@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="384" height="384" viewBox="0 0 384 384" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg-rory" x1="48" y1="28" x2="336" y2="356" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#5D4230"/>
+      <stop offset="1" stop-color="#241914"/>
+    </linearGradient>
+    <linearGradient id="shirt-rory" x1="192" y1="220" x2="192" y2="370" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#bc8a69"/>
+      <stop offset="1" stop-color="#966647"/>
+    </linearGradient>
+  </defs>
+  <rect width="384" height="384" rx="72" fill="url(#bg-rory)"/>
+  <circle cx="300" cy="88" r="76" fill="#F2C6A22e"/>
+  <circle cx="74" cy="302" r="56" fill="#F2C6A21f"/>
+  <path d="M76 310C110 254 152 226 192 226C234 226 278 254 308 310V384H76V310Z" fill="url(#shirt-rory)"/>
+  <ellipse cx="192" cy="332" rx="138" ry="86" fill="#B37A557a"/>
+  
+  <rect x="169" y="188" width="46" height="46" rx="20" fill="#e3c7b3"/>
+  <ellipse cx="192" cy="150" rx="76" ry="84" fill="#F1D4BE"/>
+  <ellipse cx="163" cy="154" rx="7" ry="8" fill="#231D1A"/>
+  <ellipse cx="221" cy="154" rx="7" ry="8" fill="#231D1A"/>
+  <path d="M191 160V184" stroke="#b59783" stroke-width="5" stroke-linecap="round"/>
+  <path d="M168 199C178 208 205 208 216 199" stroke="#885c51" stroke-width="6" stroke-linecap="round"/>
+  <ellipse cx="143" cy="176" rx="13" ry="7" fill="#f5b9b15c"/>
+  <ellipse cx="241" cy="176" rx="13" ry="7" fill="#f5b9b15c"/>
+  <g>
+        <path d="M124 132C131 90 158 64 192 64C226 64 253 90 260 132C240 116 218 108 192 108C166 108 144 116 124 132Z" fill="#9C4F2F"/>
+        <rect x="120" y="128" width="18" height="60" rx="9" fill="#a45d40"/>
+        <rect x="246" y="128" width="18" height="60" rx="9" fill="#a45d40"/>
+      </g>
+  <path d="M153 184C159 212 173 226 192 226C211 226 225 212 231 184C219 194 206 199 192 199C178 199 165 194 153 184Z" fill="#964c2d"/>
+</svg>

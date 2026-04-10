@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="384" height="384" viewBox="0 0 384 384" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg-kai" x1="48" y1="28" x2="336" y2="356" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#29424C"/>
+      <stop offset="1" stop-color="#111B1F"/>
+    </linearGradient>
+    <linearGradient id="shirt-kai" x1="192" y1="220" x2="192" y2="370" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#618e9e"/>
+      <stop offset="1" stop-color="#3f6b7a"/>
+    </linearGradient>
+  </defs>
+  <rect width="384" height="384" rx="72" fill="url(#bg-kai)"/>
+  <circle cx="300" cy="88" r="76" fill="#86CBE02e"/>
+  <circle cx="74" cy="302" r="56" fill="#86CBE01f"/>
+  <path d="M76 310C110 254 152 226 192 226C234 226 278 254 308 310V384H76V310Z" fill="url(#shirt-kai)"/>
+  <ellipse cx="192" cy="332" rx="138" ry="86" fill="#4B7F917a"/>
+  
+  <rect x="169" y="188" width="46" height="46" rx="20" fill="#84583e"/>
+  <ellipse cx="192" cy="150" rx="76" ry="84" fill="#8C5E42"/>
+  <ellipse cx="163" cy="154" rx="7" ry="8" fill="#231D1A"/>
+  <ellipse cx="221" cy="154" rx="7" ry="8" fill="#231D1A"/>
+  <path d="M191 160V184" stroke="#7d563e" stroke-width="5" stroke-linecap="round"/>
+  <path d="M168 199C178 208 205 208 216 199" stroke="#724236" stroke-width="6" stroke-linecap="round"/>
+  <ellipse cx="143" cy="176" rx="13" ry="7" fill="#af665a5c"/>
+  <ellipse cx="241" cy="176" rx="13" ry="7" fill="#af665a5c"/>
+  <path d="M128 128C138 92 161 74 192 74C223 74 246 92 256 128C237 116 216 109 192 109C168 109 147 116 128 128Z" fill="#201c1c"/>
+  
+</svg>

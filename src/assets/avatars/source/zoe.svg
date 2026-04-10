@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="384" height="384" viewBox="0 0 384 384" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg-zoe" x1="48" y1="28" x2="336" y2="356" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#6A2445"/>
+      <stop offset="1" stop-color="#2B1020"/>
+    </linearGradient>
+    <linearGradient id="shirt-zoe" x1="192" y1="220" x2="192" y2="370" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#f17f9c"/>
+      <stop offset="1" stop-color="#c95c78"/>
+    </linearGradient>
+  </defs>
+  <rect width="384" height="384" rx="72" fill="url(#bg-zoe)"/>
+  <circle cx="300" cy="88" r="76" fill="#FF9BBE2e"/>
+  <circle cx="74" cy="302" r="56" fill="#FF9BBE1f"/>
+  <path d="M76 310C110 254 152 226 192 226C234 226 278 254 308 310V384H76V310Z" fill="url(#shirt-zoe)"/>
+  <ellipse cx="192" cy="332" rx="138" ry="86" fill="#EF6D8F7a"/>
+  <g>
+        <path d="M123 148C123 91 152 57 192 57C232 57 261 91 261 148V214C240 228 217 235 192 235C167 235 144 228 123 214V148Z" fill="#151112"/>
+        <rect x="105" y="164" width="26" height="112" rx="13" fill="#211d1e"/>
+        <rect x="253" y="164" width="26" height="112" rx="13" fill="#211d1e"/>
+      </g>
+  <rect x="169" y="188" width="46" height="46" rx="20" fill="#734633"/>
+  <ellipse cx="192" cy="150" rx="76" ry="84" fill="#7A4A36"/>
+  <ellipse cx="163" cy="154" rx="7" ry="8" fill="#231D1A"/>
+  <ellipse cx="221" cy="154" rx="7" ry="8" fill="#231D1A"/>
+  <path d="M191 160V184" stroke="#734b38" stroke-width="5" stroke-linecap="round"/>
+  <path d="M168 199C178 208 205 208 216 199" stroke="#6e3e33" stroke-width="6" stroke-linecap="round"/>
+  <ellipse cx="143" cy="176" rx="13" ry="7" fill="#a258525c"/>
+  <ellipse cx="241" cy="176" rx="13" ry="7" fill="#a258525c"/>
+  <path d="M124 142C132 94 159 71 192 71C225 71 252 94 260 142C243 120 220 111 192 111C164 111 141 120 124 142Z" fill="#151112"/>
+  <g fill="#ffb3ce">
+        <circle cx="122" cy="189" r="6"/>
+        <circle cx="262" cy="189" r="6"/>
+      </g>
+</svg>

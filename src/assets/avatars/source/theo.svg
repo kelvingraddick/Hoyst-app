@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="384" height="384" viewBox="0 0 384 384" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg-theo" x1="48" y1="28" x2="336" y2="356" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#7D5630"/>
+      <stop offset="1" stop-color="#2E1E15"/>
+    </linearGradient>
+    <linearGradient id="shirt-theo" x1="192" y1="220" x2="192" y2="370" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#f8ba60"/>
+      <stop offset="1" stop-color="#cf953e"/>
+    </linearGradient>
+  </defs>
+  <rect width="384" height="384" rx="72" fill="url(#bg-theo)"/>
+  <circle cx="300" cy="88" r="76" fill="#FFD27A2e"/>
+  <circle cx="74" cy="302" r="56" fill="#FFD27A1f"/>
+  <path d="M76 310C110 254 152 226 192 226C234 226 278 254 308 310V384H76V310Z" fill="url(#shirt-theo)"/>
+  <ellipse cx="192" cy="332" rx="138" ry="86" fill="#F7B14A7a"/>
+  
+  <rect x="169" y="188" width="46" height="46" rx="20" fill="#e5c5a7"/>
+  <ellipse cx="192" cy="150" rx="76" ry="84" fill="#F4D2B2"/>
+  <ellipse cx="163" cy="154" rx="7" ry="8" fill="#231D1A"/>
+  <ellipse cx="221" cy="154" rx="7" ry="8" fill="#231D1A"/>
+  <path d="M191 160V184" stroke="#b6967c" stroke-width="5" stroke-linecap="round"/>
+  <path d="M168 199C178 208 205 208 216 199" stroke="#895b4e" stroke-width="6" stroke-linecap="round"/>
+  <ellipse cx="143" cy="176" rx="13" ry="7" fill="#f7b8a95c"/>
+  <ellipse cx="241" cy="176" rx="13" ry="7" fill="#f7b8a95c"/>
+  <path d="M122 138C129 92 159 68 192 68C220 68 245 82 260 122C241 108 220 103 195 103C168 103 145 113 122 138Z" fill="#B88237"/>
+  
+</svg>

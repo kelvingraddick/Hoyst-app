@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="384" height="384" viewBox="0 0 384 384" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg-june" x1="48" y1="28" x2="336" y2="356" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#34405C"/>
+      <stop offset="1" stop-color="#171A28"/>
+    </linearGradient>
+    <linearGradient id="shirt-june" x1="192" y1="220" x2="192" y2="370" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#8d9ceb"/>
+      <stop offset="1" stop-color="#6a77c3"/>
+    </linearGradient>
+  </defs>
+  <rect width="384" height="384" rx="72" fill="url(#bg-june)"/>
+  <circle cx="300" cy="88" r="76" fill="#AAB8FF2e"/>
+  <circle cx="74" cy="302" r="56" fill="#AAB8FF1f"/>
+  <path d="M76 310C110 254 152 226 192 226C234 226 278 254 308 310V384H76V310Z" fill="url(#shirt-june)"/>
+  <ellipse cx="192" cy="332" rx="138" ry="86" fill="#7E8EE87a"/>
+  <path d="M114 136C114 88 147 54 192 54C237 54 270 88 270 136V252C248 272 221 286 192 286C163 286 136 272 114 252V136Z" fill="#161417"/>
+  <rect x="169" y="188" width="46" height="46" rx="20" fill="#e1bca6"/>
+  <ellipse cx="192" cy="150" rx="76" ry="84" fill="#EFC8B1"/>
+  <ellipse cx="163" cy="154" rx="7" ry="8" fill="#231D1A"/>
+  <ellipse cx="221" cy="154" rx="7" ry="8" fill="#231D1A"/>
+  <path d="M191 160V184" stroke="#b4907b" stroke-width="5" stroke-linecap="round"/>
+  <path d="M168 199C178 208 205 208 216 199" stroke="#88594e" stroke-width="6" stroke-linecap="round"/>
+  <ellipse cx="143" cy="176" rx="13" ry="7" fill="#f4b1a85c"/>
+  <ellipse cx="241" cy="176" rx="13" ry="7" fill="#f4b1a85c"/>
+  <path d="M118 138C126 92 156 68 192 68C228 68 258 92 266 138C245 119 221 111 192 111C163 111 139 119 118 138Z" fill="#151316"/>
+  
+</svg>

@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="384" height="384" viewBox="0 0 384 384" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg-mia" x1="48" y1="28" x2="336" y2="356" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#555139"/>
+      <stop offset="1" stop-color="#242116"/>
+    </linearGradient>
+    <linearGradient id="shirt-mia" x1="192" y1="220" x2="192" y2="370" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#c1b363"/>
+      <stop offset="1" stop-color="#9b8e42"/>
+    </linearGradient>
+  </defs>
+  <rect width="384" height="384" rx="72" fill="url(#bg-mia)"/>
+  <circle cx="300" cy="88" r="76" fill="#E3DB922e"/>
+  <circle cx="74" cy="302" r="56" fill="#E3DB921f"/>
+  <path d="M76 310C110 254 152 226 192 226C234 226 278 254 308 310V384H76V310Z" fill="url(#shirt-mia)"/>
+  <ellipse cx="192" cy="332" rx="138" ry="86" fill="#B8A94E7a"/>
+  <g>
+        <ellipse cx="256" cy="136" rx="24" ry="52" fill="#32221b"/>
+        <path d="M124 138C124 90 154 60 192 60C230 60 260 90 260 138V218C239 235 216 245 192 245C168 245 145 235 124 218V138Z" fill="#36251D"/>
+      </g>
+  <rect x="169" y="188" width="46" height="46" rx="20" fill="#bb8966"/>
+  <ellipse cx="192" cy="150" rx="76" ry="84" fill="#C7926C"/>
+  <ellipse cx="163" cy="154" rx="7" ry="8" fill="#231D1A"/>
+  <ellipse cx="221" cy="154" rx="7" ry="8" fill="#231D1A"/>
+  <path d="M191 160V184" stroke="#9e7356" stroke-width="5" stroke-linecap="round"/>
+  <path d="M168 199C178 208 205 208 216 199" stroke="#7f4d3f" stroke-width="6" stroke-linecap="round"/>
+  <ellipse cx="143" cy="176" rx="13" ry="7" fill="#d88b785c"/>
+  <ellipse cx="241" cy="176" rx="13" ry="7" fill="#d88b785c"/>
+  <path d="M126 136C134 92 160 70 192 70C224 70 250 92 258 136C242 119 220 111 192 111C164 111 142 119 126 136Z" fill="#36251D"/>
+  
+</svg>

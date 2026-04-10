@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="384" height="384" viewBox="0 0 384 384" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg-kelvin" x1="48" y1="28" x2="336" y2="356" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#264B3E"/>
+      <stop offset="1" stop-color="#173028"/>
+    </linearGradient>
+    <linearGradient id="shirt-kelvin" x1="192" y1="220" x2="192" y2="370" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#80d5a3"/>
+      <stop offset="1" stop-color="#5dae7f"/>
+    </linearGradient>
+  </defs>
+  <rect width="384" height="384" rx="72" fill="url(#bg-kelvin)"/>
+  <circle cx="300" cy="88" r="76" fill="#F3B57B2e"/>
+  <circle cx="74" cy="302" r="56" fill="#F3B57B1f"/>
+  <path d="M76 310C110 254 152 226 192 226C234 226 278 254 308 310V384H76V310Z" fill="url(#shirt-kelvin)"/>
+  <ellipse cx="192" cy="332" rx="138" ry="86" fill="#6FCF977a"/>
+  
+  <rect x="169" y="188" width="46" height="46" rx="20" fill="#ae7146"/>
+  <ellipse cx="192" cy="150" rx="76" ry="84" fill="#B9784A"/>
+  <ellipse cx="163" cy="154" rx="7" ry="8" fill="#231D1A"/>
+  <ellipse cx="221" cy="154" rx="7" ry="8" fill="#231D1A"/>
+  <path d="M191 160V184" stroke="#966443" stroke-width="5" stroke-linecap="round"/>
+  <path d="M168 199C178 208 205 208 216 199" stroke="#7c4837" stroke-width="6" stroke-linecap="round"/>
+  <ellipse cx="143" cy="176" rx="13" ry="7" fill="#ce79605c"/>
+  <ellipse cx="241" cy="176" rx="13" ry="7" fill="#ce79605c"/>
+  <g>
+        <path d="M118 132C118 84 148 58 192 58C236 58 266 84 266 132C246 116 224 108 192 108C160 108 138 116 118 132Z" fill="#1C1716"/>
+        <circle cx="138" cy="106" r="22" fill="#1C1716"/>
+        <circle cx="174" cy="92" r="25" fill="#1C1716"/>
+        <circle cx="212" cy="90" r="24" fill="#1C1716"/>
+        <circle cx="248" cy="106" r="21" fill="#1C1716"/>
+      </g>
+  <g stroke="#142026d1" stroke-width="5" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="137" y="139" width="40" height="28" rx="12"/>
+        <rect x="207" y="139" width="40" height="28" rx="12"/>
+        <path d="M177 152H207"/>
+      </g>
+</svg>

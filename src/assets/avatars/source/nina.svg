@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="384" height="384" viewBox="0 0 384 384" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg-nina" x1="48" y1="28" x2="336" y2="356" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#184642"/>
+      <stop offset="1" stop-color="#0D2422"/>
+    </linearGradient>
+    <linearGradient id="shirt-nina" x1="192" y1="220" x2="192" y2="370" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#5bc1b4"/>
+      <stop offset="1" stop-color="#3a9b8f"/>
+    </linearGradient>
+  </defs>
+  <rect width="384" height="384" rx="72" fill="url(#bg-nina)"/>
+  <circle cx="300" cy="88" r="76" fill="#74E1D12e"/>
+  <circle cx="74" cy="302" r="56" fill="#74E1D11f"/>
+  <path d="M76 310C110 254 152 226 192 226C234 226 278 254 308 310V384H76V310Z" fill="url(#shirt-nina)"/>
+  <ellipse cx="192" cy="332" rx="138" ry="86" fill="#45B8AA7a"/>
+  <g>
+        <circle cx="192" cy="62" r="28" fill="#221A19"/>
+        <path d="M122 150C122 95 151 61 192 61C233 61 262 95 262 150V220C241 238 217 247 192 247C167 247 143 238 122 220V150Z" fill="#221A19"/>
+      </g>
+  <rect x="169" y="188" width="46" height="46" rx="20" fill="#ba8561"/>
+  <ellipse cx="192" cy="150" rx="76" ry="84" fill="#C68D67"/>
+  <ellipse cx="163" cy="154" rx="7" ry="8" fill="#231D1A"/>
+  <ellipse cx="221" cy="154" rx="7" ry="8" fill="#231D1A"/>
+  <path d="M191 160V184" stroke="#9d7053" stroke-width="5" stroke-linecap="round"/>
+  <path d="M168 199C178 208 205 208 216 199" stroke="#7f4c3e" stroke-width="6" stroke-linecap="round"/>
+  <ellipse cx="143" cy="176" rx="13" ry="7" fill="#d787745c"/>
+  <ellipse cx="241" cy="176" rx="13" ry="7" fill="#d787745c"/>
+  <path d="M124 140C134 94 159 74 192 74C225 74 250 94 260 140L244 122C230 110 214 104 192 104C170 104 154 110 140 122L124 140Z" fill="#201918"/>
+  
+</svg>
