@@ -1,8 +1,8 @@
 export type AppTabsParamList = {
   Home: undefined;
   Circles: undefined;
+  TapIn: undefined;
   Explore: undefined;
-  Inbox: undefined;
   Profile: undefined;
 };
 
@@ -11,10 +11,20 @@ export type AuthStackParamList = {
   SignIn: undefined;
 };
 
+export type TapInSource = 'home' | 'circle_detail' | 'tap_in';
+
 export type RootStackParamList = {
   MainTabs: undefined;
   Auth: undefined;
+  Inbox: undefined;
+  TapInPicker: undefined;
   CreateCircle: undefined;
   CircleDetail: {circleId: string};
-  CheckInModal: {circleId: string; source: 'home' | 'circle_detail'};
+  TapInComposer: {circleId: string; source: TapInSource};
+  TapInComplete: {
+    circleId: string;
+    source: TapInSource;
+    note?: string;
+    photoUri?: string;
+  };
 };

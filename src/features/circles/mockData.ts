@@ -1,13 +1,22 @@
 import type {
-  CheckInDraft,
   CircleDetailModel,
+  CircleManagementCard,
+  CircleMemberStatus,
+  CircleSummary,
   CreateCircleDraft,
+  ExploreCircle,
+  TapInDraft,
   TodayCircleCard,
   UserProfile,
 } from '../../types/models';
 import {avatarImages} from '../../assets/avatars';
 
-export const initialCheckInDraft: CheckInDraft = {
+type CircleDetailContent = Pick<
+  CircleDetailModel,
+  'activity' | 'monthProgress'
+>;
+
+export const initialTapInDraft: TapInDraft = {
   note: '',
 };
 
@@ -105,13 +114,13 @@ export const todayCircles: TodayCircleCard[] = [
         badgeCount: 2,
       },
     ],
-    completionLabel: 'Daily Log Complete',
+    completionLabel: 'Daily Tap In Complete',
   },
   {
     id: 'sober-squad',
     title: 'Sober Squad',
     category: 'Sobriety',
-    dailyTask: 'Daily sobriety check-in',
+    dailyTask: 'Daily sobriety Tap In',
     state: 'risk',
     progressPercent: 42,
     viewerHasCheckedIn: false,
@@ -148,48 +157,227 @@ export const todayCircles: TodayCircleCard[] = [
   },
 ];
 
-export const circleDetails: Record<string, CircleDetailModel> = {
-  'fitness-fanatics': {
-    id: 'fitness-fanatics',
-    category: 'Fitness',
-    streakLabel: '12d streak',
-    title: 'Fitness Fanatics',
-    dailyGoal: 'Daily goal: 30min workout',
+export const circleManagementCards: CircleManagementCard[] = [
+  {
+    ...todayCircles[0],
     completionRate: 82,
-    members: [
-      {
-        id: 'm1',
-        name: 'Kelvin',
-        initials: 'KE',
-        avatarImage: avatarImages.kelvin,
-        state: 'done',
-        badgeCount: 12,
-      },
-      {
-        id: 'm2',
-        name: 'Ava',
-        initials: 'AV',
-        avatarImage: avatarImages.ava,
-        state: 'pending',
-        badgeCount: 8,
-      },
-      {
-        id: 'm3',
-        name: 'Marcus',
-        initials: 'MA',
-        avatarImage: avatarImages.marcus,
-        state: 'done',
-        badgeCount: 15,
-      },
-      {
-        id: 'm4',
-        name: 'Theo',
-        initials: 'TH',
-        avatarImage: avatarImages.theo,
-        state: 'missed',
-        badgeCount: 3,
-      },
-    ],
+    privacy: 'public',
+    joinMode: 'request_to_join',
+    memberCount: 4,
+    maxSize: 8,
+    viewerRole: 'owner',
+    inviteUrl: 'https://hoyst.app/join/fitness-fanatics-832',
+  },
+  {
+    ...todayCircles[1],
+    completionRate: 91,
+    privacy: 'private',
+    joinMode: 'invite_only',
+    memberCount: 2,
+    maxSize: 6,
+    viewerRole: 'admin',
+    inviteUrl: 'https://hoyst.app/join/mindful-mornings-417',
+  },
+  {
+    ...todayCircles[2],
+    completionRate: 67,
+    privacy: 'private',
+    joinMode: 'invite_only',
+    memberCount: 3,
+    maxSize: 5,
+    viewerRole: 'member',
+  },
+];
+
+const founderBuildersMembers: CircleMemberStatus[] = [
+  {
+    id: 'fb-1',
+    name: 'Marcus',
+    initials: 'MA',
+    avatarImage: avatarImages.marcus,
+    state: 'done',
+    badgeCount: 15,
+  },
+  {
+    id: 'fb-2',
+    name: 'Ava',
+    initials: 'AV',
+    avatarImage: avatarImages.ava,
+    state: 'done',
+    badgeCount: 8,
+  },
+  {
+    id: 'fb-3',
+    name: 'Kai',
+    initials: 'KA',
+    avatarImage: avatarImages.kai,
+    state: 'pending',
+    badgeCount: 2,
+  },
+  {
+    id: 'fb-4',
+    name: 'June',
+    initials: 'JU',
+    avatarImage: avatarImages.june,
+    state: 'done',
+    badgeCount: 6,
+  },
+];
+
+const sunriseStrengthMembers: CircleMemberStatus[] = [
+  {
+    id: 'ss-1',
+    name: 'Theo',
+    initials: 'TH',
+    avatarImage: avatarImages.theo,
+    state: 'done',
+    badgeCount: 3,
+  },
+  {
+    id: 'ss-2',
+    name: 'Rory',
+    initials: 'RO',
+    avatarImage: avatarImages.rory,
+    state: 'pending',
+    badgeCount: 2,
+  },
+  {
+    id: 'ss-3',
+    name: 'Ava',
+    initials: 'AV',
+    avatarImage: avatarImages.ava,
+    state: 'done',
+    badgeCount: 8,
+  },
+];
+
+const clearHeadedCreatorsMembers: CircleMemberStatus[] = [
+  {
+    id: 'chc-1',
+    name: 'Lia',
+    initials: 'LI',
+    avatarImage: avatarImages.lia,
+    state: 'done',
+    badgeCount: 4,
+  },
+  {
+    id: 'chc-2',
+    name: 'Noah',
+    initials: 'NO',
+    avatarImage: avatarImages.noah,
+    state: 'pending',
+    badgeCount: 7,
+  },
+  {
+    id: 'chc-3',
+    name: 'Zoe',
+    initials: 'ZO',
+    avatarImage: avatarImages.zoe,
+    state: 'done',
+    badgeCount: 1,
+  },
+  {
+    id: 'chc-4',
+    name: 'Mia',
+    initials: 'MI',
+    avatarImage: avatarImages.mia,
+    state: 'done',
+    badgeCount: 7,
+  },
+];
+
+const writersCompassMembers: CircleMemberStatus[] = [
+  {
+    id: 'wc-1',
+    name: 'Nina',
+    initials: 'NI',
+    avatarImage: avatarImages.nina,
+    state: 'done',
+    badgeCount: 5,
+  },
+  {
+    id: 'wc-2',
+    name: 'June',
+    initials: 'JU',
+    avatarImage: avatarImages.june,
+    state: 'done',
+    badgeCount: 6,
+  },
+  {
+    id: 'wc-3',
+    name: 'Kai',
+    initials: 'KA',
+    avatarImage: avatarImages.kai,
+    state: 'pending',
+    badgeCount: 2,
+  },
+];
+
+export const exploreCircles: ExploreCircle[] = [
+  {
+    id: 'founder-builders',
+    title: 'Founder Builders',
+    category: 'Deep Work',
+    dailyTask: 'Ship one focused build block',
+    matchCopy: 'For founders protecting daily momentum.',
+    joinLabel: 'Open seats',
+    privacy: 'public',
+    joinMode: 'request_to_join',
+    memberCount: 9,
+    maxSize: 12,
+    completionRate: 88,
+    streakLabel: '21d streak',
+    members: founderBuildersMembers,
+  },
+  {
+    id: 'sunrise-strength',
+    title: 'Sunrise Strength',
+    category: 'Fitness',
+    dailyTask: '45min strength or mobility',
+    matchCopy: 'Morning training with a steady 6AM crew.',
+    joinLabel: 'Request to join',
+    privacy: 'public',
+    joinMode: 'request_to_join',
+    memberCount: 6,
+    maxSize: 8,
+    completionRate: 79,
+    streakLabel: '14d streak',
+    members: sunriseStrengthMembers,
+  },
+  {
+    id: 'clear-headed-creators',
+    title: 'Clear Headed Creators',
+    category: 'Sobriety',
+    dailyTask: 'Daily sobriety Tap In',
+    matchCopy: 'Supportive creators staying clear and consistent.',
+    joinLabel: 'Open seats',
+    privacy: 'public',
+    joinMode: 'request_to_join',
+    memberCount: 7,
+    maxSize: 10,
+    completionRate: 91,
+    streakLabel: '30d streak',
+    members: clearHeadedCreatorsMembers,
+  },
+  {
+    id: 'writers-compass',
+    title: 'Writers Compass',
+    category: 'Writing',
+    dailyTask: 'Write 500 words',
+    matchCopy: 'Quiet accountability for drafts and publishing.',
+    joinLabel: 'Request to join',
+    privacy: 'public',
+    joinMode: 'request_to_join',
+    memberCount: 5,
+    maxSize: 8,
+    completionRate: 74,
+    streakLabel: '9d streak',
+    members: writersCompassMembers,
+  },
+];
+
+const circleDetails: Record<string, CircleDetailContent> = {
+  'fitness-fanatics': {
     monthProgress: [
       {day: 1, state: 'done'},
       {day: 2, state: 'done'},
@@ -230,38 +418,6 @@ export const circleDetails: Record<string, CircleDetailModel> = {
     ],
   },
   'mindful-mornings': {
-    id: 'mindful-mornings',
-    category: 'Wellness',
-    streakLabel: '45d streak',
-    title: 'Mindful Mornings',
-    dailyGoal: 'Daily goal: 10min meditation',
-    completionRate: 91,
-    members: [
-      {
-        id: 'w1',
-        name: 'June',
-        initials: 'JU',
-        avatarImage: avatarImages.june,
-        state: 'done',
-        badgeCount: 6,
-      },
-      {
-        id: 'w2',
-        name: 'Mia',
-        initials: 'MI',
-        avatarImage: avatarImages.mia,
-        state: 'done',
-        badgeCount: 7,
-      },
-      {
-        id: 'w3',
-        name: 'Kai',
-        initials: 'KA',
-        avatarImage: avatarImages.kai,
-        state: 'pending',
-        badgeCount: 2,
-      },
-    ],
     monthProgress: [
       {day: 1, state: 'done'},
       {day: 2, state: 'done'},
@@ -285,44 +441,12 @@ export const circleDetails: Record<string, CircleDetailModel> = {
         actorInitials: 'JU',
         actorAvatarImage: avatarImages.june,
         tone: 'success',
-        message: 'logged a quiet morning reset',
+        message: 'tapped in with a quiet morning reset',
         timestamp: '1 hour ago',
       },
     ],
   },
   'sober-squad': {
-    id: 'sober-squad',
-    category: 'Sobriety',
-    streakLabel: '7-day streak',
-    title: 'Sober Squad',
-    dailyGoal: 'Daily goal: sobriety check-in',
-    completionRate: 67,
-    members: [
-      {
-        id: 's1',
-        name: 'Lia',
-        initials: 'LI',
-        avatarImage: avatarImages.lia,
-        state: 'done',
-        badgeCount: 4,
-      },
-      {
-        id: 's2',
-        name: 'Noah',
-        initials: 'NO',
-        avatarImage: avatarImages.noah,
-        state: 'pending',
-        badgeCount: 7,
-      },
-      {
-        id: 's3',
-        name: 'Zoe',
-        initials: 'ZO',
-        avatarImage: avatarImages.zoe,
-        state: 'pending',
-        badgeCount: 1,
-      },
-    ],
     monthProgress: [
       {day: 1, state: 'done'},
       {day: 2, state: 'missed'},
@@ -346,7 +470,7 @@ export const circleDetails: Record<string, CircleDetailModel> = {
         actorInitials: 'LI',
         actorAvatarImage: avatarImages.lia,
         tone: 'success',
-        message: 'checked in and kept the streak alive',
+        message: 'tapped in and kept the streak alive',
         timestamp: '38 minutes ago',
       },
       {
@@ -355,14 +479,192 @@ export const circleDetails: Record<string, CircleDetailModel> = {
         actorInitials: 'NO',
         actorAvatarImage: avatarImages.noah,
         tone: 'alert',
-        message: 'has not checked in yet',
+        message: 'has not tapped in yet',
         timestamp: '4 hours ago',
         actionLabel: 'Poke',
       },
     ],
   },
+  'founder-builders': {
+    monthProgress: [
+      {day: 1, state: 'done'},
+      {day: 2, state: 'done'},
+      {day: 3, state: 'done'},
+      {day: 4, state: 'missed'},
+      {day: 5, state: 'done'},
+      {day: 6, state: 'done'},
+      {day: 7, state: 'done'},
+      {day: 8, state: 'done'},
+      {day: 9, state: 'done'},
+      {day: 10, state: 'done'},
+      {day: 11, state: 'done'},
+      {day: 12, state: 'done'},
+      {day: 13, state: 'today'},
+      {day: 14, state: 'future'},
+    ],
+    activity: [
+      {
+        id: 'fb-a1',
+        actorName: 'Marcus',
+        actorInitials: 'MA',
+        actorAvatarImage: avatarImages.marcus,
+        tone: 'success',
+        message: 'shipped his morning build block',
+        timestamp: '48 minutes ago',
+      },
+      {
+        id: 'fb-a2',
+        actorName: 'Kai',
+        actorInitials: 'KA',
+        actorAvatarImage: avatarImages.kai,
+        tone: 'pending',
+        message: "is lining up today's focus window",
+        timestamp: '2 hours ago',
+      },
+    ],
+  },
+  'sunrise-strength': {
+    monthProgress: [
+      {day: 1, state: 'done'},
+      {day: 2, state: 'missed'},
+      {day: 3, state: 'done'},
+      {day: 4, state: 'done'},
+      {day: 5, state: 'done'},
+      {day: 6, state: 'done'},
+      {day: 7, state: 'future'},
+      {day: 8, state: 'done'},
+      {day: 9, state: 'done'},
+      {day: 10, state: 'missed'},
+      {day: 11, state: 'done'},
+      {day: 12, state: 'done'},
+      {day: 13, state: 'today'},
+      {day: 14, state: 'future'},
+    ],
+    activity: [
+      {
+        id: 'ss-a1',
+        actorName: 'Theo',
+        actorInitials: 'TH',
+        actorAvatarImage: avatarImages.theo,
+        tone: 'success',
+        message: 'logged strength before breakfast',
+        timestamp: '1 hour ago',
+        imageVariant: 'workout',
+      },
+      {
+        id: 'ss-a2',
+        actorName: 'Rory',
+        actorInitials: 'RO',
+        actorAvatarImage: avatarImages.rory,
+        tone: 'pending',
+        message: 'has mobility still on deck',
+        timestamp: '3 hours ago',
+      },
+    ],
+  },
+  'clear-headed-creators': {
+    monthProgress: [
+      {day: 1, state: 'done'},
+      {day: 2, state: 'done'},
+      {day: 3, state: 'done'},
+      {day: 4, state: 'done'},
+      {day: 5, state: 'done'},
+      {day: 6, state: 'done'},
+      {day: 7, state: 'done'},
+      {day: 8, state: 'done'},
+      {day: 9, state: 'done'},
+      {day: 10, state: 'done'},
+      {day: 11, state: 'done'},
+      {day: 12, state: 'done'},
+      {day: 13, state: 'today'},
+      {day: 14, state: 'future'},
+    ],
+    activity: [
+      {
+        id: 'chc-a1',
+        actorName: 'Lia',
+        actorInitials: 'LI',
+        actorAvatarImage: avatarImages.lia,
+        tone: 'success',
+        message: 'tapped in and held the streak',
+        timestamp: '24 minutes ago',
+      },
+      {
+        id: 'chc-a2',
+        actorName: 'Noah',
+        actorInitials: 'NO',
+        actorAvatarImage: avatarImages.noah,
+        tone: 'pending',
+        message: 'is due for a late afternoon check-in',
+        timestamp: '4 hours ago',
+        actionLabel: 'Poke',
+      },
+    ],
+  },
+  'writers-compass': {
+    monthProgress: [
+      {day: 1, state: 'done'},
+      {day: 2, state: 'done'},
+      {day: 3, state: 'future'},
+      {day: 4, state: 'done'},
+      {day: 5, state: 'missed'},
+      {day: 6, state: 'done'},
+      {day: 7, state: 'done'},
+      {day: 8, state: 'done'},
+      {day: 9, state: 'done'},
+      {day: 10, state: 'future'},
+      {day: 11, state: 'done'},
+      {day: 12, state: 'done'},
+      {day: 13, state: 'today'},
+      {day: 14, state: 'future'},
+    ],
+    activity: [
+      {
+        id: 'wc-a1',
+        actorName: 'Nina',
+        actorInitials: 'NI',
+        actorAvatarImage: avatarImages.nina,
+        tone: 'success',
+        message: 'finished a clean 500-word draft',
+        timestamp: '52 minutes ago',
+      },
+      {
+        id: 'wc-a2',
+        actorName: 'Kai',
+        actorInitials: 'KA',
+        actorAvatarImage: avatarImages.kai,
+        tone: 'pending',
+        message: 'has a draft window scheduled tonight',
+        timestamp: '5 hours ago',
+      },
+    ],
+  },
 };
 
+const circleSummaries = [...circleManagementCards, ...exploreCircles].reduce(
+  (summaryById, circle) => {
+    summaryById[circle.id] = circle;
+    return summaryById;
+  },
+  {} as Record<string, CircleSummary>,
+);
+
 export function getCircleDetail(circleId: string): CircleDetailModel {
-  return circleDetails[circleId] ?? circleDetails['fitness-fanatics'];
+  const fallbackSummary = circleSummaries['fitness-fanatics'];
+  const summary = circleSummaries[circleId] ?? fallbackSummary;
+  const detailContent =
+    circleDetails[summary.id] ?? circleDetails['fitness-fanatics'];
+
+  return {
+    ...summary,
+    ...detailContent,
+    dailyGoal: `Daily goal: ${summary.dailyTask}`,
+    completionRate:
+      summary.completionRate ??
+      summary.progressPercent ??
+      fallbackSummary.progressPercent ??
+      0,
+    memberCount: summary.memberCount ?? summary.members.length,
+    maxSize: summary.maxSize ?? summary.members.length,
+  };
 }

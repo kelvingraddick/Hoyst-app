@@ -2,8 +2,11 @@ import React from 'react';
 import {createNativeStackNavigator} from '@react-navigation/native-stack';
 
 import {CreateCircleScreen} from '../features/create-circle/screens/CreateCircleScreen';
-import {CheckInModalScreen} from '../features/check-in/screens/CheckInModalScreen';
 import {CircleDetailScreen} from '../features/circles/screens/CircleDetailScreen';
+import {InboxScreen} from '../features/inbox/screens/InboxScreen';
+import {TapInCompleteScreen} from '../features/check-in/screens/TapInCompleteScreen';
+import {TapInComposerScreen} from '../features/check-in/screens/TapInComposerScreen';
+import {TapInPickerScreen} from '../features/check-in/screens/TapInPickerScreen';
 import {useSessionStore} from '../store/session-store';
 import {AppTabsNavigator} from './AppTabsNavigator';
 import {AuthStackNavigator} from './AuthStackNavigator';
@@ -32,6 +35,23 @@ export function RootNavigator(): React.JSX.Element {
         />
       )}
       <Stack.Screen
+        component={InboxScreen}
+        name="Inbox"
+        options={{
+          animation: 'slide_from_right',
+          headerShown: false,
+        }}
+      />
+      <Stack.Screen
+        component={TapInPickerScreen}
+        name="TapInPicker"
+        options={{
+          animation: 'slide_from_bottom',
+          headerShown: false,
+          presentation: 'modal',
+        }}
+      />
+      <Stack.Screen
         component={CircleDetailScreen}
         name="CircleDetail"
         options={{
@@ -48,8 +68,17 @@ export function RootNavigator(): React.JSX.Element {
         }}
       />
       <Stack.Screen
-        component={CheckInModalScreen}
-        name="CheckInModal"
+        component={TapInComposerScreen}
+        name="TapInComposer"
+        options={{
+          animation: 'slide_from_bottom',
+          headerShown: false,
+          presentation: 'fullScreenModal',
+        }}
+      />
+      <Stack.Screen
+        component={TapInCompleteScreen}
+        name="TapInComplete"
         options={{
           animation: 'slide_from_bottom',
           headerShown: false,

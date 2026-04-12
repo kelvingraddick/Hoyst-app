@@ -1,6 +1,6 @@
 export const brandColors = {
   green: '#44d85c',
-  orange: '#ff9b53',
+  orange: '#FF8A3D',
   orangeStrong: '#ff8a3d',
   red: '#ff6e84',
   purple: '#8b5cf6',

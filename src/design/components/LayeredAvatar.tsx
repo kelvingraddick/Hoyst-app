@@ -7,7 +7,9 @@ import {
 } from 'react-native';
 
 import type {CircleMemberState} from '../../types/models';
+import {getBrandRing} from '../brand/usage';
 import {useHoystTheme} from '../theme/useHoystTheme';
+import {getBrandAvatarRingSize} from './avatarRingSizing';
 import {HoystText} from './HoystText';
 
 type LayeredAvatarProps = {
@@ -23,7 +25,7 @@ function getLayeredAvatarPalette(
 ) {
   if (state === 'done') {
     return {
-      glow: 'rgba(68,216,92,0.14)',
+      glow: 'transparent',
       outerRing: 'rgba(34,115,48,0.96)',
       innerRing: theme.success,
       separator: 'rgba(10,10,10,0.96)',
@@ -61,12 +63,15 @@ export function LayeredAvatar({
 }: LayeredAvatarProps): React.JSX.Element {
   const theme = useHoystTheme();
   const palette = getLayeredAvatarPalette(theme, state);
+  const isDone = state === 'done';
   const glowSize = size + 6;
   const outerSize = size + 2;
   const innerSize = size - 2;
   const frameSize = size - 8;
   const imageSize = size - 10;
+  const doneRingSize = getBrandAvatarRingSize(frameSize);
   const ringWidth = size >= 56 ? 1.5 : 1.2;
+  const stateRingWidth = isDone ? 0 : ringWidth;
   const frameWidth = size >= 56 ? 1.4 : 1.2;
 
   return (
@@ -83,21 +88,34 @@ export function LayeredAvatar({
       <View
         style={[
           styles.outerRing,
+          isDone ? styles.doneRingWrap : undefined,
           {
             borderColor: palette.outerRing,
             borderRadius: outerSize / 2,
-            borderWidth: ringWidth,
+            borderWidth: stateRingWidth,
             height: outerSize,
             width: outerSize,
           },
         ]}>
+        {isDone ? (
+          <Image
+            source={getBrandRing()}
+            style={[
+              styles.doneRing,
+              {
+                height: doneRingSize,
+                width: doneRingSize,
+              },
+            ]}
+          />
+        ) : null}
         <View
           style={[
             styles.innerRing,
             {
               borderColor: palette.innerRing,
               borderRadius: innerSize / 2,
-              borderWidth: ringWidth,
+              borderWidth: stateRingWidth,
               height: innerSize,
               width: innerSize,
             },
@@ -146,6 +164,13 @@ const styles = StyleSheet.create({
   outerRing: {
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  doneRing: {
+    position: 'absolute',
+    resizeMode: 'contain',
+  },
+  doneRingWrap: {
+    overflow: 'visible',
   },
   innerRing: {
     alignItems: 'center',

@@ -18,6 +18,12 @@ export function ActivityFeedCard({
   item,
 }: ActivityFeedCardProps): React.JSX.Element {
   const theme = useHoystTheme();
+  const avatarTone =
+    item.tone === 'success'
+      ? 'green'
+      : item.tone === 'pending'
+      ? 'purple'
+      : 'muted';
 
   return (
     <GlassPanel>
@@ -27,7 +33,8 @@ export function ActivityFeedCard({
             initials={item.actorInitials}
             imageSource={item.actorAvatarImage}
             size={36}
-            tone="green"
+            tone={avatarTone}
+            useBrandRing={item.tone === 'success'}
           />
           <View style={styles.actorCopy}>
             <HoystText>

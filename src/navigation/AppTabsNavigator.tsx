@@ -1,10 +1,10 @@
 import React from 'react';
 import {Platform, StyleSheet, View} from 'react-native';
 import {createBottomTabNavigator} from '@react-navigation/bottom-tabs';
+import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import {
   Compass,
   Home,
-  Inbox,
   type LucideIcon,
   UserRound,
   UsersRound,
@@ -13,21 +13,26 @@ import {
 import {CirclesScreen} from '../features/circles/screens/CirclesScreen';
 import {ExploreScreen} from '../features/explore/screens/ExploreScreen';
 import {HomeScreen} from '../features/home/screens/HomeScreen';
-import {InboxScreen} from '../features/inbox/screens/InboxScreen';
 import {ProfileScreen} from '../features/profile/screens/ProfileScreen';
+import {TapInRingMark} from '../design/components/TapInRingMark';
 import {useHoystTheme} from '../design/theme/useHoystTheme';
 import {HoystTabBarBackground} from './components/HoystTabBarBackground';
-import type {AppTabsParamList} from './types';
+import type {AppTabsParamList, RootStackParamList} from './types';
 
 const Tab = createBottomTabNavigator<AppTabsParamList>();
 
-const routeIcons: Record<keyof AppTabsParamList, LucideIcon> = {
+type StandardTabName = Exclude<keyof AppTabsParamList, 'TapIn'>;
+
+const routeIcons: Record<StandardTabName, LucideIcon> = {
   Home,
   Circles: UsersRound,
   Explore: Compass,
-  Inbox,
   Profile: UserRound,
 };
+
+function TapInPlaceholder(): React.JSX.Element {
+  return <View />;
+}
 
 export function AppTabsNavigator(): React.JSX.Element {
   const theme = useHoystTheme();
@@ -39,9 +44,10 @@ export function AppTabsNavigator(): React.JSX.Element {
         sceneStyle: {
           backgroundColor: theme.background,
         },
-        tabBarActiveTintColor: theme.success,
+        tabBarActiveTintColor: '#FFFFFF',
         tabBarBackground: HoystTabBarBackground,
         tabBarHideOnKeyboard: true,
+        tabBarIconStyle: styles.tabBarIcon,
         tabBarInactiveTintColor: theme.textSubtle,
         tabBarItemStyle: styles.tabBarItem,
         tabBarShowLabel: false,
@@ -58,16 +64,16 @@ export function AppTabsNavigator(): React.JSX.Element {
         // component warning is noise for this specific API shape.
         // eslint-disable-next-line react/no-unstable-nested-components
         tabBarIcon: ({color, focused, size}) => {
-          const Icon = routeIcons[route.name];
+          if (route.name === 'TapIn') {
+            return <TapInRingMark style={styles.tapInOffset} />;
+          }
+
+          const Icon = routeIcons[route.name as StandardTabName];
           return (
             <View
               style={[
                 styles.iconWrap,
-                focused
-                  ? route.name === 'Explore'
-                    ? styles.iconWrapExploreFocused
-                    : styles.iconWrapFocused
-                  : undefined,
+                focused ? styles.iconWrapFocused : undefined,
               ]}>
               <Icon color={color} size={size} strokeWidth={2.25} />
             </View>
@@ -76,8 +82,22 @@ export function AppTabsNavigator(): React.JSX.Element {
       })}>
       <Tab.Screen component={HomeScreen} name="Home" />
       <Tab.Screen component={CirclesScreen} name="Circles" />
+      <Tab.Screen
+        component={TapInPlaceholder}
+        listeners={({navigation}) => ({
+          tabPress: event => {
+            event.preventDefault();
+
+            const rootNavigation =
+              navigation.getParent<NativeStackNavigationProp<RootStackParamList>>();
+
+            rootNavigation?.navigate('TapInPicker');
+          },
+        })}
+        name="TapIn"
+        options={{tabBarAccessibilityLabel: 'Tap In'}}
+      />
       <Tab.Screen component={ExploreScreen} name="Explore" />
-      <Tab.Screen component={InboxScreen} name="Inbox" />
       <Tab.Screen component={ProfileScreen} name="Profile" />
     </Tab.Navigator>
   );
@@ -97,6 +117,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  tabBarIcon: {
+    height: 38,
+    width: 38,
+  },
   iconWrap: {
     alignItems: 'center',
     borderRadius: 999,
@@ -105,9 +129,17 @@ const styles = StyleSheet.create({
     width: 38,
   },
   iconWrapFocused: {
-    backgroundColor: 'rgba(68,216,92,0.14)',
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    elevation: 8,
+    shadowColor: '#FFFFFF',
+    shadowOffset: {
+      height: 0,
+      width: 0,
+    },
+    shadowOpacity: 0.62,
+    shadowRadius: 12,
   },
-  iconWrapExploreFocused: {
-    backgroundColor: 'rgba(139,92,246,0.18)',
+  tapInOffset: {
+    marginTop: -24,
   },
 });

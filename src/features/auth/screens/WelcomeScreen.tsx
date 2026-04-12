@@ -23,7 +23,7 @@ export function WelcomeScreen(): React.JSX.Element {
           Consistency feels lighter in a circle.
         </HoystText>
         <HoystText style={styles.copy} tone="muted">
-          Daily accountability, group streaks, low-friction check-ins, and a
+          Daily accountability, group streaks, low-friction Tap Ins, and a
           little momentum you can actually keep.
         </HoystText>
       </View>

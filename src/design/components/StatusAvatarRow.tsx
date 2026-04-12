@@ -3,8 +3,8 @@ import {StyleSheet, View} from 'react-native';
 
 import type {CircleMemberStatus} from '../../types/models';
 import {useHoystTheme} from '../theme/useHoystTheme';
-import {HoystAvatar} from './HoystAvatar';
 import {HoystText} from './HoystText';
+import {LayeredAvatar} from './LayeredAvatar';
 
 type StatusAvatarRowProps = {
   members: CircleMemberStatus[];
@@ -18,12 +18,6 @@ export function StatusAvatarRow({
   return (
     <View style={styles.row}>
       {members.map(member => {
-        const tone =
-          member.state === 'done'
-            ? 'green'
-            : member.state === 'pending'
-            ? 'purple'
-            : 'muted';
         const label =
           member.state === 'done'
             ? 'DONE'
@@ -34,11 +28,11 @@ export function StatusAvatarRow({
         return (
           <View key={member.id} style={styles.member}>
             <View style={styles.avatarWrap}>
-              <HoystAvatar
+              <LayeredAvatar
                 initials={member.initials}
                 imageSource={member.avatarImage}
                 size={56}
-                tone={tone}
+                state={member.state}
               />
               {member.badgeCount ? (
                 <View

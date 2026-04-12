@@ -3,6 +3,8 @@ import {Image, StyleSheet, View} from 'react-native';
 import type {ImageSourcePropType} from 'react-native';
 
 import {useHoystTheme} from '../theme/useHoystTheme';
+import {getBrandRing} from '../brand/usage';
+import {getBrandAvatarRingSize} from './avatarRingSizing';
 import {GradientRing} from './GradientRing';
 import {HoystText} from './HoystText';
 
@@ -11,6 +13,7 @@ type HoystAvatarProps = {
   imageSource?: ImageSourcePropType;
   size?: number;
   tone?: 'gradient' | 'green' | 'purple' | 'muted';
+  useBrandRing?: boolean;
 };
 
 export function HoystAvatar({
@@ -18,8 +21,12 @@ export function HoystAvatar({
   imageSource,
   size = 52,
   tone = 'gradient',
+  useBrandRing,
 }: HoystAvatarProps): React.JSX.Element {
   const theme = useHoystTheme();
+  const imageSize = size - 12;
+  const brandRingSize = getBrandAvatarRingSize(imageSize);
+  const shouldUseBrandRing = useBrandRing ?? tone === 'green';
   const ringColor =
     tone === 'green'
       ? theme.success
@@ -31,15 +38,22 @@ export function HoystAvatar({
 
   return (
     <View style={[styles.root, {width: size, height: size}]}>
-      <GradientRing flatColor={ringColor} size={size} strokeWidth={6} />
+      {shouldUseBrandRing ? (
+        <Image
+          source={getBrandRing()}
+          style={[styles.brandRing, {height: brandRingSize, width: brandRingSize}]}
+        />
+      ) : (
+        <GradientRing flatColor={ringColor} size={size} strokeWidth={6} />
+      )}
       <View
         style={[
           styles.inner,
           {
             backgroundColor: theme.surfaceStrong,
-            width: size - 12,
-            height: size - 12,
-            borderRadius: (size - 12) / 2,
+            width: imageSize,
+            height: imageSize,
+            borderRadius: imageSize / 2,
           },
         ]}>
         {imageSource ? (
@@ -48,9 +62,9 @@ export function HoystAvatar({
             style={[
               styles.image,
               {
-                width: size - 12,
-                height: size - 12,
-                borderRadius: (size - 12) / 2,
+                width: imageSize,
+                height: imageSize,
+                borderRadius: imageSize / 2,
               },
             ]}
           />
@@ -72,6 +86,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     overflow: 'hidden',
     position: 'absolute',
+  },
+  brandRing: {
+    position: 'absolute',
+    resizeMode: 'contain',
   },
   image: {
     resizeMode: 'cover',

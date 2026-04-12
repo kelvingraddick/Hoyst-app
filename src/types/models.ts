@@ -8,6 +8,7 @@ export type TodayCircleState = 'active' | 'done' | 'risk';
 export type CircleMemberState = 'done' | 'pending' | 'missed';
 export type CircleActivityTone = 'success' | 'pending' | 'alert';
 export type ProgressDayState = 'done' | 'missed' | 'today' | 'future';
+export type CircleJoinLabel = 'Open seats' | 'Request to join';
 
 export type UserProfile = {
   id: string;
@@ -66,30 +67,63 @@ export type CircleActivityItem = {
   imageVariant?: 'workout' | 'none';
 };
 
-export type TodayCircleCard = {
+export type CircleSummary = {
   id: string;
   title: string;
   category: string;
   dailyTask: string;
+  streakLabel: string;
+  members: CircleMemberStatus[];
+  state?: TodayCircleState;
+  progressPercent?: number;
+  completionRate?: number;
+  viewerHasCheckedIn?: boolean;
+  remainingCheckIns?: number;
+  streakDays?: number;
+  memberCount?: number;
+  maxSize?: number;
+  privacy?: CirclePrivacy;
+  joinMode?: CircleJoinMode;
+  viewerRole?: MemberRole;
+  inviteUrl?: string;
+  joinLabel?: CircleJoinLabel;
+  matchCopy?: string;
+  completionLabel?: string;
+  progressLabel?: string;
+};
+
+export type TodayCircleCard = CircleSummary & {
   state: TodayCircleState;
   progressPercent: number;
   viewerHasCheckedIn: boolean;
   remainingCheckIns: number;
   streakDays: number;
-  streakLabel: string;
-  members: CircleMemberStatus[];
-  completionLabel?: string;
-  progressLabel?: string;
 };
 
-export type CircleDetailModel = {
-  id: string;
-  category: string;
-  streakLabel: string;
-  title: string;
+export type CircleManagementFilter = 'all' | 'needsYou' | 'atRisk' | 'done';
+
+export type CircleManagementCard = TodayCircleCard & {
+  privacy: CirclePrivacy;
+  joinMode: CircleJoinMode;
+  memberCount: number;
+  maxSize: number;
+  viewerRole: MemberRole;
+  inviteUrl?: string;
+};
+
+export type ExploreCircle = CircleSummary & {
+  matchCopy: string;
+  joinLabel: CircleJoinLabel;
+  memberCount: number;
+  maxSize: number;
+  completionRate: number;
+};
+
+export type CircleDetailModel = CircleSummary & {
   dailyGoal: string;
   completionRate: number;
-  members: CircleMemberStatus[];
+  memberCount: number;
+  maxSize: number;
   monthProgress: CircleProgressDay[];
   activity: CircleActivityItem[];
 };
@@ -103,7 +137,7 @@ export type CreateCircleDraft = {
   inviteCode: string;
 };
 
-export type CheckInDraft = {
+export type TapInDraft = {
   note: string;
   photoUri?: string;
 };

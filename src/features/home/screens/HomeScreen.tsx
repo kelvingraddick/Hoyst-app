@@ -61,14 +61,14 @@ export function HomeScreen(): React.JSX.Element {
       <View style={styles.topBar}>
         <BrandMark isDark={theme.isDark} kind="logo" style={styles.logo} />
         <View style={styles.topActions}>
-          <HeaderAction>
-            <Bell color={theme.accentSecondary} size={18} strokeWidth={2.2} />
+          <HeaderAction onPress={() => rootNavigation?.navigate('Inbox')}>
+            <Bell color={theme.accentSecondary} size={22} strokeWidth={2.2} />
           </HeaderAction>
           <HeaderAction>
             <LayeredAvatar
               initials="KE"
               imageSource={currentUserProfile.avatarImage}
-              size={26}
+              size={32}
               state="done"
             />
           </HeaderAction>
@@ -88,7 +88,7 @@ export function HomeScreen(): React.JSX.Element {
             Last 7 Days
           </HoystText>
           <HoystText
-            style={[styles.progressPercent, {color: theme.success}]}
+            style={[styles.progressPercent]}
             variant="bodyStrong">
             82%
           </HoystText>
@@ -98,29 +98,24 @@ export function HomeScreen(): React.JSX.Element {
             const isDone = day.state === 'done';
             const isMissed = day.state === 'missed';
             const isToday = day.state === 'today';
+            const progressCellStateStyle = isDone
+              ? styles.progressCellDone
+              : isMissed
+                ? styles.progressCellMissed
+                : isToday
+                  ? styles.progressCellToday
+                  : undefined;
+            const progressCellThemeStyle = progressCellStateStyle
+              ? undefined
+              : {backgroundColor: theme.surfaceStrong, borderColor: theme.border};
 
             return (
               <View
                 key={day.label}
                 style={[
                   styles.progressCell,
-                  {
-                    backgroundColor: isDone
-                      ? 'rgba(68,216,92,0.14)'
-                      : isMissed
-                      ? 'rgba(255,110,132,0.14)'
-                      : isToday
-                      ? 'rgba(139,92,246,0.16)'
-                      : theme.surfaceStrong,
-                    borderColor: isDone
-                      ? 'rgba(68,216,92,0.34)'
-                      : isMissed
-                      ? 'rgba(255,110,132,0.32)'
-                      : isToday
-                      ? 'rgba(186,158,255,0.5)'
-                      : theme.border,
-                    borderStyle: isToday ? 'dashed' : 'solid',
-                  },
+                  progressCellStateStyle,
+                  progressCellThemeStyle,
                 ]}>
                 <HoystText
                   style={{
@@ -152,7 +147,7 @@ export function HomeScreen(): React.JSX.Element {
         <View
           style={[
             styles.streakIconWrap,
-            {backgroundColor: 'rgba(255,138,61,0.14)'},
+            styles.streakIconTint,
           ]}>
           <Medal color={theme.warning} size={20} strokeWidth={2.1} />
         </View>
@@ -170,7 +165,7 @@ export function HomeScreen(): React.JSX.Element {
           card={circle}
           key={circle.id}
           onPress={() =>
-            rootNavigation?.navigate('CheckInModal', {
+            rootNavigation?.navigate('TapInComposer', {
               circleId: circle.id,
               source: 'home',
             })
@@ -243,6 +238,19 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
   },
+  progressCellDone: {
+    backgroundColor: 'rgba(68,216,92,0.14)',
+    borderColor: 'rgba(68,216,92,0.34)',
+  },
+  progressCellMissed: {
+    backgroundColor: 'rgba(255,110,132,0.14)',
+    borderColor: 'rgba(255,110,132,0.32)',
+  },
+  progressCellToday: {
+    backgroundColor: 'rgba(139,92,246,0.16)',
+    borderColor: 'rgba(186,158,255,0.5)',
+    borderStyle: 'dashed',
+  },
   streakSummary: {
     alignItems: 'center',
     borderRadius: radius.lg,
@@ -258,6 +266,9 @@ const styles = StyleSheet.create({
     height: 46,
     justifyContent: 'center',
     width: 46,
+  },
+  streakIconTint: {
+    backgroundColor: 'rgba(255,138,61,0.14)',
   },
   streakCopy: {
     flex: 1,

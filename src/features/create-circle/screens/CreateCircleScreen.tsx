@@ -185,7 +185,7 @@ export function CreateCircleScreen({
     <HoystScreen contentContainerStyle={styles.content}>
       <View style={styles.topBar}>
         <TopControl onPress={() => navigation.goBack()}>
-          <ArrowLeft color={theme.text} size={18} strokeWidth={2.3} />
+          <ArrowLeft color={theme.text} size={22} strokeWidth={2.3} />
         </TopControl>
         <View style={styles.topIcons}>
           <TopControl>
@@ -364,9 +364,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderRadius: 16,
     borderWidth: 1,
-    height: 34,
+    height: 40,
     justifyContent: 'center',
-    minWidth: 34,
+    minWidth: 40,
     paddingHorizontal: 8,
   },
   topIcons: {

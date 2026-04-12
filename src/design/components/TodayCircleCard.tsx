@@ -6,7 +6,6 @@ import {
   Clock3,
   Flame,
   Lock,
-  Plus,
   Send,
 } from 'lucide-react-native';
 
@@ -16,6 +15,7 @@ import {radius} from '../tokens/radius';
 import {GlassPanel} from './GlassPanel';
 import {HoystChip} from './HoystChip';
 import {LayeredAvatar} from './LayeredAvatar';
+import {TapInRingMark} from './TapInRingMark';
 import {HoystText} from './HoystText';
 
 type TodayCircleCardProps = {
@@ -28,8 +28,6 @@ export function TodayCircleCard({
   onPress,
 }: TodayCircleCardProps): React.JSX.Element {
   const theme = useHoystTheme();
-  const checkInActionBackground = '#14371d';
-  const checkInActionIconBackground = theme.success;
   const streakTone =
     card.streakDays > 7
       ? theme.warning
@@ -60,7 +58,7 @@ export function TodayCircleCard({
     : 'share';
   const actionLabel =
     actionVariant === 'check_in'
-      ? 'Check-In'
+      ? 'Tap In'
       : actionVariant === 'poke'
       ? `Poke ${card.remainingCheckIns}`
       : 'Share';
@@ -150,21 +148,21 @@ export function TodayCircleCard({
             onPress={onPress}
             style={({pressed}) => [
               styles.actionWrap,
-              styles.primaryActionWrap,
-              {backgroundColor: checkInActionBackground},
+              styles.primaryActionGlow,
               {opacity: pressed ? 0.92 : 1},
             ]}>
-            <View style={styles.primaryAction}>
-              <View
-                style={[
-                  styles.primaryActionIcon,
-                  {backgroundColor: checkInActionIconBackground},
-                ]}>
-                <Plus color="#0e0e0e" size={12} strokeWidth={2.2} />
-              </View>
+            <View
+              style={[
+                styles.primaryAction,
+                {
+                  backgroundColor: theme.surfaceSoft,
+                  borderColor: 'rgba(255,255,255,0.36)',
+                },
+              ]}>
+              <TapInRingMark innerSize={17} outerSize={30} />
               <HoystText
                 numberOfLines={1}
-                style={[styles.primaryActionLabel, {color: theme.success}]}
+                style={styles.primaryActionLabel}
                 variant="button">
                 {actionLabel}
               </HoystText>
@@ -293,29 +291,27 @@ const styles = StyleSheet.create({
     flexShrink: 0,
     minWidth: 116,
   },
-  primaryActionWrap: {
-    borderRadius: radius.md,
-    minWidth: 184,
-    overflow: 'hidden',
-  },
   primaryAction: {
     alignItems: 'center',
     borderRadius: radius.md,
+    borderWidth: 1,
     flexDirection: 'row',
     gap: 8,
     justifyContent: 'center',
     minHeight: 48,
+    minWidth: 116,
     paddingHorizontal: 14,
-    backgroundColor: "#14371d",
   },
-  primaryActionIcon: {
-    alignItems: 'center',
-    borderRadius: radius.pill,
-    height: 20,
-    justifyContent: 'center',
-    width: 20,
+  primaryActionGlow: {
+    borderRadius: radius.md,
+    elevation: 10,
+    shadowColor: '#FFFFFF',
+    shadowOffset: {height: 0, width: 0},
+    shadowOpacity: 0.2,
+    shadowRadius: 18,
   },
   primaryActionLabel: {
+    color: '#FFFFFF',
     fontSize: 14,
     flexShrink: 0,
     fontWeight: '800',
