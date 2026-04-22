@@ -115,8 +115,8 @@ function DashboardAction({
       style={({pressed}) => [
         styles.dashboardAction,
         {
-          backgroundColor: theme.surfaceSoft,
-          borderColor: theme.borderStrong,
+          backgroundColor: theme.actionSurface,
+          borderColor: theme.actionBorder,
           opacity: pressed ? 0.9 : 1,
           transform: [{scale: pressed ? 0.985 : 1}],
         },
@@ -151,14 +151,18 @@ function TapInPrimaryAction({onPress}: {onPress: () => void}) {
         style={[
           styles.tapInFill,
           {
-            backgroundColor: theme.surfaceSoft,
-            borderColor: theme.borderStrong,
+            backgroundColor: theme.actionSurface,
+            borderColor: theme.actionBorder,
+            shadowColor: theme.actionShadowColor,
+            shadowOpacity: theme.actionShadowOpacity,
           },
         ]}>
         <View style={styles.tapInIconWrap}>
           <TapInRingMark innerSize={22} outerSize={40} />
         </View>
-        <HoystText style={styles.tapInLabel} variant="button">
+        <HoystText
+          style={[styles.tapInLabel, {color: theme.actionForeground}]}
+          variant="button">
           Tap In
         </HoystText>
       </View>
@@ -365,7 +369,9 @@ export function CircleDetailScreen({
               {detail.memberCount}/{detail.maxSize} members
             </HoystText>
           </View>
-          <View style={styles.managementDot} />
+          <View
+            style={[styles.managementDot, {backgroundColor: theme.borderStrong}]}
+          />
           <View style={styles.metaItem}>
             {detail.privacy === 'private' ? (
               <Lock color={theme.textSubtle} size={14} strokeWidth={2.1} />
@@ -376,7 +382,9 @@ export function CircleDetailScreen({
               {privacyLabel}
             </HoystText>
           </View>
-          <View style={styles.managementDot} />
+          <View
+            style={[styles.managementDot, {backgroundColor: theme.borderStrong}]}
+          />
           <HoystText tone="muted" variant="caption">
             {isMemberCircle ? getRoleLabel(detail) : getJoinModeLabel(detail)}
           </HoystText>
@@ -588,7 +596,6 @@ const styles = StyleSheet.create({
     gap: 5,
   },
   managementDot: {
-    backgroundColor: 'rgba(255,255,255,0.2)',
     borderRadius: radius.pill,
     height: 3,
     width: 3,
@@ -628,9 +635,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     minHeight: 68,
     paddingHorizontal: 24,
-    shadowColor: '#FFFFFF',
     shadowOffset: {height: 0, width: 0},
-    shadowOpacity: 0.2,
     shadowRadius: 18,
     width: '100%',
   },
@@ -641,7 +646,6 @@ const styles = StyleSheet.create({
     width: 44,
   },
   tapInLabel: {
-    color: '#FFFFFF',
     fontSize: 17,
     fontWeight: '800',
     lineHeight: 21,

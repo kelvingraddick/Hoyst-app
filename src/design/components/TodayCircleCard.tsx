@@ -149,20 +149,27 @@ export function TodayCircleCard({
             style={({pressed}) => [
               styles.actionWrap,
               styles.primaryActionGlow,
-              {opacity: pressed ? 0.92 : 1},
+              {
+                opacity: pressed ? 0.92 : 1,
+                shadowColor: theme.actionShadowColor,
+                shadowOpacity: theme.actionShadowOpacity,
+              },
             ]}>
             <View
               style={[
                 styles.primaryAction,
                 {
-                  backgroundColor: theme.surfaceSoft,
-                  borderColor: 'rgba(255,255,255,0.36)',
+                  backgroundColor: theme.actionSurface,
+                  borderColor: theme.actionBorder,
                 },
               ]}>
               <TapInRingMark innerSize={17} outerSize={30} />
               <HoystText
                 numberOfLines={1}
-                style={styles.primaryActionLabel}
+                style={[
+                  styles.primaryActionLabel,
+                  {color: theme.actionForeground},
+                ]}
                 variant="button">
                 {actionLabel}
               </HoystText>
@@ -174,16 +181,29 @@ export function TodayCircleCard({
               styles.actionWrap,
               styles.secondaryAction,
               {
-                backgroundColor: theme.surfaceSoft,
-                borderColor: theme.borderStrong,
+                backgroundColor: theme.actionSurface,
+                borderColor: theme.actionBorder,
               },
             ]}>
             {actionVariant === 'poke' ? (
-              <BellRing color={theme.text} size={16} strokeWidth={2.2} />
+              <BellRing
+                color={theme.actionForeground}
+                size={16}
+                strokeWidth={2.2}
+              />
             ) : (
-              <Send color={theme.text} size={16} strokeWidth={2.2} />
+              <Send
+                color={theme.actionForeground}
+                size={16}
+                strokeWidth={2.2}
+              />
             )}
-            <HoystText style={styles.secondaryActionLabel} variant="button">
+            <HoystText
+              style={[
+                styles.secondaryActionLabel,
+                {color: theme.actionForeground},
+              ]}
+              variant="button">
               {actionLabel}
             </HoystText>
           </View>
@@ -305,13 +325,10 @@ const styles = StyleSheet.create({
   primaryActionGlow: {
     borderRadius: radius.md,
     elevation: 10,
-    shadowColor: '#FFFFFF',
     shadowOffset: {height: 0, width: 0},
-    shadowOpacity: 0.2,
     shadowRadius: 18,
   },
   primaryActionLabel: {
-    color: '#FFFFFF',
     fontSize: 14,
     flexShrink: 0,
     fontWeight: '800',
@@ -329,7 +346,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
   },
   secondaryActionLabel: {
-    color: '#FFFFFF',
     fontSize: 14,
     lineHeight: 18,
   },

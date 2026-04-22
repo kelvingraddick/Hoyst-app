@@ -238,7 +238,12 @@ export function TapInPickerScreen({navigation}: Props): React.JSX.Element {
                       {circle.memberCount}/{circle.maxSize} members
                     </HoystText>
                   </View>
-                  <View style={styles.managementDot} />
+                  <View
+                    style={[
+                      styles.managementDot,
+                      {backgroundColor: theme.borderStrong},
+                    ]}
+                  />
                   <HoystText style={{color: progressTone}} variant="caption">
                     {statusCopy}
                   </HoystText>
@@ -275,20 +280,27 @@ export function TapInPickerScreen({navigation}: Props): React.JSX.Element {
                     onPress={() => openTapIn(circle.id)}
                     style={({pressed}) => [
                       styles.primaryActionWrap,
-                      {opacity: pressed ? 0.92 : 1},
+                      {
+                        opacity: pressed ? 0.92 : 1,
+                        shadowColor: theme.actionShadowColor,
+                        shadowOpacity: theme.actionShadowOpacity,
+                      },
                     ]}>
                     <View
                       style={[
                         styles.primaryAction,
-                        styles.primaryActionBorder,
                         {
-                          backgroundColor: theme.surfaceSoft,
+                          backgroundColor: theme.actionSurface,
+                          borderColor: theme.actionBorder,
                         },
                       ]}>
                       <TapInRingMark innerSize={17} outerSize={30} />
                       <HoystText
                         numberOfLines={1}
-                        style={styles.primaryActionLabel}
+                        style={[
+                          styles.primaryActionLabel,
+                          {color: theme.actionForeground},
+                        ]}
                         variant="button">
                         Tap In
                       </HoystText>
@@ -366,15 +378,22 @@ export function TapInPickerScreen({navigation}: Props): React.JSX.Element {
                     style={({pressed}) => [
                       styles.secondaryAction,
                       {
-                        backgroundColor: theme.surfaceSoft,
-                        borderColor: theme.borderStrong,
+                        backgroundColor: theme.actionSurface,
+                        borderColor: theme.actionBorder,
                         opacity: pressed ? 0.9 : 1,
                       },
                     ]}>
-                    <ActionIcon color={theme.text} size={15} strokeWidth={2.2} />
+                    <ActionIcon
+                      color={theme.actionForeground}
+                      size={15}
+                      strokeWidth={2.2}
+                    />
                     <HoystText
                       numberOfLines={1}
-                      style={styles.secondaryActionLabel}
+                      style={[
+                        styles.secondaryActionLabel,
+                        {color: theme.actionForeground},
+                      ]}
                       variant="button">
                       {actionLabel}
                     </HoystText>
@@ -539,9 +558,7 @@ const styles = StyleSheet.create({
     flexShrink: 0,
     marginLeft: 'auto',
     minWidth: 116,
-    shadowColor: '#FFFFFF',
     shadowOffset: {height: 0, width: 0},
-    shadowOpacity: 0.2,
     shadowRadius: 18,
   },
   primaryAction: {
@@ -555,11 +572,7 @@ const styles = StyleSheet.create({
     minWidth: 116,
     paddingHorizontal: 14,
   },
-  primaryActionBorder: {
-    borderColor: 'rgba(255,255,255,0.36)',
-  },
   primaryActionLabel: {
-    color: '#FFFFFF',
     flexShrink: 0,
     fontSize: 14,
     fontWeight: '800',
@@ -608,7 +621,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
   },
   secondaryActionLabel: {
-    color: '#FFFFFF',
     fontSize: 14,
     lineHeight: 18,
   },

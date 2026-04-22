@@ -164,6 +164,8 @@ export function CirclesScreen({navigation}: Props): React.JSX.Element {
             styles.createButtonPressable,
             {
               opacity: pressed ? 0.9 : 1,
+              shadowColor: theme.actionShadowColor,
+              shadowOpacity: theme.actionShadowOpacity,
               transform: [{scale: pressed ? 0.98 : 1}],
             },
           ]}>
@@ -171,8 +173,8 @@ export function CirclesScreen({navigation}: Props): React.JSX.Element {
             style={[
               styles.createButton,
               {
-                backgroundColor: theme.surfaceStrong,
-                borderColor: theme.borderStrong,
+                backgroundColor: theme.actionSurface,
+                borderColor: theme.actionBorder,
               },
             ]}>
             <View style={styles.createIcon}>
@@ -186,7 +188,7 @@ export function CirclesScreen({navigation}: Props): React.JSX.Element {
             </View>
             <HoystText
               numberOfLines={1}
-              style={styles.createButtonLabel}
+              style={[styles.createButtonLabel, {color: theme.actionForeground}]}
               variant="button">
               Create Circle
             </HoystText>
@@ -339,11 +341,21 @@ export function CirclesScreen({navigation}: Props): React.JSX.Element {
                     {circle.memberCount}/{circle.maxSize} members
                   </HoystText>
                 </View>
-                <View style={styles.managementDot} />
+                <View
+                  style={[
+                    styles.managementDot,
+                    {backgroundColor: theme.borderStrong},
+                  ]}
+                />
                 <HoystText tone="muted" variant="caption">
                   {joinModeLabel}
                 </HoystText>
-                <View style={styles.managementDot} />
+                <View
+                  style={[
+                    styles.managementDot,
+                    {backgroundColor: theme.borderStrong},
+                  ]}
+                />
                 <HoystText tone="muted" variant="caption">
                   {roleLabel}
                 </HoystText>
@@ -388,14 +400,21 @@ export function CirclesScreen({navigation}: Props): React.JSX.Element {
                       style={({pressed}) => [
                         styles.secondaryAction,
                         {
-                          backgroundColor: theme.surfaceSoft,
-                          borderColor: theme.borderStrong,
+                          backgroundColor: theme.actionSurface,
+                          borderColor: theme.actionBorder,
                           opacity: pressed ? 0.9 : 1,
                         },
                       ]}>
-                      <Send color={theme.text} size={15} strokeWidth={2.2} />
+                      <Send
+                        color={theme.actionForeground}
+                        size={15}
+                        strokeWidth={2.2}
+                      />
                       <HoystText
-                        style={styles.cardActionLabel}
+                        style={[
+                          styles.cardActionLabel,
+                          {color: theme.actionForeground},
+                        ]}
                         variant="button">
                         Invite
                       </HoystText>
@@ -405,15 +424,20 @@ export function CirclesScreen({navigation}: Props): React.JSX.Element {
                     style={[
                       styles.manageAction,
                       {
-                        backgroundColor: theme.surfaceSoft,
-                        borderColor: theme.borderStrong,
+                        backgroundColor: theme.actionSurface,
+                        borderColor: theme.actionBorder,
                       },
                     ]}>
-                    <HoystText style={styles.cardActionLabel} variant="button">
+                    <HoystText
+                      style={[
+                        styles.cardActionLabel,
+                        {color: theme.actionForeground},
+                      ]}
+                      variant="button">
                       Manage
                     </HoystText>
                     <ArrowRight
-                      color={theme.textSubtle}
+                      color={theme.actionForeground}
                       size={16}
                       strokeWidth={2.2}
                     />
@@ -490,7 +514,6 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   createButtonLabel: {
-    color: '#FFFFFF',
     fontSize: 17,
     fontWeight: '800',
     lineHeight: 21,
@@ -499,9 +522,7 @@ const styles = StyleSheet.create({
     alignSelf: 'stretch',
     borderRadius: radius.md,
     elevation: 10,
-    shadowColor: '#FFFFFF',
     shadowOffset: {height: 0, width: 0},
-    shadowOpacity: 0.2,
     shadowRadius: 18,
     width: '100%',
   },
@@ -556,7 +577,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
   },
   managementDot: {
-    backgroundColor: 'rgba(255,255,255,0.2)',
     borderRadius: radius.pill,
     height: 3,
     width: 3,

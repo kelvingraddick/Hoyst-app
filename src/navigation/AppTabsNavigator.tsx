@@ -44,7 +44,7 @@ export function AppTabsNavigator(): React.JSX.Element {
         sceneStyle: {
           backgroundColor: theme.background,
         },
-        tabBarActiveTintColor: '#FFFFFF',
+        tabBarActiveTintColor: theme.tabActiveForeground,
         tabBarBackground: HoystTabBarBackground,
         tabBarHideOnKeyboard: true,
         tabBarIconStyle: styles.tabBarIcon,
@@ -73,7 +73,16 @@ export function AppTabsNavigator(): React.JSX.Element {
             <View
               style={[
                 styles.iconWrap,
-                focused ? styles.iconWrapFocused : undefined,
+                focused
+                  ? [
+                      styles.iconWrapFocused,
+                      {
+                        backgroundColor: theme.tabActiveBackground,
+                        shadowColor: theme.tabActiveShadowColor,
+                        shadowOpacity: theme.tabActiveShadowOpacity,
+                      },
+                    ]
+                  : undefined,
               ]}>
               <Icon color={color} size={size} strokeWidth={2.25} />
             </View>
@@ -129,14 +138,11 @@ const styles = StyleSheet.create({
     width: 38,
   },
   iconWrapFocused: {
-    backgroundColor: 'rgba(255,255,255,0.12)',
     elevation: 8,
-    shadowColor: '#FFFFFF',
     shadowOffset: {
       height: 0,
       width: 0,
     },
-    shadowOpacity: 0.62,
     shadowRadius: 12,
   },
   tapInOffset: {
