@@ -14,7 +14,7 @@ export function HoystTabBarBackground(): React.JSX.Element {
         blurType={theme.isDark ? 'dark' : 'light'}
         reducedTransparencyFallbackColor={theme.surfaceStrong}
         style={[
-          StyleSheet.absoluteFillObject,
+          StyleSheet.absoluteFill,
           styles.base,
           {
             borderColor: theme.border,
@@ -27,7 +27,7 @@ export function HoystTabBarBackground(): React.JSX.Element {
   return (
     <View
       style={[
-        StyleSheet.absoluteFillObject,
+        StyleSheet.absoluteFill,
         styles.base,
         {
           backgroundColor: theme.surface,

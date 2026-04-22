@@ -16,7 +16,9 @@ export const brandColors = {
 
 export type HoystTheme = ReturnType<typeof getHoystThemeColors>;
 
-export function getHoystThemeColors(scheme: 'light' | 'dark' | null | undefined) {
+export function getHoystThemeColors(
+  scheme: 'light' | 'dark' | 'unspecified' | null | undefined,
+) {
   const isDark = scheme !== 'light';
 
   return {

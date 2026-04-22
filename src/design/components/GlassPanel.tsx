@@ -40,13 +40,13 @@ export function GlassPanel({
           blurAmount={glass.blurAmount}
           blurType={theme.isDark ? 'dark' : 'light'}
           reducedTransparencyFallbackColor={theme.surfaceStrong}
-          style={StyleSheet.absoluteFillObject}
+          style={StyleSheet.absoluteFill}
         />
       ) : (
         <View
           pointerEvents="none"
           style={[
-            StyleSheet.absoluteFillObject,
+            StyleSheet.absoluteFill,
             {
               backgroundColor: theme.tint,
             },
@@ -56,7 +56,7 @@ export function GlassPanel({
       <View
         pointerEvents="none"
         style={[
-          StyleSheet.absoluteFillObject,
+          StyleSheet.absoluteFill,
           styles.highlight,
           {
             borderColor: theme.border,
