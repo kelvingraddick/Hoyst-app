@@ -12,8 +12,9 @@ import {HoystText} from '../../../design/components/HoystText';
 import {TodayCircleCard} from '../../../design/components/TodayCircleCard';
 import {radius} from '../../../design/tokens/radius';
 import {useHoystTheme} from '../../../design/theme/useHoystTheme';
-import {currentUserProfile, todayCircles} from '../../circles/mockData';
+import {todayCircles} from '../../circles/mockData';
 import type {RootStackParamList} from '../../../navigation/types';
+import {useUserProfileStore} from '../../../store/profile-store';
 
 const recentProgress = [
   {label: '18', state: 'done'},
@@ -52,9 +53,17 @@ function HeaderAction({
 
 export function HomeScreen(): React.JSX.Element {
   const theme = useHoystTheme();
+  const profile = useUserProfileStore(state => state.profile);
   const navigation = useNavigation();
   const rootNavigation =
     navigation.getParent<NativeStackNavigationProp<RootStackParamList>>();
+  const firstName = profile.name.split(' ')[0];
+  const initials = profile.name
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map(part => part[0]?.toUpperCase() ?? '')
+    .join('');
 
   return (
     <HoystScreen contentContainerStyle={styles.content}>
@@ -66,8 +75,8 @@ export function HomeScreen(): React.JSX.Element {
           </HeaderAction>
           <HeaderAction>
             <LayeredAvatar
-              initials="KE"
-              imageSource={currentUserProfile.avatarImage}
+              initials={initials}
+              imageSource={profile.avatarImage}
               size={32}
               state="done"
             />
@@ -76,7 +85,7 @@ export function HomeScreen(): React.JSX.Element {
       </View>
 
       <View style={styles.heroCopy}>
-        <HoystText variant="headline">Good morning, Kelvin</HoystText>
+        <HoystText variant="headline">Good morning, {firstName}</HoystText>
         <HoystText tone="muted" variant="label">
           Tuesday, October 24
         </HoystText>

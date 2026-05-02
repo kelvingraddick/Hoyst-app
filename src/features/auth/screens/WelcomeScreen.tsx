@@ -1,5 +1,6 @@
 import React from 'react';
 import {StyleSheet, View} from 'react-native';
+import type {NativeStackScreenProps} from '@react-navigation/native-stack';
 
 import {BrandMark} from '../../../design/components/BrandMark';
 import {GlassPanel} from '../../../design/components/GlassPanel';
@@ -7,9 +8,14 @@ import {HoystButton} from '../../../design/components/HoystButton';
 import {HoystScreen} from '../../../design/components/HoystScreen';
 import {HoystText} from '../../../design/components/HoystText';
 import {useHoystTheme} from '../../../design/theme/useHoystTheme';
+import type {AuthStackParamList} from '../../../navigation/types';
+import {useSessionStore} from '../../../store/session-store';
 
-export function WelcomeScreen(): React.JSX.Element {
+type Props = NativeStackScreenProps<AuthStackParamList, 'Welcome'>;
+
+export function WelcomeScreen({navigation}: Props): React.JSX.Element {
   const theme = useHoystTheme();
+  const enterPreview = useSessionStore(state => state.enterPreview);
 
   return (
     <HoystScreen>
@@ -33,7 +39,12 @@ export function WelcomeScreen(): React.JSX.Element {
           The app currently opens in preview mode so the main Hoyst shell is
           reviewable before auth wiring lands.
         </HoystText>
-        <HoystButton label="Continue To Preview" />
+        <HoystButton label="Continue To Preview" onPress={enterPreview} />
+        <HoystButton
+          label="Go To Sign In"
+          onPress={() => navigation.navigate('SignIn')}
+          variant="outline"
+        />
       </GlassPanel>
     </HoystScreen>
   );

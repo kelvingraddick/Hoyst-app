@@ -17,6 +17,8 @@ export type RootStackParamList = {
   MainTabs: undefined;
   Auth: undefined;
   Inbox: undefined;
+  Settings: undefined;
+  EditProfile: undefined;
   TapInPicker: undefined;
   CreateCircle: undefined;
   CircleDetail: {circleId: string};

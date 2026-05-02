@@ -4,6 +4,8 @@ import {createNativeStackNavigator} from '@react-navigation/native-stack';
 import {CreateCircleScreen} from '../features/create-circle/screens/CreateCircleScreen';
 import {CircleDetailScreen} from '../features/circles/screens/CircleDetailScreen';
 import {InboxScreen} from '../features/inbox/screens/InboxScreen';
+import {EditProfileScreen} from '../features/settings/screens/EditProfileScreen';
+import {SettingsScreen} from '../features/settings/screens/SettingsScreen';
 import {TapInCompleteScreen} from '../features/check-in/screens/TapInCompleteScreen';
 import {TapInComposerScreen} from '../features/check-in/screens/TapInComposerScreen';
 import {TapInPickerScreen} from '../features/check-in/screens/TapInPickerScreen';
@@ -37,6 +39,22 @@ export function RootNavigator(): React.JSX.Element {
       <Stack.Screen
         component={InboxScreen}
         name="Inbox"
+        options={{
+          animation: 'slide_from_right',
+          headerShown: false,
+        }}
+      />
+      <Stack.Screen
+        component={SettingsScreen}
+        name="Settings"
+        options={{
+          animation: 'slide_from_right',
+          headerShown: false,
+        }}
+      />
+      <Stack.Screen
+        component={EditProfileScreen}
+        name="EditProfile"
         options={{
           animation: 'slide_from_right',
           headerShown: false,
