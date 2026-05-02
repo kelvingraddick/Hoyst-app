@@ -8,7 +8,6 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "lint": "eslint src --ext .ts",
-    "serve": "firebase emulators:start --only functions",
     "watch": "tsc -w -p tsconfig.json"
   },
   "dependencies": {

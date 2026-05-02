@@ -75,6 +75,9 @@ node_modules
 *.log
 .nvm
 
+# Firebase
+.firebase/
+
 # OS X
 .DS_Store
 
