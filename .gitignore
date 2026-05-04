@@ -21,6 +21,7 @@ DerivedData
 *.xcuserstate
 project.xcworkspace
 **/.xcode.env.local
+ios/tmp.xcconfig
 
 # Gradle
 /build/
@@ -75,11 +76,24 @@ node_modules
 *.log
 .nvm
 .env
+.env.*
+!.env.example
 
 # Firebase
 .firebase/
 android/app/google-services.json
 ios/GoogleService-Info.plist
+
+# Local credentials and release signing
+*.jks
+*.p12
+*.mobileprovision
+android/key.properties
+android/keystore.properties
+android/app/*.keystore
+!android/app/debug.keystore
+*service-account*.json
+*firebase-admin*.json
 
 # OS X
 .DS_Store

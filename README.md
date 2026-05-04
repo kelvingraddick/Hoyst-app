@@ -47,6 +47,11 @@ SENTRY_DSN=your-sentry-dsn
 not provide hardcoded Google client ID fallbacks. Keep optional services blank
 in `.env` until they are ready to receive local app events.
 
+Do not put backend-only credentials in `.env`. Cloud Functions secrets such as
+email provider API keys or push notification REST API keys should be set as
+Firebase Functions secrets, not committed to this repo and not bundled into the
+mobile app.
+
 Google native app config is intentionally kept out of git. On a fresh machine,
 download the Firebase app config files from the Firebase console or restore
 them from a secure backup, then place them at:
