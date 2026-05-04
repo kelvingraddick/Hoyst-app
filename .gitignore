@@ -77,6 +77,8 @@ node_modules
 
 # Firebase
 .firebase/
+android/app/google-services.json
+ios/GoogleService-Info.plist
 
 # OS X
 .DS_Store
