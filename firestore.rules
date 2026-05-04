@@ -1,0 +1,72 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isSelf(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    function isActiveMember(circleId) {
+      return signedIn() &&
+        exists(/databases/$(database)/documents/circles/$(circleId)/members/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/circles/$(circleId)/members/$(request.auth.uid)).data.status == 'active';
+    }
+
+    function isPublicCircle() {
+      return resource.data.privacy == 'public';
+    }
+
+    match /users/{uid} {
+      allow read: if true;
+      allow create, delete: if false;
+      allow update: if isSelf(uid) &&
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['avatarUrl', 'bio', 'displayName', 'updatedAt']);
+    }
+
+    match /userPrivate/{uid} {
+      allow read: if isSelf(uid);
+      allow create, update, delete: if false;
+    }
+
+    match /handles/{handle} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    match /publicCircleIndex/{circleId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    match /circles/{circleId} {
+      allow read: if isPublicCircle() || isActiveMember(circleId);
+      allow write: if false;
+
+      match /members/{uid} {
+        allow read: if isActiveMember(circleId) || isSelf(uid);
+        allow write: if false;
+      }
+
+      match /joinRequests/{uid} {
+        allow read: if isSelf(uid) || isActiveMember(circleId);
+        allow write: if false;
+      }
+
+      match /days/{dateKey} {
+        allow read: if isActiveMember(circleId);
+        allow write: if false;
+
+        match /checkIns/{uid} {
+          allow read: if isActiveMember(circleId);
+          allow write: if false;
+        }
+      }
+    }
+  }
+}
+

@@ -7,21 +7,31 @@ import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import {BrandMark} from '../../../design/components/BrandMark';
 import {GlassPanel} from '../../../design/components/GlassPanel';
 import {HoystChip} from '../../../design/components/HoystChip';
+import {HoystButton} from '../../../design/components/HoystButton';
 import {HoystScreen} from '../../../design/components/HoystScreen';
 import {HoystText} from '../../../design/components/HoystText';
 import {LayeredAvatar} from '../../../design/components/LayeredAvatar';
 import {useHoystTheme} from '../../../design/theme/useHoystTheme';
 import type {AppTabsParamList, RootStackParamList} from '../../../navigation/types';
+import {useOnboardingStore} from '../../../store/onboarding-store';
 import {useUserProfileStore} from '../../../store/profile-store';
+import {useSessionStore} from '../../../store/session-store';
 
 type Props = BottomTabScreenProps<AppTabsParamList, 'Profile'>;
 
 export function ProfileScreen({navigation}: Props): React.JSX.Element {
   const theme = useHoystTheme();
   const profile = useUserProfileStore(state => state.profile);
+  const displayProfile = useUserProfileStore(state => state.getDisplayProfile());
+  const status = useSessionStore(state => state.status);
+  const beginAuthFlow = useSessionStore(state => state.beginAuthFlow);
+  const startForProtectedAction = useOnboardingStore(
+    state => state.startForProtectedAction,
+  );
   const rootNavigation =
     navigation.getParent<NativeStackNavigationProp<RootStackParamList>>();
-  const initials = profile.name
+  const isReady = status === 'authenticatedReady' && Boolean(profile);
+  const initials = displayProfile.name
     .split(' ')
     .filter(Boolean)
     .slice(0, 2)
@@ -30,19 +40,40 @@ export function ProfileScreen({navigation}: Props): React.JSX.Element {
 
   return (
     <HoystScreen contentContainerStyle={styles.content}>
+      {!isReady ? (
+        <GlassPanel>
+          <View style={styles.sectionCopy}>
+            <HoystText variant="title">Create your Hoyst account</HoystText>
+            <HoystText tone="muted">
+              Profiles, settings, joins, and Tap Ins unlock after sign-in and a
+              handle.
+            </HoystText>
+          </View>
+          <HoystButton
+            label="Sign in or register"
+            onPress={() => {
+              beginAuthFlow({type: 'settings'});
+              startForProtectedAction();
+              rootNavigation?.navigate('Auth', {screen: 'Welcome'});
+            }}
+          />
+        </GlassPanel>
+      ) : null}
       <GlassPanel>
         <View style={styles.profileHeader}>
           <LayeredAvatar
             initials={initials}
-            imageSource={profile.avatarImage}
+            imageSource={displayProfile.avatarImage}
             size={68}
             state="done"
           />
           <View style={styles.copy}>
             <BrandMark isDark={theme.isDark} kind="logo" style={styles.logo} />
-            <HoystText variant="title">{profile.name}</HoystText>
-            <HoystText tone="muted">@{profile.handle}</HoystText>
-            {profile.bio ? <HoystText tone="muted">{profile.bio}</HoystText> : null}
+            <HoystText variant="title">{displayProfile.name}</HoystText>
+            <HoystText tone="muted">@{displayProfile.handle}</HoystText>
+            {displayProfile.bio ? (
+              <HoystText tone="muted">{displayProfile.bio}</HoystText>
+            ) : null}
           </View>
         </View>
         <View style={styles.chips}>
@@ -68,7 +99,16 @@ export function ProfileScreen({navigation}: Props): React.JSX.Element {
           </View>
         </View>
         <Pressable
-          onPress={() => rootNavigation?.navigate('Settings')}
+          onPress={() => {
+            if (!isReady) {
+              beginAuthFlow({type: 'settings'});
+              startForProtectedAction();
+              rootNavigation?.navigate('Auth', {screen: 'Welcome'});
+              return;
+            }
+
+            rootNavigation?.navigate('Settings');
+          }}
           style={({pressed}) => [
             styles.settingsLink,
             {

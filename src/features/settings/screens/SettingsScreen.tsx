@@ -21,14 +21,17 @@ import type {LucideIcon} from 'lucide-react-native';
 import type {NativeStackScreenProps} from '@react-navigation/native-stack';
 
 import {GlassPanel} from '../../../design/components/GlassPanel';
+import {HoystButton} from '../../../design/components/HoystButton';
 import {HoystScreen} from '../../../design/components/HoystScreen';
 import {HoystText} from '../../../design/components/HoystText';
 import {LayeredAvatar} from '../../../design/components/LayeredAvatar';
 import {useHoystTheme} from '../../../design/theme/useHoystTheme';
 import type {RootStackParamList} from '../../../navigation/types';
+import {signOutOfHoyst} from '../../auth/services/auth-service';
 import {useUserProfileStore} from '../../../store/profile-store';
 import {useSessionStore} from '../../../store/session-store';
 import {useSettingsStore} from '../../../store/settings-store';
+import {useOnboardingStore} from '../../../store/onboarding-store';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Settings'>;
 
@@ -183,17 +186,52 @@ function AccountSummaryRow({
 export function SettingsScreen({navigation}: Props): React.JSX.Element {
   const theme = useHoystTheme();
   const profile = useUserProfileStore(state => state.profile);
+  const displayProfile = useUserProfileStore(state => state.getDisplayProfile());
+  const status = useSessionStore(state => state.status);
   const notifications = useSettingsStore(state => state.notifications);
   const setNotificationPreference = useSettingsStore(
     state => state.setNotificationPreference,
   );
-  const signOut = useSessionStore(state => state.signOut);
-  const initials = profile.name
+  const beginAuthFlow = useSessionStore(state => state.beginAuthFlow);
+  const startForProtectedAction = useOnboardingStore(
+    state => state.startForProtectedAction,
+  );
+  const setGuest = useSessionStore(state => state.setGuest);
+  const isReady = status === 'authenticatedReady' && Boolean(profile);
+  const initials = displayProfile.name
     .split(' ')
     .filter(Boolean)
     .slice(0, 2)
     .map(part => part[0]?.toUpperCase() ?? '')
     .join('');
+
+  if (!isReady) {
+    return (
+      <HoystScreen contentContainerStyle={styles.content}>
+        <View style={styles.header}>
+          <HeaderButton onPress={() => navigation.goBack()}>
+            <ArrowLeft color={theme.text} size={22} strokeWidth={2.3} />
+          </HeaderButton>
+          <HoystText variant="headline">Settings</HoystText>
+        </View>
+        <GlassPanel>
+          <HoystText variant="title">Account required</HoystText>
+          <HoystText tone="muted">
+            Sign in and choose a handle before managing profile and account
+            settings.
+          </HoystText>
+          <HoystButton
+            label="Sign in or register"
+            onPress={() => {
+              beginAuthFlow({type: 'settings'});
+              startForProtectedAction();
+              navigation.navigate('Auth', {screen: 'Welcome'});
+            }}
+          />
+        </GlassPanel>
+      </HoystScreen>
+    );
+  }
 
   return (
     <HoystScreen contentContainerStyle={styles.content}>
@@ -206,11 +244,11 @@ export function SettingsScreen({navigation}: Props): React.JSX.Element {
 
       <SettingsSection title="Account">
         <AccountSummaryRow
-          bio={profile.bio}
-          handle={profile.handle}
-          imageSource={profile.avatarImage}
+          bio={displayProfile.bio}
+          handle={displayProfile.handle}
+          imageSource={displayProfile.avatarImage}
           initials={initials}
-          name={profile.name}
+          name={displayProfile.name}
         />
         <SectionDivider />
         <SettingsRow
@@ -224,7 +262,7 @@ export function SettingsScreen({navigation}: Props): React.JSX.Element {
         />
         <SectionDivider />
         <SettingsRow
-          detail={profile.timezone}
+          detail={displayProfile.timezone}
           icon={Clock3}
           title="Timezone"
           trailing={
@@ -238,7 +276,9 @@ export function SettingsScreen({navigation}: Props): React.JSX.Element {
           detail="Exit the Hoyst shell and return to auth."
           icon={LogOut}
           iconColor={theme.danger}
-          onPress={signOut}
+          onPress={() => {
+            signOutOfHoyst().finally(setGuest).catch(() => undefined);
+          }}
           title="Sign out"
         />
       </SettingsSection>

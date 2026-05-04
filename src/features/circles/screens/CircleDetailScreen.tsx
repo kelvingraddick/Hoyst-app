@@ -1,5 +1,5 @@
-import React, {useMemo, useState} from 'react';
-import {Pressable, Share, StyleSheet, View} from 'react-native';
+import React, {useEffect, useMemo, useState} from 'react';
+import {Alert, Pressable, Share, StyleSheet, View} from 'react-native';
 import {
   ArrowLeft,
   Bell,
@@ -25,10 +25,14 @@ import {HoystScreen} from '../../../design/components/HoystScreen';
 import {HoystText} from '../../../design/components/HoystText';
 import {StatusAvatarRow} from '../../../design/components/StatusAvatarRow';
 import {TapInRingMark} from '../../../design/components/TapInRingMark';
+import {actionMotion, actionShadow} from '../../../design/tokens/actions';
 import {radius} from '../../../design/tokens/radius';
 import {useHoystTheme} from '../../../design/theme/useHoystTheme';
+import {useProtectedAction} from '../../auth/hooks/useProtectedAction';
 import {getCircleDetail} from '../mockData';
-import type {CircleDetailModel} from '../../../types/models';
+import {joinCircle} from '../services/circle-service';
+import {subscribeToPublicCircle} from '../services/public-circle-service';
+import type {CircleDetailModel, CircleSummary} from '../../../types/models';
 import type {RootStackParamList} from '../../../navigation/types';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'CircleDetail'>;
@@ -117,8 +121,8 @@ function DashboardAction({
         {
           backgroundColor: theme.actionSurface,
           borderColor: theme.actionBorder,
-          opacity: pressed ? 0.9 : 1,
-          transform: [{scale: pressed ? 0.985 : 1}],
+          opacity: pressed ? actionMotion.pressedOpacity : 1,
+          transform: [{scale: pressed ? actionMotion.pressedScale : 1}],
         },
       ]}>
       <View style={styles.dashboardActionIcon}>{icon}</View>
@@ -143,8 +147,8 @@ function TapInPrimaryAction({onPress}: {onPress: () => void}) {
       style={({pressed}) => [
         styles.tapInPressable,
         {
-          opacity: pressed ? 0.92 : 1,
-          transform: [{scale: pressed ? 0.985 : 1}],
+          opacity: pressed ? actionMotion.pressedOpacity : 1,
+          transform: [{scale: pressed ? actionMotion.pressedScale : 1}],
         },
       ]}>
       <View
@@ -241,8 +245,14 @@ export function CircleDetailScreen({
   const theme = useHoystTheme();
   const [poked, setPoked] = useState(false);
   const [joinRequested, setJoinRequested] = useState(false);
+  const [isJoining, setIsJoining] = useState(false);
   const [managed, setManaged] = useState(false);
-  const detail = getCircleDetail(route.params.circleId);
+  const [publicCircle, setPublicCircle] = useState<CircleSummary | undefined>();
+  const requireAccount = useProtectedAction(navigation);
+  const detail = useMemo(
+    () => getCircleDetail(route.params.circleId, publicCircle),
+    [publicCircle, route.params.circleId],
+  );
   const pendingMembers = useMemo(
     () => detail.members.filter(member => member.state === 'pending'),
     [detail.members],
@@ -278,9 +288,17 @@ export function CircleDetailScreen({
     ? detail.joinLabel === 'Open seats'
       ? 'Joined'
       : 'Request sent'
-    : detail.joinLabel === 'Open seats'
+      : detail.joinLabel === 'Open seats'
       ? 'Join Circle'
       : 'Request to join';
+
+  useEffect(() => {
+    return subscribeToPublicCircle(
+      route.params.circleId,
+      setPublicCircle,
+      () => setPublicCircle(undefined),
+    );
+  }, [route.params.circleId]);
 
   const shareInvite = () => {
     if (!canInvite || !detail.inviteUrl) {
@@ -293,6 +311,33 @@ export function CircleDetailScreen({
       url: detail.inviteUrl,
     }).catch(() => undefined);
   };
+
+  const handleJoinCircle = async () => {
+    setIsJoining(true);
+    try {
+      const result = await joinCircle(detail.id);
+      setJoinRequested(true);
+      Alert.alert(
+        result.status === 'active' ? 'Joined circle' : 'Request sent',
+        result.status === 'active'
+          ? 'You are now in this circle.'
+          : 'The circle owner will review your request.',
+      );
+    } catch (error) {
+      const message =
+        (error as {message?: string}).message ??
+        'Could not join this circle. Try again.';
+      Alert.alert('Join failed', message);
+    } finally {
+      setIsJoining(false);
+    }
+  };
+
+  useEffect(() => {
+    if (route.params.resumeAction === 'join' && !joinRequested && !isJoining) {
+      handleJoinCircle().catch(() => undefined);
+    }
+  });
 
   return (
     <HoystScreen contentContainerStyle={styles.content}>
@@ -420,10 +465,18 @@ export function CircleDetailScreen({
             <View style={styles.primaryActionWrap}>
               <TapInPrimaryAction
                 onPress={() =>
-                  navigation.navigate('TapInComposer', {
-                    circleId: detail.id,
-                    source: 'circle_detail',
-                  })
+                  requireAccount(
+                    {
+                      circleId: detail.id,
+                      source: 'circle_detail',
+                      type: 'tapIn',
+                    },
+                    () =>
+                      navigation.navigate('TapInComposer', {
+                        circleId: detail.id,
+                        source: 'circle_detail',
+                      }),
+                  )
                 }
               />
             </View>
@@ -477,9 +530,22 @@ export function CircleDetailScreen({
         ) : (
           <View style={styles.publicActionStack}>
             <HoystButton
-              icon={<UserPlus color="#0B0B0C" size={18} strokeWidth={2.4} />}
-              label={joinActionLabel}
-              onPress={() => setJoinRequested(true)}
+              icon={
+                <UserPlus
+                  color={theme.actionForeground}
+                  size={18}
+                  strokeWidth={2.4}
+                />
+              }
+              label={isJoining ? 'Working...' : joinActionLabel}
+              onPress={() =>
+                requireAccount(
+                  {circleId: detail.id, type: 'joinCircle'},
+                  () => {
+                    handleJoinCircle().catch(() => undefined);
+                  },
+                )
+              }
             />
             <HoystText tone="muted" variant="caption">
               {detail.joinLabel === 'Open seats'
@@ -629,14 +695,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderRadius: radius.md,
     borderWidth: 1,
-    elevation: 10,
+    elevation: actionShadow.elevation,
     flexDirection: 'row',
     gap: 7,
     justifyContent: 'center',
     minHeight: 68,
     paddingHorizontal: 24,
-    shadowOffset: {height: 0, width: 0},
-    shadowRadius: 18,
+    shadowOffset: actionShadow.offset,
+    shadowRadius: actionShadow.compactRadius,
     width: '100%',
   },
   tapInIconWrap: {

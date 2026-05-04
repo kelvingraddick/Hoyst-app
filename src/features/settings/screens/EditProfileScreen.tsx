@@ -1,5 +1,5 @@
 import React, {useState} from 'react';
-import {Pressable, StyleSheet, View} from 'react-native';
+import {Alert, Pressable, StyleSheet, View} from 'react-native';
 import {ArrowLeft} from 'lucide-react-native';
 import type {NativeStackScreenProps} from '@react-navigation/native-stack';
 
@@ -10,6 +10,7 @@ import {HoystScreen} from '../../../design/components/HoystScreen';
 import {HoystText} from '../../../design/components/HoystText';
 import {LayeredAvatar} from '../../../design/components/LayeredAvatar';
 import {useHoystTheme} from '../../../design/theme/useHoystTheme';
+import {updateProfileFields} from '../../auth/services/account-service';
 import type {RootStackParamList} from '../../../navigation/types';
 import {useUserProfileStore} from '../../../store/profile-store';
 
@@ -17,12 +18,12 @@ type Props = NativeStackScreenProps<RootStackParamList, 'EditProfile'>;
 
 export function EditProfileScreen({navigation}: Props): React.JSX.Element {
   const theme = useHoystTheme();
-  const profile = useUserProfileStore(state => state.profile);
+  const displayProfile = useUserProfileStore(state => state.getDisplayProfile());
   const updateProfile = useUserProfileStore(state => state.updateProfile);
-  const [name, setName] = useState(profile.name);
-  const [handle, setHandle] = useState(profile.handle);
-  const [bio, setBio] = useState(profile.bio ?? '');
-  const initials = profile.name
+  const [name, setName] = useState(displayProfile.name);
+  const [bio, setBio] = useState(displayProfile.bio ?? '');
+  const [isSaving, setIsSaving] = useState(false);
+  const initials = displayProfile.name
     .split(' ')
     .filter(Boolean)
     .slice(0, 2)
@@ -31,22 +32,35 @@ export function EditProfileScreen({navigation}: Props): React.JSX.Element {
 
   const isSaveDisabled =
     !name.trim() ||
-    !handle.trim() ||
-    (name.trim() === profile.name &&
-      handle.trim().replace(/^@+/, '') === profile.handle &&
-      bio.trim() === (profile.bio ?? ''));
+    isSaving ||
+    (name.trim() === displayProfile.name &&
+      bio.trim() === (displayProfile.bio ?? ''));
 
-  const onSave = () => {
+  const onSave = async () => {
     if (isSaveDisabled) {
       return;
     }
 
-    updateProfile({
-      bio,
-      handle,
-      name,
-    });
-    navigation.goBack();
+    setIsSaving(true);
+    try {
+      await updateProfileFields({
+        avatarUrl: displayProfile.avatarUrl,
+        bio: bio.trim() || undefined,
+        displayName: name.trim(),
+      });
+      updateProfile({
+        bio,
+        name,
+      });
+      navigation.goBack();
+    } catch (error) {
+      const message =
+        (error as {message?: string}).message ??
+        'Could not save profile changes.';
+      Alert.alert('Save failed', message);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -70,20 +84,20 @@ export function EditProfileScreen({navigation}: Props): React.JSX.Element {
       <GlassPanel>
         <View style={styles.hero}>
           <LayeredAvatar
-            imageSource={profile.avatarImage}
+            imageSource={displayProfile.avatarImage}
             initials={initials}
             size={68}
             state="done"
           />
           <View style={styles.heroCopy}>
-            <HoystText variant="title">{profile.name}</HoystText>
-            <HoystText tone="muted">@{profile.handle}</HoystText>
-            <HoystText tone="muted">{profile.timezone}</HoystText>
+            <HoystText variant="title">{displayProfile.name}</HoystText>
+            <HoystText tone="muted">@{displayProfile.handle}</HoystText>
+            <HoystText tone="muted">{displayProfile.timezone}</HoystText>
           </View>
         </View>
         <HoystText tone="muted" variant="caption">
-          Avatar and timezone editing will land later. This MVP keeps the core
-          identity fields editable now.
+          Handles are immutable after onboarding. Avatar and timezone editing
+          will land later.
         </HoystText>
       </GlassPanel>
 
@@ -101,17 +115,6 @@ export function EditProfileScreen({navigation}: Props): React.JSX.Element {
         </View>
         <View style={styles.fieldGroup}>
           <HoystText tone="muted" variant="label">
-            Handle
-          </HoystText>
-          <HoystInput
-            autoCapitalize="none"
-            onChangeText={setHandle}
-            placeholder="@handle"
-            value={handle}
-          />
-        </View>
-        <View style={styles.fieldGroup}>
-          <HoystText tone="muted" variant="label">
             Bio
           </HoystText>
           <HoystInput
@@ -123,7 +126,16 @@ export function EditProfileScreen({navigation}: Props): React.JSX.Element {
             value={bio}
           />
         </View>
-        <HoystButton label="Save changes" onPress={onSave} />
+        <HoystButton
+          label={isSaving ? 'Saving...' : 'Save changes'}
+          onPress={
+            isSaveDisabled
+              ? undefined
+              : () => {
+                  onSave().catch(() => undefined);
+                }
+          }
+        />
         <HoystButton
           label="Cancel"
           onPress={() => navigation.goBack()}

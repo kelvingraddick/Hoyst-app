@@ -20,6 +20,7 @@ import {HoystScreen} from '../../../design/components/HoystScreen';
 import {HoystText} from '../../../design/components/HoystText';
 import {LayeredAvatar} from '../../../design/components/LayeredAvatar';
 import {TapInRingMark} from '../../../design/components/TapInRingMark';
+import {actionMotion, actionShadow} from '../../../design/tokens/actions';
 import {radius} from '../../../design/tokens/radius';
 import {useHoystTheme} from '../../../design/theme/useHoystTheme';
 import type {RootStackParamList} from '../../../navigation/types';
@@ -281,7 +282,7 @@ export function TapInPickerScreen({navigation}: Props): React.JSX.Element {
                     style={({pressed}) => [
                       styles.primaryActionWrap,
                       {
-                        opacity: pressed ? 0.92 : 1,
+                        opacity: pressed ? actionMotion.pressedOpacity : 1,
                         shadowColor: theme.actionShadowColor,
                         shadowOpacity: theme.actionShadowOpacity,
                       },
@@ -554,12 +555,12 @@ const styles = StyleSheet.create({
   },
   primaryActionWrap: {
     borderRadius: radius.md,
-    elevation: 10,
+    elevation: actionShadow.elevation,
     flexShrink: 0,
     marginLeft: 'auto',
     minWidth: 116,
-    shadowOffset: {height: 0, width: 0},
-    shadowRadius: 18,
+    shadowOffset: actionShadow.offset,
+    shadowRadius: actionShadow.compactRadius,
   },
   primaryAction: {
     alignItems: 'center',

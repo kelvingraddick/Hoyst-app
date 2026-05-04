@@ -12,6 +12,7 @@ import {HoystText} from '../../../design/components/HoystText';
 import {TodayCircleCard} from '../../../design/components/TodayCircleCard';
 import {radius} from '../../../design/tokens/radius';
 import {useHoystTheme} from '../../../design/theme/useHoystTheme';
+import {useProtectedAction} from '../../auth/hooks/useProtectedAction';
 import {todayCircles} from '../../circles/mockData';
 import type {RootStackParamList} from '../../../navigation/types';
 import {useUserProfileStore} from '../../../store/profile-store';
@@ -54,11 +55,13 @@ function HeaderAction({
 export function HomeScreen(): React.JSX.Element {
   const theme = useHoystTheme();
   const profile = useUserProfileStore(state => state.profile);
+  const displayProfile = useUserProfileStore(state => state.getDisplayProfile());
   const navigation = useNavigation();
   const rootNavigation =
     navigation.getParent<NativeStackNavigationProp<RootStackParamList>>();
-  const firstName = profile.name.split(' ')[0];
-  const initials = profile.name
+  const requireAccount = useProtectedAction(rootNavigation);
+  const firstName = profile ? profile.name.split(' ')[0] : 'there';
+  const initials = displayProfile.name
     .split(' ')
     .filter(Boolean)
     .slice(0, 2)
@@ -76,7 +79,7 @@ export function HomeScreen(): React.JSX.Element {
           <HeaderAction>
             <LayeredAvatar
               initials={initials}
-              imageSource={profile.avatarImage}
+              imageSource={displayProfile.avatarImage}
               size={32}
               state="done"
             />
@@ -174,10 +177,14 @@ export function HomeScreen(): React.JSX.Element {
           card={circle}
           key={circle.id}
           onPress={() =>
-            rootNavigation?.navigate('TapInComposer', {
-              circleId: circle.id,
-              source: 'home',
-            })
+            requireAccount(
+              {circleId: circle.id, source: 'home', type: 'tapIn'},
+              () =>
+                rootNavigation?.navigate('TapInComposer', {
+                  circleId: circle.id,
+                  source: 'home',
+                }),
+            )
           }
         />
       ))}

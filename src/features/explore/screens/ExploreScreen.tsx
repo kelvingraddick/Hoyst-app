@@ -1,4 +1,4 @@
-import React, {useMemo, useState} from 'react';
+import React, {useEffect, useMemo, useState} from 'react';
 import {Pressable, StyleSheet, View} from 'react-native';
 import type {BottomTabScreenProps} from '@react-navigation/bottom-tabs';
 import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
@@ -19,6 +19,7 @@ import type {
 } from '../../../navigation/types';
 import type {ExploreCircle} from '../../../types/models';
 import {exploreCircles} from '../../circles/mockData';
+import {subscribeToPublicCircles} from '../../circles/services/public-circle-service';
 
 type Props = BottomTabScreenProps<AppTabsParamList, 'Explore'>;
 
@@ -171,22 +172,30 @@ function ExploreCircleCard({
 
 export function ExploreScreen({navigation}: Props): React.JSX.Element {
   const theme = useHoystTheme();
+  const [liveCircles, setLiveCircles] = useState<ExploreCircle[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [activeCategory, setActiveCategory] = useState('All');
   const rootNavigation =
     navigation.getParent<NativeStackNavigationProp<RootStackParamList>>();
+  const sourceCircles = liveCircles.length > 0 ? liveCircles : exploreCircles;
+
+  useEffect(() => {
+    return subscribeToPublicCircles(setLiveCircles, () => {
+      setLiveCircles([]);
+    });
+  }, []);
 
   const categories = useMemo(
     () => [
       'All',
-      ...Array.from(new Set(exploreCircles.map(circle => circle.category))),
+      ...Array.from(new Set(sourceCircles.map(circle => circle.category))),
     ],
-    [],
+    [sourceCircles],
   );
   const normalizedSearch = searchTerm.trim().toLowerCase();
   const filteredCircles = useMemo(
     () =>
-      exploreCircles.filter(circle => {
+      sourceCircles.filter(circle => {
         const matchesCategory =
           activeCategory === 'All' || circle.category === activeCategory;
         const matchesSearch =
@@ -195,7 +204,7 @@ export function ExploreScreen({navigation}: Props): React.JSX.Element {
 
         return matchesCategory && matchesSearch;
       }),
-    [activeCategory, normalizedSearch],
+    [activeCategory, normalizedSearch, sourceCircles],
   );
 
   const openCircle = (circleId: string) => {

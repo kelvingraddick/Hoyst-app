@@ -1,7 +1,8 @@
-import React from 'react';
+import React, {useEffect} from 'react';
 import {Platform, StyleSheet, View} from 'react-native';
 import {createBottomTabNavigator} from '@react-navigation/bottom-tabs';
 import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
+import {useNavigation} from '@react-navigation/native';
 import {
   Compass,
   Home,
@@ -18,6 +19,8 @@ import {TapInRingMark} from '../design/components/TapInRingMark';
 import {useHoystTheme} from '../design/theme/useHoystTheme';
 import {HoystTabBarBackground} from './components/HoystTabBarBackground';
 import type {AppTabsParamList, RootStackParamList} from './types';
+import {useOnboardingStore} from '../store/onboarding-store';
+import {useSessionStore} from '../store/session-store';
 
 const Tab = createBottomTabNavigator<AppTabsParamList>();
 
@@ -36,6 +39,44 @@ function TapInPlaceholder(): React.JSX.Element {
 
 export function AppTabsNavigator(): React.JSX.Element {
   const theme = useHoystTheme();
+  const status = useSessionStore(state => state.status);
+  const beginAuthFlow = useSessionStore(state => state.beginAuthFlow);
+  const consumePendingAction = useSessionStore(state => state.consumePendingAction);
+  const startForProtectedAction = useOnboardingStore(
+    state => state.startForProtectedAction,
+  );
+  const rootNavigation =
+    useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+
+  useEffect(() => {
+    if (status !== 'authenticatedReady') {
+      return;
+    }
+
+    const pendingAction = consumePendingAction();
+
+    if (!pendingAction) {
+      return;
+    }
+
+    if (pendingAction.type === 'createCircle') {
+      rootNavigation.navigate('CreateCircle');
+    } else if (pendingAction.type === 'joinCircle') {
+      rootNavigation.navigate('CircleDetail', {
+        circleId: pendingAction.circleId,
+        resumeAction: 'join',
+      });
+    } else if (pendingAction.type === 'tapIn') {
+      rootNavigation.navigate('TapInComposer', {
+        circleId: pendingAction.circleId,
+        source: pendingAction.source,
+      });
+    } else if (pendingAction.type === 'tapInPicker') {
+      rootNavigation.navigate('TapInPicker');
+    } else if (pendingAction.type === 'settings') {
+      rootNavigation.navigate('Settings');
+    }
+  }, [consumePendingAction, rootNavigation, status]);
 
   return (
     <Tab.Navigator
@@ -97,10 +138,17 @@ export function AppTabsNavigator(): React.JSX.Element {
           tabPress: event => {
             event.preventDefault();
 
-            const rootNavigation =
+            const parentNavigation =
               navigation.getParent<NativeStackNavigationProp<RootStackParamList>>();
 
-            rootNavigation?.navigate('TapInPicker');
+            if (status === 'authenticatedReady') {
+              parentNavigation?.navigate('TapInPicker');
+              return;
+            }
+
+            beginAuthFlow({type: 'tapInPicker'});
+            startForProtectedAction();
+            parentNavigation?.navigate('Auth', {screen: 'Welcome'});
           },
         })}
         name="TapIn"

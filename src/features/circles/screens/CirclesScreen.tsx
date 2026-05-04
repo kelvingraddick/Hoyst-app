@@ -20,8 +20,10 @@ import {HoystScreen} from '../../../design/components/HoystScreen';
 import {HoystText} from '../../../design/components/HoystText';
 import {LayeredAvatar} from '../../../design/components/LayeredAvatar';
 import {TapInRingMark} from '../../../design/components/TapInRingMark';
+import {actionMotion, actionShadow} from '../../../design/tokens/actions';
 import {radius} from '../../../design/tokens/radius';
 import {useHoystTheme} from '../../../design/theme/useHoystTheme';
+import {useProtectedAction} from '../../auth/hooks/useProtectedAction';
 import {circleManagementCards} from '../mockData';
 import type {
   CircleManagementCard,
@@ -95,6 +97,7 @@ export function CirclesScreen({navigation}: Props): React.JSX.Element {
     useState<CircleManagementFilter>('all');
   const rootNavigation =
     navigation.getParent<NativeStackNavigationProp<RootStackParamList>>();
+  const requireAccount = useProtectedAction(rootNavigation);
   const filterCounts = useMemo(
     () =>
       filters.reduce(
@@ -159,14 +162,18 @@ export function CirclesScreen({navigation}: Props): React.JSX.Element {
         <Pressable
           accessibilityLabel="Create Circle"
           hitSlop={8}
-          onPress={() => rootNavigation?.navigate('CreateCircle')}
+          onPress={() =>
+            requireAccount({type: 'createCircle'}, () =>
+              rootNavigation?.navigate('CreateCircle'),
+            )
+          }
           style={({pressed}) => [
             styles.createButtonPressable,
             {
-              opacity: pressed ? 0.9 : 1,
+              opacity: pressed ? actionMotion.pressedOpacity : 1,
               shadowColor: theme.actionShadowColor,
               shadowOpacity: theme.actionShadowOpacity,
-              transform: [{scale: pressed ? 0.98 : 1}],
+              transform: [{scale: pressed ? actionMotion.pressedScale : 1}],
             },
           ]}>
           <View
@@ -521,9 +528,9 @@ const styles = StyleSheet.create({
   createButtonPressable: {
     alignSelf: 'stretch',
     borderRadius: radius.md,
-    elevation: 10,
-    shadowOffset: {height: 0, width: 0},
-    shadowRadius: 18,
+    elevation: actionShadow.elevation,
+    shadowOffset: actionShadow.offset,
+    shadowRadius: actionShadow.compactRadius,
     width: '100%',
   },
   createIcon: {

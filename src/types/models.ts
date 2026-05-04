@@ -1,7 +1,7 @@
 import type {ImageSourcePropType} from 'react-native';
 
 export type CirclePrivacy = 'private' | 'public';
-export type CircleJoinMode = 'invite_only' | 'request_to_join';
+export type CircleJoinMode = 'open' | 'invite_only' | 'request_to_join';
 export type MemberRole = 'owner' | 'admin' | 'member';
 export type CheckInStatus = 'done' | 'skip' | 'rest';
 export type TodayCircleState = 'active' | 'done' | 'risk';
@@ -18,6 +18,7 @@ export type UserProfile = {
   avatarImage?: ImageSourcePropType;
   bio?: string;
   timezone: string;
+  onboardingStatus?: 'complete';
 };
 
 export type GraceRule = {

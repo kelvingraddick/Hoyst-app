@@ -649,9 +649,12 @@ const circleSummaries = [...circleManagementCards, ...exploreCircles].reduce(
   {} as Record<string, CircleSummary>,
 );
 
-export function getCircleDetail(circleId: string): CircleDetailModel {
+export function getCircleDetail(
+  circleId: string,
+  publicSummary?: CircleSummary,
+): CircleDetailModel {
   const fallbackSummary = circleSummaries['fitness-fanatics'];
-  const summary = circleSummaries[circleId] ?? fallbackSummary;
+  const summary = publicSummary ?? circleSummaries[circleId] ?? fallbackSummary;
   const detailContent =
     circleDetails[summary.id] ?? circleDetails['fitness-fanatics'];
 

@@ -11,6 +11,7 @@ import {
 
 import type {TodayCircleCard as TodayCircleCardModel} from '../../types/models';
 import {useHoystTheme} from '../theme/useHoystTheme';
+import {actionMotion, actionShadow} from '../tokens/actions';
 import {radius} from '../tokens/radius';
 import {GlassPanel} from './GlassPanel';
 import {HoystChip} from './HoystChip';
@@ -150,7 +151,7 @@ export function TodayCircleCard({
               styles.actionWrap,
               styles.primaryActionGlow,
               {
-                opacity: pressed ? 0.92 : 1,
+                opacity: pressed ? actionMotion.pressedOpacity : 1,
                 shadowColor: theme.actionShadowColor,
                 shadowOpacity: theme.actionShadowOpacity,
               },
@@ -324,9 +325,9 @@ const styles = StyleSheet.create({
   },
   primaryActionGlow: {
     borderRadius: radius.md,
-    elevation: 10,
-    shadowOffset: {height: 0, width: 0},
-    shadowRadius: 18,
+    elevation: actionShadow.elevation,
+    shadowOffset: actionShadow.offset,
+    shadowRadius: actionShadow.compactRadius,
   },
   primaryActionLabel: {
     fontSize: 14,

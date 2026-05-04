@@ -2,6 +2,7 @@ import Config from 'react-native-config';
 
 export const env = {
   appEnv: Config.APP_ENV ?? 'development',
+  googleIosClientId: Config.GOOGLE_IOS_CLIENT_ID ?? '',
   googleWebClientId: Config.GOOGLE_WEB_CLIENT_ID ?? '',
   oneSignalAppId: Config.ONESIGNAL_APP_ID ?? '',
   sentryDsn: Config.SENTRY_DSN ?? '',

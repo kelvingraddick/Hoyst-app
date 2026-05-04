@@ -1,5 +1,5 @@
 import React, {useState} from 'react';
-import {Image, Pressable, StyleSheet, View} from 'react-native';
+import {Alert, Image, Pressable, StyleSheet, View} from 'react-native';
 import {Camera, ImagePlus, X} from 'lucide-react-native';
 import {launchCamera, launchImageLibrary} from 'react-native-image-picker';
 import type {NativeStackScreenProps} from '@react-navigation/native-stack';
@@ -14,6 +14,7 @@ import {TapInRingMark} from '../../../design/components/TapInRingMark';
 import {radius} from '../../../design/tokens/radius';
 import {useHoystTheme} from '../../../design/theme/useHoystTheme';
 import {getCircleDetail, initialTapInDraft} from '../../circles/mockData';
+import {submitTapIn} from '../services/check-in-service';
 import type {TapInDraft} from '../../../types/models';
 import type {RootStackParamList} from '../../../navigation/types';
 
@@ -25,6 +26,7 @@ export function TapInComposerScreen({
 }: Props): React.JSX.Element {
   const theme = useHoystTheme();
   const [draft, setDraft] = useState<TapInDraft>(initialTapInDraft);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const detail = getCircleDetail(route.params.circleId);
   const notePreview =
     draft.note.trim().length > 0
@@ -73,15 +75,31 @@ export function TapInComposerScreen({
     }
   };
 
-  const handleConfirm = () => {
+  const handleConfirm = async () => {
     const note = draft.note.trim();
 
-    navigation.replace('TapInComplete', {
-      circleId: route.params.circleId,
-      source: route.params.source,
-      note: note.length > 0 ? note : undefined,
-      photoUri: draft.photoUri,
-    });
+    setIsSubmitting(true);
+    try {
+      await submitTapIn({
+        circleId: route.params.circleId,
+        note: note.length > 0 ? note : undefined,
+        photoUrl: draft.photoUri,
+      });
+
+      navigation.replace('TapInComplete', {
+        circleId: route.params.circleId,
+        source: route.params.source,
+        note: note.length > 0 ? note : undefined,
+        photoUri: draft.photoUri,
+      });
+    } catch (error) {
+      const message =
+        (error as {message?: string}).message ??
+        'Could not submit your Tap In. Try again.';
+      Alert.alert('Tap In failed', message);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -256,8 +274,14 @@ export function TapInComposerScreen({
         </View>
 
         <HoystButton
-          label="Confirm Tap In"
-          onPress={handleConfirm}
+          label={isSubmitting ? 'Submitting...' : 'Confirm Tap In'}
+          onPress={
+            isSubmitting
+              ? undefined
+              : () => {
+                  handleConfirm().catch(() => undefined);
+                }
+          }
           variant="secondary"
         />
         <Pressable onPress={resetAndClose}>

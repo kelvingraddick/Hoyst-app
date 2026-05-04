@@ -1,5 +1,6 @@
 import React, {useState} from 'react';
 import {
+  Alert,
   LayoutChangeEvent,
   Pressable,
   StyleSheet,
@@ -28,6 +29,7 @@ import {HoystText} from '../../../design/components/HoystText';
 import {StepSection} from '../../../design/components/StepSection';
 import {useHoystTheme} from '../../../design/theme/useHoystTheme';
 import {initialCreateCircleDraft} from '../../circles/mockData';
+import {createCircle} from '../../circles/services/circle-service';
 import type {CreateCircleDraft} from '../../../types/models';
 import type {RootStackParamList} from '../../../navigation/types';
 
@@ -147,6 +149,7 @@ export function CreateCircleScreen({
   const [errors, setErrors] = useState<DraftErrors>({});
   const [saved, setSaved] = useState(false);
   const [created, setCreated] = useState(false);
+  const [isCreating, setIsCreating] = useState(false);
 
   const setField = <Key extends keyof CreateCircleDraft,>(
     key: Key,
@@ -172,13 +175,32 @@ export function CreateCircleScreen({
     return Object.keys(nextErrors).length === 0;
   };
 
-  const handleCreate = () => {
+  const handleCreate = async () => {
     if (!validate()) {
       return;
     }
 
-    setCreated(true);
-    setSaved(false);
+    setIsCreating(true);
+    try {
+      const result = await createCircle({
+        category: draft.category,
+        dailyTask: draft.dailyTask,
+        joinMode: draft.privacy === 'public' ? 'open' : 'invite_only',
+        maxSize: draft.maxSize,
+        privacy: draft.privacy,
+        title: draft.title,
+      });
+      setCreated(true);
+      setSaved(false);
+      Alert.alert('Circle created', `Circle ID: ${result.circleId}`);
+    } catch (error) {
+      const message =
+        (error as {message?: string}).message ??
+        'Could not create this circle. Try again.';
+      Alert.alert('Create failed', message);
+    } finally {
+      setIsCreating(false);
+    }
   };
 
   return (
@@ -337,7 +359,17 @@ export function CreateCircleScreen({
           </HoystText>
         </Pressable>
         <View style={styles.createButton}>
-          <HoystButton label="Create Circle" onPress={handleCreate} variant="secondary" />
+          <HoystButton
+            label={isCreating ? 'Creating...' : 'Create Circle'}
+            onPress={
+              isCreating
+                ? undefined
+                : () => {
+                    handleCreate().catch(() => undefined);
+                  }
+            }
+            variant="secondary"
+          />
         </View>
       </View>
 

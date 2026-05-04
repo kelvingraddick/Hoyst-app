@@ -38,11 +38,11 @@ export function getHoystThemeColors(
     ring: 'rgba(255,255,255,0.09)',
     shadow: isDark ? 'rgba(0,0,0,0.34)' : 'rgba(15,23,42,0.14)',
     tint: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(255,255,255,0.54)',
-    actionSurface: isDark ? '#141414' : '#FFFFFF',
-    actionBorder: isDark ? 'rgba(255,255,255,0.36)' : 'rgba(31,41,51,0.12)',
+    actionSurface: isDark ? 'rgba(255,255,255,0.07)' : '#FFFFFF',
+    actionBorder: isDark ? 'rgba(255,255,255,0.18)' : 'rgba(31,41,51,0.14)',
     actionForeground: isDark ? brandColors.white : brandColors.charcoal,
-    actionShadowColor: isDark ? '#FFFFFF' : 'rgba(15,23,42,0.2)',
-    actionShadowOpacity: isDark ? 0.2 : 0.14,
+    actionShadowColor: isDark ? '#FFFFFF' : 'rgba(15,23,42,0.24)',
+    actionShadowOpacity: isDark ? 0.1 : 0.14,
     tabActiveBackground: isDark
       ? 'rgba(255,255,255,0.12)'
       : 'rgba(31,41,51,0.08)',

@@ -1,9 +1,137 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.circleModules = void 0;
-exports.circleModules = {
-    createCircle: 'todo',
-    updateCircleSettings: 'todo',
-    issueInvite: 'todo',
-    redeemInvite: 'todo',
-};
+exports.joinCircle = exports.createCircle = void 0;
+const firestore_1 = require("firebase-admin/firestore");
+const https_1 = require("firebase-functions/v2/https");
+const zod_1 = require("zod");
+const firebase_1 = require("../firebase");
+const createCircleSchema = zod_1.z.object({
+    category: zod_1.z.string().trim().min(1).max(40),
+    dailyTask: zod_1.z.string().trim().min(1).max(160),
+    joinMode: zod_1.z.enum(['open', 'request_to_join', 'invite_only']),
+    maxSize: zod_1.z.number().int().min(2).max(100),
+    privacy: zod_1.z.enum(['public', 'private']),
+    timezone: zod_1.z.string().trim().min(1).max(80).optional(),
+    title: zod_1.z.string().trim().min(1).max(80),
+});
+const joinCircleSchema = zod_1.z.object({
+    circleId: zod_1.z.string().trim().min(1),
+    inviteCode: zod_1.z.string().trim().optional(),
+});
+async function requireCompletedProfile(uid) {
+    if (!uid) {
+        throw new https_1.HttpsError('unauthenticated', 'Sign in is required.');
+    }
+    const snapshot = await firebase_1.db.collection('users').doc(uid).get();
+    const profile = snapshot.data();
+    if (!profile || profile.onboardingStatus !== 'complete') {
+        throw new https_1.HttpsError('failed-precondition', 'Complete your profile first.');
+    }
+    return { profile, uid };
+}
+function createInviteCode() {
+    return Math.random().toString(36).slice(2, 10);
+}
+exports.createCircle = (0, https_1.onCall)(async (request) => {
+    const { profile, uid } = await requireCompletedProfile(request.auth?.uid);
+    const input = createCircleSchema.parse(request.data);
+    const circleRef = firebase_1.db.collection('circles').doc();
+    const memberRef = circleRef.collection('members').doc(uid);
+    const publicIndexRef = firebase_1.db.collection('publicCircleIndex').doc(circleRef.id);
+    const now = firestore_1.FieldValue.serverTimestamp();
+    const inviteCode = createInviteCode();
+    const circle = {
+        category: input.category,
+        createdAt: now,
+        dailyTask: input.dailyTask,
+        inviteCode,
+        joinMode: input.joinMode,
+        maxSize: input.maxSize,
+        memberCount: 1,
+        ownerId: uid,
+        privacy: input.privacy,
+        title: input.title,
+        timezone: input.timezone ?? profile.timezone ?? 'UTC',
+        updatedAt: now,
+    };
+    const batch = firebase_1.db.batch();
+    batch.set(circleRef, circle);
+    batch.set(memberRef, {
+        displayName: profile.displayName,
+        handle: profile.handle,
+        joinedAt: now,
+        role: 'owner',
+        status: 'active',
+        uid,
+    });
+    if (input.privacy === 'public') {
+        batch.set(publicIndexRef, {
+            category: input.category,
+            dailyTask: input.dailyTask,
+            joinMode: input.joinMode,
+            maxSize: input.maxSize,
+            memberCount: 1,
+            title: input.title,
+            updatedAt: now,
+        });
+    }
+    await batch.commit();
+    return { circleId: circleRef.id, inviteCode };
+});
+exports.joinCircle = (0, https_1.onCall)(async (request) => {
+    const { profile, uid } = await requireCompletedProfile(request.auth?.uid);
+    const input = joinCircleSchema.parse(request.data);
+    const circleRef = firebase_1.db.collection('circles').doc(input.circleId);
+    const memberRef = circleRef.collection('members').doc(uid);
+    const joinRequestRef = circleRef.collection('joinRequests').doc(uid);
+    const publicIndexRef = firebase_1.db.collection('publicCircleIndex').doc(input.circleId);
+    const now = firestore_1.FieldValue.serverTimestamp();
+    return firebase_1.db.runTransaction(async (transaction) => {
+        const [circleSnapshot, memberSnapshot] = await Promise.all([
+            transaction.get(circleRef),
+            transaction.get(memberRef),
+        ]);
+        if (!circleSnapshot.exists) {
+            throw new https_1.HttpsError('not-found', 'Circle not found.');
+        }
+        const circle = circleSnapshot.data();
+        if (memberSnapshot.data()?.status === 'active') {
+            return { status: 'active' };
+        }
+        if ((circle?.memberCount ?? 0) >= (circle?.maxSize ?? 0)) {
+            throw new https_1.HttpsError('resource-exhausted', 'This circle is full.');
+        }
+        if (circle?.joinMode === 'invite_only' && input.inviteCode !== circle.inviteCode) {
+            throw new https_1.HttpsError('permission-denied', 'A valid invite is required.');
+        }
+        if (circle?.joinMode === 'request_to_join') {
+            transaction.set(joinRequestRef, {
+                createdAt: now,
+                displayName: profile.displayName,
+                handle: profile.handle,
+                status: 'pending',
+                uid,
+            }, { merge: true });
+            transaction.set(memberRef, {
+                displayName: profile.displayName,
+                handle: profile.handle,
+                requestedAt: now,
+                role: 'member',
+                status: 'pending',
+                uid,
+            }, { merge: true });
+            return { status: 'pending' };
+        }
+        transaction.set(memberRef, {
+            displayName: profile.displayName,
+            handle: profile.handle,
+            joinedAt: now,
+            role: 'member',
+            status: 'active',
+            uid,
+        });
+        transaction.update(circleRef, { memberCount: firestore_1.FieldValue.increment(1) });
+        transaction.set(publicIndexRef, { memberCount: firestore_1.FieldValue.increment(1), updatedAt: now }, { merge: true });
+        return { status: 'active' };
+    });
+});

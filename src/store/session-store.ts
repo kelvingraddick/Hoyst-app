@@ -1,45 +1,63 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import {create} from 'zustand';
-import {createJSONStorage, persist} from 'zustand/middleware';
 
-type SessionState = {
-  isAuthenticated: boolean;
-  previewMode: boolean;
-  enterPreview: () => void;
-  signIn: () => void;
-  signOut: () => void;
-  setAuthenticated: (value: boolean) => void;
-  setPreviewMode: (value: boolean) => void;
+import type {TapInSource} from '../navigation/types';
+
+export type AuthSessionStatus =
+  | 'initializing'
+  | 'guest'
+  | 'authenticating'
+  | 'authenticatedIncompleteProfile'
+  | 'authenticatedReady';
+
+export type AuthSessionUser = {
+  uid: string;
+  displayName?: string;
+  email?: string;
+  phoneNumber?: string;
+  photoURL?: string;
+  providerIds: string[];
 };
 
-// The initial scaffold opens directly into the signed-in shell so the design
-// system and tab architecture are easy to review before auth is wired up.
-export const useSessionStore = create<SessionState>()(
-  persist(
-    set => ({
-      isAuthenticated: true,
-      previewMode: true,
-      enterPreview: () => set({isAuthenticated: false, previewMode: true}),
-      signIn: () => set({isAuthenticated: true, previewMode: false}),
-      signOut: () => set({isAuthenticated: false, previewMode: false}),
-      setAuthenticated: value =>
-        set(state => ({
-          isAuthenticated: value,
-          previewMode: value ? false : state.previewMode,
-        })),
-      setPreviewMode: value =>
-        set(state => ({
-          previewMode: value,
-          isAuthenticated: value ? false : state.isAuthenticated,
-        })),
-    }),
-    {
-      name: 'hoyst-session',
-      partialize: state => ({
-        isAuthenticated: state.isAuthenticated,
-        previewMode: state.previewMode,
-      }),
-      storage: createJSONStorage(() => AsyncStorage),
-    },
-  ),
-);
+export type PendingProtectedAction =
+  | {type: 'createCircle'}
+  | {type: 'joinCircle'; circleId: string}
+  | {type: 'settings'}
+  | {type: 'tapIn'; circleId: string; source: TapInSource}
+  | {type: 'tapInPicker'};
+
+type SessionState = {
+  pendingAction?: PendingProtectedAction;
+  status: AuthSessionStatus;
+  user?: AuthSessionUser;
+  beginAuthFlow: (pendingAction?: PendingProtectedAction) => void;
+  clearPendingAction: () => void;
+  consumePendingAction: () => PendingProtectedAction | undefined;
+  setAuthenticatedIncompleteProfile: (user: AuthSessionUser) => void;
+  setAuthenticatedReady: (user: AuthSessionUser) => void;
+  setGuest: () => void;
+  setInitializing: () => void;
+  setPendingAction: (pendingAction?: PendingProtectedAction) => void;
+};
+
+export const useSessionStore = create<SessionState>((set, get) => ({
+  pendingAction: undefined,
+  status: 'initializing',
+  user: undefined,
+  beginAuthFlow: pendingAction =>
+    set(state => ({
+      pendingAction: pendingAction ?? state.pendingAction,
+      status: 'authenticating',
+    })),
+  clearPendingAction: () => set({pendingAction: undefined}),
+  consumePendingAction: () => {
+    const pendingAction = get().pendingAction;
+    set({pendingAction: undefined});
+    return pendingAction;
+  },
+  setAuthenticatedIncompleteProfile: user =>
+    set({status: 'authenticatedIncompleteProfile', user}),
+  setAuthenticatedReady: user => set({status: 'authenticatedReady', user}),
+  setGuest: () => set({status: 'guest', user: undefined}),
+  setInitializing: () => set({status: 'initializing', user: undefined}),
+  setPendingAction: pendingAction => set({pendingAction}),
+}));

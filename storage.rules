@@ -1,0 +1,35 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isSelf(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    function isActiveMember(circleId) {
+      return signedIn() &&
+        firestore.exists(/databases/(default)/documents/circles/$(circleId)/members/$(request.auth.uid)) &&
+        firestore.get(/databases/(default)/documents/circles/$(circleId)/members/$(request.auth.uid)).data.status == 'active';
+    }
+
+    match /users/{uid}/avatar/{fileName} {
+      allow read: if true;
+      allow write: if isSelf(uid) && request.resource.size < 5 * 1024 * 1024;
+    }
+
+    match /circles/{circleId}/check-ins/{dateKey}/{uid}/{fileName} {
+      allow read: if isActiveMember(circleId);
+      allow write: if isSelf(uid) &&
+        isActiveMember(circleId) &&
+        request.resource.size < 10 * 1024 * 1024;
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}
