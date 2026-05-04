@@ -74,6 +74,7 @@ local.properties
 node_modules
 *.log
 .nvm
+.env
 
 # Firebase
 .firebase/

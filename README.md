@@ -24,16 +24,28 @@ Current Firebase project status:
 - Cloud Functions are deployed in `us-central1` on `nodejs22`.
 - Android debug SHA-1 and SHA-256 fingerprints are registered for Google sign-in.
 
-Required app env values:
+Local app env values live in `.env`, which is intentionally ignored by git.
+For a fresh install, copy `.env.example` to `.env` and replace each placeholder
+with the Firebase and service values for the Hoyst project:
+
+```sh
+cp .env.example .env
+```
+
+The local `.env` should define:
 
 ```sh
 APP_ENV=development
-GOOGLE_WEB_CLIENT_ID=937685084332-a0fasktr8pmbv23vn4r50fpii8iek3ru.apps.googleusercontent.com
-GOOGLE_IOS_CLIENT_ID=937685084332-feb15a5a5soj978h2aqtaru7fqo86eem.apps.googleusercontent.com
-GOOGLE_REVERSED_CLIENT_ID=com.googleusercontent.apps.937685084332-feb15a5a5soj978h2aqtaru7fqo86eem
-ONESIGNAL_APP_ID=
-SENTRY_DSN=
+GOOGLE_WEB_CLIENT_ID=your-google-web-client-id.apps.googleusercontent.com
+GOOGLE_IOS_CLIENT_ID=your-google-ios-client-id.apps.googleusercontent.com
+GOOGLE_REVERSED_CLIENT_ID=com.googleusercontent.apps.your-google-ios-client-id
+ONESIGNAL_APP_ID=your-onesignal-app-id
+SENTRY_DSN=your-sentry-dsn
 ```
+
+`src/config/env.ts` reads these values through `react-native-config`; it does
+not provide hardcoded Google client ID fallbacks. Keep optional services blank
+in `.env` until they are ready to receive local app events.
 
 Google native app config is intentionally kept out of git. On a fresh machine,
 download the Firebase app config files from the Firebase console or restore
