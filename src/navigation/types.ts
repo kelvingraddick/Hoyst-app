@@ -34,6 +34,7 @@ export type AuthStackParamList = {
 export type TapInSource = 'home' | 'circle_detail' | 'tap_in';
 
 export type RootStackParamList = {
+  Loading: undefined;
   MainTabs: undefined;
   Auth: NavigatorScreenParams<AuthStackParamList> | undefined;
   Inbox: undefined;

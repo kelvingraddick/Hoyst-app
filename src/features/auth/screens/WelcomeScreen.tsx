@@ -40,6 +40,7 @@ import {TapInRingMark} from '../../../design/components/TapInRingMark';
 import {useHoystTheme} from '../../../design/theme/useHoystTheme';
 import {gradients} from '../../../design/tokens/gradients';
 import {radius} from '../../../design/tokens/radius';
+import {firebaseAuth} from '../../../lib/firebase/auth';
 import type {
   AuthStackParamList,
   RootStackParamList,
@@ -62,8 +63,10 @@ import {normalizeHandle, validateHandle} from '../services/profile-validation';
 import {
   signInWithApple,
   signInWithGoogle,
+  signOutOfHoyst,
   type AuthServiceError,
 } from '../services/auth-service';
+import {continueAsGuestFromAuth} from '../services/auth-dismiss';
 import {
   getOnboardingSignInParams,
   getWelcomeSignInParams,
@@ -505,10 +508,23 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
   };
 
   const continueAsGuest = () => {
-    clearPendingAction();
-    markSeen();
-    setGuest();
-    rootNavigation?.navigate('MainTabs');
+    continueAsGuestFromAuth({
+      clearPendingAction,
+      dismissAuth: () => {
+        if (rootNavigation?.canGoBack()) {
+          rootNavigation.goBack();
+        }
+      },
+      hasAuthenticatedUser: () => Boolean(firebaseAuth().currentUser),
+      markOnboardingSeen: markSeen,
+      setGuest,
+      signOut: signOutOfHoyst,
+    }).catch(error => {
+      Alert.alert(
+        'Could not continue as guest',
+        (error as {message?: string}).message ?? 'Try again.',
+      );
+    });
   };
 
   const runProviderAuth = async (provider: 'apple' | 'google') => {

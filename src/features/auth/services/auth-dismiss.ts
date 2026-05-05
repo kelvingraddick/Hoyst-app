@@ -1,17 +1,17 @@
 type ContinueAsGuestFromAuthInput = {
   clearPendingAction: () => void;
+  dismissAuth: () => void;
   hasAuthenticatedUser: () => boolean;
   markOnboardingSeen: () => void;
-  navigateToMainTabs: () => void;
   setGuest: () => void;
   signOut: () => Promise<unknown>;
 };
 
 export async function continueAsGuestFromAuth({
   clearPendingAction,
+  dismissAuth,
   hasAuthenticatedUser,
   markOnboardingSeen,
-  navigateToMainTabs,
   setGuest,
   signOut,
 }: ContinueAsGuestFromAuthInput) {
@@ -22,5 +22,5 @@ export async function continueAsGuestFromAuth({
   clearPendingAction();
   markOnboardingSeen();
   setGuest();
-  navigateToMainTabs();
+  dismissAuth();
 }

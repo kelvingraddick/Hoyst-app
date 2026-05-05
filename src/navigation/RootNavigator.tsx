@@ -15,6 +15,7 @@ import {useOnboardingStore} from '../store/onboarding-store';
 import {useSessionStore} from '../store/session-store';
 import {AppTabsNavigator} from './AppTabsNavigator';
 import {AuthStackNavigator} from './AuthStackNavigator';
+import {getRootNavigatorMode} from './root-mode';
 import type {RootStackParamList} from './types';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -31,21 +32,21 @@ export function RootNavigator(): React.JSX.Element {
   const status = useSessionStore(state => state.status);
   const hasHydratedOnboarding = useOnboardingStore(state => state.hasHydrated);
   const hasSeenOnboarding = useOnboardingStore(state => state.hasSeenOnboarding);
-  const shouldShowAuthFirst =
-    status === 'authenticating' ||
-    status === 'authenticatedIncompleteProfile' ||
-    (status === 'guest' && !hasSeenOnboarding);
-  const isLoading = status === 'initializing' || !hasHydratedOnboarding;
+  const mode = getRootNavigatorMode({
+    hasHydratedOnboarding,
+    hasSeenOnboarding,
+    status,
+  });
 
   return (
-    <Stack.Navigator>
-      {isLoading ? (
+    <Stack.Navigator key={mode}>
+      {mode === 'loading' ? (
         <Stack.Screen
           component={LoadingScreen}
-          name="MainTabs"
+          name="Loading"
           options={{headerShown: false}}
         />
-      ) : shouldShowAuthFirst ? (
+      ) : mode === 'authFirst' ? (
         <Stack.Screen
           component={AuthStackNavigator}
           name="Auth"
@@ -58,13 +59,7 @@ export function RootNavigator(): React.JSX.Element {
           options={{headerShown: false}}
         />
       )}
-      {shouldShowAuthFirst ? (
-        <Stack.Screen
-          component={AppTabsNavigator}
-          name="MainTabs"
-          options={{headerShown: false}}
-        />
-      ) : !isLoading ? (
+      {mode === 'main' ? (
         <Stack.Screen
           component={AuthStackNavigator}
           name="Auth"

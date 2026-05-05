@@ -236,9 +236,13 @@ export function SignInScreen({navigation, route}: Props): React.JSX.Element {
     try {
       await continueAsGuestFromAuth({
         clearPendingAction,
+        dismissAuth: () => {
+          if (rootNavigation?.canGoBack()) {
+            rootNavigation.goBack();
+          }
+        },
         hasAuthenticatedUser: () => Boolean(firebaseAuth().currentUser),
         markOnboardingSeen,
-        navigateToMainTabs: () => rootNavigation?.navigate('MainTabs'),
         setGuest,
         signOut: signOutOfHoyst,
       });

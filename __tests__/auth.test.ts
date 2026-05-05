@@ -16,6 +16,7 @@ import {
   normalizeHandle,
   validateHandle,
 } from '../src/features/auth/services/profile-validation';
+import {getRootNavigatorMode} from '../src/navigation/root-mode';
 
 describe('auth profile validation', () => {
   it('normalizes handles before reservation', () => {
@@ -133,16 +134,16 @@ describe('adaptive auth entry intent', () => {
 describe('auth dismiss flow', () => {
   it('continues as guest after clearing pending auth state', async () => {
     const clearPendingAction = jest.fn();
+    const dismissAuth = jest.fn();
     const markOnboardingSeen = jest.fn();
-    const navigateToMainTabs = jest.fn();
     const setGuest = jest.fn();
     const signOut = jest.fn();
 
     await continueAsGuestFromAuth({
       clearPendingAction,
+      dismissAuth,
       hasAuthenticatedUser: () => false,
       markOnboardingSeen,
-      navigateToMainTabs,
       setGuest,
       signOut,
     });
@@ -151,7 +152,7 @@ describe('auth dismiss flow', () => {
     expect(clearPendingAction).toHaveBeenCalledTimes(1);
     expect(markOnboardingSeen).toHaveBeenCalledTimes(1);
     expect(setGuest).toHaveBeenCalledTimes(1);
-    expect(navigateToMainTabs).toHaveBeenCalledTimes(1);
+    expect(dismissAuth).toHaveBeenCalledTimes(1);
   });
 
   it('signs out before continuing as guest when a user is present', async () => {
@@ -159,14 +160,86 @@ describe('auth dismiss flow', () => {
 
     await continueAsGuestFromAuth({
       clearPendingAction: jest.fn(),
+      dismissAuth: jest.fn(),
       hasAuthenticatedUser: () => true,
       markOnboardingSeen: jest.fn(),
-      navigateToMainTabs: jest.fn(),
       setGuest: jest.fn(),
       signOut,
     });
 
     expect(signOut).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('root navigator mode policy', () => {
+  it('shows loading while the session initializes', () => {
+    expect(
+      getRootNavigatorMode({
+        hasHydratedOnboarding: true,
+        hasSeenOnboarding: true,
+        status: 'initializing',
+      }),
+    ).toBe('loading');
+  });
+
+  it('shows loading until onboarding state hydrates', () => {
+    expect(
+      getRootNavigatorMode({
+        hasHydratedOnboarding: false,
+        hasSeenOnboarding: true,
+        status: 'guest',
+      }),
+    ).toBe('loading');
+  });
+
+  it('starts with auth for first-run guests', () => {
+    expect(
+      getRootNavigatorMode({
+        hasHydratedOnboarding: true,
+        hasSeenOnboarding: false,
+        status: 'guest',
+      }),
+    ).toBe('authFirst');
+  });
+
+  it('starts with auth for incomplete authenticated profiles', () => {
+    expect(
+      getRootNavigatorMode({
+        hasHydratedOnboarding: true,
+        hasSeenOnboarding: true,
+        status: 'authenticatedIncompleteProfile',
+      }),
+    ).toBe('authFirst');
+  });
+
+  it('starts with main tabs for returning guests', () => {
+    expect(
+      getRootNavigatorMode({
+        hasHydratedOnboarding: true,
+        hasSeenOnboarding: true,
+        status: 'guest',
+      }),
+    ).toBe('main');
+  });
+
+  it('keeps authenticating users in main mode for auth modals', () => {
+    expect(
+      getRootNavigatorMode({
+        hasHydratedOnboarding: true,
+        hasSeenOnboarding: true,
+        status: 'authenticating',
+      }),
+    ).toBe('main');
+  });
+
+  it('starts with main tabs for ready authenticated users', () => {
+    expect(
+      getRootNavigatorMode({
+        hasHydratedOnboarding: true,
+        hasSeenOnboarding: true,
+        status: 'authenticatedReady',
+      }),
+    ).toBe('main');
   });
 });
 
