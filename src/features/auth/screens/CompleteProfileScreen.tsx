@@ -11,6 +11,7 @@ import type {AuthStackParamList} from '../../../navigation/types';
 import {useOnboardingStore} from '../../../store/onboarding-store';
 import {useSessionStore} from '../../../store/session-store';
 import {completeProfile, getLocalTimezone} from '../services/account-service';
+import {getProfileSignInParams} from '../services/auth-route-intent';
 import {normalizeHandle, validateHandle} from '../services/profile-validation';
 
 type Props = NativeStackScreenProps<AuthStackParamList, 'CompleteProfile'>;
@@ -131,7 +132,7 @@ export function CompleteProfileScreen({
         />
         <HoystButton
           label="Back to sign in"
-          onPress={() => navigation.navigate('SignIn')}
+          onPress={() => navigation.navigate('SignIn', getProfileSignInParams())}
           variant="ghost"
         />
       </GlassPanel>

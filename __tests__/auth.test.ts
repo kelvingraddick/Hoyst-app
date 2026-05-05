@@ -4,7 +4,14 @@ jest.mock('@react-native-async-storage/async-storage', () =>
 
 import {useSessionStore} from '../src/store/session-store';
 import {useOnboardingStore} from '../src/store/onboarding-store';
+import {continueAsGuestFromAuth} from '../src/features/auth/services/auth-dismiss';
 import {buildOnboardingPreferences} from '../src/features/auth/services/onboarding-payload';
+import {
+  getOnboardingSignInParams,
+  getWelcomeSignInParams,
+  resolveSignInRouteIntent,
+  switchSignInMode,
+} from '../src/features/auth/services/auth-route-intent';
 import {
   normalizeHandle,
   validateHandle,
@@ -60,6 +67,106 @@ describe('session pending actions', () => {
       type: 'tapIn',
     });
     expect(useSessionStore.getState().consumePendingAction()).toBeUndefined();
+  });
+});
+
+describe('adaptive auth entry intent', () => {
+  it('defaults direct sign-in routes to no selected method', () => {
+    expect(resolveSignInRouteIntent()).toEqual({
+      entryPoint: undefined,
+      method: undefined,
+      mode: 'signIn',
+    });
+  });
+
+  it('opens onboarding email choice in registration mode', () => {
+    expect(resolveSignInRouteIntent(getOnboardingSignInParams('email'))).toEqual({
+      entryPoint: 'onboarding',
+      method: 'email',
+      mode: 'register',
+    });
+  });
+
+  it('opens onboarding phone choice in registration mode', () => {
+    expect(resolveSignInRouteIntent(getOnboardingSignInParams('phone'))).toEqual({
+      entryPoint: 'onboarding',
+      method: 'phone',
+      mode: 'register',
+    });
+  });
+
+  it('keeps protected action choices in registration mode', () => {
+    expect(
+      resolveSignInRouteIntent(
+        getOnboardingSignInParams('email', 'protectedAction'),
+      ),
+    ).toEqual({
+      entryPoint: 'protectedAction',
+      method: 'email',
+      mode: 'register',
+    });
+  });
+
+  it('opens welcome sign-in action in email sign-in mode', () => {
+    expect(resolveSignInRouteIntent(getWelcomeSignInParams())).toEqual({
+      entryPoint: 'welcome',
+      method: 'email',
+      mode: 'signIn',
+    });
+  });
+
+  it('preserves method when switching between sign in and register', () => {
+    expect(
+      switchSignInMode({
+        entryPoint: 'onboarding',
+        method: 'phone',
+        mode: 'register',
+      }),
+    ).toEqual({
+      entryPoint: 'onboarding',
+      method: 'phone',
+      mode: 'signIn',
+    });
+  });
+});
+
+describe('auth dismiss flow', () => {
+  it('continues as guest after clearing pending auth state', async () => {
+    const clearPendingAction = jest.fn();
+    const markOnboardingSeen = jest.fn();
+    const navigateToMainTabs = jest.fn();
+    const setGuest = jest.fn();
+    const signOut = jest.fn();
+
+    await continueAsGuestFromAuth({
+      clearPendingAction,
+      hasAuthenticatedUser: () => false,
+      markOnboardingSeen,
+      navigateToMainTabs,
+      setGuest,
+      signOut,
+    });
+
+    expect(signOut).not.toHaveBeenCalled();
+    expect(clearPendingAction).toHaveBeenCalledTimes(1);
+    expect(markOnboardingSeen).toHaveBeenCalledTimes(1);
+    expect(setGuest).toHaveBeenCalledTimes(1);
+    expect(navigateToMainTabs).toHaveBeenCalledTimes(1);
+  });
+
+  it('signs out before continuing as guest when a user is present', async () => {
+    const signOut = jest.fn().mockResolvedValue(undefined);
+
+    await continueAsGuestFromAuth({
+      clearPendingAction: jest.fn(),
+      hasAuthenticatedUser: () => true,
+      markOnboardingSeen: jest.fn(),
+      navigateToMainTabs: jest.fn(),
+      setGuest: jest.fn(),
+      signOut,
+    });
+
+    expect(signOut).toHaveBeenCalledTimes(1);
   });
 });
 

@@ -8,9 +8,26 @@ export type AppTabsParamList = {
   Profile: undefined;
 };
 
+export type SignInEntryPoint =
+  | 'welcome'
+  | 'onboarding'
+  | 'protectedAction'
+  | 'profile'
+  | 'settings';
+
+export type SignInMethod = 'email' | 'phone';
+
+export type SignInMode = 'signIn' | 'register';
+
+export type SignInRouteParams = {
+  entryPoint?: SignInEntryPoint;
+  method?: SignInMethod;
+  mode: SignInMode;
+};
+
 export type AuthStackParamList = {
   Welcome: undefined;
-  SignIn: undefined;
+  SignIn: SignInRouteParams | undefined;
   CompleteProfile: undefined;
 };
 

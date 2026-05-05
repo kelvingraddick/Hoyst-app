@@ -1,14 +1,27 @@
-import React, {useState} from 'react';
-import {Alert, StyleSheet, View} from 'react-native';
+import React, {useEffect, useState} from 'react';
+import {Alert, Pressable, StyleSheet, View} from 'react-native';
 import type {FirebaseAuthTypes} from '@react-native-firebase/auth';
-import type {NativeStackScreenProps} from '@react-navigation/native-stack';
+import type {
+  NativeStackNavigationProp,
+  NativeStackScreenProps,
+} from '@react-navigation/native-stack';
+import {Apple, Chrome, Mail, Phone, X} from 'lucide-react-native';
 
 import {GlassPanel} from '../../../design/components/GlassPanel';
 import {HoystButton} from '../../../design/components/HoystButton';
 import {HoystInput} from '../../../design/components/HoystInput';
 import {HoystScreen} from '../../../design/components/HoystScreen';
 import {HoystText} from '../../../design/components/HoystText';
-import type {AuthStackParamList} from '../../../navigation/types';
+import {useHoystTheme} from '../../../design/theme/useHoystTheme';
+import {radius} from '../../../design/tokens/radius';
+import {firebaseAuth} from '../../../lib/firebase/auth';
+import type {
+  AuthStackParamList,
+  RootStackParamList,
+  SignInMethod,
+} from '../../../navigation/types';
+import {useOnboardingStore} from '../../../store/onboarding-store';
+import {useSessionStore} from '../../../store/session-store';
 import {
   confirmPhoneSignIn,
   getSameEmailProviders,
@@ -17,12 +30,17 @@ import {
   signInWithApple,
   signInWithEmail,
   signInWithGoogle,
+  signOutOfHoyst,
   startPhoneSignIn,
   type AuthServiceError,
 } from '../services/auth-service';
+import {continueAsGuestFromAuth} from '../services/auth-dismiss';
+import {
+  resolveSignInRouteIntent,
+  switchSignInMode,
+} from '../services/auth-route-intent';
 
 type Props = NativeStackScreenProps<AuthStackParamList, 'SignIn'>;
-type EmailMode = 'signIn' | 'register';
 
 function getErrorMessage(error: unknown) {
   const serviceError = error as AuthServiceError;
@@ -40,8 +58,13 @@ function getErrorMessage(error: unknown) {
   return serviceError.message ?? 'Authentication failed. Try again.';
 }
 
-export function SignInScreen({navigation}: Props): React.JSX.Element {
-  const [emailMode, setEmailMode] = useState<EmailMode>('signIn');
+export function SignInScreen({navigation, route}: Props): React.JSX.Element {
+  const theme = useHoystTheme();
+  const initialIntent = resolveSignInRouteIntent(route.params);
+  const [mode, setMode] = useState(initialIntent.mode);
+  const [method, setMethod] = useState<SignInMethod | undefined>(
+    initialIntent.method,
+  );
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
@@ -49,6 +72,64 @@ export function SignInScreen({navigation}: Props): React.JSX.Element {
   const [confirmation, setConfirmation] =
     useState<FirebaseAuthTypes.ConfirmationResult>();
   const [isBusy, setIsBusy] = useState(false);
+  const [isDismissing, setIsDismissing] = useState(false);
+  const [activeProvider, setActiveProvider] = useState<
+    'apple' | 'google' | undefined
+  >();
+  const clearPendingAction = useSessionStore(state => state.clearPendingAction);
+  const setGuest = useSessionStore(state => state.setGuest);
+  const markOnboardingSeen = useOnboardingStore(state => state.markSeen);
+  const rootNavigation =
+    navigation.getParent<NativeStackNavigationProp<RootStackParamList>>();
+  const isRegisterMode = mode === 'register';
+  const isActionBusy = isBusy || isDismissing;
+  const failureTitle = isRegisterMode ? 'Registration failed' : 'Sign in failed';
+  const headerTitle = isRegisterMode ? 'Create your account' : 'Welcome back';
+  const headerBody = isRegisterMode
+    ? 'Save your profile, join circles, and keep your Tap In rhythm across devices.'
+    : 'Sign in to rejoin your circles, Tap In, and manage your profile.';
+  const modeSwitchLabel = isRegisterMode
+    ? 'Already have an account? Sign in'
+    : 'New to Hoyst? Create an account';
+  const activeProviderLabel =
+    activeProvider === 'apple'
+      ? 'Apple'
+      : activeProvider === 'google'
+        ? 'Google'
+        : undefined;
+  const authProviderColors = {
+    apple: {
+      backgroundColor: theme.isDark
+        ? 'rgba(255,255,255,0.08)'
+        : 'rgba(31,41,51,0.06)',
+      borderColor: theme.isDark
+        ? 'rgba(255,255,255,0.28)'
+        : 'rgba(31,41,51,0.18)',
+      foregroundColor: theme.text,
+    },
+    email: {
+      backgroundColor: 'rgba(255,138,61,0.13)',
+      borderColor: 'rgba(255,138,61,0.44)',
+      foregroundColor: theme.accentWarm,
+    },
+    google: {
+      backgroundColor: 'rgba(66,133,244,0.12)',
+      borderColor: 'rgba(66,133,244,0.42)',
+      foregroundColor: '#4285F4',
+    },
+    phone: {
+      backgroundColor: 'rgba(68,216,92,0.12)',
+      borderColor: 'rgba(68,216,92,0.42)',
+      foregroundColor: theme.success,
+    },
+  };
+
+  useEffect(() => {
+    const nextIntent = resolveSignInRouteIntent(route.params);
+
+    setMode(nextIntent.mode);
+    setMethod(nextIntent.method);
+  }, [route.params]);
 
   const runAuth = async (action: () => Promise<unknown>) => {
     setIsBusy(true);
@@ -56,7 +137,7 @@ export function SignInScreen({navigation}: Props): React.JSX.Element {
       await action();
       navigation.navigate('CompleteProfile');
     } catch (error) {
-      Alert.alert('Sign in failed', getErrorMessage(error));
+      Alert.alert(failureTitle, getErrorMessage(error));
     } finally {
       setIsBusy(false);
     }
@@ -64,12 +145,23 @@ export function SignInScreen({navigation}: Props): React.JSX.Element {
 
   const handleEmail = () => {
     runAuth(async () => {
-      if (emailMode === 'register') {
+      if (isRegisterMode) {
         return registerWithEmail(email, password);
       }
 
       return signInWithEmail(email, password);
     }).catch(() => undefined);
+  };
+
+  const handleProviderAuth = async (provider: 'apple' | 'google') => {
+    setMethod(undefined);
+    setActiveProvider(provider);
+
+    try {
+      await runAuth(provider === 'apple' ? signInWithApple : signInWithGoogle);
+    } finally {
+      setActiveProvider(undefined);
+    }
   };
 
   const handleResetPassword = async () => {
@@ -91,10 +183,10 @@ export function SignInScreen({navigation}: Props): React.JSX.Element {
     startPhoneSignIn(phoneNumber)
       .then(nextConfirmation => {
         setConfirmation(nextConfirmation);
-        Alert.alert('Code sent', 'Enter the SMS code to finish signing in.');
+        Alert.alert('Code sent', 'Enter the SMS code to continue.');
       })
       .catch(error => {
-        Alert.alert('Phone sign in failed', getErrorMessage(error));
+        Alert.alert(failureTitle, getErrorMessage(error));
       })
       .finally(() => setIsBusy(false));
   };
@@ -128,108 +220,277 @@ export function SignInScreen({navigation}: Props): React.JSX.Element {
     }
   };
 
+  const selectMethod = (nextMethod: SignInMethod) => {
+    setActiveProvider(undefined);
+    setMethod(nextMethod);
+  };
+
+  const toggleMode = () => {
+    setMode(currentMode =>
+      switchSignInMode({method, mode: currentMode}).mode,
+    );
+  };
+
+  const dismissToGuest = async () => {
+    setIsDismissing(true);
+    try {
+      await continueAsGuestFromAuth({
+        clearPendingAction,
+        hasAuthenticatedUser: () => Boolean(firebaseAuth().currentUser),
+        markOnboardingSeen,
+        navigateToMainTabs: () => rootNavigation?.navigate('MainTabs'),
+        setGuest,
+        signOut: signOutOfHoyst,
+      });
+    } catch (error) {
+      Alert.alert(
+        'Could not continue as guest',
+        (error as {message?: string}).message ?? 'Try again.',
+      );
+    } finally {
+      setIsDismissing(false);
+    }
+  };
+
   return (
     <HoystScreen>
-      <View style={styles.header}>
-        <HoystText variant="largeTitle">Welcome back</HoystText>
-        <HoystText tone="muted">
-          Sign in or create an account to join circles, Tap In, and manage your
-          profile.
-        </HoystText>
+      <View style={styles.topBar}>
+        <Pressable
+          accessibilityLabel="Continue as guest"
+          accessibilityRole="button"
+          disabled={isActionBusy}
+          onPress={dismissToGuest}
+          style={({pressed}) => [
+            styles.closeButton,
+            {
+              backgroundColor: theme.surfaceSoft,
+              borderColor: theme.border,
+              opacity: isActionBusy ? 0.42 : pressed ? 0.82 : 1,
+            },
+          ]}>
+          <X color={theme.text} size={21} strokeWidth={2.4} />
+        </Pressable>
       </View>
+      <View style={styles.header}>
+        <HoystText variant="largeTitle">{headerTitle}</HoystText>
+        <HoystText tone="muted">{headerBody}</HoystText>
+      </View>
+      {method === 'email' ? (
+        <GlassPanel>
+          <View style={styles.formStack}>
+            <HoystText variant="title">Email</HoystText>
+            <HoystInput
+              autoCapitalize="none"
+              keyboardType="email-address"
+              onChangeText={setEmail}
+              placeholder="Email"
+              value={email}
+            />
+            <HoystInput
+              onChangeText={setPassword}
+              placeholder="Password"
+              secureTextEntry
+              value={password}
+            />
+            <HoystButton
+              label={
+                isActionBusy
+                  ? 'Working...'
+                  : isRegisterMode
+                    ? 'Create account'
+                    : 'Sign in'
+              }
+              onPress={isActionBusy ? undefined : handleEmail}
+            />
+            {!isRegisterMode ? (
+              <>
+                <HoystButton
+                  label="Send password reset"
+                  onPress={isActionBusy ? undefined : handleResetPassword}
+                  variant="ghost"
+                />
+                <HoystButton
+                  label="Check same-email providers"
+                  onPress={isActionBusy ? undefined : explainSameEmailProviders}
+                  variant="ghost"
+                />
+              </>
+            ) : null}
+          </View>
+        </GlassPanel>
+      ) : null}
+      {method === 'phone' ? (
+        <GlassPanel>
+          <View style={styles.formStack}>
+            <HoystText variant="title">Phone</HoystText>
+            <HoystInput
+              keyboardType="phone-pad"
+              onChangeText={setPhoneNumber}
+              placeholder="+1 555 000 0000"
+              value={phoneNumber}
+            />
+            {confirmation ? (
+              <HoystInput
+                keyboardType="number-pad"
+                onChangeText={setSmsCode}
+                placeholder="SMS code"
+                value={smsCode}
+              />
+            ) : null}
+            <HoystButton
+              label={
+                isActionBusy
+                  ? 'Working...'
+                  : confirmation
+                    ? isRegisterMode
+                      ? 'Create account'
+                      : 'Sign in'
+                    : isRegisterMode
+                      ? 'Send registration code'
+                      : 'Send sign-in code'
+              }
+              onPress={
+                isActionBusy
+                  ? undefined
+                  : confirmation
+                    ? handlePhoneConfirm
+                    : handlePhoneStart
+              }
+            />
+          </View>
+        </GlassPanel>
+      ) : null}
+      {activeProviderLabel ? (
+        <GlassPanel>
+          <View style={styles.formStack}>
+            <HoystText variant="title">Opening {activeProviderLabel}</HoystText>
+            <HoystText tone="muted">
+              Finish in the {activeProviderLabel} sheet to continue.
+            </HoystText>
+          </View>
+        </GlassPanel>
+      ) : null}
       <GlassPanel>
-        <View style={styles.modeRow}>
+        <View style={styles.optionStack}>
           <HoystButton
-            label="Sign in"
-            onPress={() => setEmailMode('signIn')}
-            variant={emailMode === 'signIn' ? 'secondary' : 'outline'}
+            backgroundColor={authProviderColors.apple.backgroundColor}
+            borderColor={authProviderColors.apple.borderColor}
+            icon={
+              <Apple
+                color={authProviderColors.apple.foregroundColor}
+                size={20}
+                strokeWidth={2.3}
+              />
+            }
+            label={
+              activeProvider === 'apple'
+                ? 'Opening Apple...'
+                : 'Continue with Apple'
+            }
+            onPress={
+              isActionBusy
+                ? undefined
+                : () => {
+                    handleProviderAuth('apple').catch(() => undefined);
+                  }
+            }
+            textColor={authProviderColors.apple.foregroundColor}
+            variant="outline"
           />
           <HoystButton
-            label="Register"
-            onPress={() => setEmailMode('register')}
-            variant={emailMode === 'register' ? 'secondary' : 'outline'}
+            backgroundColor={authProviderColors.google.backgroundColor}
+            borderColor={authProviderColors.google.borderColor}
+            icon={
+              <Chrome
+                color={authProviderColors.google.foregroundColor}
+                size={20}
+                strokeWidth={2.3}
+              />
+            }
+            label={
+              activeProvider === 'google'
+                ? 'Opening Google...'
+                : 'Continue with Google'
+            }
+            onPress={
+              isActionBusy
+                ? undefined
+                : () => {
+                    handleProviderAuth('google').catch(() => undefined);
+                  }
+            }
+            textColor={authProviderColors.google.foregroundColor}
+            variant="outline"
           />
+          {method !== 'email' ? (
+            <HoystButton
+              backgroundColor={authProviderColors.email.backgroundColor}
+              borderColor={authProviderColors.email.borderColor}
+              icon={
+                <Mail
+                  color={authProviderColors.email.foregroundColor}
+                  size={20}
+                  strokeWidth={2.3}
+                />
+              }
+              label="Continue with Email"
+              onPress={isActionBusy ? undefined : () => selectMethod('email')}
+              textColor={authProviderColors.email.foregroundColor}
+              variant="outline"
+            />
+          ) : null}
+          {method !== 'phone' ? (
+            <HoystButton
+              backgroundColor={authProviderColors.phone.backgroundColor}
+              borderColor={authProviderColors.phone.borderColor}
+              icon={
+                <Phone
+                  color={authProviderColors.phone.foregroundColor}
+                  size={20}
+                  strokeWidth={2.3}
+                />
+              }
+              label="Continue with Phone"
+              onPress={isActionBusy ? undefined : () => selectMethod('phone')}
+              textColor={authProviderColors.phone.foregroundColor}
+              variant="outline"
+            />
+          ) : null}
         </View>
-        <HoystInput
-          autoCapitalize="none"
-          keyboardType="email-address"
-          onChangeText={setEmail}
-          placeholder="Email"
-          value={email}
-        />
-        <HoystInput
-          onChangeText={setPassword}
-          placeholder="Password"
-          secureTextEntry
-          value={password}
-        />
-        <HoystButton
-          label={isBusy ? 'Working...' : emailMode === 'register' ? 'Create account' : 'Sign in'}
-          onPress={isBusy ? undefined : handleEmail}
-        />
-        <HoystButton
-          label="Send password reset"
-          onPress={handleResetPassword}
-          variant="ghost"
-        />
-        <HoystButton
-          label="Check same-email providers"
-          onPress={explainSameEmailProviders}
-          variant="ghost"
-        />
-      </GlassPanel>
-
-      <GlassPanel>
-        <HoystText variant="title">Phone</HoystText>
-        <HoystInput
-          keyboardType="phone-pad"
-          onChangeText={setPhoneNumber}
-          placeholder="+1 555 000 0000"
-          value={phoneNumber}
-        />
-        {confirmation ? (
-          <HoystInput
-            keyboardType="number-pad"
-            onChangeText={setSmsCode}
-            placeholder="SMS code"
-            value={smsCode}
-          />
-        ) : null}
-        <HoystButton
-          label={confirmation ? 'Confirm code' : 'Send SMS code'}
-          onPress={confirmation ? handlePhoneConfirm : handlePhoneStart}
-          variant="outline"
-        />
-      </GlassPanel>
-
-      <GlassPanel>
-        <HoystText variant="title">Social</HoystText>
-        <HoystButton
-          label="Continue with Apple"
-          onPress={() => {
-            runAuth(signInWithApple).catch(() => undefined);
-          }}
-          variant="ghost"
-        />
-        <HoystButton
-          label="Continue with Google"
-          onPress={() => {
-            runAuth(signInWithGoogle).catch(() => undefined);
-          }}
-          variant="ghost"
-        />
+        <Pressable onPress={toggleMode} style={styles.modeFooter}>
+          <HoystText tone="muted" variant="button">
+            {modeSwitchLabel}
+          </HoystText>
+        </Pressable>
       </GlassPanel>
     </HoystScreen>
   );
 }
 
 const styles = StyleSheet.create({
+  closeButton: {
+    alignItems: 'center',
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    height: 44,
+    justifyContent: 'center',
+    width: 44,
+  },
   header: {
     gap: 10,
-    paddingTop: 18,
   },
-  modeRow: {
-    flexDirection: 'row',
-    gap: 10,
+  formStack: {
+    gap: 12,
+  },
+  optionStack: {
+    gap: 12,
+  },
+  modeFooter: {
+    alignItems: 'center',
+    paddingTop: 2,
+  },
+  topBar: {
+    alignItems: 'flex-end',
+    paddingTop: 6,
   },
 });

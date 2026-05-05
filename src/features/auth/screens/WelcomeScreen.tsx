@@ -43,6 +43,7 @@ import {radius} from '../../../design/tokens/radius';
 import type {
   AuthStackParamList,
   RootStackParamList,
+  SignInEntryPoint,
 } from '../../../navigation/types';
 import {useOnboardingStore} from '../../../store/onboarding-store';
 import {useSessionStore} from '../../../store/session-store';
@@ -63,6 +64,10 @@ import {
   signInWithGoogle,
   type AuthServiceError,
 } from '../services/auth-service';
+import {
+  getOnboardingSignInParams,
+  getWelcomeSignInParams,
+} from '../services/auth-route-intent';
 
 type Props = NativeStackScreenProps<AuthStackParamList, 'Welcome'>;
 
@@ -453,6 +458,7 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
   const setSocialComfort = useOnboardingStore(state => state.setSocialComfort);
   const setTimezone = useOnboardingStore(state => state.setTimezone);
   const clearPendingAction = useSessionStore(state => state.clearPendingAction);
+  const pendingAction = useSessionStore(state => state.pendingAction);
   const setGuest = useSessionStore(state => state.setGuest);
   const rootNavigation =
     navigation.getParent<NativeStackNavigationProp<RootStackParamList>>();
@@ -758,7 +764,10 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
               onPress={() => {
                 markSeen();
                 setCurrentStep('auth');
-                navigation.navigate('SignIn');
+                navigation.navigate(
+                  'SignIn',
+                  getOnboardingSignInParams('email', authEntryPoint),
+                );
               }}
               textColor={authProviderColors.email.foregroundColor}
               variant="outline"
@@ -777,7 +786,10 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
               onPress={() => {
                 markSeen();
                 setCurrentStep('auth');
-                navigation.navigate('SignIn');
+                navigation.navigate(
+                  'SignIn',
+                  getOnboardingSignInParams('phone', authEntryPoint),
+                );
               }}
               textColor={authProviderColors.phone.foregroundColor}
               variant="outline"
@@ -798,6 +810,11 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
           : 'Continue';
   const secondaryLabel =
     currentStep === 'welcome' ? 'I already have an account' : undefined;
+  const authEntryPoint: SignInEntryPoint = pendingAction
+    ? pendingAction.type === 'settings'
+      ? 'settings'
+      : 'protectedAction'
+    : 'onboarding';
   const primaryAction =
     currentStep === 'welcome'
       ? () => setCurrentStep('coach')
@@ -809,7 +826,7 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
       ? () => {
           markSeen();
           setCurrentStep('auth');
-          navigation.navigate('SignIn');
+          navigation.navigate('SignIn', getWelcomeSignInParams());
         }
       : undefined;
 
