@@ -13,38 +13,36 @@ import {useHoystTheme} from '../../../design/theme/useHoystTheme';
 import {updateProfileFields} from '../../auth/services/account-service';
 import type {RootStackParamList} from '../../../navigation/types';
 import {useUserProfileStore} from '../../../store/profile-store';
+import {
+  getProfileAvatarSource,
+  getProfileInitials,
+} from '../../profile/services/profile-display';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'EditProfile'>;
 
 export function EditProfileScreen({navigation}: Props): React.JSX.Element {
   const theme = useHoystTheme();
-  const displayProfile = useUserProfileStore(state => state.getDisplayProfile());
+  const profile = useUserProfileStore(state => state.profile);
   const updateProfile = useUserProfileStore(state => state.updateProfile);
-  const [name, setName] = useState(displayProfile.name);
-  const [bio, setBio] = useState(displayProfile.bio ?? '');
+  const [name, setName] = useState(profile?.name ?? '');
+  const [bio, setBio] = useState(profile?.bio ?? '');
   const [isSaving, setIsSaving] = useState(false);
-  const initials = displayProfile.name
-    .split(' ')
-    .filter(Boolean)
-    .slice(0, 2)
-    .map(part => part[0]?.toUpperCase() ?? '')
-    .join('');
 
   const isSaveDisabled =
+    !profile ||
     !name.trim() ||
     isSaving ||
-    (name.trim() === displayProfile.name &&
-      bio.trim() === (displayProfile.bio ?? ''));
+    (name.trim() === profile.name && bio.trim() === (profile.bio ?? ''));
 
   const onSave = async () => {
-    if (isSaveDisabled) {
+    if (isSaveDisabled || !profile) {
       return;
     }
 
     setIsSaving(true);
     try {
       await updateProfileFields({
-        avatarUrl: displayProfile.avatarUrl,
+        avatarUrl: profile.avatarUrl,
         bio: bio.trim() || undefined,
         displayName: name.trim(),
       });
@@ -62,6 +60,43 @@ export function EditProfileScreen({navigation}: Props): React.JSX.Element {
       setIsSaving(false);
     }
   };
+
+  if (!profile) {
+    return (
+      <HoystScreen contentContainerStyle={styles.content}>
+        <View style={styles.header}>
+          <Pressable
+            onPress={() => navigation.goBack()}
+            style={({pressed}) => [
+              styles.backButton,
+              {
+                backgroundColor: theme.surfaceSoft,
+                borderColor: theme.border,
+                opacity: pressed ? 0.92 : 1,
+              },
+            ]}>
+            <ArrowLeft color={theme.text} size={22} strokeWidth={2.3} />
+          </Pressable>
+          <HoystText variant="headline">Edit Profile</HoystText>
+        </View>
+
+        <GlassPanel>
+          <HoystText variant="title">Profile unavailable</HoystText>
+          <HoystText tone="muted">
+            Sign in and complete your profile before editing account details.
+          </HoystText>
+          <HoystButton
+            label="Back to settings"
+            onPress={() => navigation.goBack()}
+            variant="outline"
+          />
+        </GlassPanel>
+      </HoystScreen>
+    );
+  }
+
+  const initials = getProfileInitials(profile);
+  const avatarSource = getProfileAvatarSource(profile);
 
   return (
     <HoystScreen contentContainerStyle={styles.content}>
@@ -84,15 +119,15 @@ export function EditProfileScreen({navigation}: Props): React.JSX.Element {
       <GlassPanel>
         <View style={styles.hero}>
           <LayeredAvatar
-            imageSource={displayProfile.avatarImage}
+            imageSource={avatarSource}
             initials={initials}
             size={68}
             state="done"
           />
           <View style={styles.heroCopy}>
-            <HoystText variant="title">{displayProfile.name}</HoystText>
-            <HoystText tone="muted">@{displayProfile.handle}</HoystText>
-            <HoystText tone="muted">{displayProfile.timezone}</HoystText>
+            <HoystText variant="title">{profile.name}</HoystText>
+            <HoystText tone="muted">@{profile.handle}</HoystText>
+            <HoystText tone="muted">{profile.timezone}</HoystText>
           </View>
         </View>
         <HoystText tone="muted" variant="caption">

@@ -8,6 +8,7 @@ import {continueAsGuestFromAuth} from '../src/features/auth/services/auth-dismis
 import {buildOnboardingPreferences} from '../src/features/auth/services/onboarding-payload';
 import {
   getOnboardingSignInParams,
+  getProfileSignInParams,
   getWelcomeSignInParams,
   resolveSignInRouteIntent,
   switchSignInMode,
@@ -16,6 +17,7 @@ import {
   normalizeHandle,
   validateHandle,
 } from '../src/features/auth/services/profile-validation';
+import {getStateWithoutAuthModal} from '../src/navigation/auth-modal-state';
 import {getRootNavigatorMode} from '../src/navigation/root-mode';
 
 describe('auth profile validation', () => {
@@ -112,6 +114,14 @@ describe('adaptive auth entry intent', () => {
     expect(resolveSignInRouteIntent(getWelcomeSignInParams())).toEqual({
       entryPoint: 'welcome',
       method: 'email',
+      mode: 'signIn',
+    });
+  });
+
+  it('opens profile auth with social providers first', () => {
+    expect(resolveSignInRouteIntent(getProfileSignInParams())).toEqual({
+      entryPoint: 'profile',
+      method: undefined,
       mode: 'signIn',
     });
   });
@@ -240,6 +250,67 @@ describe('root navigator mode policy', () => {
         status: 'authenticatedReady',
       }),
     ).toBe('main');
+  });
+});
+
+describe('auth modal dismissal state', () => {
+  it('removes only the auth modal when main tabs are underneath', () => {
+    expect(
+      getStateWithoutAuthModal({
+        index: 1,
+        routes: [
+          {key: 'main', name: 'MainTabs'},
+          {key: 'auth', name: 'Auth'},
+        ],
+      }),
+    ).toEqual({
+      index: 0,
+      routes: [{key: 'main', name: 'MainTabs'}],
+    });
+  });
+
+  it('preserves a resumed protected action above auth', () => {
+    expect(
+      getStateWithoutAuthModal({
+        index: 2,
+        routes: [
+          {key: 'main', name: 'MainTabs'},
+          {key: 'auth', name: 'Auth'},
+          {key: 'tap-in', name: 'TapInPicker'},
+        ],
+      }),
+    ).toEqual({
+      index: 1,
+      routes: [
+        {key: 'main', name: 'MainTabs'},
+        {key: 'tap-in', name: 'TapInPicker'},
+      ],
+    });
+  });
+
+  it('removes duplicate auth modals in one reset', () => {
+    expect(
+      getStateWithoutAuthModal({
+        index: 2,
+        routes: [
+          {key: 'main', name: 'MainTabs'},
+          {key: 'auth-1', name: 'Auth'},
+          {key: 'auth-2', name: 'Auth'},
+        ],
+      }),
+    ).toEqual({
+      index: 0,
+      routes: [{key: 'main', name: 'MainTabs'}],
+    });
+  });
+
+  it('leaves auth-first profile completion alone', () => {
+    expect(
+      getStateWithoutAuthModal({
+        index: 0,
+        routes: [{key: 'auth', name: 'Auth'}],
+      }),
+    ).toBeUndefined();
   });
 });
 

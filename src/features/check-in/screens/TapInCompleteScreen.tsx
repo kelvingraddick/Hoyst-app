@@ -1,4 +1,4 @@
-import React from 'react';
+import React, {useEffect, useState} from 'react';
 import {Image, Pressable, StyleSheet, View} from 'react-native';
 import {X} from 'lucide-react-native';
 import type {NativeStackScreenProps} from '@react-navigation/native-stack';
@@ -11,7 +11,10 @@ import {TapInRingMark} from '../../../design/components/TapInRingMark';
 import {radius} from '../../../design/tokens/radius';
 import {useHoystTheme} from '../../../design/theme/useHoystTheme';
 import type {RootStackParamList} from '../../../navigation/types';
-import {getCircleDetail} from '../../circles/mockData';
+import type {CircleDetailModel} from '../../../types/models';
+import {useUserProfileStore} from '../../../store/profile-store';
+import {useSessionStore} from '../../../store/session-store';
+import {subscribeToMemberCircleDetail} from '../../home/services/home-data-service';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'TapInComplete'>;
 
@@ -20,13 +23,35 @@ export function TapInCompleteScreen({
   route,
 }: Props): React.JSX.Element {
   const theme = useHoystTheme();
-  const detail = getCircleDetail(route.params.circleId);
+  const [detail, setDetail] = useState<CircleDetailModel | undefined>();
+  const profile = useUserProfileStore(state => state.profile);
+  const status = useSessionStore(state => state.status);
+  const user = useSessionStore(state => state.user);
+  const timezone = profile?.timezone ?? 'UTC';
+  const canLoadDetail = status === 'authenticatedReady' && Boolean(user?.uid);
   const note = route.params.note?.trim();
   const hasNote = Boolean(note);
+
+  useEffect(() => {
+    if (!canLoadDetail || !user?.uid) {
+      setDetail(undefined);
+      return undefined;
+    }
+
+    return subscribeToMemberCircleDetail({
+      circleId: route.params.circleId,
+      onDetail: setDetail,
+      onError: () => setDetail(undefined),
+      timezone,
+      uid: user.uid,
+    });
+  }, [canLoadDetail, route.params.circleId, timezone, user?.uid]);
 
   const finish = () => {
     navigation.replace('TapInPicker');
   };
+  const title = detail?.title ?? 'Your circle';
+  const dailyTask = detail?.dailyTask ?? "Today's Tap In";
 
   return (
     <HoystScreen contentContainerStyle={styles.content}>
@@ -55,7 +80,7 @@ export function TapInCompleteScreen({
             Tap In Complete
           </HoystText>
           <HoystText style={[styles.centerText, {color: theme.success}]}>
-            {detail.title} has your update for today.
+            {title} has your update for today.
           </HoystText>
         </View>
 
@@ -72,7 +97,7 @@ export function TapInCompleteScreen({
               <HoystText tone="muted" variant="label">
                 Today's Tap In
               </HoystText>
-              <HoystText style={styles.summaryTitle}>{detail.dailyTask}</HoystText>
+              <HoystText style={styles.summaryTitle}>{dailyTask}</HoystText>
             </View>
             <HoystText style={{color: theme.success}} variant="caption">
               Sent

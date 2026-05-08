@@ -1,16 +1,10 @@
 import React from 'react';
-import {Pressable, StyleSheet, View} from 'react-native';
-import {ArrowLeft} from 'lucide-react-native';
-import type {NativeStackScreenProps} from '@react-navigation/native-stack';
+import {StyleSheet, View} from 'react-native';
 
 import {ActivityFeedCard} from '../../../design/components/ActivityFeedCard';
 import {HoystScreen} from '../../../design/components/HoystScreen';
 import {HoystText} from '../../../design/components/HoystText';
-import {useHoystTheme} from '../../../design/theme/useHoystTheme';
-import type {RootStackParamList} from '../../../navigation/types';
 import type {CircleActivityItem} from '../../../types/models';
-
-type Props = NativeStackScreenProps<RootStackParamList, 'Inbox'>;
 
 const inboxItems: CircleActivityItem[] = [
   {
@@ -42,24 +36,10 @@ const inboxItems: CircleActivityItem[] = [
   },
 ];
 
-export function InboxScreen({navigation}: Props): React.JSX.Element {
-  const theme = useHoystTheme();
-
+export function InboxScreen(): React.JSX.Element {
   return (
     <HoystScreen contentContainerStyle={styles.content}>
       <View style={styles.header}>
-        <Pressable
-          onPress={() => navigation.goBack()}
-          style={({pressed}) => [
-            styles.backButton,
-            {
-              backgroundColor: theme.surfaceSoft,
-              borderColor: theme.border,
-              opacity: pressed ? 0.92 : 1,
-            },
-          ]}>
-          <ArrowLeft color={theme.text} size={22} strokeWidth={2.3} />
-        </Pressable>
         <HoystText variant="headline">Inbox</HoystText>
       </View>
       {inboxItems.map(item => (
@@ -74,16 +54,6 @@ const styles = StyleSheet.create({
     paddingBottom: 168,
   },
   header: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: 12,
-  },
-  backButton: {
-    alignItems: 'center',
-    borderRadius: 16,
-    borderWidth: 1,
-    height: 40,
-    justifyContent: 'center',
-    width: 40,
+    gap: 8,
   },
 });

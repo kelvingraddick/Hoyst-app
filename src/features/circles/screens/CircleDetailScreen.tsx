@@ -1,4 +1,4 @@
-import React, {useEffect, useMemo, useState} from 'react';
+import React, {useCallback, useEffect, useMemo, useState} from 'react';
 import {Alert, Pressable, Share, StyleSheet, View} from 'react-native';
 import {
   ArrowLeft,
@@ -29,9 +29,15 @@ import {actionMotion, actionShadow} from '../../../design/tokens/actions';
 import {radius} from '../../../design/tokens/radius';
 import {useHoystTheme} from '../../../design/theme/useHoystTheme';
 import {useProtectedAction} from '../../auth/hooks/useProtectedAction';
+import {useUserProfileStore} from '../../../store/profile-store';
+import {useSessionStore} from '../../../store/session-store';
 import {getCircleDetail} from '../mockData';
 import {joinCircle} from '../services/circle-service';
 import {subscribeToPublicCircle} from '../services/public-circle-service';
+import {
+  buildPublicCircleDetail,
+  subscribeToMemberCircleDetail,
+} from '../../home/services/home-data-service';
 import type {CircleDetailModel, CircleSummary} from '../../../types/models';
 import type {RootStackParamList} from '../../../navigation/types';
 
@@ -248,19 +254,122 @@ export function CircleDetailScreen({
   const [isJoining, setIsJoining] = useState(false);
   const [managed, setManaged] = useState(false);
   const [publicCircle, setPublicCircle] = useState<CircleSummary | undefined>();
+  const [memberCircle, setMemberCircle] = useState<
+    CircleDetailModel | undefined
+  >();
+  const profile = useUserProfileStore(state => state.profile);
+  const status = useSessionStore(state => state.status);
+  const user = useSessionStore(state => state.user);
   const requireAccount = useProtectedAction(navigation);
+  const timezone = profile?.timezone ?? 'UTC';
+  const canLoadMemberCircle =
+    status === 'authenticatedReady' && Boolean(user?.uid);
   const detail = useMemo(
-    () => getCircleDetail(route.params.circleId, publicCircle),
-    [publicCircle, route.params.circleId],
+    () =>
+      memberCircle ??
+      (publicCircle ? buildPublicCircleDetail(publicCircle) : undefined) ??
+      getCircleDetail(route.params.circleId),
+    [memberCircle, publicCircle, route.params.circleId],
   );
   const pendingMembers = useMemo(
-    () => detail.members.filter(member => member.state === 'pending'),
-    [detail.members],
+    () => detail?.members.filter(member => member.state === 'pending') ?? [],
+    [detail?.members],
   );
-  const missedMembers = detail.members.filter(
+  const missedMembers = detail?.members.filter(
     member => member.state === 'missed',
-  );
-  const isMemberCircle = Boolean(detail.viewerRole);
+  ) ?? [];
+
+  useEffect(() => {
+    return subscribeToPublicCircle(
+      route.params.circleId,
+      setPublicCircle,
+      () => setPublicCircle(undefined),
+    );
+  }, [route.params.circleId]);
+
+  useEffect(() => {
+    if (!canLoadMemberCircle || !user?.uid) {
+      setMemberCircle(undefined);
+      return undefined;
+    }
+
+    return subscribeToMemberCircleDetail({
+      circleId: route.params.circleId,
+      onDetail: setMemberCircle,
+      onError: () => setMemberCircle(undefined),
+      timezone,
+      uid: user.uid,
+    });
+  }, [canLoadMemberCircle, route.params.circleId, timezone, user?.uid]);
+
+  const handleJoinCircle = useCallback(async () => {
+    if (!detail) {
+      return;
+    }
+
+    setIsJoining(true);
+    try {
+      const result = await joinCircle(detail.id);
+      setJoinRequested(true);
+      Alert.alert(
+        result.status === 'active' ? 'Joined circle' : 'Request sent',
+        result.status === 'active'
+          ? 'You are now in this circle.'
+          : 'The circle owner will review your request.',
+      );
+    } catch (error) {
+      const message =
+        (error as {message?: string}).message ??
+        'Could not join this circle. Try again.';
+      Alert.alert('Join failed', message);
+    } finally {
+      setIsJoining(false);
+    }
+  }, [detail]);
+
+  useEffect(() => {
+    if (
+      detail &&
+      route.params.resumeAction === 'join' &&
+      !joinRequested &&
+      !isJoining
+    ) {
+      handleJoinCircle().catch(() => undefined);
+    }
+  }, [
+    detail,
+    handleJoinCircle,
+    isJoining,
+    joinRequested,
+    route.params.resumeAction,
+  ]);
+
+  if (!detail) {
+    return (
+      <HoystScreen contentContainerStyle={styles.content}>
+        <View style={styles.topBar}>
+          <View style={styles.brandRow}>
+            <TopBarButton onPress={() => navigation.goBack()}>
+              <ArrowLeft color={theme.text} size={22} strokeWidth={2.3} />
+            </TopBarButton>
+            <BrandMark isDark={theme.isDark} kind="logo" style={styles.logo} />
+          </View>
+        </View>
+        <GlassPanel>
+          <View style={styles.heroCopy}>
+            <HoystText variant="title">Circle unavailable</HoystText>
+            <HoystText tone="muted">
+              This circle was not found, or your account does not have access to
+              it yet.
+            </HoystText>
+          </View>
+        </GlassPanel>
+      </HoystScreen>
+    );
+  }
+
+  const isPendingMembership = detail.viewerMembershipStatus === 'pending';
+  const isMemberCircle = Boolean(detail.viewerRole) && !isPendingMembership;
   const canInvite =
     Boolean(detail.inviteUrl) &&
     (detail.viewerRole === 'owner' || detail.viewerRole === 'admin');
@@ -280,25 +389,20 @@ export function CircleDetailScreen({
       : detail.remainingCheckIns && detail.remainingCheckIns > 0
         ? `${detail.remainingCheckIns} pending today`
         : 'Daily Tap In complete'
-    : detail.matchCopy ?? 'Preview the circle before you jump in.';
-  const streakValue = detail.streakDays ?? Number.parseInt(detail.streakLabel, 10);
+    : detail.viewerMembershipStatus === 'pending'
+      ? 'Pending approval before Tap In unlocks.'
+      : detail.matchCopy ?? 'Preview the circle before you jump in.';
+  const streakValue =
+    detail.streakDays ?? Number.parseInt(detail.streakLabel, 10);
   const showFlameIcon = Number.isFinite(streakValue) && streakValue > 7;
   const privacyLabel = detail.privacy === 'private' ? 'Private' : 'Public';
   const joinActionLabel = joinRequested
     ? detail.joinLabel === 'Open seats'
       ? 'Joined'
       : 'Request sent'
-      : detail.joinLabel === 'Open seats'
+    : detail.joinLabel === 'Open seats'
       ? 'Join Circle'
       : 'Request to join';
-
-  useEffect(() => {
-    return subscribeToPublicCircle(
-      route.params.circleId,
-      setPublicCircle,
-      () => setPublicCircle(undefined),
-    );
-  }, [route.params.circleId]);
 
   const shareInvite = () => {
     if (!canInvite || !detail.inviteUrl) {
@@ -311,33 +415,6 @@ export function CircleDetailScreen({
       url: detail.inviteUrl,
     }).catch(() => undefined);
   };
-
-  const handleJoinCircle = async () => {
-    setIsJoining(true);
-    try {
-      const result = await joinCircle(detail.id);
-      setJoinRequested(true);
-      Alert.alert(
-        result.status === 'active' ? 'Joined circle' : 'Request sent',
-        result.status === 'active'
-          ? 'You are now in this circle.'
-          : 'The circle owner will review your request.',
-      );
-    } catch (error) {
-      const message =
-        (error as {message?: string}).message ??
-        'Could not join this circle. Try again.';
-      Alert.alert('Join failed', message);
-    } finally {
-      setIsJoining(false);
-    }
-  };
-
-  useEffect(() => {
-    if (route.params.resumeAction === 'join' && !joinRequested && !isJoining) {
-      handleJoinCircle().catch(() => undefined);
-    }
-  });
 
   return (
     <HoystScreen contentContainerStyle={styles.content}>
@@ -456,6 +533,8 @@ export function CircleDetailScreen({
           <HoystText tone="muted" variant="caption">
             {isMemberCircle
               ? `${pendingMembers.length} pending, ${missedMembers.length} missed`
+              : isPendingMembership
+                ? 'Pending approval'
               : getJoinModeLabel(detail)}
           </HoystText>
         </View>
@@ -537,18 +616,30 @@ export function CircleDetailScreen({
                   strokeWidth={2.4}
                 />
               }
-              label={isJoining ? 'Working...' : joinActionLabel}
-              onPress={() =>
-                requireAccount(
-                  {circleId: detail.id, type: 'joinCircle'},
-                  () => {
-                    handleJoinCircle().catch(() => undefined);
-                  },
-                )
+              disabled={isPendingMembership}
+              label={
+                isPendingMembership
+                  ? 'Pending approval'
+                  : isJoining
+                    ? 'Working...'
+                    : joinActionLabel
+              }
+              onPress={
+                isPendingMembership
+                  ? undefined
+                  : () =>
+                      requireAccount(
+                        {circleId: detail.id, type: 'joinCircle'},
+                        () => {
+                          handleJoinCircle().catch(() => undefined);
+                        },
+                      )
               }
             />
             <HoystText tone="muted" variant="caption">
-              {detail.joinLabel === 'Open seats'
+              {isPendingMembership
+                ? 'The circle owner will review your request.'
+                : detail.joinLabel === 'Open seats'
                 ? `${detail.maxSize - detail.memberCount} seats open today`
                 : 'The circle owner will review your request.'}
             </HoystText>

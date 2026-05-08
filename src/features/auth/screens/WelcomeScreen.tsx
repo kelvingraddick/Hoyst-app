@@ -46,6 +46,7 @@ import type {
   RootStackParamList,
   SignInEntryPoint,
 } from '../../../navigation/types';
+import {dismissAuthModals} from '../../../navigation/auth-modal-dismiss';
 import {useOnboardingStore} from '../../../store/onboarding-store';
 import {useSessionStore} from '../../../store/session-store';
 import {
@@ -510,11 +511,7 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
   const continueAsGuest = () => {
     continueAsGuestFromAuth({
       clearPendingAction,
-      dismissAuth: () => {
-        if (rootNavigation?.canGoBack()) {
-          rootNavigation.goBack();
-        }
-      },
+      dismissAuth: () => dismissAuthModals(rootNavigation),
       hasAuthenticatedUser: () => Boolean(firebaseAuth().currentUser),
       markOnboardingSeen: markSeen,
       setGuest,
@@ -537,7 +534,6 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
       }
 
       markSeen();
-      navigation.navigate('CompleteProfile');
     } catch (error) {
       Alert.alert('Sign in failed', getErrorMessage(error));
     } finally {

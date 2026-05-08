@@ -16,6 +16,12 @@ service cloud.firestore {
         get(/databases/$(database)/documents/circles/$(circleId)/members/$(request.auth.uid)).data.status == 'active';
     }
 
+    function isCircleMember(circleId) {
+      return signedIn() &&
+        exists(/databases/$(database)/documents/circles/$(circleId)/members/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/circles/$(circleId)/members/$(request.auth.uid)).data.status in ['active', 'pending'];
+    }
+
     function isPublicCircle() {
       return resource.data.privacy == 'public';
     }
@@ -43,8 +49,13 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    match /{path=**}/members/{uid} {
+      allow read: if isSelf(uid) || (signedIn() && resource.data.uid == request.auth.uid);
+      allow write: if false;
+    }
+
     match /circles/{circleId} {
-      allow read: if isPublicCircle() || isActiveMember(circleId);
+      allow read: if isPublicCircle() || isCircleMember(circleId);
       allow write: if false;
 
       match /members/{uid} {
@@ -69,4 +80,3 @@ service cloud.firestore {
     }
   }
 }
-

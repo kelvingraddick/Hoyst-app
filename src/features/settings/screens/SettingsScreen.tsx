@@ -32,6 +32,10 @@ import {useUserProfileStore} from '../../../store/profile-store';
 import {useSessionStore} from '../../../store/session-store';
 import {useSettingsStore} from '../../../store/settings-store';
 import {useOnboardingStore} from '../../../store/onboarding-store';
+import {
+  getProfileAvatarSource,
+  getProfileInitials,
+} from '../../profile/services/profile-display';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Settings'>;
 
@@ -186,7 +190,6 @@ function AccountSummaryRow({
 export function SettingsScreen({navigation}: Props): React.JSX.Element {
   const theme = useHoystTheme();
   const profile = useUserProfileStore(state => state.profile);
-  const displayProfile = useUserProfileStore(state => state.getDisplayProfile());
   const status = useSessionStore(state => state.status);
   const notifications = useSettingsStore(state => state.notifications);
   const setNotificationPreference = useSettingsStore(
@@ -198,14 +201,8 @@ export function SettingsScreen({navigation}: Props): React.JSX.Element {
   );
   const setGuest = useSessionStore(state => state.setGuest);
   const isReady = status === 'authenticatedReady' && Boolean(profile);
-  const initials = displayProfile.name
-    .split(' ')
-    .filter(Boolean)
-    .slice(0, 2)
-    .map(part => part[0]?.toUpperCase() ?? '')
-    .join('');
 
-  if (!isReady) {
+  if (!isReady || !profile) {
     return (
       <HoystScreen contentContainerStyle={styles.content}>
         <View style={styles.header}>
@@ -233,6 +230,9 @@ export function SettingsScreen({navigation}: Props): React.JSX.Element {
     );
   }
 
+  const initials = getProfileInitials(profile);
+  const avatarSource = getProfileAvatarSource(profile);
+
   return (
     <HoystScreen contentContainerStyle={styles.content}>
       <View style={styles.header}>
@@ -244,11 +244,11 @@ export function SettingsScreen({navigation}: Props): React.JSX.Element {
 
       <SettingsSection title="Account">
         <AccountSummaryRow
-          bio={displayProfile.bio}
-          handle={displayProfile.handle}
-          imageSource={displayProfile.avatarImage}
+          bio={profile.bio}
+          handle={profile.handle}
+          imageSource={avatarSource}
           initials={initials}
-          name={displayProfile.name}
+          name={profile.name}
         />
         <SectionDivider />
         <SettingsRow
@@ -262,7 +262,7 @@ export function SettingsScreen({navigation}: Props): React.JSX.Element {
         />
         <SectionDivider />
         <SettingsRow
-          detail={displayProfile.timezone}
+          detail={profile.timezone}
           icon={Clock3}
           title="Timezone"
           trailing={

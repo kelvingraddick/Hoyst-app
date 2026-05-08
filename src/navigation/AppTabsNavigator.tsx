@@ -4,16 +4,16 @@ import {createBottomTabNavigator} from '@react-navigation/bottom-tabs';
 import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import {useNavigation} from '@react-navigation/native';
 import {
+  Bell,
   Compass,
   Home,
   type LucideIcon,
   UserRound,
-  UsersRound,
 } from 'lucide-react-native';
 
-import {CirclesScreen} from '../features/circles/screens/CirclesScreen';
 import {ExploreScreen} from '../features/explore/screens/ExploreScreen';
 import {HomeScreen} from '../features/home/screens/HomeScreen';
+import {InboxScreen} from '../features/inbox/screens/InboxScreen';
 import {ProfileScreen} from '../features/profile/screens/ProfileScreen';
 import {TapInRingMark} from '../design/components/TapInRingMark';
 import {useHoystTheme} from '../design/theme/useHoystTheme';
@@ -28,8 +28,8 @@ type StandardTabName = Exclude<keyof AppTabsParamList, 'TapIn'>;
 
 const routeIcons: Record<StandardTabName, LucideIcon> = {
   Home,
-  Circles: UsersRound,
   Explore: Compass,
+  Inbox: Bell,
   Profile: UserRound,
 };
 
@@ -131,7 +131,7 @@ export function AppTabsNavigator(): React.JSX.Element {
         },
       })}>
       <Tab.Screen component={HomeScreen} name="Home" />
-      <Tab.Screen component={CirclesScreen} name="Circles" />
+      <Tab.Screen component={ExploreScreen} name="Explore" />
       <Tab.Screen
         component={TapInPlaceholder}
         listeners={({navigation}) => ({
@@ -154,7 +154,7 @@ export function AppTabsNavigator(): React.JSX.Element {
         name="TapIn"
         options={{tabBarAccessibilityLabel: 'Tap In'}}
       />
-      <Tab.Screen component={ExploreScreen} name="Explore" />
+      <Tab.Screen component={InboxScreen} name="Inbox" />
       <Tab.Screen component={ProfileScreen} name="Profile" />
     </Tab.Navigator>
   );

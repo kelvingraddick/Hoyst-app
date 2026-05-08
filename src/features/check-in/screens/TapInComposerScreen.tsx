@@ -1,4 +1,4 @@
-import React, {useState} from 'react';
+import React, {useEffect, useState} from 'react';
 import {Alert, Image, Pressable, StyleSheet, View} from 'react-native';
 import {Camera, ImagePlus, X} from 'lucide-react-native';
 import {launchCamera, launchImageLibrary} from 'react-native-image-picker';
@@ -13,12 +13,18 @@ import {HoystText} from '../../../design/components/HoystText';
 import {TapInRingMark} from '../../../design/components/TapInRingMark';
 import {radius} from '../../../design/tokens/radius';
 import {useHoystTheme} from '../../../design/theme/useHoystTheme';
-import {getCircleDetail, initialTapInDraft} from '../../circles/mockData';
 import {submitTapIn} from '../services/check-in-service';
-import type {TapInDraft} from '../../../types/models';
+import type {CircleDetailModel, TapInDraft} from '../../../types/models';
 import type {RootStackParamList} from '../../../navigation/types';
+import {useUserProfileStore} from '../../../store/profile-store';
+import {useSessionStore} from '../../../store/session-store';
+import {subscribeToMemberCircleDetail} from '../../home/services/home-data-service';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'TapInComposer'>;
+
+const initialTapInDraft: TapInDraft = {
+  note: '',
+};
 
 export function TapInComposerScreen({
   navigation,
@@ -26,18 +32,28 @@ export function TapInComposerScreen({
 }: Props): React.JSX.Element {
   const theme = useHoystTheme();
   const [draft, setDraft] = useState<TapInDraft>(initialTapInDraft);
+  const [detail, setDetail] = useState<CircleDetailModel | undefined>();
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const detail = getCircleDetail(route.params.circleId);
-  const notePreview =
-    draft.note.trim().length > 0
-      ? draft.note.trim()
-      : 'Your circle will see the note you add here.';
-  const statusLabel =
-    detail.state === 'risk'
-      ? 'Group streak at risk'
-      : detail.viewerHasCheckedIn
-        ? 'Already tapped in'
-        : `${detail.remainingCheckIns ?? 0} pending today`;
+  const profile = useUserProfileStore(state => state.profile);
+  const status = useSessionStore(state => state.status);
+  const user = useSessionStore(state => state.user);
+  const timezone = profile?.timezone ?? 'UTC';
+  const canLoadDetail = status === 'authenticatedReady' && Boolean(user?.uid);
+
+  useEffect(() => {
+    if (!canLoadDetail || !user?.uid) {
+      setDetail(undefined);
+      return undefined;
+    }
+
+    return subscribeToMemberCircleDetail({
+      circleId: route.params.circleId,
+      onDetail: setDetail,
+      onError: () => setDetail(undefined),
+      timezone,
+      uid: user.uid,
+    });
+  }, [canLoadDetail, route.params.circleId, timezone, user?.uid]);
 
   const resetAndClose = () => {
     setDraft(initialTapInDraft);
@@ -48,6 +64,44 @@ export function TapInComposerScreen({
 
     navigation.goBack();
   };
+
+  if (!detail) {
+    return (
+      <HoystScreen contentContainerStyle={styles.content}>
+        <View style={styles.closeRow}>
+          <Pressable
+            onPress={resetAndClose}
+            style={({pressed}) => [
+              styles.closeButton,
+              {
+                backgroundColor: theme.surfaceSoft,
+                borderColor: theme.border,
+                opacity: pressed ? 0.92 : 1,
+              },
+            ]}>
+            <X color={theme.text} size={18} strokeWidth={2.4} />
+          </Pressable>
+        </View>
+        <GlassPanel style={styles.contextPanel}>
+          <HoystText variant="title">Circle unavailable</HoystText>
+          <HoystText tone="muted">
+            This Tap In needs a real active circle before you can submit.
+          </HoystText>
+        </GlassPanel>
+      </HoystScreen>
+    );
+  }
+
+  const notePreview =
+    draft.note.trim().length > 0
+      ? draft.note.trim()
+      : 'Your circle will see the note you add here.';
+  const statusLabel =
+    detail.state === 'risk'
+      ? 'Group streak at risk'
+      : detail.viewerHasCheckedIn
+        ? 'Already tapped in'
+        : `${detail.remainingCheckIns ?? 0} pending today`;
 
   const handleChoosePhoto = async () => {
     const response = await launchImageLibrary({

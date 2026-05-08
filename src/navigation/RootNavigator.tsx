@@ -5,7 +5,6 @@ import {HoystScreen} from '../design/components/HoystScreen';
 import {HoystText} from '../design/components/HoystText';
 import {CreateCircleScreen} from '../features/create-circle/screens/CreateCircleScreen';
 import {CircleDetailScreen} from '../features/circles/screens/CircleDetailScreen';
-import {InboxScreen} from '../features/inbox/screens/InboxScreen';
 import {EditProfileScreen} from '../features/settings/screens/EditProfileScreen';
 import {SettingsScreen} from '../features/settings/screens/SettingsScreen';
 import {TapInCompleteScreen} from '../features/check-in/screens/TapInCompleteScreen';
@@ -37,6 +36,8 @@ export function RootNavigator(): React.JSX.Element {
     hasSeenOnboarding,
     status,
   });
+  const canPresentAuthModal =
+    mode === 'main' && status !== 'authenticatedReady';
 
   return (
     <Stack.Navigator key={mode}>
@@ -59,7 +60,7 @@ export function RootNavigator(): React.JSX.Element {
           options={{headerShown: false}}
         />
       )}
-      {mode === 'main' ? (
+      {canPresentAuthModal ? (
         <Stack.Screen
           component={AuthStackNavigator}
           name="Auth"
@@ -70,14 +71,6 @@ export function RootNavigator(): React.JSX.Element {
           }}
         />
       ) : null}
-      <Stack.Screen
-        component={InboxScreen}
-        name="Inbox"
-        options={{
-          animation: 'slide_from_right',
-          headerShown: false,
-        }}
-      />
       <Stack.Screen
         component={SettingsScreen}
         name="Settings"

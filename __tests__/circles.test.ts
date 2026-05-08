@@ -1,6 +1,7 @@
 jest.mock('@react-native-firebase/firestore', () => jest.fn());
 
 import {mapPublicCircleIndexSnapshot} from '../src/features/circles/services/public-circle-service';
+import {getCircleDetail} from '../src/features/circles/mockData';
 
 describe('public circle discovery mapping', () => {
   it('maps publicCircleIndex documents into explore circles', () => {
@@ -40,5 +41,11 @@ describe('public circle discovery mapping', () => {
     };
 
     expect(mapPublicCircleIndexSnapshot(snapshot as never)).toBeUndefined();
+  });
+});
+
+describe('circle detail mock lookup', () => {
+  it('does not fall back to a mock circle for unknown ids', () => {
+    expect(getCircleDetail('unknown-real-circle')).toBeUndefined();
   });
 });

@@ -7,7 +7,6 @@ import type {
   ExploreCircle,
   TapInDraft,
   TodayCircleCard,
-  UserProfile,
 } from '../../types/models';
 import {avatarImages} from '../../assets/avatars';
 
@@ -29,21 +28,13 @@ export const initialCreateCircleDraft: CreateCircleDraft = {
   inviteCode: 'hoyst.app/join/vanguard-832',
 };
 
-export const currentUserProfile: UserProfile = {
-  id: 'u-kelvin',
-  handle: 'kelvin',
-  name: 'Kelvin',
-  avatarImage: avatarImages.kelvin,
-  bio: 'Builder. Accountable. Quietly competitive.',
-  timezone: 'America/New_York',
-};
-
 export const todayCircles: TodayCircleCard[] = [
   {
     id: 'fitness-fanatics',
     title: 'Fitness Fanatics',
     category: 'Fitness',
     dailyTask: '30min workout',
+    matchCopy: 'A steady training crew keeping daily workouts honest.',
     state: 'active',
     progressPercent: 75,
     viewerHasCheckedIn: true,
@@ -90,6 +81,7 @@ export const todayCircles: TodayCircleCard[] = [
     title: 'Mindful Mornings',
     category: 'Wellness',
     dailyTask: '10min meditation',
+    matchCopy: 'A calm morning circle for starting the day grounded.',
     state: 'done',
     progressPercent: 100,
     viewerHasCheckedIn: true,
@@ -121,6 +113,7 @@ export const todayCircles: TodayCircleCard[] = [
     title: 'Sober Squad',
     category: 'Sobriety',
     dailyTask: 'Daily sobriety Tap In',
+    matchCopy: 'Supportive daily accountability for staying clear and connected.',
     state: 'risk',
     progressPercent: 42,
     viewerHasCheckedIn: false,
@@ -652,22 +645,33 @@ const circleSummaries = [...circleManagementCards, ...exploreCircles].reduce(
 export function getCircleDetail(
   circleId: string,
   publicSummary?: CircleSummary,
-): CircleDetailModel {
-  const fallbackSummary = circleSummaries['fitness-fanatics'];
-  const summary = publicSummary ?? circleSummaries[circleId] ?? fallbackSummary;
-  const detailContent =
-    circleDetails[summary.id] ?? circleDetails['fitness-fanatics'];
+): CircleDetailModel | undefined {
+  const summary = publicSummary ?? circleSummaries[circleId];
+
+  if (!summary) {
+    return undefined;
+  }
+
+  const detailContent = circleDetails[summary.id] ?? {
+    activity: [],
+    monthProgress: Array.from({length: 7}, (_, index) => ({
+      day: index + 1,
+      state: index === 6 ? 'today' : 'future',
+    })),
+  };
+  const progressPercent = summary.progressPercent ?? summary.completionRate ?? 0;
 
   return {
     ...summary,
     ...detailContent,
     dailyGoal: `Daily goal: ${summary.dailyTask}`,
-    completionRate:
-      summary.completionRate ??
-      summary.progressPercent ??
-      fallbackSummary.progressPercent ??
-      0,
+    completionRate: summary.completionRate ?? progressPercent,
     memberCount: summary.memberCount ?? summary.members.length,
-    maxSize: summary.maxSize ?? summary.members.length,
+    maxSize: summary.maxSize ?? Math.max(summary.members.length, 1),
+    progressPercent,
+    remainingCheckIns: summary.remainingCheckIns ?? 0,
+    state: summary.state ?? 'active',
+    streakDays: summary.streakDays ?? 0,
+    viewerHasCheckedIn: summary.viewerHasCheckedIn ?? true,
   };
 }

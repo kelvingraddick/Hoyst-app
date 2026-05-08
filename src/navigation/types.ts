@@ -2,9 +2,9 @@ import type {NavigatorScreenParams} from '@react-navigation/native';
 
 export type AppTabsParamList = {
   Home: undefined;
-  Circles: undefined;
-  TapIn: undefined;
   Explore: undefined;
+  TapIn: undefined;
+  Inbox: undefined;
   Profile: undefined;
 };
 
@@ -37,7 +37,6 @@ export type RootStackParamList = {
   Loading: undefined;
   MainTabs: undefined;
   Auth: NavigatorScreenParams<AuthStackParamList> | undefined;
-  Inbox: undefined;
   Settings: undefined;
   EditProfile: undefined;
   TapInPicker: undefined;

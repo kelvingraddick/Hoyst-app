@@ -43,7 +43,6 @@ export function getWelcomeSignInParams(): SignInRouteParams {
 export function getProfileSignInParams(): SignInRouteParams {
   return {
     entryPoint: 'profile',
-    method: 'email',
     mode: 'signIn',
   };
 }

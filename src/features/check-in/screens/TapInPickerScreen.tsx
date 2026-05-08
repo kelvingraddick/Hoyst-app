@@ -1,4 +1,4 @@
-import React from 'react';
+import React, {useEffect, useState} from 'react';
 import {Pressable, Share, StyleSheet, View} from 'react-native';
 import {
   ArrowRight,
@@ -25,7 +25,13 @@ import {radius} from '../../../design/tokens/radius';
 import {useHoystTheme} from '../../../design/theme/useHoystTheme';
 import type {RootStackParamList} from '../../../navigation/types';
 import type {CircleManagementCard} from '../../../types/models';
-import {circleManagementCards} from '../../circles/mockData';
+import {useUserProfileStore} from '../../../store/profile-store';
+import {useSessionStore} from '../../../store/session-store';
+import {
+  createEmptyHomeData,
+  subscribeToHomeData,
+  type HomeData,
+} from '../../home/services/home-data-service';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'TapInPicker'>;
 
@@ -69,16 +75,42 @@ function sortDueCircles(
 
 export function TapInPickerScreen({navigation}: Props): React.JSX.Element {
   const theme = useHoystTheme();
-  const dueCircles = circleManagementCards
+  const [homeData, setHomeData] = useState<HomeData>(() =>
+    createEmptyHomeData(),
+  );
+  const profile = useUserProfileStore(state => state.profile);
+  const status = useSessionStore(state => state.status);
+  const user = useSessionStore(state => state.user);
+  const timezone = profile?.timezone ?? 'UTC';
+  const canLoadCircles = status === 'authenticatedReady' && Boolean(user?.uid);
+
+  useEffect(() => {
+    if (!canLoadCircles || !user?.uid) {
+      setHomeData(createEmptyHomeData(timezone));
+      return undefined;
+    }
+
+    return subscribeToHomeData({
+      onData: setHomeData,
+      onError: () => setHomeData(createEmptyHomeData(timezone)),
+      timezone,
+      uid: user.uid,
+    });
+  }, [canLoadCircles, timezone, user?.uid]);
+
+  const activeCircles = homeData.circles.filter(
+    circle => circle.viewerMembershipStatus !== 'pending',
+  );
+  const dueCircles = activeCircles
     .filter(circle => !circle.viewerHasCheckedIn)
     .sort(sortDueCircles);
-  const secondaryCircles = circleManagementCards.filter(
+  const secondaryCircles = activeCircles.filter(
     circle => circle.viewerHasCheckedIn,
   );
-  const atRiskCount = circleManagementCards.filter(
+  const atRiskCount = activeCircles.filter(
     circle => circle.state === 'risk',
   ).length;
-  const doneCount = circleManagementCards.filter(
+  const doneCount = activeCircles.filter(
     circle => circle.viewerHasCheckedIn,
   ).length;
 

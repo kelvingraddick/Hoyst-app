@@ -22,6 +22,7 @@ import type {
 } from '../../../navigation/types';
 import {useOnboardingStore} from '../../../store/onboarding-store';
 import {useSessionStore} from '../../../store/session-store';
+import {dismissAuthModals} from '../../../navigation/auth-modal-dismiss';
 import {
   confirmPhoneSignIn,
   getSameEmailProviders,
@@ -135,7 +136,7 @@ export function SignInScreen({navigation, route}: Props): React.JSX.Element {
     setIsBusy(true);
     try {
       await action();
-      navigation.navigate('CompleteProfile');
+      markOnboardingSeen();
     } catch (error) {
       Alert.alert(failureTitle, getErrorMessage(error));
     } finally {
@@ -236,11 +237,7 @@ export function SignInScreen({navigation, route}: Props): React.JSX.Element {
     try {
       await continueAsGuestFromAuth({
         clearPendingAction,
-        dismissAuth: () => {
-          if (rootNavigation?.canGoBack()) {
-            rootNavigation.goBack();
-          }
-        },
+        dismissAuth: () => dismissAuthModals(rootNavigation),
         hasAuthenticatedUser: () => Boolean(firebaseAuth().currentUser),
         markOnboardingSeen,
         setGuest,

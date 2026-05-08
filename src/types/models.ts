@@ -2,6 +2,7 @@ import type {ImageSourcePropType} from 'react-native';
 
 export type CirclePrivacy = 'private' | 'public';
 export type CircleJoinMode = 'open' | 'invite_only' | 'request_to_join';
+export type CircleMembershipStatus = 'active' | 'pending';
 export type MemberRole = 'owner' | 'admin' | 'member';
 export type CheckInStatus = 'done' | 'skip' | 'rest';
 export type TodayCircleState = 'active' | 'done' | 'risk';
@@ -86,6 +87,7 @@ export type CircleSummary = {
   privacy?: CirclePrivacy;
   joinMode?: CircleJoinMode;
   viewerRole?: MemberRole;
+  viewerMembershipStatus?: CircleMembershipStatus;
   inviteUrl?: string;
   joinLabel?: CircleJoinLabel;
   matchCopy?: string;
