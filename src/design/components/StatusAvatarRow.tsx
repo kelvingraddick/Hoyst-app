@@ -31,6 +31,7 @@ export function StatusAvatarRow({
               <LayeredAvatar
                 initials={member.initials}
                 imageSource={member.avatarImage}
+                imageUrl={member.avatarUrl}
                 size={56}
                 state={member.state}
               />

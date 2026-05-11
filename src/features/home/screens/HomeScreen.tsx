@@ -24,6 +24,7 @@ import {
   getHomeFilterCounts,
   matchesHomeCircleFilter,
   shouldShowHomeCreateCircleButton,
+  shouldShowHomeDataErrorPanel,
   sortHomeCircles,
   subscribeToHomeData,
   type HomeData,
@@ -135,6 +136,7 @@ export function HomeScreen(): React.JSX.Element {
     return subscribeToHomeData({
       onData: data => {
         setHomeData(data);
+        setHasHomeDataError(false);
         setIsLoadingHomeData(false);
       },
       onError: () => {
@@ -188,7 +190,7 @@ export function HomeScreen(): React.JSX.Element {
   );
   const firstName = profile ? profile.name.split(' ')[0] : 'there';
   const initials = getProfileInitials(profile);
-  const avatarSource = getProfileAvatarSource(profile);
+  const avatarSource = getProfileAvatarSource(profile, user?.photoURL);
   const progressLabel =
     isAuthenticatedHome && homeData.hasRealProgress
       ? `${homeData.progressPercent}%`
@@ -203,6 +205,11 @@ export function HomeScreen(): React.JSX.Element {
     !isLoadingHomeData &&
     !hasHomeDataError &&
     homeData.circles.length === 0;
+  const showHomeDataErrorPanel = shouldShowHomeDataErrorPanel({
+    circleCount: homeData.circles.length,
+    hasHomeDataError,
+    isLoadingHomeData,
+  });
   const showCreateCircleButton = shouldShowHomeCreateCircleButton({
     isAuthenticatedHome,
     showAccountPrompt,
@@ -461,7 +468,7 @@ export function HomeScreen(): React.JSX.Element {
         </GlassPanel>
       ) : null}
 
-      {hasHomeDataError ? (
+      {showHomeDataErrorPanel ? (
         <GlassPanel style={styles.emptyPanel}>
           <HoystText variant="title">Could not load Home</HoystText>
           <HoystText tone="muted">

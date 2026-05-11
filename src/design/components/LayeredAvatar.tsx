@@ -14,6 +14,7 @@ import {HoystText} from './HoystText';
 
 type LayeredAvatarProps = {
   imageSource?: ImageSourcePropType;
+  imageUrl?: string;
   initials: string;
   size?: number;
   state?: CircleMemberState;
@@ -45,6 +46,17 @@ function getLayeredAvatarPalette(
     };
   }
 
+  if (state === 'skipped') {
+    return {
+      glow: 'rgba(255,138,61,0.08)',
+      outerRing: 'rgba(255,138,61,0.42)',
+      innerRing: theme.warning,
+      separator: 'rgba(15,15,15,0.96)',
+      background: '#21160f',
+      text: '#ffd8bd',
+    };
+  }
+
   return {
     glow: 'rgba(255,255,255,0.03)',
     outerRing: 'rgba(255,255,255,0.1)',
@@ -57,11 +69,14 @@ function getLayeredAvatarPalette(
 
 export function LayeredAvatar({
   imageSource,
+  imageUrl,
   initials,
   size = 42,
   state = 'done',
 }: LayeredAvatarProps): React.JSX.Element {
   const theme = useHoystTheme();
+  const resolvedImageSource =
+    imageSource ?? (imageUrl ? {uri: imageUrl} : undefined);
   const palette = getLayeredAvatarPalette(theme, state);
   const isDone = state === 'done';
   const glowSize = size + 6;
@@ -132,9 +147,9 @@ export function LayeredAvatar({
                 width: frameSize,
               },
             ]}>
-            {imageSource ? (
+            {resolvedImageSource ? (
               <Image
-                source={imageSource}
+                source={resolvedImageSource}
                 style={[
                   styles.image,
                   {

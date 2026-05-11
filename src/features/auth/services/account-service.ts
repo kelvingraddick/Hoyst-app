@@ -20,6 +20,10 @@ export function getLocalTimezone() {
   return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
 }
 
+function asOptionalString(value: unknown) {
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+}
+
 export function mapUserProfileSnapshot(
   snapshot: FirebaseFirestoreTypes.DocumentSnapshot,
 ): UserProfile | undefined {
@@ -30,8 +34,8 @@ export function mapUserProfileSnapshot(
   }
 
   return {
-    avatarUrl: data.avatarUrl,
-    bio: data.bio,
+    avatarUrl: asOptionalString(data.avatarUrl),
+    bio: asOptionalString(data.bio),
     handle: data.handle,
     id: snapshot.id,
     name: data.displayName,
@@ -77,6 +81,23 @@ export async function updateProfileFields(input: {
       avatarUrl: input.avatarUrl ?? null,
       bio: input.bio ?? null,
       displayName: input.displayName,
+      updatedAt: firestore.FieldValue.serverTimestamp(),
+    });
+}
+
+export async function updateProfileAvatarUrlFromAuth(avatarUrl: string) {
+  const uid = firebaseAuth().currentUser?.uid;
+  const normalizedAvatarUrl = avatarUrl.trim();
+
+  if (!uid || !normalizedAvatarUrl) {
+    return;
+  }
+
+  await firebaseFirestore()
+    .collection(collections.users)
+    .doc(uid)
+    .update({
+      avatarUrl: normalizedAvatarUrl,
       updatedAt: firestore.FieldValue.serverTimestamp(),
     });
 }

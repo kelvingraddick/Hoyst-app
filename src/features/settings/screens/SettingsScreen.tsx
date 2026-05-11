@@ -49,10 +49,47 @@ type SettingsRowProps = {
   disabled?: boolean;
   icon: LucideIcon;
   iconColor?: string;
+  iconTone?: SettingsIconTone;
   onPress?: () => void;
   title: string;
   trailing?: React.ReactNode;
+  trailingKind?: 'accessory' | 'switch' | 'value';
 };
+
+type SettingsIconTone =
+  | 'blue'
+  | 'danger'
+  | 'green'
+  | 'neutral'
+  | 'orange'
+  | 'purple';
+
+function getSettingsIconColor(
+  theme: ReturnType<typeof useHoystTheme>,
+  tone: SettingsIconTone,
+) {
+  if (tone === 'green') {
+    return theme.success;
+  }
+
+  if (tone === 'orange') {
+    return theme.accentWarm;
+  }
+
+  if (tone === 'danger') {
+    return theme.danger;
+  }
+
+  if (tone === 'neutral') {
+    return theme.textSubtle;
+  }
+
+  if (tone === 'purple') {
+    return theme.accentSecondary;
+  }
+
+  return theme.accentTertiary;
+}
 
 function HeaderButton({
   children,
@@ -114,12 +151,17 @@ function SettingsRow({
   disabled = false,
   icon: Icon,
   iconColor,
+  iconTone = 'blue',
   onPress,
   title,
   trailing,
+  trailingKind = 'accessory',
 }: SettingsRowProps): React.JSX.Element {
   const theme = useHoystTheme();
   const isInteractive = Boolean(onPress) && !disabled;
+  const resolvedIconColor =
+    iconColor ??
+    (disabled ? theme.textSubtle : getSettingsIconColor(theme, iconTone));
 
   return (
     <Pressable
@@ -133,11 +175,7 @@ function SettingsRow({
       ]}>
       <View style={styles.rowMain}>
         <View style={styles.rowIcon}>
-          <Icon
-            color={iconColor ?? theme.accentSecondary}
-            size={18}
-            strokeWidth={2.1}
-          />
+          <Icon color={resolvedIconColor} size={18} strokeWidth={2.1} />
         </View>
         <View style={styles.rowContent}>
           <HoystText style={styles.rowTitle}>{title}</HoystText>
@@ -148,8 +186,41 @@ function SettingsRow({
           ) : null}
         </View>
       </View>
-      {trailing ? <View style={styles.rowTrailing}>{trailing}</View> : null}
+      {trailing ? (
+        <View
+          style={[
+            styles.rowTrailing,
+            trailingKind === 'accessory'
+              ? styles.rowTrailingAccessory
+              : undefined,
+          ]}>
+          {trailing}
+        </View>
+      ) : null}
     </Pressable>
+  );
+}
+
+function SettingsSwitch({
+  onValueChange,
+  value,
+}: {
+  onValueChange: (value: boolean) => void;
+  value: boolean;
+}): React.JSX.Element {
+  const theme = useHoystTheme();
+
+  return (
+    <Switch
+      ios_backgroundColor={theme.borderStrong}
+      onValueChange={onValueChange}
+      trackColor={{
+        false: theme.borderStrong,
+        true: theme.success,
+      }}
+      thumbColor={theme.backgroundElevated}
+      value={value}
+    />
   );
 }
 
@@ -191,6 +262,7 @@ export function SettingsScreen({navigation}: Props): React.JSX.Element {
   const theme = useHoystTheme();
   const profile = useUserProfileStore(state => state.profile);
   const status = useSessionStore(state => state.status);
+  const user = useSessionStore(state => state.user);
   const notifications = useSettingsStore(state => state.notifications);
   const setNotificationPreference = useSettingsStore(
     state => state.setNotificationPreference,
@@ -231,7 +303,7 @@ export function SettingsScreen({navigation}: Props): React.JSX.Element {
   }
 
   const initials = getProfileInitials(profile);
-  const avatarSource = getProfileAvatarSource(profile);
+  const avatarSource = getProfileAvatarSource(profile, user?.photoURL);
 
   return (
     <HoystScreen contentContainerStyle={styles.content}>
@@ -254,6 +326,7 @@ export function SettingsScreen({navigation}: Props): React.JSX.Element {
         <SettingsRow
           detail="Update your name, handle, and bio."
           icon={UserRound}
+          iconTone="blue"
           onPress={() => navigation.navigate('EditProfile')}
           title="Edit profile"
           trailing={
@@ -264,12 +337,14 @@ export function SettingsScreen({navigation}: Props): React.JSX.Element {
         <SettingsRow
           detail={profile.timezone}
           icon={Clock3}
+          iconTone="orange"
           title="Timezone"
           trailing={
             <HoystText tone="muted" variant="caption">
               Local
             </HoystText>
           }
+          trailingKind="value"
         />
         <SectionDivider />
         <SettingsRow
@@ -287,82 +362,77 @@ export function SettingsScreen({navigation}: Props): React.JSX.Element {
         <SettingsRow
           detail="Daily nudge to keep your streak moving."
           icon={Bell}
+          iconTone="orange"
           title="Tap In reminders"
           trailing={
-            <Switch
+            <SettingsSwitch
               onValueChange={value =>
                 setNotificationPreference('tapInReminders', value)
               }
-              trackColor={{
-                false: theme.borderStrong,
-                true: theme.accentSecondary,
-              }}
-              thumbColor={theme.backgroundElevated}
               value={notifications.tapInReminders}
             />
           }
+          trailingKind="switch"
         />
         <SectionDivider />
         <SettingsRow
           detail="Circle activity, nudges, and group updates."
           icon={UsersRound}
+          iconTone="green"
           title="Circle activity"
           trailing={
-            <Switch
+            <SettingsSwitch
               onValueChange={value =>
                 setNotificationPreference('circleActivity', value)
               }
-              trackColor={{
-                false: theme.borderStrong,
-                true: theme.accentSecondary,
-              }}
-              thumbColor={theme.backgroundElevated}
               value={notifications.circleActivity}
             />
           }
+          trailingKind="switch"
         />
         <SectionDivider />
         <SettingsRow
           detail="Product news and major app announcements."
           icon={Megaphone}
+          iconTone="blue"
           title="Product updates"
           trailing={
-            <Switch
+            <SettingsSwitch
               onValueChange={value =>
                 setNotificationPreference('productUpdates', value)
               }
-              trackColor={{
-                false: theme.borderStrong,
-                true: theme.accentSecondary,
-              }}
-              thumbColor={theme.backgroundElevated}
               value={notifications.productUpdates}
             />
           }
+          trailingKind="switch"
         />
         <SectionDivider />
         <SettingsRow
           detail="Coming soon"
           disabled
           icon={BellRing}
+          iconTone="orange"
           title="Reminder time"
           trailing={
             <HoystText tone="muted" variant="caption">
               8:00 AM
             </HoystText>
           }
+          trailingKind="value"
         />
         <SectionDivider />
         <SettingsRow
           detail="Coming soon"
           disabled
           icon={Shield}
+          iconTone="green"
           title="Push permissions"
           trailing={
             <HoystText tone="muted" variant="caption">
               System
             </HoystText>
           }
+          trailingKind="value"
         />
       </SettingsSection>
 
@@ -371,23 +441,27 @@ export function SettingsScreen({navigation}: Props): React.JSX.Element {
           detail="Coming soon"
           disabled
           icon={MoonStar}
+          iconTone="neutral"
           title="Appearance"
           trailing={
             <HoystText tone="muted" variant="caption">
               System
             </HoystText>
           }
+          trailingKind="value"
         />
         <SectionDivider />
         <SettingsRow
           detail="Build information"
           icon={Smartphone}
+          iconTone="blue"
           title="App version"
           trailing={
             <HoystText tone="muted" variant="caption">
               0.0.1
             </HoystText>
           }
+          trailingKind="value"
         />
       </SettingsSection>
 
@@ -396,6 +470,7 @@ export function SettingsScreen({navigation}: Props): React.JSX.Element {
           detail="Coming soon"
           disabled
           icon={LifeBuoy}
+          iconTone="blue"
           title="Help"
           trailing={
             <ChevronRight color={theme.textSubtle} size={18} strokeWidth={2.2} />
@@ -406,6 +481,7 @@ export function SettingsScreen({navigation}: Props): React.JSX.Element {
           detail="Coming soon"
           disabled
           icon={ShieldCheck}
+          iconTone="green"
           title="Privacy Policy"
           trailing={
             <ChevronRight color={theme.textSubtle} size={18} strokeWidth={2.2} />
@@ -416,6 +492,7 @@ export function SettingsScreen({navigation}: Props): React.JSX.Element {
           detail="Coming soon"
           disabled
           icon={FileText}
+          iconTone="neutral"
           title="Terms"
           trailing={
             <ChevronRight color={theme.textSubtle} size={18} strokeWidth={2.2} />
@@ -466,38 +543,37 @@ const styles = StyleSheet.create({
   },
   dividerWrap: {
     justifyContent: 'center',
-    minHeight: 18,
   },
   divider: {
     height: 1,
-    marginLeft: 52,
-    marginRight: 4,
-    opacity: 0.7,
+    marginLeft: 48,
+    marginRight: 2,
+    opacity: 0.56,
   },
   row: {
-    alignItems: 'flex-start',
+    alignItems: 'center',
+    alignSelf: 'stretch',
     flexDirection: 'row',
-    gap: 16,
-    minHeight: 88,
+    gap: 14,
+    minHeight: 104,
     paddingHorizontal: 4,
-    paddingVertical: 18,
+    paddingVertical: 24,
   },
   rowMain: {
-    alignItems: 'flex-start',
+    alignItems: 'center',
     flex: 1,
     flexDirection: 'row',
-    gap: 16,
+    gap: 14,
     minWidth: 0,
   },
   rowIcon: {
-    alignItems: 'flex-start',
-    justifyContent: 'flex-start',
-    paddingTop: 3,
-    width: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 30,
   },
   rowContent: {
     flex: 1,
-    gap: 8,
+    gap: 6,
     minWidth: 0,
   },
   rowTitle: {
@@ -508,8 +584,10 @@ const styles = StyleSheet.create({
   },
   rowTrailing: {
     alignItems: 'flex-end',
-    justifyContent: 'flex-start',
-    minWidth: 60,
-    paddingTop: 2,
+    justifyContent: 'center',
+    width: 104,
+  },
+  rowTrailingAccessory: {
+    width: 32,
   },
 });

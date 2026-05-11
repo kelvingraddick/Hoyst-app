@@ -5,7 +5,10 @@ import {firebaseAuth} from '../../../lib/firebase/auth';
 import {useUserProfileStore} from '../../../store/profile-store';
 import {useSessionStore, type AuthSessionUser} from '../../../store/session-store';
 import {configureAuthProviders} from '../services/auth-service';
-import {subscribeToUserProfile} from '../services/account-service';
+import {
+  subscribeToUserProfile,
+  updateProfileAvatarUrlFromAuth,
+} from '../services/account-service';
 
 function mapAuthUser(user: FirebaseAuthTypes.User): AuthSessionUser {
   return {
@@ -55,6 +58,11 @@ export function AuthStateProvider({
         profile => {
           setProfile(profile);
           if (profile?.onboardingStatus === 'complete') {
+            if (!profile.avatarUrl && sessionUser.photoURL) {
+              updateProfileAvatarUrlFromAuth(sessionUser.photoURL).catch(
+                () => undefined,
+              );
+            }
             setAuthenticatedReady(sessionUser);
             return;
           }

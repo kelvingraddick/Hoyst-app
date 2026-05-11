@@ -3,7 +3,7 @@ import {onRequest} from 'firebase-functions/v2/https';
 export {emailModules} from './emails';
 export {notificationModules} from './notifications';
 export {completeProfile} from './auth';
-export {submitTapIn} from './checkins';
+export {removeTapIn, submitTapIn} from './checkins';
 export {createCircle, joinCircle} from './circles';
 export {getProfileSummary} from './profile';
 

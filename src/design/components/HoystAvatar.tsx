@@ -11,6 +11,7 @@ import {HoystText} from './HoystText';
 type HoystAvatarProps = {
   initials: string;
   imageSource?: ImageSourcePropType;
+  imageUrl?: string;
   size?: number;
   tone?: 'gradient' | 'green' | 'purple' | 'muted';
   useBrandRing?: boolean;
@@ -19,11 +20,14 @@ type HoystAvatarProps = {
 export function HoystAvatar({
   initials,
   imageSource,
+  imageUrl,
   size = 52,
   tone = 'gradient',
   useBrandRing,
 }: HoystAvatarProps): React.JSX.Element {
   const theme = useHoystTheme();
+  const resolvedImageSource =
+    imageSource ?? (imageUrl ? {uri: imageUrl} : undefined);
   const imageSize = size - 12;
   const brandRingSize = getBrandAvatarRingSize(imageSize);
   const shouldUseBrandRing = useBrandRing ?? tone === 'green';
@@ -56,9 +60,9 @@ export function HoystAvatar({
             borderRadius: imageSize / 2,
           },
         ]}>
-        {imageSource ? (
+        {resolvedImageSource ? (
           <Image
-            source={imageSource}
+            source={resolvedImageSource}
             style={[
               styles.image,
               {

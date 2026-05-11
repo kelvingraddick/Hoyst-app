@@ -127,6 +127,7 @@ function ExploreCircleCard({
                 ]}>
                 <LayeredAvatar
                   imageSource={member.avatarImage}
+                  imageUrl={member.avatarUrl}
                   initials={member.initials}
                   size={42}
                   state={member.state}

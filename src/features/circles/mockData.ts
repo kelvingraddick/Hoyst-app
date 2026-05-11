@@ -21,11 +21,20 @@ export const initialTapInDraft: TapInDraft = {
 
 export const initialCreateCircleDraft: CreateCircleDraft = {
   category: 'Fitness',
-  title: 'Fitness Fanatics',
-  dailyTask: '30min workout',
+  title: '',
+  dailyTask: '',
+  graceRules: {
+    skip: {
+      allowance: 1,
+      windowDays: 7,
+    },
+  },
+  joinMode: 'request_to_join',
   privacy: 'public',
-  maxSize: 8,
-  inviteCode: 'hoyst.app/join/vanguard-832',
+  privacyMode: 'public',
+  maxSize: 2,
+  inviteCode: '',
+  timezone: 'UTC',
 };
 
 export const todayCircles: TodayCircleCard[] = [

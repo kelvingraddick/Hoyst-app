@@ -1,27 +1,52 @@
 import {FieldValue} from 'firebase-admin/firestore';
+import {getAuth} from 'firebase-admin/auth';
 import {HttpsError, onCall} from 'firebase-functions/v2/https';
 import {z} from 'zod';
 
 import {db} from '../firebase';
+import {canUseSkipGrace, getRollingDateKeys} from './grace';
+import {getRemoveTapInDecision} from './remove';
 
 const submitTapInSchema = z.object({
   circleId: z.string().trim().min(1),
   note: z.string().trim().max(1000).optional(),
   photoUrl: z.string().trim().max(2048).optional(),
+  status: z.enum(['done', 'skip']).default('done'),
 });
-async function requireCompletedProfile(uid?: string) {
-  if (!uid) {
+
+const removeTapInSchema = z.object({
+  circleId: z.string().trim().min(1),
+  idToken: z.string().trim().min(1).optional(),
+});
+
+async function getAuthenticatedUid(uid?: string, idToken?: string) {
+  if (uid) {
+    return uid;
+  }
+
+  if (!idToken) {
     throw new HttpsError('unauthenticated', 'Sign in is required.');
   }
 
-  const snapshot = await db.collection('users').doc(uid).get();
+  try {
+    const decodedToken = await getAuth().verifyIdToken(idToken);
+    return decodedToken.uid;
+  } catch {
+    throw new HttpsError('unauthenticated', 'Sign in is required.');
+  }
+}
+
+async function requireCompletedProfile(uid?: string, idToken?: string) {
+  const authenticatedUid = await getAuthenticatedUid(uid, idToken);
+
+  const snapshot = await db.collection('users').doc(authenticatedUid).get();
   const profile = snapshot.data();
 
   if (!profile || profile.onboardingStatus !== 'complete') {
     throw new HttpsError('failed-precondition', 'Complete your profile first.');
   }
 
-  return {profile, uid};
+  return {profile, uid: authenticatedUid};
 }
 
 function getDateKey(timezone: string) {
@@ -73,13 +98,48 @@ export const submitTapIn = onCall(async request => {
       throw new HttpsError('already-exists', 'You already tapped in today.');
     }
 
+    if (input.status === 'skip') {
+      const skipRule = circle?.graceRules?.skip as
+        | {allowance?: unknown; windowDays?: unknown}
+        | undefined;
+      const graceRule = {
+        allowance:
+          typeof skipRule?.allowance === 'number' ? skipRule.allowance : 0,
+        windowDays:
+          typeof skipRule?.windowDays === 'number' ? skipRule.windowDays : 1,
+      };
+      const rollingDateKeys = getRollingDateKeys(dateKey, graceRule.windowDays);
+      const priorSkipSnapshots = await Promise.all(
+        rollingDateKeys.map(windowDateKey =>
+          transaction.get(
+            circleRef
+              .collection('days')
+              .doc(windowDateKey)
+              .collection('checkIns')
+              .doc(uid),
+          ),
+        ),
+      );
+      const priorSkipCount = priorSkipSnapshots.filter(
+        snapshot => snapshot.data()?.status === 'skip',
+      ).length;
+
+      if (!canUseSkipGrace({graceRule, priorSkipCount})) {
+        throw new HttpsError(
+          'resource-exhausted',
+          'No skips are available for this grace window.',
+        );
+      }
+    }
+
     transaction.set(checkInRef, {
+      avatarUrl: profile.avatarUrl ?? null,
       createdAt: now,
       displayName: profile.displayName,
       handle: profile.handle,
       note: input.note ?? null,
       photoUrl: input.photoUrl ?? null,
-      status: 'done',
+      status: input.status,
       uid,
     });
     transaction.set(
@@ -93,5 +153,57 @@ export const submitTapIn = onCall(async request => {
     );
 
     return {checkInId: uid, dateKey};
+  });
+});
+
+export const removeTapIn = onCall(async request => {
+  const input = removeTapInSchema.parse(request.data);
+  const {profile, uid} = await requireCompletedProfile(
+    request.auth?.uid,
+    input.idToken,
+  );
+  const circleRef = db.collection('circles').doc(input.circleId);
+  const memberRef = circleRef.collection('members').doc(uid);
+  const now = FieldValue.serverTimestamp();
+
+  return db.runTransaction(async transaction => {
+    const [circleSnapshot, memberSnapshot] = await Promise.all([
+      transaction.get(circleRef),
+      transaction.get(memberRef),
+    ]);
+
+    if (!circleSnapshot.exists) {
+      throw new HttpsError('not-found', 'Circle not found.');
+    }
+
+    const circle = circleSnapshot.data();
+    const dateKey = getDateKey(circle?.timezone ?? profile.timezone ?? 'UTC');
+    const checkInRef = circleRef
+      .collection('days')
+      .doc(dateKey)
+      .collection('checkIns')
+      .doc(uid);
+    const checkInSnapshot = await transaction.get(checkInRef);
+    const decision = getRemoveTapInDecision({
+      checkInStatus: checkInSnapshot.data()?.status,
+      memberStatus: memberSnapshot.data()?.status,
+    });
+
+    if (!decision.removed) {
+      return {dateKey, removed: false};
+    }
+
+    transaction.delete(checkInRef);
+    transaction.set(
+      circleRef.collection('days').doc(dateKey),
+      {
+        checkInCount: FieldValue.increment(decision.checkInCountDelta),
+        dateKey,
+        updatedAt: now,
+      },
+      {merge: true},
+    );
+
+    return {dateKey, removed: true};
   });
 });

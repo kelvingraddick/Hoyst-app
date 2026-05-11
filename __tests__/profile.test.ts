@@ -12,6 +12,10 @@ import {
   calculatePersonalDailyStreak,
   getDateKey,
 } from '../functions/src/profile/streak';
+import {
+  canUseSkipGrace,
+  getRollingDateKeys,
+} from '../functions/src/checkins/grace';
 
 const profile: UserProfile = {
   avatarUrl: 'https://example.com/avatar.png',
@@ -65,6 +69,17 @@ describe('profile display helpers', () => {
   it('prefers remote avatar URLs over local avatar images', () => {
     expect(getProfileAvatarSource(profile)).toEqual({
       uri: 'https://example.com/avatar.png',
+    });
+  });
+
+  it('uses the auth photo when the saved profile has no avatar URL', () => {
+    expect(
+      getProfileAvatarSource(
+        {...profile, avatarUrl: undefined},
+        'https://example.com/auth-photo.png',
+      ),
+    ).toEqual({
+      uri: 'https://example.com/auth-photo.png',
     });
   });
 
@@ -159,6 +174,19 @@ describe('personal daily streak calculation', () => {
     });
   });
 
+  it('preserves streaks when skipped days are included as covered dates', () => {
+    expect(
+      calculatePersonalDailyStreak({
+        checkInDateKeys: ['2026-05-07', '2026-05-06', '2026-05-05'],
+        now,
+        timezone: 'UTC',
+      }),
+    ).toEqual({
+      hasTappedInToday: true,
+      personalStreakDays: 3,
+    });
+  });
+
   it('uses the requested timezone for date keys', () => {
     expect(
       getDateKey(
@@ -166,5 +194,49 @@ describe('personal daily streak calculation', () => {
         'America/New_York',
       ),
     ).toBe('2026-05-06');
+  });
+});
+
+describe('skip grace helpers', () => {
+  it('allows the first skip inside a grace window', () => {
+    expect(
+      canUseSkipGrace({
+        graceRule: {
+          allowance: 1,
+          windowDays: 7,
+        },
+        priorSkipCount: 0,
+      }),
+    ).toBe(true);
+  });
+
+  it('blocks skips when allowance is exhausted or off', () => {
+    expect(
+      canUseSkipGrace({
+        graceRule: {
+          allowance: 1,
+          windowDays: 7,
+        },
+        priorSkipCount: 1,
+      }),
+    ).toBe(false);
+    expect(
+      canUseSkipGrace({
+        graceRule: {
+          allowance: 0,
+          windowDays: 7,
+        },
+        priorSkipCount: 0,
+      }),
+    ).toBe(false);
+  });
+
+  it('builds rolling date windows from today backward', () => {
+    expect(getRollingDateKeys('2026-05-07', 4)).toEqual([
+      '2026-05-07',
+      '2026-05-06',
+      '2026-05-05',
+      '2026-05-04',
+    ]);
   });
 });

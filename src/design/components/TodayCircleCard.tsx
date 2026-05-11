@@ -55,17 +55,21 @@ export function TodayCircleCard({
         : theme.warning;
   const statusLabel = isPendingMembership
     ? 'Pending'
-    : !card.viewerHasCheckedIn
-    ? 'Needs You'
-    : card.remainingCheckIns > 0
-      ? 'Pending'
-      : 'Complete';
+    : card.viewerTodayStatus === 'skip'
+      ? 'Skipped'
+      : !card.viewerHasCheckedIn
+        ? 'Needs You'
+        : card.remainingCheckIns > 0
+          ? 'Pending'
+          : 'Complete';
   const statusTone: React.ComponentProps<typeof HoystChip>['tone'] =
     statusLabel === 'Complete'
       ? 'green'
       : statusLabel === 'Needs You'
         ? 'orange'
-        : 'purple';
+        : statusLabel === 'Skipped'
+          ? 'orange'
+          : 'purple';
   const fallbackContextLabel = isPendingMembership
     ? 'Pending approval before Tap In unlocks.'
     : !card.viewerHasCheckedIn
@@ -76,6 +80,8 @@ export function TodayCircleCard({
   const contextLabel = card.matchCopy ?? fallbackContextLabel;
   const statsLabel = isPendingMembership
     ? 'Awaiting approval'
+    : card.viewerTodayStatus === 'skip'
+      ? 'Grace skip used today'
     : card.remainingCheckIns > 0
       ? `${card.remainingCheckIns} pending today`
       : `${completionRate}% tapped in`;
@@ -161,6 +167,7 @@ export function TodayCircleCard({
                 <LayeredAvatar
                   initials={member.initials}
                   imageSource={member.avatarImage}
+                  imageUrl={member.avatarUrl}
                   size={42}
                   state={member.state}
                 />

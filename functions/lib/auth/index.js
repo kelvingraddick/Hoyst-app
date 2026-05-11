@@ -37,6 +37,7 @@ exports.completeProfile = (0, https_1.onCall)(async (request) => {
     const userPrivateRef = firebase_1.db.collection('userPrivate').doc(uid);
     const handleRef = firebase_1.db.collection('handles').doc(input.handle);
     const now = firestore_1.FieldValue.serverTimestamp();
+    const authAvatarUrl = typeof userRecord?.picture === 'string' ? userRecord.picture : undefined;
     await firebase_1.db.runTransaction(async (transaction) => {
         const [userSnapshot, handleSnapshot] = await Promise.all([
             transaction.get(userRef),
@@ -57,7 +58,7 @@ exports.completeProfile = (0, https_1.onCall)(async (request) => {
             uid,
         }, { merge: true });
         transaction.set(userRef, {
-            avatarUrl: input.avatarUrl ?? null,
+            avatarUrl: input.avatarUrl ?? authAvatarUrl ?? null,
             displayName: input.displayName,
             handle: input.handle,
             onboardingStatus: 'complete',

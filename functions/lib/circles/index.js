@@ -5,9 +5,18 @@ const firestore_1 = require("firebase-admin/firestore");
 const https_1 = require("firebase-functions/v2/https");
 const zod_1 = require("zod");
 const firebase_1 = require("../firebase");
+const graceRuleSchema = zod_1.z.object({
+    allowance: zod_1.z.number().int().min(0).max(30),
+    windowDays: zod_1.z.number().int().min(1).max(365),
+});
 const createCircleSchema = zod_1.z.object({
     category: zod_1.z.string().trim().min(1).max(40),
     dailyTask: zod_1.z.string().trim().min(1).max(160),
+    graceRules: zod_1.z
+        .object({
+        skip: graceRuleSchema,
+    })
+        .optional(),
     joinMode: zod_1.z.enum(['open', 'request_to_join', 'invite_only']),
     maxSize: zod_1.z.number().int().min(2).max(100),
     privacy: zod_1.z.enum(['public', 'private']),
@@ -32,6 +41,14 @@ async function requireCompletedProfile(uid) {
 function createInviteCode() {
     return Math.random().toString(36).slice(2, 10);
 }
+function buildMemberPublicPreview(profile, uid) {
+    return {
+        avatarUrl: profile.avatarUrl ?? null,
+        displayName: profile.displayName,
+        handle: profile.handle,
+        uid,
+    };
+}
 exports.createCircle = (0, https_1.onCall)(async (request) => {
     const { profile, uid } = await requireCompletedProfile(request.auth?.uid);
     const input = createCircleSchema.parse(request.data);
@@ -44,6 +61,12 @@ exports.createCircle = (0, https_1.onCall)(async (request) => {
         category: input.category,
         createdAt: now,
         dailyTask: input.dailyTask,
+        graceRules: input.graceRules ?? {
+            skip: {
+                allowance: 1,
+                windowDays: 7,
+            },
+        },
         inviteCode,
         joinMode: input.joinMode,
         maxSize: input.maxSize,
@@ -57,6 +80,7 @@ exports.createCircle = (0, https_1.onCall)(async (request) => {
     const batch = firebase_1.db.batch();
     batch.set(circleRef, circle);
     batch.set(memberRef, {
+        avatarUrl: profile.avatarUrl ?? null,
         displayName: profile.displayName,
         handle: profile.handle,
         joinedAt: now,
@@ -71,6 +95,7 @@ exports.createCircle = (0, https_1.onCall)(async (request) => {
             joinMode: input.joinMode,
             maxSize: input.maxSize,
             memberCount: 1,
+            members: [buildMemberPublicPreview(profile, uid)],
             title: input.title,
             updatedAt: now,
         });
@@ -101,11 +126,13 @@ exports.joinCircle = (0, https_1.onCall)(async (request) => {
         if ((circle?.memberCount ?? 0) >= (circle?.maxSize ?? 0)) {
             throw new https_1.HttpsError('resource-exhausted', 'This circle is full.');
         }
-        if (circle?.joinMode === 'invite_only' && input.inviteCode !== circle.inviteCode) {
+        if (circle?.privacy === 'private' &&
+            input.inviteCode !== circle.inviteCode) {
             throw new https_1.HttpsError('permission-denied', 'A valid invite is required.');
         }
         if (circle?.joinMode === 'request_to_join') {
             transaction.set(joinRequestRef, {
+                avatarUrl: profile.avatarUrl ?? null,
                 createdAt: now,
                 displayName: profile.displayName,
                 handle: profile.handle,
@@ -113,6 +140,7 @@ exports.joinCircle = (0, https_1.onCall)(async (request) => {
                 uid,
             }, { merge: true });
             transaction.set(memberRef, {
+                avatarUrl: profile.avatarUrl ?? null,
                 displayName: profile.displayName,
                 handle: profile.handle,
                 requestedAt: now,
@@ -123,6 +151,7 @@ exports.joinCircle = (0, https_1.onCall)(async (request) => {
             return { status: 'pending' };
         }
         transaction.set(memberRef, {
+            avatarUrl: profile.avatarUrl ?? null,
             displayName: profile.displayName,
             handle: profile.handle,
             joinedAt: now,
@@ -131,7 +160,13 @@ exports.joinCircle = (0, https_1.onCall)(async (request) => {
             uid,
         });
         transaction.update(circleRef, { memberCount: firestore_1.FieldValue.increment(1) });
-        transaction.set(publicIndexRef, { memberCount: firestore_1.FieldValue.increment(1), updatedAt: now }, { merge: true });
+        if (circle?.privacy === 'public') {
+            transaction.set(publicIndexRef, {
+                memberCount: firestore_1.FieldValue.increment(1),
+                members: firestore_1.FieldValue.arrayUnion(buildMemberPublicPreview(profile, uid)),
+                updatedAt: now,
+            }, { merge: true });
+        }
         return { status: 'active' };
     });
 });

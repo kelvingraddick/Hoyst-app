@@ -46,6 +46,7 @@ export type RootStackParamList = {
   TapInComplete: {
     circleId: string;
     source: TapInSource;
+    status?: 'done' | 'skip';
     note?: string;
     photoUri?: string;
   };

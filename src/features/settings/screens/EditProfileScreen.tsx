@@ -9,10 +9,12 @@ import {HoystInput} from '../../../design/components/HoystInput';
 import {HoystScreen} from '../../../design/components/HoystScreen';
 import {HoystText} from '../../../design/components/HoystText';
 import {LayeredAvatar} from '../../../design/components/LayeredAvatar';
+import {actionShadow} from '../../../design/tokens/actions';
 import {useHoystTheme} from '../../../design/theme/useHoystTheme';
 import {updateProfileFields} from '../../auth/services/account-service';
 import type {RootStackParamList} from '../../../navigation/types';
 import {useUserProfileStore} from '../../../store/profile-store';
+import {useSessionStore} from '../../../store/session-store';
 import {
   getProfileAvatarSource,
   getProfileInitials,
@@ -24,6 +26,7 @@ export function EditProfileScreen({navigation}: Props): React.JSX.Element {
   const theme = useHoystTheme();
   const profile = useUserProfileStore(state => state.profile);
   const updateProfile = useUserProfileStore(state => state.updateProfile);
+  const user = useSessionStore(state => state.user);
   const [name, setName] = useState(profile?.name ?? '');
   const [bio, setBio] = useState(profile?.bio ?? '');
   const [isSaving, setIsSaving] = useState(false);
@@ -41,12 +44,15 @@ export function EditProfileScreen({navigation}: Props): React.JSX.Element {
 
     setIsSaving(true);
     try {
+      const avatarUrl = profile.avatarUrl ?? user?.photoURL;
+
       await updateProfileFields({
-        avatarUrl: profile.avatarUrl,
+        avatarUrl,
         bio: bio.trim() || undefined,
         displayName: name.trim(),
       });
       updateProfile({
+        avatarUrl,
         bio,
         name,
       });
@@ -96,7 +102,7 @@ export function EditProfileScreen({navigation}: Props): React.JSX.Element {
   }
 
   const initials = getProfileInitials(profile);
-  const avatarSource = getProfileAvatarSource(profile);
+  const avatarSource = getProfileAvatarSource(profile, user?.photoURL);
 
   return (
     <HoystScreen contentContainerStyle={styles.content}>
@@ -170,6 +176,12 @@ export function EditProfileScreen({navigation}: Props): React.JSX.Element {
                   onSave().catch(() => undefined);
                 }
           }
+          style={[
+            styles.confirmGlow,
+            {
+              shadowColor: theme.success,
+            },
+          ]}
         />
         <HoystButton
           label="Cancel"
@@ -213,5 +225,11 @@ const styles = StyleSheet.create({
   bioInput: {
     minHeight: 124,
     paddingTop: 14,
+  },
+  confirmGlow: {
+    elevation: actionShadow.elevation,
+    shadowOffset: actionShadow.offset,
+    shadowOpacity: 0.34,
+    shadowRadius: 28,
   },
 });

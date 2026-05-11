@@ -12,6 +12,8 @@ import type {
   CircleMembershipStatus,
   CircleProgressDay,
   CircleSummary,
+  CheckInStatus,
+  GraceRule,
   MemberRole,
   ProgressDayState,
 } from '../../../types/models';
@@ -37,16 +39,20 @@ type PlainData = Record<string, unknown>;
 export type HomeCircleMappingInput = {
   circleData?: PlainData;
   circleId: string;
+  memberProfilesByUid?: ReadonlyMap<string, PlainData>;
   membersData?: PlainData[];
   membershipData?: PlainData;
+  todayCheckInStatuses?: ReadonlyMap<string, CheckInStatus>;
   todayCheckInUids?: ReadonlySet<string>;
 };
 
 type CircleSubscriptionState = {
   circleData?: PlainData;
+  memberProfiles: Map<string, PlainData>;
+  memberProfileUnsubscribes: Map<string, () => void>;
   membersData?: PlainData[];
   recentUserCheckIns: Map<string, boolean>;
-  todayCheckInUids: Set<string>;
+  todayCheckInStatuses: Map<string, CheckInStatus>;
 };
 
 type HomeSubscriptionOptions = {
@@ -100,6 +106,35 @@ function normalizeJoinMode(value: unknown) {
     : 'invite_only';
 }
 
+function normalizeCheckInStatus(value: unknown): CheckInStatus | undefined {
+  return value === 'done' || value === 'skip' ? value : undefined;
+}
+
+function isCoveredCheckInStatus(value: unknown) {
+  const status = normalizeCheckInStatus(value);
+
+  return status === 'done' || status === 'skip';
+}
+
+function normalizeGraceRule(value: unknown): GraceRule {
+  const data = value && typeof value === 'object' ? (value as PlainData) : {};
+  const allowance = asNumber(data.allowance, 1);
+  const windowDays = asNumber(data.windowDays, 7);
+
+  return {
+    allowance: Math.min(30, Math.max(0, Math.round(allowance))),
+    windowDays: Math.min(365, Math.max(1, Math.round(windowDays))),
+  };
+}
+
+function normalizeGraceRules(value: unknown) {
+  const data = value && typeof value === 'object' ? (value as PlainData) : {};
+
+  return {
+    skip: normalizeGraceRule(data.skip),
+  };
+}
+
 function getInitials(name: string) {
   const initials = name
     .split(' ')
@@ -118,9 +153,43 @@ function getMemberLabel(memberData: PlainData) {
   );
 }
 
+function getMemberAvatarUrl(memberData: PlainData) {
+  return asString(
+    memberData.avatarUrl,
+    asString(memberData.photoURL, asString(memberData.photoUrl)),
+  );
+}
+
+function mergeMemberProfileData(
+  memberData: PlainData,
+  memberProfilesByUid?: ReadonlyMap<string, PlainData>,
+) {
+  const uid = asString(memberData.uid, asString(memberData.id));
+  const profileData = uid ? memberProfilesByUid?.get(uid) : undefined;
+
+  if (!profileData) {
+    return memberData;
+  }
+
+  const avatarUrl = getMemberAvatarUrl(memberData) || getMemberAvatarUrl(profileData);
+  const displayName = asString(
+    memberData.displayName,
+    asString(memberData.name, asString(profileData.displayName, asString(profileData.name))),
+  );
+  const handle = asString(memberData.handle, asString(profileData.handle));
+
+  return {
+    ...profileData,
+    ...memberData,
+    ...(avatarUrl ? {avatarUrl} : {}),
+    ...(displayName ? {displayName} : {}),
+    ...(handle ? {handle} : {}),
+  };
+}
+
 function getMemberState(
   memberData: PlainData,
-  todayCheckInUids: ReadonlySet<string>,
+  todayCheckInStatuses: ReadonlyMap<string, CheckInStatus>,
 ): CircleMemberState {
   const status = normalizeMembershipStatus(memberData.status);
   const uid = asString(memberData.uid);
@@ -129,12 +198,18 @@ function getMemberState(
     return 'pending';
   }
 
-  return uid && todayCheckInUids.has(uid) ? 'done' : 'pending';
+  const checkInStatus = uid ? todayCheckInStatuses.get(uid) : undefined;
+
+  if (checkInStatus === 'skip') {
+    return 'skipped';
+  }
+
+  return checkInStatus === 'done' ? 'done' : 'pending';
 }
 
 function mapMemberStatus(
   memberData: PlainData,
-  todayCheckInUids: ReadonlySet<string>,
+  todayCheckInStatuses: ReadonlyMap<string, CheckInStatus>,
 ): CircleMemberStatus | undefined {
   const uid = asString(memberData.uid, asString(memberData.id));
   const name = getMemberLabel(memberData);
@@ -143,11 +218,14 @@ function mapMemberStatus(
     return undefined;
   }
 
+  const avatarUrl = getMemberAvatarUrl(memberData);
+
   return {
+    ...(avatarUrl ? {avatarUrl} : {}),
     id: uid,
     initials: getInitials(name),
     name,
-    state: getMemberState(memberData, todayCheckInUids),
+    state: getMemberState(memberData, todayCheckInStatuses),
   };
 }
 
@@ -265,8 +343,10 @@ export function buildHomeDataFromCircles({
 export function mapHomeCircleFromData({
   circleData,
   circleId,
+  memberProfilesByUid,
   membersData = [],
   membershipData,
+  todayCheckInStatuses,
   todayCheckInUids = new Set<string>(),
 }: HomeCircleMappingInput): CircleManagementCard | undefined {
   const membershipStatus = normalizeMembershipStatus(membershipData?.status);
@@ -283,25 +363,35 @@ export function mapHomeCircleFromData({
   }
 
   const uid = asString(membershipData.uid);
+  const coveredCheckIns =
+    todayCheckInStatuses ??
+    new Map(
+      Array.from(todayCheckInUids).map(checkInUid => [
+        checkInUid,
+        'done' as CheckInStatus,
+      ]),
+    );
   const isPending = membershipStatus === 'pending';
   const memberRecords = membersData.length > 0 ? membersData : [membershipData];
   const activeMemberCount = memberRecords.filter(
     memberData => normalizeMembershipStatus(memberData.status) === 'active',
   ).length;
   const visibleMembers = memberRecords
-    .map(memberData => mapMemberStatus(memberData, todayCheckInUids))
+    .map(memberData => mergeMemberProfileData(memberData, memberProfilesByUid))
+    .map(memberData => mapMemberStatus(memberData, coveredCheckIns))
     .filter((member): member is CircleMemberStatus => Boolean(member));
   const memberCount = asNumber(
     circleData.memberCount,
     Math.max(memberRecords.length, visibleMembers.length),
   );
   const progressBase = Math.max(activeMemberCount, isPending ? 0 : memberCount);
-  const todayCheckInCount = todayCheckInUids.size;
+  const todayCheckInCount = coveredCheckIns.size;
   const progressPercent =
     progressBase > 0
       ? Math.round((todayCheckInCount / progressBase) * 100)
       : 0;
-  const viewerHasCheckedIn = isPending ? true : Boolean(uid && todayCheckInUids.has(uid));
+  const viewerTodayStatus = uid ? coveredCheckIns.get(uid) : undefined;
+  const viewerHasCheckedIn = isPending ? true : Boolean(viewerTodayStatus);
   const remainingCheckIns = isPending
     ? 0
     : Math.max(progressBase - todayCheckInCount, 0);
@@ -321,6 +411,7 @@ export function mapHomeCircleFromData({
     category: asString(circleData.category, 'General'),
     completionRate: progressPercent,
     dailyTask,
+    graceRules: normalizeGraceRules(circleData.graceRules),
     id: circleId,
     inviteUrl: getInviteUrl(circleData),
     joinMode: normalizeJoinMode(circleData.joinMode),
@@ -343,6 +434,7 @@ export function mapHomeCircleFromData({
     viewerHasCheckedIn,
     viewerMembershipStatus: membershipStatus,
     viewerRole: normalizeMemberRole(membershipData.role),
+    viewerTodayStatus,
   };
 }
 
@@ -435,6 +527,18 @@ export function shouldShowHomeCreateCircleButton({
   return isAuthenticatedHome || showAccountPrompt;
 }
 
+export function shouldShowHomeDataErrorPanel({
+  circleCount,
+  hasHomeDataError,
+  isLoadingHomeData,
+}: {
+  circleCount: number;
+  hasHomeDataError: boolean;
+  isLoadingHomeData: boolean;
+}) {
+  return hasHomeDataError && !isLoadingHomeData && circleCount === 0;
+}
+
 function getMembershipCircleId(
   snapshot: FirebaseFirestoreTypes.QueryDocumentSnapshot,
 ) {
@@ -458,10 +562,70 @@ function buildCircleFromState(
   return mapHomeCircleFromData({
     circleData: state?.circleData,
     circleId,
+    memberProfilesByUid: state?.memberProfiles,
     membersData: state?.membersData,
     membershipData,
-    todayCheckInUids: state?.todayCheckInUids,
+    todayCheckInStatuses: state?.todayCheckInStatuses,
   });
+}
+
+function syncMemberProfileListeners({
+  memberRecords,
+  onError,
+  onUpdate,
+  state,
+}: {
+  memberRecords: PlainData[];
+  onError: (error: Error) => void;
+  onUpdate: () => void;
+  state: CircleSubscriptionState;
+}) {
+  const firestore = firebaseFirestore();
+  const nextUids = new Set(
+    memberRecords
+      .map(memberData => asString(memberData.uid, asString(memberData.id)))
+      .filter(Boolean),
+  );
+
+  state.memberProfileUnsubscribes.forEach((unsubscribe, memberUid) => {
+    if (!nextUids.has(memberUid)) {
+      unsubscribe();
+      state.memberProfileUnsubscribes.delete(memberUid);
+      state.memberProfiles.delete(memberUid);
+    }
+  });
+
+  nextUids.forEach(memberUid => {
+    if (state.memberProfileUnsubscribes.has(memberUid)) {
+      return;
+    }
+
+    const unsubscribe = firestore
+      .collection(collections.users)
+      .doc(memberUid)
+      .onSnapshot(
+        snapshot => {
+          const profileData = snapshotData(snapshot);
+
+          if (profileData) {
+            state.memberProfiles.set(memberUid, profileData);
+          } else {
+            state.memberProfiles.delete(memberUid);
+          }
+
+          onUpdate();
+        },
+        onError,
+      );
+
+    state.memberProfileUnsubscribes.set(memberUid, unsubscribe);
+  });
+}
+
+function clearMemberProfileListeners(state: CircleSubscriptionState) {
+  state.memberProfileUnsubscribes.forEach(unsubscribe => unsubscribe());
+  state.memberProfileUnsubscribes.clear();
+  state.memberProfiles.clear();
 }
 
 function recentCompletedDateKeys(
@@ -510,6 +674,7 @@ export function subscribeToHomeData({
   const stopCircleListeners = () => {
     circleUnsubscribes.forEach(unsubscribe => unsubscribe());
     circleUnsubscribes = [];
+    states.forEach(clearMemberProfileListeners);
     states.clear();
   };
 
@@ -520,12 +685,20 @@ export function subscribeToHomeData({
       const membershipStatus = normalizeMembershipStatus(membershipData.status);
       const circleRef = firestore.collection(collections.circles).doc(circleId);
       const state: CircleSubscriptionState = {
+        memberProfiles: new Map(),
+        memberProfileUnsubscribes: new Map(),
         membersData: [membershipData],
         recentUserCheckIns: new Map(),
-        todayCheckInUids: new Set(),
+        todayCheckInStatuses: new Map(),
       };
 
       states.set(circleId, state);
+      syncMemberProfileListeners({
+        memberRecords: [membershipData],
+        onError,
+        onUpdate: emit,
+        state,
+      });
 
       circleUnsubscribes.push(
         circleRef.onSnapshot(
@@ -553,6 +726,12 @@ export function subscribeToHomeData({
                       activeStatuses.has(asString(memberData.status)),
                   ),
               );
+            syncMemberProfileListeners({
+              memberRecords: state.membersData,
+              onError,
+              onUpdate: emit,
+              state,
+            });
             emit();
           },
           onError,
@@ -569,10 +748,23 @@ export function subscribeToHomeData({
             .collection('checkIns')
             .onSnapshot(
               snapshot => {
-                state.todayCheckInUids = new Set(
+                state.todayCheckInStatuses = new Map(
                   snapshot.docs
-                    .map(doc => asString(doc.data().uid, doc.id))
-                    .filter(Boolean),
+                    .map(doc => {
+                      const uidValue = asString(doc.data().uid, doc.id);
+                      const status =
+                        normalizeCheckInStatus(doc.data().status) ?? 'done';
+
+                      return uidValue && isCoveredCheckInStatus(status)
+                        ? ([uidValue, status] as const)
+                        : undefined;
+                    })
+                    .filter(
+                      (
+                        entry,
+                      ): entry is readonly [string, CheckInStatus] =>
+                        Boolean(entry),
+                    ),
                 );
                 emit();
               },
@@ -590,7 +782,11 @@ export function subscribeToHomeData({
             .doc(uid)
             .onSnapshot(
               snapshot => {
-                state.recentUserCheckIns.set(dateKey, snapshot.exists());
+                state.recentUserCheckIns.set(
+                  dateKey,
+                  snapshot.exists() &&
+                    isCoveredCheckInStatus(snapshot.data()?.status),
+                );
                 emit();
               },
               onError,
@@ -637,8 +833,10 @@ export function subscribeToMemberCircleDetail({
   const todayDateKey = recentDateKeys[recentDateKeys.length - 1];
   const circleRef = firestore.collection(collections.circles).doc(circleId);
   const state: CircleSubscriptionState = {
+    memberProfiles: new Map(),
+    memberProfileUnsubscribes: new Map(),
     recentUserCheckIns: new Map(),
-    todayCheckInUids: new Set(),
+    todayCheckInStatuses: new Map(),
   };
   let membershipData: PlainData | undefined;
   let activeUnsubscribes: Array<() => void> = [];
@@ -652,9 +850,10 @@ export function subscribeToMemberCircleDetail({
     const circle = mapHomeCircleFromData({
       circleData: state.circleData,
       circleId,
+      memberProfilesByUid: state.memberProfiles,
       membersData: state.membersData,
       membershipData,
-      todayCheckInUids: state.todayCheckInUids,
+      todayCheckInStatuses: state.todayCheckInStatuses,
     });
 
     onDetail(circle ? buildCircleDetailFromHomeCircle(circle) : undefined);
@@ -664,7 +863,13 @@ export function subscribeToMemberCircleDetail({
     activeUnsubscribes.forEach(unsubscribe => unsubscribe());
     activeUnsubscribes = [];
     state.membersData = membershipData ? [membershipData] : undefined;
-    state.todayCheckInUids = new Set();
+    syncMemberProfileListeners({
+      memberRecords: state.membersData ?? [],
+      onError,
+      onUpdate: emit,
+      state,
+    });
+    state.todayCheckInStatuses = new Map();
     state.recentUserCheckIns.clear();
   };
 
@@ -687,6 +892,12 @@ export function subscribeToMemberCircleDetail({
                   memberData && activeStatuses.has(asString(memberData.status)),
                 ),
             );
+          syncMemberProfileListeners({
+            memberRecords: state.membersData,
+            onError,
+            onUpdate: emit,
+            state,
+          });
           emit();
         },
         onError,
@@ -701,10 +912,23 @@ export function subscribeToMemberCircleDetail({
           .collection('checkIns')
           .onSnapshot(
             snapshot => {
-              state.todayCheckInUids = new Set(
+              state.todayCheckInStatuses = new Map(
                 snapshot.docs
-                  .map(doc => asString(doc.data().uid, doc.id))
-                  .filter(Boolean),
+                  .map(doc => {
+                    const uidValue = asString(doc.data().uid, doc.id);
+                    const status =
+                      normalizeCheckInStatus(doc.data().status) ?? 'done';
+
+                    return uidValue && isCoveredCheckInStatus(status)
+                      ? ([uidValue, status] as const)
+                      : undefined;
+                  })
+                  .filter(
+                    (
+                      entry,
+                    ): entry is readonly [string, CheckInStatus] =>
+                      Boolean(entry),
+                  ),
               );
               emit();
             },
@@ -722,7 +946,11 @@ export function subscribeToMemberCircleDetail({
           .doc(uid)
           .onSnapshot(
             snapshot => {
-              state.recentUserCheckIns.set(dateKey, snapshot.exists());
+              state.recentUserCheckIns.set(
+                dateKey,
+                snapshot.exists() &&
+                  isCoveredCheckInStatus(snapshot.data()?.status),
+              );
               emit();
             },
             onError,
@@ -754,6 +982,7 @@ export function subscribeToMemberCircleDetail({
     unsubscribeCircle();
     unsubscribeMembership();
     stopActiveListeners();
+    clearMemberProfileListeners(state);
   };
 }
 

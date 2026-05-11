@@ -39,6 +39,8 @@ export const completeProfile = onCall(async request => {
   const userPrivateRef = db.collection('userPrivate').doc(uid);
   const handleRef = db.collection('handles').doc(input.handle);
   const now = FieldValue.serverTimestamp();
+  const authAvatarUrl =
+    typeof userRecord?.picture === 'string' ? userRecord.picture : undefined;
 
   await db.runTransaction(async transaction => {
     const [userSnapshot, handleSnapshot] = await Promise.all([
@@ -72,7 +74,7 @@ export const completeProfile = onCall(async request => {
     transaction.set(
       userRef,
       {
-        avatarUrl: input.avatarUrl ?? null,
+        avatarUrl: input.avatarUrl ?? authAvatarUrl ?? null,
         displayName: input.displayName,
         handle: input.handle,
         onboardingStatus: 'complete',

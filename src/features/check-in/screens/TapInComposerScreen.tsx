@@ -1,6 +1,6 @@
 import React, {useEffect, useState} from 'react';
 import {Alert, Image, Pressable, StyleSheet, View} from 'react-native';
-import {Camera, ImagePlus, X} from 'lucide-react-native';
+import {Camera, CheckCircle2, ImagePlus, Trash2, X} from 'lucide-react-native';
 import {launchCamera, launchImageLibrary} from 'react-native-image-picker';
 import type {NativeStackScreenProps} from '@react-navigation/native-stack';
 
@@ -11,10 +11,15 @@ import {HoystInput} from '../../../design/components/HoystInput';
 import {HoystScreen} from '../../../design/components/HoystScreen';
 import {HoystText} from '../../../design/components/HoystText';
 import {TapInRingMark} from '../../../design/components/TapInRingMark';
+import {actionShadow} from '../../../design/tokens/actions';
 import {radius} from '../../../design/tokens/radius';
 import {useHoystTheme} from '../../../design/theme/useHoystTheme';
-import {submitTapIn} from '../services/check-in-service';
-import type {CircleDetailModel, TapInDraft} from '../../../types/models';
+import {removeTapIn, submitTapIn} from '../services/check-in-service';
+import type {
+  CheckInStatus,
+  CircleDetailModel,
+  TapInDraft,
+} from '../../../types/models';
 import type {RootStackParamList} from '../../../navigation/types';
 import {useUserProfileStore} from '../../../store/profile-store';
 import {useSessionStore} from '../../../store/session-store';
@@ -34,6 +39,7 @@ export function TapInComposerScreen({
   const [draft, setDraft] = useState<TapInDraft>(initialTapInDraft);
   const [detail, setDetail] = useState<CircleDetailModel | undefined>();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isRemovingTapIn, setIsRemovingTapIn] = useState(false);
   const profile = useUserProfileStore(state => state.profile);
   const status = useSessionStore(state => state.status);
   const user = useSessionStore(state => state.user);
@@ -99,9 +105,23 @@ export function TapInComposerScreen({
   const statusLabel =
     detail.state === 'risk'
       ? 'Group streak at risk'
+      : detail.viewerTodayStatus === 'skip'
+      ? 'Skipped today'
       : detail.viewerHasCheckedIn
-        ? 'Already tapped in'
-        : `${detail.remainingCheckIns ?? 0} pending today`;
+      ? 'Already tapped in'
+      : `${detail.remainingCheckIns ?? 0} pending today`;
+  const skipGraceRule = detail.graceRules?.skip;
+  const canSkip =
+    !detail.viewerHasCheckedIn &&
+    Boolean(skipGraceRule && skipGraceRule.allowance > 0);
+  const canRemoveTodayCheckIn =
+    detail.viewerTodayStatus === 'done' || detail.viewerTodayStatus === 'skip';
+  const removeActionLabel =
+    detail.viewerTodayStatus === 'skip' ? 'Remove Skip' : 'Remove Tap In';
+  const checkedInStatusCopy =
+    detail.viewerTodayStatus === 'skip'
+      ? 'Your grace skip is covering today for this circle.'
+      : 'Your Tap In is counted for today.';
 
   const handleChoosePhoto = async () => {
     const response = await launchImageLibrary({
@@ -129,7 +149,9 @@ export function TapInComposerScreen({
     }
   };
 
-  const handleConfirm = async () => {
+  const handleConfirm = async (
+    checkInStatus: Extract<CheckInStatus, 'done' | 'skip'> = 'done',
+  ) => {
     const note = draft.note.trim();
 
     setIsSubmitting(true);
@@ -138,11 +160,13 @@ export function TapInComposerScreen({
         circleId: route.params.circleId,
         note: note.length > 0 ? note : undefined,
         photoUrl: draft.photoUri,
+        status: checkInStatus,
       });
 
       navigation.replace('TapInComplete', {
         circleId: route.params.circleId,
         source: route.params.source,
+        status: checkInStatus,
         note: note.length > 0 ? note : undefined,
         photoUri: draft.photoUri,
       });
@@ -154,6 +178,38 @@ export function TapInComposerScreen({
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const handleRemoveTapIn = async () => {
+    setIsRemovingTapIn(true);
+    try {
+      await removeTapIn({circleId: route.params.circleId});
+      setIsRemovingTapIn(false);
+      resetAndClose();
+    } catch (error) {
+      setIsRemovingTapIn(false);
+      const message =
+        (error as {message?: string}).message ??
+        'Could not remove your Tap In. Try again.';
+      Alert.alert('Remove failed', message);
+    }
+  };
+
+  const confirmRemoveTapIn = () => {
+    Alert.alert(
+      'Remove today?',
+      "This will undo today's progress for this circle.",
+      [
+        {style: 'cancel', text: 'Keep'},
+        {
+          onPress: () => {
+            handleRemoveTapIn().catch(() => undefined);
+          },
+          style: 'destructive',
+          text: 'Remove',
+        },
+      ],
+    );
   };
 
   return (
@@ -208,141 +264,243 @@ export function TapInComposerScreen({
       </GlassPanel>
 
       <GlassPanel style={styles.formPanel}>
-        <View style={styles.fieldBlock}>
-          <HoystText tone="muted" variant="label">
-            Optional Note
-          </HoystText>
-          <HoystInput
-            multiline
-            numberOfLines={5}
-            onChangeText={value =>
-              setDraft(current => ({...current, note: value}))
-            }
-            placeholder="Share what you did, how it went, or what your circle should know."
-            style={styles.noteInput}
-            textAlignVertical="top"
-            value={draft.note}
-          />
-        </View>
-
-        <View style={styles.fieldBlock}>
-          <HoystText tone="muted" variant="label">
-            Photo
-          </HoystText>
-          <View style={styles.photoActions}>
-            <Pressable
-              onPress={handleTakePhoto}
-              style={({pressed}) => [
-                styles.photoAction,
-                {
-                  backgroundColor: theme.surfaceSoft,
-                  borderColor: theme.border,
-                  opacity: pressed ? 0.92 : 1,
-                },
-              ]}>
-              <Camera color={theme.textSubtle} size={22} strokeWidth={2.1} />
-              <HoystText tone="muted" variant="tiny">
-                Take Photo
-              </HoystText>
-            </Pressable>
-            <Pressable
-              onPress={handleChoosePhoto}
-              style={({pressed}) => [
-                styles.photoAction,
-                {
-                  backgroundColor: theme.surfaceSoft,
-                  borderColor: theme.border,
-                  opacity: pressed ? 0.92 : 1,
-                },
-              ]}>
-              <ImagePlus color={theme.textSubtle} size={22} strokeWidth={2.1} />
-              <HoystText tone="muted" variant="tiny">
-                Library
-              </HoystText>
-            </Pressable>
-          </View>
-        </View>
-
-        <View style={styles.fieldBlock}>
-          <HoystText tone="muted" variant="label">
-            Preview
-          </HoystText>
-          <View
-            style={[
-              styles.previewCard,
-              {
-                backgroundColor: theme.surfaceSoft,
-                borderColor: theme.borderStrong,
-              },
-            ]}>
-            <View style={styles.previewHeader}>
-              <TapInRingMark innerSize={22} outerSize={40} />
-              <View style={styles.previewHeaderCopy}>
-                <HoystText style={styles.previewTitle}>
-                  {detail.title}
-                </HoystText>
-                <HoystText tone="muted" variant="caption">
-                  {detail.dailyTask}
-                </HoystText>
-              </View>
-            </View>
-            <HoystText tone={draft.note.trim() ? 'primary' : 'muted'}>
-              {notePreview}
-            </HoystText>
+        {canRemoveTodayCheckIn ? (
+          <View style={styles.checkedInState}>
             <View
               style={[
-                styles.previewImageWrap,
+                styles.previewCard,
                 {
-                  backgroundColor: theme.surfaceHigh,
-                  borderColor: theme.border,
+                  backgroundColor: theme.surfaceSoft,
+                  borderColor: theme.borderStrong,
                 },
               ]}>
-              {draft.photoUri ? (
-                <>
-                  <Image
-                    source={{uri: draft.photoUri}}
-                    style={styles.previewImage}
-                  />
-                  <Pressable
-                    onPress={() =>
-                      setDraft(current => ({...current, photoUri: undefined}))
-                    }
-                    style={styles.removePhotoButton}>
-                    <X color={theme.text} size={14} strokeWidth={2.2} />
-                  </Pressable>
-                </>
-              ) : (
-                <View style={styles.previewEmpty}>
-                  <ImagePlus
-                    color={theme.textSubtle}
-                    size={20}
-                    strokeWidth={2.1}
-                  />
+              <View style={styles.previewHeader}>
+                <TapInRingMark innerSize={22} outerSize={40} />
+                <View style={styles.previewHeaderCopy}>
+                  <HoystText style={styles.previewTitle}>
+                    Today is covered
+                  </HoystText>
                   <HoystText tone="muted" variant="caption">
-                    Add a photo to include it here.
+                    {checkedInStatusCopy}
                   </HoystText>
                 </View>
-              )}
+              </View>
+              <HoystText tone="muted">
+                Removing it will undo today's progress for this circle.
+              </HoystText>
+            </View>
+            <View style={styles.actionStack}>
+              <HoystButton
+                borderColor={theme.danger}
+                disabled={isRemovingTapIn}
+                icon={
+                  <Trash2 color={theme.danger} size={18} strokeWidth={2.3} />
+                }
+                label={isRemovingTapIn ? 'Removing...' : removeActionLabel}
+                onPress={confirmRemoveTapIn}
+                textColor={theme.danger}
+                variant="outline"
+              />
+              <Pressable onPress={resetAndClose} style={styles.textAction}>
+                <HoystText
+                  style={styles.centerText}
+                  tone="muted"
+                  variant="bodyStrong">
+                  Close
+                </HoystText>
+              </Pressable>
             </View>
           </View>
-        </View>
+        ) : (
+          <>
+            <View style={styles.formStack}>
+              <View style={styles.fieldBlock}>
+                <HoystText tone="muted" variant="label">
+                  Optional Note
+                </HoystText>
+                <HoystInput
+                  multiline
+                  numberOfLines={5}
+                  onChangeText={value =>
+                    setDraft(current => ({...current, note: value}))
+                  }
+                  placeholder="Share what you did, how it went, or what your circle should know."
+                  style={styles.noteInput}
+                  textAlignVertical="top"
+                  value={draft.note}
+                />
+              </View>
 
-        <HoystButton
-          label={isSubmitting ? 'Submitting...' : 'Confirm Tap In'}
-          onPress={
-            isSubmitting
-              ? undefined
-              : () => {
-                  handleConfirm().catch(() => undefined);
+              <View style={styles.fieldBlock}>
+                <HoystText tone="muted" variant="label">
+                  Photo
+                </HoystText>
+                <View style={styles.photoActions}>
+                  <View style={styles.photoActionColumn}>
+                    <Pressable
+                      onPress={handleTakePhoto}
+                      style={({pressed}) => [
+                        styles.photoAction,
+                        {
+                          borderColor: theme.actionBorder,
+                          opacity: pressed ? 0.92 : 1,
+                        },
+                      ]}>
+                      <Camera
+                        color={theme.textSubtle}
+                        size={22}
+                        strokeWidth={2.1}
+                      />
+                      <HoystText tone="muted" variant="tiny">
+                        Take Photo
+                      </HoystText>
+                    </Pressable>
+                  </View>
+                  <View style={styles.photoActionColumn}>
+                    <Pressable
+                      onPress={handleChoosePhoto}
+                      style={({pressed}) => [
+                        styles.photoAction,
+                        {
+                          borderColor: theme.actionBorder,
+                          opacity: pressed ? 0.92 : 1,
+                        },
+                      ]}>
+                      <ImagePlus
+                        color={theme.textSubtle}
+                        size={22}
+                        strokeWidth={2.1}
+                      />
+                      <HoystText tone="muted" variant="tiny">
+                        Library
+                      </HoystText>
+                    </Pressable>
+                  </View>
+                </View>
+              </View>
+
+              <View style={styles.fieldBlock}>
+                <HoystText tone="muted" variant="label">
+                  Preview
+                </HoystText>
+                <View
+                  style={[
+                    styles.previewCard,
+                    {
+                      backgroundColor: theme.surfaceSoft,
+                      borderColor: theme.borderStrong,
+                    },
+                  ]}>
+                  <View style={styles.previewHeader}>
+                    <TapInRingMark innerSize={22} outerSize={40} />
+                    <View style={styles.previewHeaderCopy}>
+                      <HoystText style={styles.previewTitle}>
+                        {detail.title}
+                      </HoystText>
+                      <HoystText tone="muted" variant="caption">
+                        {detail.dailyTask}
+                      </HoystText>
+                    </View>
+                  </View>
+                  <HoystText tone={draft.note.trim() ? 'primary' : 'muted'}>
+                    {notePreview}
+                  </HoystText>
+                  <View
+                    style={[
+                      styles.previewImageWrap,
+                      {
+                        backgroundColor: theme.surfaceHigh,
+                        borderColor: theme.border,
+                      },
+                    ]}>
+                    {draft.photoUri ? (
+                      <>
+                        <Image
+                          source={{uri: draft.photoUri}}
+                          style={styles.previewImage}
+                        />
+                        <Pressable
+                          onPress={() =>
+                            setDraft(current => ({
+                              ...current,
+                              photoUri: undefined,
+                            }))
+                          }
+                          style={styles.removePhotoButton}>
+                          <X color={theme.text} size={14} strokeWidth={2.2} />
+                        </Pressable>
+                      </>
+                    ) : (
+                      <View style={styles.previewEmpty}>
+                        <ImagePlus
+                          color={theme.textSubtle}
+                          size={20}
+                          strokeWidth={2.1}
+                        />
+                        <HoystText tone="muted" variant="caption">
+                          Add a photo to include it here.
+                        </HoystText>
+                      </View>
+                    )}
+                  </View>
+                </View>
+              </View>
+            </View>
+
+            <View style={styles.actionStack}>
+              <HoystButton
+                disabled={isSubmitting}
+                icon={
+                  <CheckCircle2
+                    color={theme.actionForeground}
+                    size={18}
+                    strokeWidth={2.3}
+                  />
                 }
-          }
-          variant="secondary"
-        />
-        <Pressable onPress={resetAndClose}>
-          <HoystText style={styles.centerText} tone="muted" variant="bodyStrong">
-            Discard
-          </HoystText>
-        </Pressable>
+                label={isSubmitting ? 'Submitting...' : 'Confirm Tap In'}
+                onPress={
+                  isSubmitting
+                    ? undefined
+                    : () => {
+                        handleConfirm().catch(() => undefined);
+                    }
+                }
+                style={[
+                  styles.confirmGlow,
+                  {
+                    shadowColor: theme.success,
+                  },
+                ]}
+              />
+              {canSkip ? (
+                <HoystButton
+                  backgroundColor="transparent"
+                  borderColor={theme.actionBorder}
+                  disabled={isSubmitting}
+                  label={`Use Skip (${skipGraceRule?.allowance ?? 0} per ${
+                    skipGraceRule?.windowDays ?? 1
+                  } days)`}
+                  onPress={
+                    isSubmitting
+                      ? undefined
+                      : () => {
+                          handleConfirm('skip').catch(() => undefined);
+                        }
+                  }
+                  variant="outline"
+                />
+              ) : null}
+              <Pressable onPress={resetAndClose} style={styles.textAction}>
+                <HoystText
+                  style={styles.centerText}
+                  tone="muted"
+                  variant="bodyStrong">
+                  Discard
+                </HoystText>
+              </Pressable>
+            </View>
+          </>
+        )}
       </GlassPanel>
     </HoystScreen>
   );
@@ -350,7 +508,7 @@ export function TapInComposerScreen({
 
 const styles = StyleSheet.create({
   content: {
-    paddingBottom: 168,
+    paddingBottom: 60,
   },
   closeRow: {
     alignItems: 'flex-end',
@@ -364,7 +522,7 @@ const styles = StyleSheet.create({
     width: 34,
   },
   heroPanel: {
-    minHeight: 238,
+    minHeight: 220,
   },
   iconWrap: {
     alignItems: 'center',
@@ -383,7 +541,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   contextPanel: {
-    minHeight: 130,
+    minHeight: 118,
   },
   sectionHeader: {
     alignItems: 'center',
@@ -399,27 +557,56 @@ const styles = StyleSheet.create({
     lineHeight: 27,
   },
   formPanel: {
-    minHeight: 480,
+    minHeight: 420,
+  },
+  formStack: {
+    gap: 18,
   },
   fieldBlock: {
     gap: 10,
+  },
+  checkedInState: {
+    gap: 18,
+  },
+  actionStack: {
+    gap: 12,
+    marginTop: 6,
+  },
+  confirmGlow: {
+    elevation: actionShadow.elevation,
+    shadowOffset: actionShadow.offset,
+    shadowOpacity: 0.34,
+    shadowRadius: 28,
+  },
+  textAction: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 44,
   },
   noteInput: {
     minHeight: 136,
     paddingTop: 16,
   },
   photoActions: {
+    alignSelf: 'stretch',
     flexDirection: 'row',
-    gap: 14,
+    width: '100%',
+  },
+  photoActionColumn: {
+    paddingHorizontal: 7,
+    width: '50%',
   },
   photoAction: {
     alignItems: 'center',
     borderRadius: radius.md,
     borderWidth: 1,
-    flex: 1,
-    gap: 10,
     justifyContent: 'center',
     minHeight: 92,
+    minWidth: 0,
+    paddingHorizontal: 12,
+    paddingVertical: 18,
+    rowGap: 10,
+    width: '100%',
   },
   previewCard: {
     borderRadius: radius.md,

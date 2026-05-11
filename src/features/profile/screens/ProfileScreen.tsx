@@ -110,6 +110,7 @@ export function ProfileScreen({navigation}: Props): React.JSX.Element {
   const theme = useHoystTheme();
   const profile = useUserProfileStore(state => state.profile);
   const status = useSessionStore(state => state.status);
+  const user = useSessionStore(state => state.user);
   const beginAuthFlow = useSessionStore(state => state.beginAuthFlow);
   const clearPendingAction = useSessionStore(state => state.clearPendingAction);
   const rootNavigation =
@@ -218,7 +219,7 @@ export function ProfileScreen({navigation}: Props): React.JSX.Element {
   }
 
   const initials = getProfileInitials(profile);
-  const avatarSource = getProfileAvatarSource(profile);
+  const avatarSource = getProfileAvatarSource(profile, user?.photoURL);
   const profileSummary = profileSummaryQuery.data;
 
   return (

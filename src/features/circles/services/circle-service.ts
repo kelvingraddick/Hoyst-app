@@ -1,9 +1,12 @@
 import {firebaseFunctions} from '../../../lib/firebase/functions';
-import type {CircleJoinMode, CirclePrivacy} from '../../../types/models';
+import type {CircleJoinMode, CirclePrivacy, GraceRule} from '../../../types/models';
 
 export type CreateCircleInput = {
   category: string;
   dailyTask: string;
+  graceRules: {
+    skip: GraceRule;
+  };
   joinMode: CircleJoinMode;
   maxSize: number;
   privacy: CirclePrivacy;
@@ -22,4 +25,3 @@ export async function joinCircle(circleId: string, inviteCode?: string) {
   const result = await callable({circleId, inviteCode});
   return result.data as {status: 'active' | 'pending'};
 }
-

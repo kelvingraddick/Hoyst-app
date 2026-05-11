@@ -37,9 +37,12 @@ export function getProfileInitials(profile?: Pick<UserProfile, 'name'>) {
 
 export function getProfileAvatarSource(
   profile?: Pick<UserProfile, 'avatarImage' | 'avatarUrl'>,
+  fallbackAvatarUrl?: string,
 ): ImageSourcePropType | undefined {
-  if (profile?.avatarUrl) {
-    return {uri: profile.avatarUrl};
+  const avatarUrl = profile?.avatarUrl?.trim() || fallbackAvatarUrl?.trim();
+
+  if (avatarUrl) {
+    return {uri: avatarUrl};
   }
 
   return profile?.avatarImage;

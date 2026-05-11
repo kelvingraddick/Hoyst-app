@@ -78,6 +78,8 @@ export function TapInPickerScreen({navigation}: Props): React.JSX.Element {
   const [homeData, setHomeData] = useState<HomeData>(() =>
     createEmptyHomeData(),
   );
+  const [isLoadingHomeData, setIsLoadingHomeData] = useState(false);
+  const [hasHomeDataError, setHasHomeDataError] = useState(false);
   const profile = useUserProfileStore(state => state.profile);
   const status = useSessionStore(state => state.status);
   const user = useSessionStore(state => state.user);
@@ -87,12 +89,24 @@ export function TapInPickerScreen({navigation}: Props): React.JSX.Element {
   useEffect(() => {
     if (!canLoadCircles || !user?.uid) {
       setHomeData(createEmptyHomeData(timezone));
+      setIsLoadingHomeData(false);
+      setHasHomeDataError(false);
       return undefined;
     }
 
+    setIsLoadingHomeData(true);
+    setHasHomeDataError(false);
+
     return subscribeToHomeData({
-      onData: setHomeData,
-      onError: () => setHomeData(createEmptyHomeData(timezone)),
+      onData: data => {
+        setHomeData(data);
+        setHasHomeDataError(false);
+        setIsLoadingHomeData(false);
+      },
+      onError: () => {
+        setHasHomeDataError(true);
+        setIsLoadingHomeData(false);
+      },
       timezone,
       uid: user.uid,
     });
@@ -113,6 +127,16 @@ export function TapInPickerScreen({navigation}: Props): React.JSX.Element {
   const doneCount = activeCircles.filter(
     circle => circle.viewerHasCheckedIn,
   ).length;
+  const showLoadingState = isLoadingHomeData;
+  const showDataErrorState =
+    hasHomeDataError && !isLoadingHomeData && activeCircles.length === 0;
+  const showNoActiveCirclesState =
+    !hasHomeDataError && !isLoadingHomeData && activeCircles.length === 0;
+  const showAllTappedInState =
+    !hasHomeDataError &&
+    !isLoadingHomeData &&
+    activeCircles.length > 0 &&
+    dueCircles.length === 0;
 
   const openTapIn = (circleId: string) => {
     navigation.replace('TapInComposer', {
@@ -293,6 +317,7 @@ export function TapInPickerScreen({navigation}: Props): React.JSX.Element {
                         ]}>
                         <LayeredAvatar
                           imageSource={member.avatarImage}
+                          imageUrl={member.avatarUrl}
                           initials={member.initials}
                           size={40}
                           state={member.state}
@@ -344,7 +369,44 @@ export function TapInPickerScreen({navigation}: Props): React.JSX.Element {
             );
           })}
         </View>
-      ) : (
+      ) : showLoadingState ? (
+        <GlassPanel style={styles.emptyPanel}>
+          <View style={styles.emptyState}>
+            <TapInRingMark innerSize={34} outerSize={62} />
+            <HoystText style={styles.centerText} variant="title">
+              Loading your circles
+            </HoystText>
+            <HoystText style={styles.centerText} tone="muted">
+              Pulling your live Tap In status from Hoyst.
+            </HoystText>
+          </View>
+        </GlassPanel>
+      ) : showDataErrorState ? (
+        <GlassPanel style={styles.emptyPanel}>
+          <View style={styles.emptyState}>
+            <TapInRingMark innerSize={34} outerSize={62} />
+            <HoystText style={styles.centerText} variant="title">
+              Could not load Tap In
+            </HoystText>
+            <HoystText style={styles.centerText} tone="muted">
+              Your account is connected, but Hoyst could not load your live
+              circle status.
+            </HoystText>
+          </View>
+        </GlassPanel>
+      ) : showNoActiveCirclesState ? (
+        <GlassPanel style={styles.emptyPanel}>
+          <View style={styles.emptyState}>
+            <TapInRingMark innerSize={34} outerSize={62} />
+            <HoystText style={styles.centerText} variant="title">
+              No active circles yet
+            </HoystText>
+            <HoystText style={styles.centerText} tone="muted">
+              Join or create a circle before Tap In has anything to track.
+            </HoystText>
+          </View>
+        </GlassPanel>
+      ) : showAllTappedInState ? (
         <GlassPanel style={styles.emptyPanel}>
           <View style={styles.emptyState}>
             <TapInRingMark innerSize={34} outerSize={62} />
@@ -357,7 +419,7 @@ export function TapInPickerScreen({navigation}: Props): React.JSX.Element {
             </HoystText>
           </View>
         </GlassPanel>
-      )}
+      ) : null}
 
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
@@ -378,9 +440,15 @@ export function TapInPickerScreen({navigation}: Props): React.JSX.Element {
               : canShare
                 ? 'Share'
                 : 'View';
-            const statusTone = canPoke ? theme.accentSecondary : theme.success;
+            const statusTone = canPoke
+              ? theme.accentSecondary
+              : circle.viewerTodayStatus === 'skip'
+                ? theme.warning
+                : theme.success;
             const statusLabel = canPoke
               ? `${circle.remainingCheckIns} pending today`
+              : circle.viewerTodayStatus === 'skip'
+                ? 'Grace skip used today'
               : 'Daily Tap In complete';
             const ActionIcon = canPoke ? BellRing : canShare ? Send : ArrowRight;
 

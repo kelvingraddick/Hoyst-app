@@ -5,12 +5,14 @@ import {
   Bell,
   BellRing,
   Check,
+  ChevronRight,
   Clock3,
   Flame,
   Globe2,
   Lock,
   Send,
   Settings2,
+  Trash2,
   UserPlus,
   UsersRound,
 } from 'lucide-react-native';
@@ -31,6 +33,7 @@ import {useHoystTheme} from '../../../design/theme/useHoystTheme';
 import {useProtectedAction} from '../../auth/hooks/useProtectedAction';
 import {useUserProfileStore} from '../../../store/profile-store';
 import {useSessionStore} from '../../../store/session-store';
+import {removeTapIn} from '../../check-in/services/check-in-service';
 import {getCircleDetail} from '../mockData';
 import {joinCircle} from '../services/circle-service';
 import {subscribeToPublicCircle} from '../services/public-circle-service';
@@ -106,12 +109,14 @@ function TopBarButton({
   );
 }
 
-function DashboardAction({
+function DashboardQuickAction({
+  emphasized,
   icon,
   label,
   onPress,
   supportingText,
 }: {
+  emphasized?: boolean;
   icon: React.ReactNode;
   label: string;
   onPress?: () => void;
@@ -123,22 +128,92 @@ function DashboardAction({
     <Pressable
       onPress={onPress}
       style={({pressed}) => [
-        styles.dashboardAction,
+        styles.dashboardQuickPressable,
         {
-          backgroundColor: theme.actionSurface,
-          borderColor: theme.actionBorder,
           opacity: pressed ? actionMotion.pressedOpacity : 1,
           transform: [{scale: pressed ? actionMotion.pressedScale : 1}],
         },
       ]}>
-      <View style={styles.dashboardActionIcon}>{icon}</View>
-      <View style={styles.dashboardActionCopy}>
-        <HoystText style={styles.dashboardActionLabel} variant="button">
-          {label}
-        </HoystText>
-        <HoystText tone="muted" variant="caption">
-          {supportingText}
-        </HoystText>
+      <View
+        style={[
+          styles.dashboardQuickFill,
+          {
+            backgroundColor: emphasized
+              ? `${theme.accent}22`
+              : theme.surfaceHigh,
+            borderColor: emphasized ? `${theme.accent}77` : theme.borderStrong,
+          },
+        ]}>
+        <View style={styles.dashboardQuickIcon}>{icon}</View>
+        <View style={styles.dashboardActionCopy}>
+          <HoystText
+            numberOfLines={1}
+            style={styles.dashboardActionLabel}
+            variant="button">
+            {label}
+          </HoystText>
+          <HoystText numberOfLines={1} tone="muted" variant="caption">
+            {supportingText}
+          </HoystText>
+        </View>
+      </View>
+    </Pressable>
+  );
+}
+
+function DashboardUtilityAction({
+  icon,
+  label,
+  labelColor,
+  onPress,
+  showChevron = true,
+  supportingText,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  labelColor?: string;
+  onPress?: () => void;
+  showChevron?: boolean;
+  supportingText: string;
+}) {
+  const theme = useHoystTheme();
+
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({pressed}) => [
+        styles.dashboardUtilityPressable,
+        {
+          opacity: pressed ? actionMotion.pressedOpacity : 1,
+          transform: [{scale: pressed ? actionMotion.pressedScale : 1}],
+        },
+      ]}>
+      <View
+        style={[
+          styles.dashboardUtilityFill,
+          {
+            backgroundColor: theme.surfaceSoft,
+            borderColor: theme.borderStrong,
+          },
+        ]}>
+        <View style={styles.dashboardUtilityIcon}>{icon}</View>
+        <View style={styles.dashboardActionCopy}>
+          <HoystText
+            numberOfLines={1}
+            style={[
+              styles.dashboardUtilityLabel,
+              labelColor ? {color: labelColor} : undefined,
+            ]}
+            variant="button">
+            {label}
+          </HoystText>
+          <HoystText numberOfLines={1} tone="muted" variant="caption">
+            {supportingText}
+          </HoystText>
+        </View>
+        {showChevron ? (
+          <ChevronRight color={theme.textSubtle} size={17} strokeWidth={2.2} />
+        ) : null}
       </View>
     </Pressable>
   );
@@ -207,10 +282,10 @@ function DetailProgressPanel({
           const progressCellStateStyle = isDone
             ? styles.progressCellDone
             : isMissed
-              ? styles.progressCellMissed
-              : isToday
-                ? styles.progressCellToday
-                : undefined;
+            ? styles.progressCellMissed
+            : isToday
+            ? styles.progressCellToday
+            : undefined;
           const progressCellThemeStyle = progressCellStateStyle
             ? undefined
             : {backgroundColor: theme.surfaceStrong, borderColor: theme.border};
@@ -228,10 +303,10 @@ function DetailProgressPanel({
                   color: isDone
                     ? theme.success
                     : isMissed
-                      ? theme.danger
-                      : isToday
-                        ? theme.accentSecondary
-                        : theme.textMuted,
+                    ? theme.danger
+                    : isToday
+                    ? theme.accentSecondary
+                    : theme.textMuted,
                 }}
                 variant="bodyStrong">
                 {String(day.day).padStart(2, '0')}
@@ -252,6 +327,7 @@ export function CircleDetailScreen({
   const [poked, setPoked] = useState(false);
   const [joinRequested, setJoinRequested] = useState(false);
   const [isJoining, setIsJoining] = useState(false);
+  const [isRemovingTapIn, setIsRemovingTapIn] = useState(false);
   const [managed, setManaged] = useState(false);
   const [publicCircle, setPublicCircle] = useState<CircleSummary | undefined>();
   const [memberCircle, setMemberCircle] = useState<
@@ -275,15 +351,12 @@ export function CircleDetailScreen({
     () => detail?.members.filter(member => member.state === 'pending') ?? [],
     [detail?.members],
   );
-  const missedMembers = detail?.members.filter(
-    member => member.state === 'missed',
-  ) ?? [];
+  const missedMembers =
+    detail?.members.filter(member => member.state === 'missed') ?? [];
 
   useEffect(() => {
-    return subscribeToPublicCircle(
-      route.params.circleId,
-      setPublicCircle,
-      () => setPublicCircle(undefined),
+    return subscribeToPublicCircle(route.params.circleId, setPublicCircle, () =>
+      setPublicCircle(undefined),
     );
   }, [route.params.circleId]);
 
@@ -377,21 +450,23 @@ export function CircleDetailScreen({
     detail.completionRate >= 85
       ? theme.success
       : detail.completionRate >= 70
-        ? theme.accentSecondary
-        : detail.completionRate >= 50
-          ? theme.warning
-          : theme.danger;
+      ? theme.accentSecondary
+      : detail.completionRate >= 50
+      ? theme.warning
+      : theme.danger;
   const statusLabel =
     detail.state === 'done' ? 'Done' : `${detail.completionRate}%`;
   const statusCopy = isMemberCircle
-    ? !detail.viewerHasCheckedIn
+    ? detail.viewerTodayStatus === 'skip'
+      ? 'Grace skip used today'
+      : !detail.viewerHasCheckedIn
       ? 'Needs your Tap In'
       : detail.remainingCheckIns && detail.remainingCheckIns > 0
-        ? `${detail.remainingCheckIns} pending today`
-        : 'Daily Tap In complete'
+      ? `${detail.remainingCheckIns} pending today`
+      : 'Daily Tap In complete'
     : detail.viewerMembershipStatus === 'pending'
-      ? 'Pending approval before Tap In unlocks.'
-      : detail.matchCopy ?? 'Preview the circle before you jump in.';
+    ? 'Pending approval before Tap In unlocks.'
+    : detail.matchCopy ?? 'Preview the circle before you jump in.';
   const streakValue =
     detail.streakDays ?? Number.parseInt(detail.streakLabel, 10);
   const showFlameIcon = Number.isFinite(streakValue) && streakValue > 7;
@@ -401,8 +476,14 @@ export function CircleDetailScreen({
       ? 'Joined'
       : 'Request sent'
     : detail.joinLabel === 'Open seats'
-      ? 'Join Circle'
-      : 'Request to join';
+    ? 'Join Circle'
+    : 'Request to join';
+  const canRemoveTodayCheckIn =
+    isMemberCircle &&
+    (detail.viewerTodayStatus === 'done' ||
+      detail.viewerTodayStatus === 'skip');
+  const removeActionLabel =
+    detail.viewerTodayStatus === 'skip' ? 'Remove Skip' : 'Remove Tap In';
 
   const shareInvite = () => {
     if (!canInvite || !detail.inviteUrl) {
@@ -414,6 +495,37 @@ export function CircleDetailScreen({
       message: `Join ${detail.title} on Hoyst: ${detail.inviteUrl}`,
       url: detail.inviteUrl,
     }).catch(() => undefined);
+  };
+
+  const handleRemoveTodayCheckIn = async () => {
+    setIsRemovingTapIn(true);
+    try {
+      await removeTapIn({circleId: detail.id});
+    } catch (error) {
+      const message =
+        (error as {message?: string}).message ??
+        'Could not remove your Tap In. Try again.';
+      Alert.alert('Remove failed', message);
+    } finally {
+      setIsRemovingTapIn(false);
+    }
+  };
+
+  const confirmRemoveTodayCheckIn = () => {
+    Alert.alert(
+      'Remove today?',
+      "This will undo today's progress for this circle.",
+      [
+        {style: 'cancel', text: 'Keep'},
+        {
+          onPress: () => {
+            handleRemoveTodayCheckIn().catch(() => undefined);
+          },
+          style: 'destructive',
+          text: 'Remove',
+        },
+      ],
+    );
   };
 
   return (
@@ -492,7 +604,10 @@ export function CircleDetailScreen({
             </HoystText>
           </View>
           <View
-            style={[styles.managementDot, {backgroundColor: theme.borderStrong}]}
+            style={[
+              styles.managementDot,
+              {backgroundColor: theme.borderStrong},
+            ]}
           />
           <View style={styles.metaItem}>
             {detail.privacy === 'private' ? (
@@ -505,7 +620,10 @@ export function CircleDetailScreen({
             </HoystText>
           </View>
           <View
-            style={[styles.managementDot, {backgroundColor: theme.borderStrong}]}
+            style={[
+              styles.managementDot,
+              {backgroundColor: theme.borderStrong},
+            ]}
           />
           <HoystText tone="muted" variant="caption">
             {isMemberCircle ? getRoleLabel(detail) : getJoinModeLabel(detail)}
@@ -534,7 +652,7 @@ export function CircleDetailScreen({
             {isMemberCircle
               ? `${pendingMembers.length} pending, ${missedMembers.length} missed`
               : isPendingMembership
-                ? 'Pending approval'
+              ? 'Pending approval'
               : getJoinModeLabel(detail)}
           </HoystText>
         </View>
@@ -559,50 +677,77 @@ export function CircleDetailScreen({
                 }
               />
             </View>
-            <DashboardAction
-              icon={
-                <BellRing
-                  color={poked ? theme.success : theme.text}
-                  size={18}
-                  strokeWidth={2.2}
-                />
-              }
-              label={poked ? 'Poked' : `Poke ${pendingMembers.length || 'All'}`}
-              onPress={() => setPoked(true)}
-              supportingText={
-                pendingMembers.length > 0
-                  ? 'Nudge pending members'
-                  : 'Keep everyone warm'
-              }
-            />
-            {canInvite ? (
-              <DashboardAction
-                icon={<Send color={theme.text} size={17} strokeWidth={2.2} />}
-                label="Invite"
-                onPress={shareInvite}
-                supportingText="Share the circle link"
-              />
-            ) : (
-              <DashboardAction
+            {canRemoveTodayCheckIn ? (
+              <DashboardUtilityAction
                 icon={
-                  <UserPlus color={theme.text} size={17} strokeWidth={2.2} />
+                  <Trash2 color={theme.danger} size={17} strokeWidth={2.2} />
                 }
-                label="Members"
-                supportingText="See who is in"
+                labelColor={theme.danger}
+                label={isRemovingTapIn ? 'Removing...' : removeActionLabel}
+                onPress={
+                  isRemovingTapIn ? undefined : confirmRemoveTodayCheckIn
+                }
+                showChevron={false}
+                supportingText="Undo today"
               />
-            )}
-            <DashboardAction
+            ) : null}
+            <View style={styles.quickActionRow}>
+              <DashboardQuickAction
+                emphasized={pendingMembers.length > 0 && !poked}
+                icon={
+                  <BellRing
+                    color={
+                      poked
+                        ? theme.success
+                        : pendingMembers.length > 0
+                        ? theme.accentSecondary
+                        : theme.text
+                    }
+                    size={18}
+                    strokeWidth={2.2}
+                  />
+                }
+                label={
+                  poked ? 'Poked' : `Poke ${pendingMembers.length || 'All'}`
+                }
+                onPress={() => setPoked(true)}
+                supportingText={
+                  pendingMembers.length > 0
+                    ? `${pendingMembers.length} pending`
+                    : 'Warm nudge'
+                }
+              />
+              {canInvite ? (
+                <DashboardQuickAction
+                  icon={<Send color={theme.text} size={17} strokeWidth={2.2} />}
+                  label="Invite"
+                  onPress={shareInvite}
+                  supportingText="Share link"
+                />
+              ) : (
+                <DashboardQuickAction
+                  icon={
+                    <UserPlus color={theme.text} size={17} strokeWidth={2.2} />
+                  }
+                  label="Members"
+                  supportingText="See who is in"
+                />
+              )}
+            </View>
+            <DashboardUtilityAction
               icon={
                 <Settings2
                   color={managed ? theme.success : theme.text}
-                  size={17}
+                  size={16}
                   strokeWidth={2.2}
                 />
               }
               label={managed ? 'Queued' : 'Manage'}
               onPress={() => setManaged(true)}
               supportingText={
-                detail.viewerRole === 'member' ? 'Member settings' : 'Circle tools'
+                detail.viewerRole === 'member'
+                  ? 'Member settings'
+                  : 'Circle tools'
               }
             />
           </View>
@@ -621,8 +766,8 @@ export function CircleDetailScreen({
                 isPendingMembership
                   ? 'Pending approval'
                   : isJoining
-                    ? 'Working...'
-                    : joinActionLabel
+                  ? 'Working...'
+                  : joinActionLabel
               }
               onPress={
                 isPendingMembership
@@ -770,13 +915,20 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   dashboardGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+    alignSelf: 'stretch',
+    alignItems: 'stretch',
     gap: 10,
+    width: '100%',
   },
   primaryActionWrap: {
-    flexBasis: '100%',
-    marginBottom: 10,
+    marginBottom: 2,
+  },
+  quickActionRow: {
+    alignSelf: 'stretch',
+    flexDirection: 'row',
+    gap: 10,
+    minWidth: '100%',
+    width: '100%',
   },
   tapInPressable: {
     borderRadius: radius.md,
@@ -807,22 +959,52 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     lineHeight: 21,
   },
-  dashboardAction: {
+  dashboardQuickPressable: {
+    alignSelf: 'stretch',
+    borderRadius: radius.md,
+    flex: 1,
+    flexBasis: 0,
+    minWidth: 0,
+  },
+  dashboardQuickFill: {
+    alignItems: 'flex-start',
+    borderRadius: radius.md,
+    borderWidth: 1,
+    gap: 10,
+    justifyContent: 'center',
+    minHeight: 86,
+    minWidth: 0,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    width: '100%',
+  },
+  dashboardQuickIcon: {
+    alignItems: 'center',
+    height: 24,
+    justifyContent: 'center',
+    width: 24,
+  },
+  dashboardUtilityPressable: {
+    alignSelf: 'stretch',
+    borderRadius: radius.md,
+    width: '100%',
+  },
+  dashboardUtilityFill: {
     alignItems: 'center',
     borderRadius: radius.md,
     borderWidth: 1,
-    flexBasis: '48%',
     flexDirection: 'row',
-    flexGrow: 1,
-    gap: 10,
-    minHeight: 62,
+    gap: 11,
+    minHeight: 58,
     paddingHorizontal: 14,
     paddingVertical: 10,
+    width: '100%',
   },
-  dashboardActionIcon: {
+  dashboardUtilityIcon: {
     alignItems: 'center',
+    height: 28,
     justifyContent: 'center',
-    width: 22,
+    width: 28,
   },
   dashboardActionCopy: {
     flex: 1,
@@ -830,6 +1012,10 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   dashboardActionLabel: {
+    fontSize: 14,
+    lineHeight: 18,
+  },
+  dashboardUtilityLabel: {
     fontSize: 14,
     lineHeight: 18,
   },

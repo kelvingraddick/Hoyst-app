@@ -1,12 +1,13 @@
 import type {ImageSourcePropType} from 'react-native';
 
 export type CirclePrivacy = 'private' | 'public';
+export type CirclePrivacyMode = 'link_only' | 'private' | 'public';
 export type CircleJoinMode = 'open' | 'invite_only' | 'request_to_join';
 export type CircleMembershipStatus = 'active' | 'pending';
 export type MemberRole = 'owner' | 'admin' | 'member';
 export type CheckInStatus = 'done' | 'skip' | 'rest';
 export type TodayCircleState = 'active' | 'done' | 'risk';
-export type CircleMemberState = 'done' | 'pending' | 'missed';
+export type CircleMemberState = 'done' | 'pending' | 'missed' | 'skipped';
 export type CircleActivityTone = 'success' | 'pending' | 'alert';
 export type ProgressDayState = 'done' | 'missed' | 'today' | 'future';
 export type CircleJoinLabel = 'Open seats' | 'Request to join';
@@ -48,6 +49,7 @@ export type CircleMemberStatus = {
   name: string;
   initials: string;
   avatarImage?: ImageSourcePropType;
+  avatarUrl?: string;
   state: CircleMemberState;
   badgeCount?: number;
 };
@@ -62,6 +64,7 @@ export type CircleActivityItem = {
   actorName: string;
   actorInitials: string;
   actorAvatarImage?: ImageSourcePropType;
+  actorAvatarUrl?: string;
   tone: CircleActivityTone;
   message: string;
   timestamp: string;
@@ -80,7 +83,11 @@ export type CircleSummary = {
   progressPercent?: number;
   completionRate?: number;
   viewerHasCheckedIn?: boolean;
+  viewerTodayStatus?: CheckInStatus;
   remainingCheckIns?: number;
+  graceRules?: {
+    skip: GraceRule;
+  };
   streakDays?: number;
   memberCount?: number;
   maxSize?: number;
@@ -133,11 +140,17 @@ export type CircleDetailModel = CircleSummary & {
 
 export type CreateCircleDraft = {
   category: string;
+  graceRules: {
+    skip: GraceRule;
+  };
+  joinMode: CircleJoinMode;
   title: string;
   dailyTask: string;
   privacy: CirclePrivacy;
+  privacyMode: CirclePrivacyMode;
   maxSize: number;
   inviteCode: string;
+  timezone: string;
 };
 
 export type TapInDraft = {

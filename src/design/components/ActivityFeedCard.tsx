@@ -32,6 +32,7 @@ export function ActivityFeedCard({
           <HoystAvatar
             initials={item.actorInitials}
             imageSource={item.actorAvatarImage}
+            imageUrl={item.actorAvatarUrl}
             size={36}
             tone={avatarTone}
             useBrandRing={item.tone === 'success'}

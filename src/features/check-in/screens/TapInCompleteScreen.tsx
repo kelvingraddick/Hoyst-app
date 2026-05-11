@@ -31,6 +31,7 @@ export function TapInCompleteScreen({
   const canLoadDetail = status === 'authenticatedReady' && Boolean(user?.uid);
   const note = route.params.note?.trim();
   const hasNote = Boolean(note);
+  const isSkip = route.params.status === 'skip';
 
   useEffect(() => {
     if (!canLoadDetail || !user?.uid) {
@@ -77,10 +78,12 @@ export function TapInCompleteScreen({
 
         <View style={styles.titleBlock}>
           <HoystText style={styles.centerText} variant="display">
-            Tap In Complete
+            {isSkip ? 'Skip Recorded' : 'Tap In Complete'}
           </HoystText>
           <HoystText style={[styles.centerText, {color: theme.success}]}>
-            {title} has your update for today.
+            {isSkip
+              ? `${title} kept your streak covered today.`
+              : `${title} has your update for today.`}
           </HoystText>
         </View>
 
@@ -100,11 +103,15 @@ export function TapInCompleteScreen({
               <HoystText style={styles.summaryTitle}>{dailyTask}</HoystText>
             </View>
             <HoystText style={{color: theme.success}} variant="caption">
-              Sent
+              {isSkip ? 'Skipped' : 'Sent'}
             </HoystText>
           </View>
           <HoystText tone={hasNote ? 'primary' : 'muted'}>
-            {hasNote ? note : 'No note added. Your Tap In still counts.'}
+            {hasNote
+              ? note
+              : isSkip
+                ? 'No note added. Your grace skip still counts.'
+                : 'No note added. Your Tap In still counts.'}
           </HoystText>
           {route.params.photoUri ? (
             <Image

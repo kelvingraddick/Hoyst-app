@@ -7,6 +7,7 @@ import {
   mapHomeCircleFromData,
   matchesHomeCircleFilter,
   shouldShowHomeCreateCircleButton,
+  shouldShowHomeDataErrorPanel,
 } from '../src/features/home/services/home-data-service';
 
 const circleData = {
@@ -21,11 +22,16 @@ const circleData = {
 
 describe('home data mapping', () => {
   it('maps active membership and today check-ins into a real Home card', () => {
+    const memberProfilesByUid = new Map([
+      ['user-2', {avatarUrl: 'https://example.com/ava.png'}],
+    ]);
     const card = mapHomeCircleFromData({
       circleData,
       circleId: 'circle-1',
+      memberProfilesByUid,
       membersData: [
         {
+          avatarUrl: 'https://example.com/kelvin.png',
           displayName: 'Kelvin North',
           role: 'owner',
           status: 'active',
@@ -58,9 +64,17 @@ describe('home data mapping', () => {
       viewerRole: 'owner',
     });
     expect(card?.members).toEqual([
-      expect.objectContaining({id: 'user-1', initials: 'KN', state: 'done'}),
+      expect.objectContaining({
+        avatarUrl: 'https://example.com/kelvin.png',
+        id: 'user-1',
+        initials: 'KN',
+        state: 'done',
+      }),
       expect.objectContaining({id: 'user-2', initials: 'AS', state: 'pending'}),
     ]);
+    expect(card?.members[1]).toMatchObject({
+      avatarUrl: 'https://example.com/ava.png',
+    });
   });
 
   it('maps pending memberships as visible but not due for Tap In', () => {
@@ -85,6 +99,100 @@ describe('home data mapping', () => {
     expect(matchesHomeCircleFilter(card!, 'all')).toBe(true);
     expect(matchesHomeCircleFilter(card!, 'needsYou')).toBe(false);
     expect(matchesHomeCircleFilter(card!, 'done')).toBe(false);
+  });
+
+  it('counts skips as covered while keeping member state distinct', () => {
+    const card = mapHomeCircleFromData({
+      circleData: {
+        ...circleData,
+        graceRules: {
+          skip: {
+            allowance: 1,
+            windowDays: 7,
+          },
+        },
+      },
+      circleId: 'circle-skip',
+      membersData: [
+        {
+          displayName: 'Kelvin North',
+          role: 'owner',
+          status: 'active',
+          uid: 'user-1',
+        },
+        {
+          displayName: 'Ava Stone',
+          role: 'member',
+          status: 'active',
+          uid: 'user-2',
+        },
+      ],
+      membershipData: {
+        displayName: 'Kelvin North',
+        role: 'owner',
+        status: 'active',
+        uid: 'user-1',
+      },
+      todayCheckInStatuses: new Map([
+        ['user-1', 'skip'],
+        ['user-2', 'done'],
+      ]),
+    });
+
+    expect(card).toMatchObject({
+      graceRules: {
+        skip: {
+          allowance: 1,
+          windowDays: 7,
+        },
+      },
+      progressPercent: 100,
+      remainingCheckIns: 0,
+      state: 'done',
+      viewerHasCheckedIn: true,
+      viewerTodayStatus: 'skip',
+    });
+    expect(card?.members).toEqual([
+      expect.objectContaining({id: 'user-1', state: 'skipped'}),
+      expect.objectContaining({id: 'user-2', state: 'done'}),
+    ]);
+  });
+
+  it('maps a removed check-in back to needs-you state', () => {
+    const card = mapHomeCircleFromData({
+      circleData,
+      circleId: 'circle-removed-check-in',
+      membersData: [
+        {
+          displayName: 'Kelvin North',
+          role: 'owner',
+          status: 'active',
+          uid: 'user-1',
+        },
+        {
+          displayName: 'Ava Stone',
+          role: 'member',
+          status: 'active',
+          uid: 'user-2',
+        },
+      ],
+      membershipData: {
+        displayName: 'Kelvin North',
+        role: 'owner',
+        status: 'active',
+        uid: 'user-1',
+      },
+      todayCheckInStatuses: new Map([['user-2', 'done']]),
+    });
+
+    expect(card).toMatchObject({
+      progressPercent: 50,
+      remainingCheckIns: 1,
+      state: 'active',
+      viewerHasCheckedIn: false,
+      viewerTodayStatus: undefined,
+    });
+    expect(matchesHomeCircleFilter(card!, 'needsYou')).toBe(true);
   });
 
   it('ignores incomplete or missing real records instead of filling mocks', () => {
@@ -168,6 +276,30 @@ describe('home data mapping', () => {
       shouldShowHomeCreateCircleButton({
         isAuthenticatedHome: false,
         showAccountPrompt: false,
+      }),
+    ).toBe(false);
+  });
+
+  it('only shows the Home error panel when no circles can render', () => {
+    expect(
+      shouldShowHomeDataErrorPanel({
+        circleCount: 0,
+        hasHomeDataError: true,
+        isLoadingHomeData: false,
+      }),
+    ).toBe(true);
+    expect(
+      shouldShowHomeDataErrorPanel({
+        circleCount: 1,
+        hasHomeDataError: true,
+        isLoadingHomeData: false,
+      }),
+    ).toBe(false);
+    expect(
+      shouldShowHomeDataErrorPanel({
+        circleCount: 0,
+        hasHomeDataError: true,
+        isLoadingHomeData: true,
       }),
     ).toBe(false);
   });

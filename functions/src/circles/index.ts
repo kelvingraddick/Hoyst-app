@@ -1,12 +1,21 @@
-import {FieldValue} from 'firebase-admin/firestore';
+import {FieldValue, type DocumentData} from 'firebase-admin/firestore';
 import {HttpsError, onCall} from 'firebase-functions/v2/https';
 import {z} from 'zod';
 
 import {db} from '../firebase';
 
+const graceRuleSchema = z.object({
+  allowance: z.number().int().min(0).max(30),
+  windowDays: z.number().int().min(1).max(365),
+});
 const createCircleSchema = z.object({
   category: z.string().trim().min(1).max(40),
   dailyTask: z.string().trim().min(1).max(160),
+  graceRules: z
+    .object({
+      skip: graceRuleSchema,
+    })
+    .optional(),
   joinMode: z.enum(['open', 'request_to_join', 'invite_only']),
   maxSize: z.number().int().min(2).max(100),
   privacy: z.enum(['public', 'private']),
@@ -37,6 +46,15 @@ function createInviteCode() {
   return Math.random().toString(36).slice(2, 10);
 }
 
+function buildMemberPublicPreview(profile: DocumentData, uid: string) {
+  return {
+    avatarUrl: profile.avatarUrl ?? null,
+    displayName: profile.displayName,
+    handle: profile.handle,
+    uid,
+  };
+}
+
 export const createCircle = onCall(async request => {
   const {profile, uid} = await requireCompletedProfile(request.auth?.uid);
   const input = createCircleSchema.parse(request.data);
@@ -49,6 +67,12 @@ export const createCircle = onCall(async request => {
     category: input.category,
     createdAt: now,
     dailyTask: input.dailyTask,
+    graceRules: input.graceRules ?? {
+      skip: {
+        allowance: 1,
+        windowDays: 7,
+      },
+    },
     inviteCode,
     joinMode: input.joinMode,
     maxSize: input.maxSize,
@@ -63,6 +87,7 @@ export const createCircle = onCall(async request => {
   const batch = db.batch();
   batch.set(circleRef, circle);
   batch.set(memberRef, {
+    avatarUrl: profile.avatarUrl ?? null,
     displayName: profile.displayName,
     handle: profile.handle,
     joinedAt: now,
@@ -78,6 +103,7 @@ export const createCircle = onCall(async request => {
       joinMode: input.joinMode,
       maxSize: input.maxSize,
       memberCount: 1,
+      members: [buildMemberPublicPreview(profile, uid)],
       title: input.title,
       updatedAt: now,
     });
@@ -117,7 +143,10 @@ export const joinCircle = onCall(async request => {
       throw new HttpsError('resource-exhausted', 'This circle is full.');
     }
 
-    if (circle?.joinMode === 'invite_only' && input.inviteCode !== circle.inviteCode) {
+    if (
+      circle?.privacy === 'private' &&
+      input.inviteCode !== circle.inviteCode
+    ) {
       throw new HttpsError('permission-denied', 'A valid invite is required.');
     }
 
@@ -125,6 +154,7 @@ export const joinCircle = onCall(async request => {
       transaction.set(
         joinRequestRef,
         {
+          avatarUrl: profile.avatarUrl ?? null,
           createdAt: now,
           displayName: profile.displayName,
           handle: profile.handle,
@@ -136,6 +166,7 @@ export const joinCircle = onCall(async request => {
       transaction.set(
         memberRef,
         {
+          avatarUrl: profile.avatarUrl ?? null,
           displayName: profile.displayName,
           handle: profile.handle,
           requestedAt: now,
@@ -149,6 +180,7 @@ export const joinCircle = onCall(async request => {
     }
 
     transaction.set(memberRef, {
+      avatarUrl: profile.avatarUrl ?? null,
       displayName: profile.displayName,
       handle: profile.handle,
       joinedAt: now,
@@ -157,11 +189,17 @@ export const joinCircle = onCall(async request => {
       uid,
     });
     transaction.update(circleRef, {memberCount: FieldValue.increment(1)});
-    transaction.set(
-      publicIndexRef,
-      {memberCount: FieldValue.increment(1), updatedAt: now},
-      {merge: true},
-    );
+    if (circle?.privacy === 'public') {
+      transaction.set(
+        publicIndexRef,
+        {
+          memberCount: FieldValue.increment(1),
+          members: FieldValue.arrayUnion(buildMemberPublicPreview(profile, uid)),
+          updatedAt: now,
+        },
+        {merge: true},
+      );
+    }
 
     return {status: 'active' as const};
   });

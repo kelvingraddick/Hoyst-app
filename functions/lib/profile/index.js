@@ -55,7 +55,10 @@ exports.getProfileSummary = (0, https_1.onCall)(async (request) => {
         .where('uid', '==', uid)
         .get();
     const checkInDateKeys = checkInsSnapshot.docs
-        .filter(snapshot => snapshot.data().status === 'done')
+        .filter(snapshot => {
+        const status = snapshot.data().status;
+        return status === 'done' || status === 'skip';
+    })
         .filter(snapshot => {
         const circleId = getCheckInCircleId(snapshot);
         return Boolean(circleId && activeCircleIds.has(circleId));
