@@ -12,10 +12,6 @@ export function dismissAuthModals(
   }
 
   if (!getStateWithoutAuthModal(navigation.getState())) {
-    if (navigation.canGoBack()) {
-      navigation.goBack();
-    }
-
     return;
   }
 

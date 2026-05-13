@@ -1,7 +1,8 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.joinCircle = exports.createCircle = void 0;
+exports.deleteCircle = exports.joinCircle = exports.createCircle = void 0;
 const firestore_1 = require("firebase-admin/firestore");
+const storage_1 = require("firebase-admin/storage");
 const https_1 = require("firebase-functions/v2/https");
 const zod_1 = require("zod");
 const firebase_1 = require("../firebase");
@@ -27,6 +28,9 @@ const joinCircleSchema = zod_1.z.object({
     circleId: zod_1.z.string().trim().min(1),
     inviteCode: zod_1.z.string().trim().optional(),
 });
+const deleteCircleSchema = zod_1.z.object({
+    circleId: zod_1.z.string().trim().min(1),
+});
 async function requireCompletedProfile(uid) {
     if (!uid) {
         throw new https_1.HttpsError('unauthenticated', 'Sign in is required.');
@@ -49,6 +53,16 @@ function buildMemberPublicPreview(profile, uid) {
         uid,
     };
 }
+async function deleteCircleServerMetadata(circleId) {
+    const publicIndexRef = firebase_1.db.collection('publicCircleIndex').doc(circleId);
+    await Promise.all([
+        publicIndexRef.delete(),
+        (0, storage_1.getStorage)().bucket().deleteFiles({
+            force: true,
+            prefix: `circles/${circleId}/`,
+        }),
+    ]);
+}
 exports.createCircle = (0, https_1.onCall)(async (request) => {
     const { profile, uid } = await requireCompletedProfile(request.auth?.uid);
     const input = createCircleSchema.parse(request.data);
@@ -63,7 +77,7 @@ exports.createCircle = (0, https_1.onCall)(async (request) => {
         dailyTask: input.dailyTask,
         graceRules: input.graceRules ?? {
             skip: {
-                allowance: 1,
+                allowance: 2,
                 windowDays: 7,
             },
         },
@@ -169,4 +183,27 @@ exports.joinCircle = (0, https_1.onCall)(async (request) => {
         }
         return { status: 'active' };
     });
+});
+exports.deleteCircle = (0, https_1.onCall)(async (request) => {
+    const { uid } = await requireCompletedProfile(request.auth?.uid);
+    const input = deleteCircleSchema.parse(request.data);
+    const circleRef = firebase_1.db.collection('circles').doc(input.circleId);
+    const memberRef = circleRef.collection('members').doc(uid);
+    const [circleSnapshot, memberSnapshot] = await Promise.all([
+        circleRef.get(),
+        memberRef.get(),
+    ]);
+    if (!circleSnapshot.exists) {
+        throw new https_1.HttpsError('not-found', 'Circle not found.');
+    }
+    const circle = circleSnapshot.data();
+    const member = memberSnapshot.data();
+    if (circle?.ownerId !== uid ||
+        member?.role !== 'owner' ||
+        member?.status !== 'active') {
+        throw new https_1.HttpsError('permission-denied', 'Only the circle owner can delete this circle.');
+    }
+    await deleteCircleServerMetadata(input.circleId);
+    await firebase_1.db.recursiveDelete(circleRef);
+    return { deleted: true };
 });

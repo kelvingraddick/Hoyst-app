@@ -886,7 +886,6 @@ export function CreateCircleScreen({navigation}: Props): React.JSX.Element {
                 }
               : goNext
           }
-          variant="secondary"
         />
       </View>
     </HoystScreen>

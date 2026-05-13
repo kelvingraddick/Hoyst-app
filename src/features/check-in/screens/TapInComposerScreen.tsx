@@ -11,7 +11,7 @@ import {HoystInput} from '../../../design/components/HoystInput';
 import {HoystScreen} from '../../../design/components/HoystScreen';
 import {HoystText} from '../../../design/components/HoystText';
 import {TapInRingMark} from '../../../design/components/TapInRingMark';
-import {actionShadow} from '../../../design/tokens/actions';
+import {actionMotion, actionShadow} from '../../../design/tokens/actions';
 import {radius} from '../../../design/tokens/radius';
 import {useHoystTheme} from '../../../design/theme/useHoystTheme';
 import {removeTapIn, submitTapIn} from '../services/check-in-service';
@@ -336,46 +336,84 @@ export function TapInComposerScreen({
                   Photo
                 </HoystText>
                 <View style={styles.photoActions}>
-                  <View style={styles.photoActionColumn}>
-                    <Pressable
-                      onPress={handleTakePhoto}
-                      style={({pressed}) => [
-                        styles.photoAction,
+                  <Pressable
+                    onPress={handleTakePhoto}
+                    style={({pressed}) => [
+                      styles.photoActionPressable,
+                      {
+                        opacity: pressed ? actionMotion.pressedOpacity : 1,
+                        transform: [
+                          {scale: pressed ? actionMotion.pressedScale : 1},
+                        ],
+                      },
+                    ]}>
+                    <View
+                      style={[
+                        styles.photoActionFill,
                         {
-                          borderColor: theme.actionBorder,
-                          opacity: pressed ? 0.92 : 1,
+                          backgroundColor: theme.surfaceHigh,
+                          borderColor: theme.borderStrong,
                         },
                       ]}>
-                      <Camera
-                        color={theme.textSubtle}
-                        size={22}
-                        strokeWidth={2.1}
-                      />
-                      <HoystText tone="muted" variant="tiny">
-                        Take Photo
-                      </HoystText>
-                    </Pressable>
-                  </View>
-                  <View style={styles.photoActionColumn}>
-                    <Pressable
-                      onPress={handleChoosePhoto}
-                      style={({pressed}) => [
-                        styles.photoAction,
+                      <View style={styles.photoActionIcon}>
+                        <Camera
+                          color={theme.textSubtle}
+                          size={22}
+                          strokeWidth={2.1}
+                        />
+                      </View>
+                      <View style={styles.photoActionCopy}>
+                        <HoystText
+                          numberOfLines={1}
+                          style={styles.photoActionLabel}
+                          variant="button">
+                          Take Photo
+                        </HoystText>
+                        <HoystText numberOfLines={1} tone="muted" variant="caption">
+                          Open camera
+                        </HoystText>
+                      </View>
+                    </View>
+                  </Pressable>
+                  <Pressable
+                    onPress={handleChoosePhoto}
+                    style={({pressed}) => [
+                      styles.photoActionPressable,
+                      {
+                        opacity: pressed ? actionMotion.pressedOpacity : 1,
+                        transform: [
+                          {scale: pressed ? actionMotion.pressedScale : 1},
+                        ],
+                      },
+                    ]}>
+                    <View
+                      style={[
+                        styles.photoActionFill,
                         {
-                          borderColor: theme.actionBorder,
-                          opacity: pressed ? 0.92 : 1,
+                          backgroundColor: theme.surfaceHigh,
+                          borderColor: theme.borderStrong,
                         },
                       ]}>
-                      <ImagePlus
-                        color={theme.textSubtle}
-                        size={22}
-                        strokeWidth={2.1}
-                      />
-                      <HoystText tone="muted" variant="tiny">
-                        Library
-                      </HoystText>
-                    </Pressable>
-                  </View>
+                      <View style={styles.photoActionIcon}>
+                        <ImagePlus
+                          color={theme.textSubtle}
+                          size={22}
+                          strokeWidth={2.1}
+                        />
+                      </View>
+                      <View style={styles.photoActionCopy}>
+                        <HoystText
+                          numberOfLines={1}
+                          style={styles.photoActionLabel}
+                          variant="button">
+                          Library
+                        </HoystText>
+                        <HoystText numberOfLines={1} tone="muted" variant="caption">
+                          Choose saved
+                        </HoystText>
+                      </View>
+                    </View>
+                  </Pressable>
                 </View>
               </View>
 
@@ -590,23 +628,42 @@ const styles = StyleSheet.create({
   photoActions: {
     alignSelf: 'stretch',
     flexDirection: 'row',
+    gap: 10,
     width: '100%',
   },
-  photoActionColumn: {
-    paddingHorizontal: 7,
-    width: '50%',
+  photoActionPressable: {
+    alignSelf: 'stretch',
+    borderRadius: radius.md,
+    flex: 1,
+    flexBasis: 0,
+    minWidth: 0,
   },
-  photoAction: {
-    alignItems: 'center',
+  photoActionFill: {
+    alignItems: 'flex-start',
     borderRadius: radius.md,
     borderWidth: 1,
     justifyContent: 'center',
-    minHeight: 92,
+    gap: 10,
+    minHeight: 86,
     minWidth: 0,
-    paddingHorizontal: 12,
-    paddingVertical: 18,
-    rowGap: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
     width: '100%',
+  },
+  photoActionIcon: {
+    alignItems: 'center',
+    height: 24,
+    justifyContent: 'center',
+    width: 24,
+  },
+  photoActionCopy: {
+    gap: 2,
+    minWidth: 0,
+    width: '100%',
+  },
+  photoActionLabel: {
+    fontSize: 14,
+    lineHeight: 18,
   },
   previewCard: {
     borderRadius: radius.md,

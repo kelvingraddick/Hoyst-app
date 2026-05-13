@@ -6,14 +6,29 @@ import {firebaseFirestore} from '../../../lib/firebase/firestore';
 import {firebaseFunctions} from '../../../lib/firebase/functions';
 import {collections} from '../../../types/firestore';
 import type {UserProfile} from '../../../types/models';
+import type {CreateCircleInput} from '../../circles/services/circle-service';
 import type {OnboardingPreferences} from './onboarding-options';
+
+export type StarterCircleProfileInput = CreateCircleInput & {
+  setupId: string;
+};
 
 export type CompleteProfileInput = {
   avatarUrl?: string;
   displayName: string;
   handle: string;
   onboardingPreferences?: OnboardingPreferences;
+  starterCircle?: StarterCircleProfileInput;
   timezone: string;
+};
+
+export type CompleteProfileResult = {
+  handle: string;
+  starterCircle?: {
+    circleId: string;
+    inviteCode?: string;
+  };
+  uid: string;
 };
 
 export function getLocalTimezone() {
@@ -60,7 +75,16 @@ export function subscribeToUserProfile(
 
 export async function completeProfile(input: CompleteProfileInput) {
   const callable = firebaseFunctions().httpsCallable('completeProfile');
-  await callable(input);
+  const result = await callable(input);
+
+  return result.data as CompleteProfileResult;
+}
+
+export async function deleteAccount() {
+  const callable = firebaseFunctions().httpsCallable('deleteAccount');
+  const result = await callable();
+
+  return result.data as {deleted: true};
 }
 
 export async function updateProfileFields(input: {

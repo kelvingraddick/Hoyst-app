@@ -18,6 +18,7 @@ import {ProfileScreen} from '../features/profile/screens/ProfileScreen';
 import {TapInRingMark} from '../design/components/TapInRingMark';
 import {useHoystTheme} from '../design/theme/useHoystTheme';
 import {HoystTabBarBackground} from './components/HoystTabBarBackground';
+import {canResumePendingAction} from './pending-action-resume';
 import type {AppTabsParamList, RootStackParamList} from './types';
 import {useOnboardingStore} from '../store/onboarding-store';
 import {useSessionStore} from '../store/session-store';
@@ -42,6 +43,9 @@ export function AppTabsNavigator(): React.JSX.Element {
   const status = useSessionStore(state => state.status);
   const beginAuthFlow = useSessionStore(state => state.beginAuthFlow);
   const consumePendingAction = useSessionStore(state => state.consumePendingAction);
+  const hasPendingStarterCircleSetup = useOnboardingStore(
+    state => state.hasPendingStarterCircleSetup,
+  );
   const startForProtectedAction = useOnboardingStore(
     state => state.startForProtectedAction,
   );
@@ -49,7 +53,12 @@ export function AppTabsNavigator(): React.JSX.Element {
     useNavigation<NativeStackNavigationProp<RootStackParamList>>();
 
   useEffect(() => {
-    if (status !== 'authenticatedReady') {
+    if (
+      !canResumePendingAction({
+        hasPendingStarterCircleSetup,
+        status,
+      })
+    ) {
       return;
     }
 
@@ -76,7 +85,7 @@ export function AppTabsNavigator(): React.JSX.Element {
     } else if (pendingAction.type === 'settings') {
       rootNavigation.navigate('Settings');
     }
-  }, [consumePendingAction, rootNavigation, status]);
+  }, [consumePendingAction, hasPendingStarterCircleSetup, rootNavigation, status]);
 
   return (
     <Tab.Navigator

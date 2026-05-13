@@ -25,3 +25,9 @@ export async function joinCircle(circleId: string, inviteCode?: string) {
   const result = await callable({circleId, inviteCode});
   return result.data as {status: 'active' | 'pending'};
 }
+
+export async function deleteCircle(circleId: string) {
+  const callable = firebaseFunctions().httpsCallable('deleteCircle');
+  const result = await callable({circleId});
+  return result.data as {deleted: true};
+}

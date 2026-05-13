@@ -1,9 +1,9 @@
-import React, {useEffect, useMemo, useState} from 'react';
+import React, {useCallback, useMemo, useState} from 'react';
 import {Pressable, Share, StyleSheet, View} from 'react-native';
 import {Bell, ChevronRight, Medal} from 'lucide-react-native';
 import type {BottomTabNavigationProp} from '@react-navigation/bottom-tabs';
 import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
-import {useNavigation} from '@react-navigation/native';
+import {useFocusEffect, useNavigation} from '@react-navigation/native';
 
 import {BrandMark} from '../../../design/components/BrandMark';
 import {GlassPanel} from '../../../design/components/GlassPanel';
@@ -18,11 +18,11 @@ import {actionMotion, actionShadow} from '../../../design/tokens/actions';
 import {radius} from '../../../design/tokens/radius';
 import {useHoystTheme} from '../../../design/theme/useHoystTheme';
 import {useProtectedAction} from '../../auth/hooks/useProtectedAction';
-import {getProfileSignInParams} from '../../auth/services/auth-route-intent';
 import {
   createEmptyHomeData,
   getHomeFilterCounts,
   matchesHomeCircleFilter,
+  shouldShowAuthenticatedHomeEmptyState,
   shouldShowHomeCreateCircleButton,
   shouldShowHomeDataErrorPanel,
   sortHomeCircles,
@@ -41,6 +41,7 @@ import type {
   CircleManagementCard,
   CircleManagementFilter,
 } from '../../../types/models';
+import {useOnboardingStore} from '../../../store/onboarding-store';
 import {useUserProfileStore} from '../../../store/profile-store';
 import {useSessionStore} from '../../../store/session-store';
 
@@ -112,6 +113,9 @@ export function HomeScreen(): React.JSX.Element {
   const user = useSessionStore(state => state.user);
   const beginAuthFlow = useSessionStore(state => state.beginAuthFlow);
   const clearPendingAction = useSessionStore(state => state.clearPendingAction);
+  const startOnboardingWizard = useOnboardingStore(
+    state => state.startOnboardingWizard,
+  );
   const navigation =
     useNavigation<BottomTabNavigationProp<AppTabsParamList, 'Home'>>();
   const rootNavigation =
@@ -122,31 +126,33 @@ export function HomeScreen(): React.JSX.Element {
     status === 'authenticatedReady' && Boolean(user?.uid && profile);
   const isIncompleteProfile = status === 'authenticatedIncompleteProfile';
 
-  useEffect(() => {
-    if (!isAuthenticatedHome || !user?.uid) {
-      setHomeData(createEmptyHomeData(timezone));
-      setIsLoadingHomeData(false);
-      setHasHomeDataError(false);
-      return undefined;
-    }
-
-    setIsLoadingHomeData(true);
-    setHasHomeDataError(false);
-
-    return subscribeToHomeData({
-      onData: data => {
-        setHomeData(data);
+  useFocusEffect(
+    useCallback(() => {
+      if (!isAuthenticatedHome || !user?.uid) {
+        setHomeData(createEmptyHomeData(timezone));
+        setIsLoadingHomeData(false);
         setHasHomeDataError(false);
-        setIsLoadingHomeData(false);
-      },
-      onError: () => {
-        setHasHomeDataError(true);
-        setIsLoadingHomeData(false);
-      },
-      timezone,
-      uid: user.uid,
-    });
-  }, [isAuthenticatedHome, timezone, user?.uid]);
+        return undefined;
+      }
+
+      setIsLoadingHomeData(true);
+      setHasHomeDataError(false);
+
+      return subscribeToHomeData({
+        onData: data => {
+          setHomeData(data);
+          setHasHomeDataError(false);
+          setIsLoadingHomeData(false);
+        },
+        onError: () => {
+          setHasHomeDataError(true);
+          setIsLoadingHomeData(false);
+        },
+        timezone,
+        uid: user.uid,
+      });
+    }, [isAuthenticatedHome, timezone, user?.uid]),
+  );
 
   const filterCounts = useMemo(
     () => getHomeFilterCounts(homeData.circles),
@@ -200,15 +206,20 @@ export function HomeScreen(): React.JSX.Element {
       ? `${homeData.personalStreakDays}-day streak`
       : 'Start your streak';
   const showAccountPrompt = !isAuthenticatedHome;
-  const showAuthenticatedEmptyState =
-    isAuthenticatedHome &&
-    !isLoadingHomeData &&
-    !hasHomeDataError &&
-    homeData.circles.length === 0;
+  const showAuthenticatedEmptyState = shouldShowAuthenticatedHomeEmptyState({
+    circleCount: homeData.circles.length,
+    hasHomeDataError,
+    hasLoadedMemberships: homeData.hasLoadedMemberships,
+    isAuthenticatedHome,
+    isLoadingHomeData,
+    membershipCount: homeData.membershipCount,
+  });
   const showHomeDataErrorPanel = shouldShowHomeDataErrorPanel({
     circleCount: homeData.circles.length,
     hasHomeDataError,
+    hasLoadedMemberships: homeData.hasLoadedMemberships,
     isLoadingHomeData,
+    membershipCount: homeData.membershipCount,
   });
   const showCreateCircleButton = shouldShowHomeCreateCircleButton({
     isAuthenticatedHome,
@@ -223,10 +234,8 @@ export function HomeScreen(): React.JSX.Element {
 
     clearPendingAction();
     beginAuthFlow();
-    rootNavigation?.navigate('Auth', {
-      params: getProfileSignInParams(),
-      screen: 'SignIn',
-    });
+    startOnboardingWizard();
+    rootNavigation?.navigate('Auth', {screen: 'Welcome'});
   };
 
   const openCircleDetail = (circleId: string) => {
@@ -289,6 +298,12 @@ export function HomeScreen(): React.JSX.Element {
     shareCircle(circle);
   };
 
+  const openCreateCircle = () => {
+    requireAccount({type: 'createCircle'}, () =>
+      rootNavigation?.navigate('CreateCircle'),
+    );
+  };
+
   return (
     <HoystScreen contentContainerStyle={styles.content}>
       <View style={styles.topBar}>
@@ -297,7 +312,7 @@ export function HomeScreen(): React.JSX.Element {
           <HeaderAction onPress={() => navigation.navigate('Inbox')}>
             <Bell color={theme.accentSecondary} size={22} strokeWidth={2.2} />
           </HeaderAction>
-          <HeaderAction>
+          <HeaderAction onPress={() => navigation.navigate('Profile')}>
             <LayeredAvatar
               initials={initials}
               imageSource={avatarSource}
@@ -398,13 +413,13 @@ export function HomeScreen(): React.JSX.Element {
             <HoystText tone="muted">
               {isIncompleteProfile
                 ? 'Finish your handle and profile before circles and Tap Ins unlock.'
-                : 'Sign in or register to save progress, join circles, and build your Tap In streak.'}
+                : 'Get started to save progress, join circles, and build your Tap In streak.'}
             </HoystText>
           </View>
           <View style={styles.emptyActions}>
             <HoystButton
               label={
-                isIncompleteProfile ? 'Complete profile' : 'Sign in or register'
+                isIncompleteProfile ? 'Complete profile' : 'Get started'
               }
               onPress={openAccountAuth}
             />
@@ -422,8 +437,9 @@ export function HomeScreen(): React.JSX.Element {
           <View style={styles.circlesHeader}>
             <HoystText variant="title">Your circles</HoystText>
             <HoystText tone="muted">
-              Manage your circles, invite your people, and handle what needs you
-              today.
+              {showAuthenticatedEmptyState
+                ? 'Create a circle or find one in Explore to begin tracking real Tap Ins.'
+                : 'Manage your circles, invite your people, and handle what needs you today.'}
             </HoystText>
           </View>
 
@@ -479,18 +495,17 @@ export function HomeScreen(): React.JSX.Element {
 
       {showAuthenticatedEmptyState ? (
         <GlassPanel style={styles.emptyPanel}>
-          <View style={styles.emptyCopy}>
-            <HoystText variant="title">Your progress starts here</HoystText>
-            <HoystText tone="muted">
-              Create a circle or find one in Explore to begin tracking real Tap
-              Ins.
-            </HoystText>
+          <View style={styles.emptyActions}>
+            <HoystButton
+              label="Explore circles"
+              onPress={() => navigation.navigate('Explore')}
+            />
+            <HoystButton
+              label="Create Circle"
+              onPress={openCreateCircle}
+              variant="outline"
+            />
           </View>
-          <HoystButton
-            label="Explore circles"
-            onPress={() => navigation.navigate('Explore')}
-            variant="outline"
-          />
         </GlassPanel>
       ) : null}
 
@@ -508,11 +523,7 @@ export function HomeScreen(): React.JSX.Element {
         <Pressable
           accessibilityLabel="Create Circle"
           hitSlop={8}
-          onPress={() =>
-            requireAccount({type: 'createCircle'}, () =>
-              rootNavigation?.navigate('CreateCircle'),
-            )
-          }
+          onPress={openCreateCircle}
           style={({pressed}) => [
             styles.createButtonPressable,
             {

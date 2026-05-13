@@ -35,7 +35,6 @@ export function getOnboardingSignInParams(
 export function getWelcomeSignInParams(): SignInRouteParams {
   return {
     entryPoint: 'welcome',
-    method: 'email',
     mode: 'signIn',
   };
 }

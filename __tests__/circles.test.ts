@@ -8,6 +8,11 @@ import {
   createInitialCircleDraft,
   getPrivacyChoiceFields,
 } from '../src/features/create-circle/services/create-circle-draft';
+import {
+  buildStarterCirclePayload,
+  createInitialStarterCircleDraft,
+  getStarterCircleCategory,
+} from '../src/features/auth/services/onboarding-circle';
 
 describe('public circle discovery mapping', () => {
   it('maps publicCircleIndex documents into explore circles', () => {
@@ -78,11 +83,11 @@ describe('create circle payload mapping', () => {
     expect(draft).toMatchObject({
       graceRules: {
         skip: {
-          allowance: 1,
+          allowance: 2,
           windowDays: 7,
         },
       },
-      maxSize: 2,
+      maxSize: 10,
       timezone: 'America/New_York',
     });
   });
@@ -132,5 +137,59 @@ describe('create circle payload mapping', () => {
     });
     expect(clampCircleMaxSize(-10)).toBe(2);
     expect(clampCircleMaxSize(52.7)).toBe(53);
+  });
+
+  it('derives starter circle defaults from onboarding goals', () => {
+    expect(getStarterCircleCategory('fitness')).toBe('Fitness');
+    expect(getStarterCircleCategory('focus')).toBe('Deep Work');
+    expect(getStarterCircleCategory('wellness')).toBe('Wellness');
+    expect(getStarterCircleCategory('sobriety')).toBe('Sobriety');
+    expect(getStarterCircleCategory('learning')).toBe('Custom');
+    expect(getStarterCircleCategory('creative')).toBe('Custom');
+
+    expect(
+      createInitialStarterCircleDraft({
+        goal: 'focus',
+        timezone: 'America/New_York',
+      }),
+    ).toMatchObject({
+      category: 'Deep Work',
+      graceRules: {
+        skip: {
+          allowance: 2,
+          windowDays: 7,
+        },
+      },
+      maxSize: 10,
+      timezone: 'America/New_York',
+    });
+  });
+
+  it('builds starter circle payloads with create-circle defaults', () => {
+    const draft = {
+      ...createInitialStarterCircleDraft({goal: 'wellness'}),
+      dailyTask: ' Meditate for ten minutes ',
+      graceRules: {
+        skip: {
+          allowance: 1,
+          windowDays: 7,
+        },
+      },
+      maxSize: 2,
+      title: ' Calm Crew ',
+    };
+
+    expect(buildStarterCirclePayload(draft)).toMatchObject({
+      category: 'Wellness',
+      dailyTask: 'Meditate for ten minutes',
+      graceRules: {
+        skip: {
+          allowance: 2,
+          windowDays: 7,
+        },
+      },
+      maxSize: 10,
+      title: 'Calm Crew',
+    });
   });
 });

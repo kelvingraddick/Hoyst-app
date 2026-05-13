@@ -1,4 +1,5 @@
 import {FieldValue, type DocumentData} from 'firebase-admin/firestore';
+import {getStorage} from 'firebase-admin/storage';
 import {HttpsError, onCall} from 'firebase-functions/v2/https';
 import {z} from 'zod';
 
@@ -25,6 +26,9 @@ const createCircleSchema = z.object({
 const joinCircleSchema = z.object({
   circleId: z.string().trim().min(1),
   inviteCode: z.string().trim().optional(),
+});
+const deleteCircleSchema = z.object({
+  circleId: z.string().trim().min(1),
 });
 
 async function requireCompletedProfile(uid?: string) {
@@ -55,6 +59,18 @@ function buildMemberPublicPreview(profile: DocumentData, uid: string) {
   };
 }
 
+async function deleteCircleServerMetadata(circleId: string) {
+  const publicIndexRef = db.collection('publicCircleIndex').doc(circleId);
+
+  await Promise.all([
+    publicIndexRef.delete(),
+    getStorage().bucket().deleteFiles({
+      force: true,
+      prefix: `circles/${circleId}/`,
+    }),
+  ]);
+}
+
 export const createCircle = onCall(async request => {
   const {profile, uid} = await requireCompletedProfile(request.auth?.uid);
   const input = createCircleSchema.parse(request.data);
@@ -69,7 +85,7 @@ export const createCircle = onCall(async request => {
     dailyTask: input.dailyTask,
     graceRules: input.graceRules ?? {
       skip: {
-        allowance: 1,
+        allowance: 2,
         windowDays: 7,
       },
     },
@@ -203,4 +219,39 @@ export const joinCircle = onCall(async request => {
 
     return {status: 'active' as const};
   });
+});
+
+export const deleteCircle = onCall(async request => {
+  const {uid} = await requireCompletedProfile(request.auth?.uid);
+  const input = deleteCircleSchema.parse(request.data);
+  const circleRef = db.collection('circles').doc(input.circleId);
+  const memberRef = circleRef.collection('members').doc(uid);
+
+  const [circleSnapshot, memberSnapshot] = await Promise.all([
+    circleRef.get(),
+    memberRef.get(),
+  ]);
+
+  if (!circleSnapshot.exists) {
+    throw new HttpsError('not-found', 'Circle not found.');
+  }
+
+  const circle = circleSnapshot.data();
+  const member = memberSnapshot.data();
+
+  if (
+    circle?.ownerId !== uid ||
+    member?.role !== 'owner' ||
+    member?.status !== 'active'
+  ) {
+    throw new HttpsError(
+      'permission-denied',
+      'Only the circle owner can delete this circle.',
+    );
+  }
+
+  await deleteCircleServerMetadata(input.circleId);
+  await db.recursiveDelete(circleRef);
+
+  return {deleted: true as const};
 });

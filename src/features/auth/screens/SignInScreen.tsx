@@ -136,7 +136,6 @@ export function SignInScreen({navigation, route}: Props): React.JSX.Element {
     setIsBusy(true);
     try {
       await action();
-      markOnboardingSeen();
     } catch (error) {
       Alert.alert(failureTitle, getErrorMessage(error));
     } finally {

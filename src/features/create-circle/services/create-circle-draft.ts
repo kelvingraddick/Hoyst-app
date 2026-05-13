@@ -20,9 +20,10 @@ export type CreateCirclePayload = {
 };
 
 export const defaultSkipGraceRule: GraceRule = {
-  allowance: 1,
+  allowance: 2,
   windowDays: 7,
 };
+export const defaultCircleMaxSize = 10;
 
 export function getLocalTimezone() {
   return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
@@ -37,7 +38,7 @@ export function createInitialCircleDraft(timezone?: string): CreateCircleDraft {
     },
     inviteCode: '',
     joinMode: 'request_to_join',
-    maxSize: 2,
+    maxSize: defaultCircleMaxSize,
     privacy: 'public',
     privacyMode: 'public',
     timezone: timezone?.trim() || getLocalTimezone(),

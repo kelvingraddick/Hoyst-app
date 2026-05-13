@@ -1,4 +1,4 @@
-import React, {useMemo, useState} from 'react';
+import React, {useEffect, useMemo, useState} from 'react';
 import {
   Alert,
   KeyboardAvoidingView,
@@ -17,13 +17,14 @@ import LinearGradient from 'react-native-linear-gradient';
 import {
   Apple,
   ArrowLeft,
-  Bell,
   Check,
   Chrome,
   Clock3,
-  Flame,
+  Globe2,
   Mail,
   Phone,
+  Shield,
+  Share2,
   Sparkles,
   Target,
   UserRound,
@@ -50,17 +51,15 @@ import {dismissAuthModals} from '../../../navigation/auth-modal-dismiss';
 import {useOnboardingStore} from '../../../store/onboarding-store';
 import {useSessionStore} from '../../../store/session-store';
 import {
-  categoryOptions,
-  comfortOptions,
   getOptionLabel,
   goalOptions,
   onboardingProgressSteps,
-  paceOptions,
-  reminderOptions,
   type OnboardingOption,
   type OnboardingStep,
 } from '../services/onboarding-options';
+import type {CircleJoinMode, CirclePrivacyMode} from '../../../types/models';
 import {normalizeHandle, validateHandle} from '../services/profile-validation';
+import {isStarterCircleDraftReady} from '../services/onboarding-circle';
 import {
   signInWithApple,
   signInWithGoogle,
@@ -72,6 +71,11 @@ import {
   getOnboardingSignInParams,
   getWelcomeSignInParams,
 } from '../services/auth-route-intent';
+import {completeProfile, getLocalTimezone} from '../services/account-service';
+import {
+  completeOnboardingSetup,
+  shouldCreateStarterCircle,
+} from '../services/onboarding-completion';
 
 type Props = NativeStackScreenProps<AuthStackParamList, 'Welcome'>;
 
@@ -84,62 +88,94 @@ type StepCopy = {
 const stepCopy: Record<Exclude<OnboardingStep, 'welcome'>, StepCopy> = {
   auth: {
     body: 'Create an account when you are ready to join, Tap In, or keep your rhythm across devices.',
-    prompt: 'Pick the sign-in path that feels easiest. Guest browsing stays open.',
+    prompt: 'Pick the sign-in path that feels easiest.',
     title: 'Save your rhythm',
   },
-  categories: {
-    body: 'Choose a few circle types Hoyst should surface first.',
-    prompt: 'Which circles should we put near the top of Explore?',
-    title: 'Pick your circle lanes',
-  },
   coach: {
-    body: 'Let\'s help you create or find your first circle.',
+    body: 'Let\'s help you create your account and a first circle you can invite people into.',
     prompt: 'A circle works best when the promise is small, visible, and repeatable.',
     title: 'Let\'s get started',
   },
-  comfort: {
-    body: 'Accountability can be quiet, public, or somewhere in the middle.',
-    prompt: 'Who do you want accountability from?',
-    title: 'Choose your people',
-  },
   goal: {
-    body: 'This helps Hoyst recommend circles and Tap In prompts that match your intent.',
+    body: 'This helps Hoyst shape the first circle around the kind of accountability you want.',
     prompt: 'What are you trying to stay consistent with?',
     title: 'Start with the why',
   },
-  pace: {
-    body: 'Your rhythm can change later, but a starting cadence makes joining easier.',
-    prompt: 'How often do you want to Tap In?',
-    title: 'Set a gentle pace',
+  circleDailyTask: {
+    body: 'Make the daily action specific enough that members know what counts.',
+    prompt: 'What will members do daily?',
+    title: 'Define the promise',
   },
-  preview: {
-    body: 'Here is the starting shape Hoyst will use for recommendations and reminders.',
-    prompt: 'Here is your starter rhythm.',
-    title: 'Your Hoyst rhythm',
+  circlePrivacy: {
+    body: 'Choose who can discover it and how new members enter.',
+    prompt: 'Who can find and join it?',
+    title: 'Set the doors',
   },
-  profile: {
-    body: 'These details become the identity your circles see after sign-up.',
-    prompt: 'What should your circles call you?',
-    title: 'Set your circle identity',
+  circleReview: {
+    body: 'After account creation, Hoyst will save your profile and create this circle.',
+    prompt: 'Ready to save your setup?',
+    title: 'Review your first circle',
   },
-  reminders: {
-    body: 'Reminders should feel like a helpful hand on the shoulder, not noise.',
-    prompt: 'What should Hoyst remind you about?',
-    title: 'Pick a reminder feel',
+  circleTitle: {
+    body: 'Give the circle a name people can recognize and rally around.',
+    prompt: 'What should this circle be called?',
+    title: 'Name the circle',
+  },
+  finishProfile: {
+    body: 'Add the profile details your circles will see. Handles are locked once saved.',
+    prompt: 'Finish your profile',
+    title: 'Last step',
   },
 };
 
 const stepIcons: Record<Exclude<OnboardingStep, 'welcome'>, LucideIcon> = {
   auth: UserRound,
-  categories: UsersRound,
+  circleDailyTask: Target,
+  circlePrivacy: Globe2,
+  circleReview: Sparkles,
+  circleTitle: UsersRound,
   coach: Sparkles,
-  comfort: UsersRound,
+  finishProfile: UserRound,
   goal: Target,
-  pace: Flame,
-  preview: Sparkles,
-  profile: UserRound,
-  reminders: Bell,
 };
+
+const circlePrivacyOptions: OnboardingOption<CirclePrivacyMode>[] = [
+  {
+    accent: 'green',
+    description: 'Discoverable in Explore with your chosen join rule.',
+    id: 'public',
+    label: 'Public',
+  },
+  {
+    accent: 'blue',
+    description: 'Hidden from Explore and joinable only with your invite link.',
+    id: 'link_only',
+    label: 'Link-only',
+  },
+  {
+    accent: 'purple',
+    description: 'Hidden from Explore with invite-only requests for approval.',
+    id: 'private',
+    label: 'Private',
+  },
+];
+
+const publicJoinOptions: OnboardingOption<
+  Extract<CircleJoinMode, 'open' | 'request_to_join'>
+>[] = [
+  {
+    accent: 'green',
+    description: 'People can join immediately while seats are open.',
+    id: 'open',
+    label: 'Open seats',
+  },
+  {
+    accent: 'orange',
+    description: 'People request access before they can Tap In.',
+    id: 'request_to_join',
+    label: 'Request approval',
+  },
+];
 
 function getErrorMessage(error: unknown) {
   const serviceError = error as AuthServiceError;
@@ -222,7 +258,7 @@ function ProgressHeader({
     <View style={styles.progressHeader}>
       <IconButton
         accessibilityLabel="Go back"
-        disabled={currentStep === 'coach'}
+        disabled={currentStep === 'coach' || currentStep === 'finishProfile'}
         icon={ArrowLeft}
         onPress={onBack}
       />
@@ -435,52 +471,83 @@ function StickyCta({
 
 export function WelcomeScreen({navigation}: Props): React.JSX.Element {
   const theme = useHoystTheme();
+  const [circleSetupError, setCircleSetupError] = useState<string>();
   const [isBusy, setIsBusy] = useState(false);
+  const [profileWasCompleted, setProfileWasCompleted] = useState(false);
   const currentStep = useOnboardingStore(state => state.currentStep);
-  const categories = useOnboardingStore(state => state.categories);
   const displayName = useOnboardingStore(state => state.displayName);
+  const firstCircleSkipped = useOnboardingStore(
+    state => state.firstCircleSkipped,
+  );
+  const getOnboardingPreferences = useOnboardingStore(
+    state => state.getPreferences,
+  );
   const goal = useOnboardingStore(state => state.goal);
   const handle = useOnboardingStore(state => state.handle);
-  const pace = useOnboardingStore(state => state.pace);
-  const reminderPreference = useOnboardingStore(
-    state => state.reminderPreference,
+  const starterCircleDraft = useOnboardingStore(
+    state => state.starterCircleDraft,
   );
-  const socialComfort = useOnboardingStore(state => state.socialComfort);
+  const starterCircleSetupId = useOnboardingStore(
+    state => state.starterCircleSetupId,
+  );
   const timezone = useOnboardingStore(state => state.timezone);
+  const clearStarterCircleSetup = useOnboardingStore(
+    state => state.clearStarterCircleSetup,
+  );
   const markSeen = useOnboardingStore(state => state.markSeen);
   const nextStep = useOnboardingStore(state => state.nextStep);
+  const prepareStarterCircleSetup = useOnboardingStore(
+    state => state.prepareStarterCircleSetup,
+  );
   const previousStep = useOnboardingStore(state => state.previousStep);
-  const setCategory = useOnboardingStore(state => state.setCategory);
   const setCurrentStep = useOnboardingStore(state => state.setCurrentStep);
   const setDisplayName = useOnboardingStore(state => state.setDisplayName);
+  const setFirstCircleSkipped = useOnboardingStore(
+    state => state.setFirstCircleSkipped,
+  );
   const setGoal = useOnboardingStore(state => state.setGoal);
   const setHandle = useOnboardingStore(state => state.setHandle);
-  const setPace = useOnboardingStore(state => state.setPace);
-  const setReminderPreference = useOnboardingStore(
-    state => state.setReminderPreference,
+  const setStarterCircleField = useOnboardingStore(
+    state => state.setStarterCircleField,
   );
-  const setSocialComfort = useOnboardingStore(state => state.setSocialComfort);
+  const setStarterCirclePrivacyMode = useOnboardingStore(
+    state => state.setStarterCirclePrivacyMode,
+  );
+  const setStarterCirclePublicJoinMode = useOnboardingStore(
+    state => state.setStarterCirclePublicJoinMode,
+  );
   const setTimezone = useOnboardingStore(state => state.setTimezone);
   const clearPendingAction = useSessionStore(state => state.clearPendingAction);
   const pendingAction = useSessionStore(state => state.pendingAction);
   const setGuest = useSessionStore(state => state.setGuest);
+  const status = useSessionStore(state => state.status);
+  const user = useSessionStore(state => state.user);
   const rootNavigation =
     navigation.getParent<NativeStackNavigationProp<RootStackParamList>>();
   const handleValidation = useMemo(() => validateHandle(handle), [handle]);
+  const shouldCreateCircle = shouldCreateStarterCircle({
+    firstCircleSkipped,
+    starterCircleDraft,
+  });
+  const publicJoinMode =
+    starterCircleDraft.joinMode === 'open' ||
+    starterCircleDraft.joinMode === 'request_to_join'
+      ? starterCircleDraft.joinMode
+      : 'request_to_join';
   const canContinue =
     currentStep === 'goal'
       ? Boolean(goal)
-      : currentStep === 'categories'
-        ? categories.length > 0
-        : currentStep === 'reminders'
-          ? Boolean(reminderPreference)
-          : currentStep === 'comfort'
-            ? Boolean(socialComfort)
-            : currentStep === 'pace'
-              ? Boolean(pace)
-              : currentStep === 'profile'
-                ? displayName.trim().length > 0 && handleValidation.isValid
-                : true;
+      : currentStep === 'finishProfile'
+        ? displayName.trim().length > 0 && handleValidation.isValid
+        : currentStep === 'circleTitle'
+          ? starterCircleDraft.title.trim().length > 0 &&
+            starterCircleDraft.title.trim().length <= 80
+          : currentStep === 'circleDailyTask'
+            ? starterCircleDraft.dailyTask.trim().length > 0 &&
+              starterCircleDraft.dailyTask.trim().length <= 160
+            : currentStep === 'circleReview'
+              ? firstCircleSkipped || isStarterCircleDraftReady(starterCircleDraft)
+              : true;
   const authProviderColors = {
     apple: {
       backgroundColor: theme.isDark
@@ -532,8 +599,6 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
       } else {
         await signInWithGoogle();
       }
-
-      markSeen();
     } catch (error) {
       Alert.alert('Sign in failed', getErrorMessage(error));
     } finally {
@@ -541,13 +606,121 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
     }
   };
 
+  useEffect(() => {
+    if (status === 'authenticatedIncompleteProfile' && currentStep === 'auth') {
+      setCurrentStep('finishProfile');
+    }
+  }, [currentStep, setCurrentStep, status]);
+
+  useEffect(() => {
+    if (
+      status !== 'authenticatedIncompleteProfile' ||
+      currentStep !== 'finishProfile'
+    ) {
+      return;
+    }
+
+    if (!displayName.trim() && user?.displayName) {
+      setDisplayName(user.displayName);
+    }
+
+    if (!timezone.trim()) {
+      setTimezone(getLocalTimezone());
+    }
+  }, [
+    currentStep,
+    displayName,
+    setDisplayName,
+    setTimezone,
+    status,
+    timezone,
+    user?.displayName,
+  ]);
+
+  const submitFinishProfile = async () => {
+    if (!canContinue) {
+      if (!handleValidation.isValid) {
+        Alert.alert('Handle needs a tweak', handleValidation.message);
+      }
+      return;
+    }
+
+    setIsBusy(true);
+    setCircleSetupError(undefined);
+    let didCompleteProfile = profileWasCompleted;
+
+    try {
+      const normalizedHandle = normalizeHandle(handle);
+      const onboardingPreferences = getOnboardingPreferences();
+      const setupId = shouldCreateCircle
+        ? starterCircleSetupId ?? prepareStarterCircleSetup()
+        : undefined;
+
+      setHandle(normalizedHandle);
+
+      const result = await completeOnboardingSetup(
+        {
+          firstCircleSkipped,
+          profile: {
+            ...(user?.photoURL ? {avatarUrl: user.photoURL} : {}),
+            displayName: displayName.trim(),
+            handle: normalizedHandle,
+            ...(onboardingPreferences ? {onboardingPreferences} : {}),
+            timezone: timezone.trim() || getLocalTimezone(),
+          },
+          starterCircleDraft: {
+            ...starterCircleDraft,
+            timezone: timezone.trim() || starterCircleDraft.timezone,
+          },
+          starterCircleSetupId: setupId,
+        },
+        {
+          completeProfile,
+          onProfileCompleted: () => {
+            didCompleteProfile = true;
+            setProfileWasCompleted(true);
+          },
+        },
+      );
+
+      clearPendingAction();
+
+      if (result.circleCreated) {
+        clearStarterCircleSetup();
+      }
+
+      markSeen();
+    } catch (error) {
+      const message =
+        (error as {message?: string}).message ?? 'Setup failed. Try again.';
+
+      if (didCompleteProfile && shouldCreateCircle) {
+        setCircleSetupError(message);
+        return;
+      }
+
+      Alert.alert('Could not finish profile', message);
+    } finally {
+      setIsBusy(false);
+    }
+  };
+
+  const skipFirstCircleAfterProfile = () => {
+    setFirstCircleSkipped(true);
+    clearPendingAction();
+    markSeen();
+  };
+
   const goNext = () => {
     if (!canContinue) {
       return;
     }
 
-    if (currentStep === 'profile') {
-      setHandle(normalizeHandle(handle));
+    if (
+      currentStep === 'circleReview' &&
+      isStarterCircleDraftReady(starterCircleDraft)
+    ) {
+      prepareStarterCircleSetup();
     }
 
     nextStep();
@@ -604,19 +777,19 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
           <View style={styles.coachPreview}>
             <PreviewRow
               accent="green"
-              detail="Find something to target based on your life and goals."
+              detail="Pick the promise you want accountability around."
               icon={Target}
               label="Step one"
             />
             <PreviewRow
               accent="orange"
-              detail="Determine your rhythm and cadence for consistency."
+              detail="Shape a first circle, or skip it and start from Home."
               icon={Clock3}
               label="Step two"
             />
             <PreviewRow
               accent="purple"
-              detail="Setup your profile to share with others."
+              detail="Create an account, then finish your profile."
               icon={UsersRound}
               label="Step three"
             />
@@ -625,34 +798,7 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
         {currentStep === 'goal'
           ? renderOptions(goalOptions, goal, setGoal, Target)
           : null}
-        {currentStep === 'categories' ? (
-          <View style={styles.optionStack}>
-            {categoryOptions.map(option => (
-              <OptionCard
-                icon={UsersRound}
-                isSelected={categories.includes(option.id)}
-                key={option.id}
-                onPress={() => setCategory(option.id)}
-                option={option}
-              />
-            ))}
-          </View>
-        ) : null}
-        {currentStep === 'reminders'
-          ? renderOptions(
-              reminderOptions,
-              reminderPreference,
-              setReminderPreference,
-              Bell,
-            )
-          : null}
-        {currentStep === 'comfort'
-          ? renderOptions(comfortOptions, socialComfort, setSocialComfort, UsersRound)
-          : null}
-        {currentStep === 'pace'
-          ? renderOptions(paceOptions, pace, setPace, Flame)
-          : null}
-        {currentStep === 'profile' ? (
+        {currentStep === 'finishProfile' ? (
           <View style={styles.profileFields}>
             <View style={styles.fieldBlock}>
               <HoystText tone="muted" variant="label">
@@ -692,9 +838,99 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
                 value={timezone}
               />
             </View>
+            {shouldCreateCircle ? (
+              <View style={styles.fieldBlock}>
+                <HoystText tone="muted" variant="label">
+                  First circle
+                </HoystText>
+                <HoystText>
+                  {starterCircleDraft.title.trim()} -{' '}
+                  {starterCircleDraft.dailyTask.trim()}
+                </HoystText>
+              </View>
+            ) : null}
+            {circleSetupError ? (
+              <View style={styles.recoveryPanel}>
+                <View style={styles.fieldBlock}>
+                  <HoystText variant="bodyStrong">
+                    Profile saved. Circle creation needs another try.
+                  </HoystText>
+                  <HoystText tone="muted">{circleSetupError}</HoystText>
+                </View>
+                <HoystButton
+                  label={isBusy ? 'Retrying...' : 'Retry first circle'}
+                  onPress={canContinue && !isBusy ? submitFinishProfile : undefined}
+                />
+                <HoystButton
+                  label="Skip first circle"
+                  onPress={skipFirstCircleAfterProfile}
+                  variant="ghost"
+                />
+              </View>
+            ) : null}
           </View>
         ) : null}
-        {currentStep === 'preview' ? (
+        {currentStep === 'circleTitle' ? (
+          <View style={styles.fieldBlock}>
+            <HoystText tone="muted" variant="label">
+              Circle title
+            </HoystText>
+            <HoystInput
+              autoCapitalize="words"
+              maxLength={80}
+              onChangeText={value => setStarterCircleField('title', value)}
+              placeholder="The 5AM Vanguard"
+              value={starterCircleDraft.title}
+            />
+            <HoystText tone={canContinue ? 'muted' : 'danger'} variant="caption">
+              {starterCircleDraft.title.trim().length}/80 characters
+            </HoystText>
+          </View>
+        ) : null}
+        {currentStep === 'circleDailyTask' ? (
+          <View style={styles.fieldBlock}>
+            <HoystText tone="muted" variant="label">
+              Daily task description
+            </HoystText>
+            <HoystInput
+              maxLength={160}
+              multiline
+              numberOfLines={4}
+              onChangeText={value => setStarterCircleField('dailyTask', value)}
+              placeholder="Read 20 pages, then Tap In with one takeaway."
+              style={styles.textArea}
+              textAlignVertical="top"
+              value={starterCircleDraft.dailyTask}
+            />
+            <HoystText tone={canContinue ? 'muted' : 'danger'} variant="caption">
+              {starterCircleDraft.dailyTask.trim().length}/160 characters
+            </HoystText>
+          </View>
+        ) : null}
+        {currentStep === 'circlePrivacy' ? (
+          <View style={styles.optionStack}>
+            {renderOptions(
+              circlePrivacyOptions,
+              starterCircleDraft.privacyMode,
+              setStarterCirclePrivacyMode,
+              Globe2,
+            )}
+            {starterCircleDraft.privacyMode === 'public' ? (
+              <View style={styles.nestedOptionStack}>
+                <HoystText tone="muted" variant="label">
+                  Public join rule
+                </HoystText>
+                {renderOptions(
+                  publicJoinOptions,
+                  publicJoinMode,
+                  setStarterCirclePublicJoinMode,
+                  Shield,
+                )}
+              </View>
+            ) : null}
+          </View>
+        ) : null}
+        {currentStep === 'circleReview' ? (
           <View style={styles.coachPreview}>
             <PreviewRow
               accent="green"
@@ -704,29 +940,27 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
             />
             <PreviewRow
               accent="blue"
-              detail={
-                categories.length
-                  ? categories
-                      .map(category =>
-                        getOptionLabel(categoryOptions, category),
-                      )
-                      .join(', ')
-                  : 'Public accountability circles'
-              }
+              detail={starterCircleDraft.title.trim()}
               icon={UsersRound}
-              label="Circle lanes"
+              label="Circle name"
             />
             <PreviewRow
               accent="orange"
-              detail={getOptionLabel(reminderOptions, reminderPreference)}
-              icon={Bell}
-              label="Reminder style"
+              detail={starterCircleDraft.dailyTask.trim()}
+              icon={Target}
+              label="Daily task"
             />
             <PreviewRow
               accent="purple"
-              detail={getOptionLabel(paceOptions, pace)}
-              icon={Clock3}
-              label="Tap In pace"
+              detail={`${starterCircleDraft.privacyMode === 'link_only' ? 'Link-only' : starterCircleDraft.privacyMode}: ${
+                starterCircleDraft.joinMode === 'open'
+                  ? 'Open seats'
+                  : starterCircleDraft.joinMode === 'request_to_join'
+                    ? 'Request approval'
+                    : 'Invite link'
+              }`}
+              icon={Share2}
+              label="Access"
             />
           </View>
         ) : null}
@@ -774,7 +1008,6 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
               }
               label="Continue with Email"
               onPress={() => {
-                markSeen();
                 setCurrentStep('auth');
                 navigation.navigate(
                   'SignIn',
@@ -796,7 +1029,6 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
               }
               label="Continue with Phone"
               onPress={() => {
-                markSeen();
                 setCurrentStep('auth');
                 navigation.navigate(
                   'SignIn',
@@ -815,13 +1047,28 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
   const primaryLabel =
     currentStep === 'welcome'
       ? 'Get started'
-      : currentStep === 'preview'
+      : currentStep === 'circleReview'
         ? 'Continue to account'
+        : currentStep === 'finishProfile'
+          ? isBusy
+            ? 'Saving...'
+            : shouldCreateCircle
+              ? 'Finish setup'
+              : 'Complete account'
         : currentStep === 'auth'
           ? 'Continue as guest'
           : 'Continue';
+  const isCircleSetupStep =
+    currentStep === 'circleTitle' ||
+    currentStep === 'circleDailyTask' ||
+    currentStep === 'circlePrivacy' ||
+    currentStep === 'circleReview';
   const secondaryLabel =
-    currentStep === 'welcome' ? 'I already have an account' : undefined;
+    currentStep === 'welcome'
+      ? 'I already have an account'
+      : isCircleSetupStep
+        ? 'Skip first circle'
+        : undefined;
   const authEntryPoint: SignInEntryPoint = pendingAction
     ? pendingAction.type === 'settings'
       ? 'settings'
@@ -832,15 +1079,20 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
       ? () => setCurrentStep('coach')
       : currentStep === 'auth'
         ? continueAsGuest
+        : currentStep === 'finishProfile'
+          ? submitFinishProfile
         : goNext;
   const secondaryAction =
     currentStep === 'welcome'
       ? () => {
-          markSeen();
-          setCurrentStep('auth');
           navigation.navigate('SignIn', getWelcomeSignInParams());
         }
-      : undefined;
+      : isCircleSetupStep
+        ? () => {
+            setFirstCircleSkipped(true);
+            setCurrentStep('auth');
+          }
+        : undefined;
 
   return (
     <SafeAreaView style={[styles.safeArea, {backgroundColor: theme.background}]}>
@@ -973,6 +1225,10 @@ const styles = StyleSheet.create({
   optionStack: {
     gap: 8,
   },
+  nestedOptionStack: {
+    gap: 10,
+    paddingTop: 6,
+  },
   optionPressable: {
     width: '100%',
   },
@@ -1045,8 +1301,14 @@ const styles = StyleSheet.create({
   profileFields: {
     gap: 14,
   },
+  recoveryPanel: {
+    gap: 12,
+  },
   fieldBlock: {
     gap: 8,
+  },
+  textArea: {
+    minHeight: 118,
   },
   authChoices: {
     gap: 12,

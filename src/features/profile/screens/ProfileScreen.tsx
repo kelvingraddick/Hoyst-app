@@ -22,9 +22,9 @@ import {HoystText} from '../../../design/components/HoystText';
 import {LayeredAvatar} from '../../../design/components/LayeredAvatar';
 import {useHoystTheme} from '../../../design/theme/useHoystTheme';
 import type {AppTabsParamList, RootStackParamList} from '../../../navigation/types';
+import {useOnboardingStore} from '../../../store/onboarding-store';
 import {useUserProfileStore} from '../../../store/profile-store';
 import {useSessionStore} from '../../../store/session-store';
-import {getProfileSignInParams} from '../../auth/services/auth-route-intent';
 import {
   formatActiveCircleCountLabel,
   formatPersonalStreakLabel,
@@ -113,6 +113,9 @@ export function ProfileScreen({navigation}: Props): React.JSX.Element {
   const user = useSessionStore(state => state.user);
   const beginAuthFlow = useSessionStore(state => state.beginAuthFlow);
   const clearPendingAction = useSessionStore(state => state.clearPendingAction);
+  const startOnboardingWizard = useOnboardingStore(
+    state => state.startOnboardingWizard,
+  );
   const rootNavigation =
     navigation.getParent<NativeStackNavigationProp<RootStackParamList>>();
   const isReady = status === 'authenticatedReady' && Boolean(profile);
@@ -124,10 +127,8 @@ export function ProfileScreen({navigation}: Props): React.JSX.Element {
   const openProfileAuth = () => {
     clearPendingAction();
     beginAuthFlow();
-    rootNavigation?.navigate('Auth', {
-      params: getProfileSignInParams(),
-      screen: 'SignIn',
-    });
+    startOnboardingWizard();
+    rootNavigation?.navigate('Auth', {screen: 'Welcome'});
   };
   const openCompleteProfile = () => {
     rootNavigation?.navigate('Auth', {screen: 'CompleteProfile'});
@@ -207,7 +208,7 @@ export function ProfileScreen({navigation}: Props): React.JSX.Element {
           </View>
 
           <View style={styles.authActions}>
-            <HoystButton label="Sign in or register" onPress={openProfileAuth} />
+            <HoystButton label="Get started" onPress={openProfileAuth} />
             <HoystText tone="muted" variant="caption">
               Apple and Google appear first, with email and phone available
               after selection.
@@ -223,80 +224,86 @@ export function ProfileScreen({navigation}: Props): React.JSX.Element {
   const profileSummary = profileSummaryQuery.data;
 
   return (
-    <HoystScreen contentContainerStyle={styles.content}>
-      <GlassPanel>
-        <View style={styles.profileHeader}>
-          <LayeredAvatar
-            initials={initials}
-            imageSource={avatarSource}
-            size={68}
-            state="done"
-          />
-          <View style={styles.copy}>
-            <HoystText variant="title">{profile.name}</HoystText>
-            <HoystText tone="muted">@{profile.handle}</HoystText>
-            {profile.bio ? (
-              <HoystText tone="muted">{profile.bio}</HoystText>
-            ) : null}
+    <HoystScreen contentContainerStyle={[styles.content, styles.loggedInContent]}>
+      <GlassPanel style={styles.loggedInPanel}>
+        <View style={styles.loggedInPanelGroup}>
+          <View style={styles.profileHeader}>
+            <LayeredAvatar
+              initials={initials}
+              imageSource={avatarSource}
+              size={54}
+              state="done"
+            />
+            <View style={styles.copy}>
+              <HoystText>{profile.name}</HoystText>
+              <HoystText tone="muted">@{profile.handle}</HoystText>
+              {profile.bio ? (
+                <HoystText numberOfLines={2} tone="muted" variant="caption">
+                  {profile.bio}
+                </HoystText>
+              ) : null}
+            </View>
           </View>
+          {profileSummary ? (
+            <View style={styles.chips}>
+              <HoystChip
+                label={formatPersonalStreakLabel(profileSummary)}
+                tone="green"
+              />
+              <HoystChip
+                label={formatActiveCircleCountLabel(
+                  profileSummary.activeCircleCount,
+                )}
+                tone="purple"
+              />
+            </View>
+          ) : null}
         </View>
-        {profileSummary ? (
-          <View style={styles.chips}>
-            <HoystChip
-              label={formatPersonalStreakLabel(profileSummary)}
-              tone="green"
-            />
-            <HoystChip
-              label={formatActiveCircleCountLabel(
-                profileSummary.activeCircleCount,
-              )}
-              tone="purple"
-            />
-          </View>
-        ) : null}
       </GlassPanel>
-      <GlassPanel>
-        <View style={styles.sectionHeader}>
-          <View style={styles.sectionCopy}>
-            <HoystText variant="title">Account Hub</HoystText>
-            <HoystText tone="muted">
-              Manage notifications, profile details, and support destinations in
-              one dedicated space.
-            </HoystText>
-          </View>
-          <View
-            style={[
-              styles.sectionIcon,
-              {backgroundColor: theme.surfaceSoft, borderColor: theme.border},
-            ]}>
-            <Settings2 color={theme.accentSecondary} size={18} strokeWidth={2.1} />
-          </View>
-        </View>
-        <Pressable
-          onPress={() => {
-            rootNavigation?.navigate('Settings');
-          }}
-          style={({pressed}) => [
-            styles.settingsLink,
-            {
-              backgroundColor: theme.surfaceSoft,
-              borderColor: theme.border,
-              opacity: pressed ? 0.92 : 1,
-            },
-          ]}>
-          <View style={styles.settingsLinkInner}>
+      <View style={styles.accountSection}>
+        <HoystText tone="muted" variant="label">
+          Account Hub
+        </HoystText>
+        <GlassPanel style={styles.loggedInPanel}>
+          <Pressable
+            onPress={() => {
+              rootNavigation?.navigate('Settings');
+            }}
+            style={styles.settingsLink}>
+            <View
+              style={[
+                styles.settingsLinkIcon,
+                styles.settingsLinkIconAccent,
+              ]}>
+              <Settings2
+                color={theme.accentSecondary}
+                size={18}
+                strokeWidth={2.1}
+              />
+            </View>
             <View style={styles.settingsLinkCopy}>
-              <HoystText>Open settings</HoystText>
-              <HoystText tone="muted" variant="caption">
-                Notifications, app preferences, and sign out
+              <HoystText ellipsizeMode="tail" numberOfLines={1}>
+                Open settings
+              </HoystText>
+              <HoystText
+                ellipsizeMode="tail"
+                numberOfLines={2}
+                tone="muted"
+                variant="caption">
+                Manage notifications, profile details, app preferences, and
+                sign out.
               </HoystText>
             </View>
             <View style={styles.settingsLinkChevron}>
-              <ChevronRight color={theme.textSubtle} size={18} strokeWidth={2.2} />
+              <ChevronRight
+                color={theme.textSubtle}
+                size={18}
+                strokeWidth={2.2}
+              />
             </View>
-          </View>
-        </Pressable>
-      </GlassPanel>
+          </Pressable>
+        </GlassPanel>
+      </View>
     </HoystScreen>
   );
 }
@@ -305,14 +312,30 @@ const styles = StyleSheet.create({
   content: {
     paddingBottom: 168,
   },
+  loggedInContent: {
+    alignItems: 'stretch',
+    width: '100%',
+  },
+  loggedInPanel: {
+    alignSelf: 'stretch',
+    marginHorizontal: 0,
+    width: '100%',
+  },
+  loggedInPanelGroup: {
+    alignSelf: 'stretch',
+    gap: 12,
+    width: '100%',
+  },
   profileHeader: {
     alignItems: 'center',
     flexDirection: 'row',
-    gap: 16,
+    gap: 14,
+    width: '100%',
   },
   copy: {
     flex: 1,
-    gap: 6,
+    gap: 4,
+    minWidth: 0,
   },
   chips: {
     flexDirection: 'row',
@@ -370,44 +393,43 @@ const styles = StyleSheet.create({
   loggedOutPanel: {
     gap: 22,
   },
-  sectionHeader: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: 14,
-  },
   sectionCopy: {
     flex: 1,
     gap: 6,
   },
-  sectionIcon: {
-    alignItems: 'center',
-    borderRadius: 14,
-    borderWidth: 1,
-    height: 40,
-    justifyContent: 'center',
-    width: 40,
+  accountSection: {
+    alignSelf: 'stretch',
+    gap: 10,
+    width: '100%',
   },
   settingsLink: {
-    borderRadius: 16,
-    borderWidth: 1,
-    paddingHorizontal: 16,
-    paddingVertical: 15,
-  },
-  settingsLinkInner: {
-    alignItems: 'flex-start',
+    alignItems: 'center',
+    alignSelf: 'stretch',
     flexDirection: 'row',
     gap: 12,
-    justifyContent: 'space-between',
+    minHeight: 46,
+    width: '100%',
+  },
+  settingsLinkIcon: {
+    alignItems: 'center',
+    borderRadius: 14,
+    flexShrink: 0,
+    height: 36,
+    justifyContent: 'center',
+    width: 36,
+  },
+  settingsLinkIconAccent: {
+    backgroundColor: 'rgba(139,92,246,0.16)',
   },
   settingsLinkCopy: {
     flex: 1,
-    gap: 3,
+    gap: 4,
     minWidth: 0,
   },
   settingsLinkChevron: {
-    alignItems: 'center',
+    alignItems: 'flex-end',
+    flexShrink: 0,
     justifyContent: 'center',
-    minWidth: 20,
-    paddingTop: 2,
+    width: 32,
   },
 });

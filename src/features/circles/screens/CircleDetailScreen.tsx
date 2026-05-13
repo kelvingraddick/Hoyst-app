@@ -1,5 +1,14 @@
 import React, {useCallback, useEffect, useMemo, useState} from 'react';
-import {Alert, Pressable, Share, StyleSheet, View} from 'react-native';
+import {
+  Alert,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Pressable,
+  Share,
+  StyleSheet,
+  View,
+} from 'react-native';
 import {
   ArrowLeft,
   Bell,
@@ -23,6 +32,7 @@ import {BrandMark} from '../../../design/components/BrandMark';
 import {GlassPanel} from '../../../design/components/GlassPanel';
 import {HoystButton} from '../../../design/components/HoystButton';
 import {HoystChip} from '../../../design/components/HoystChip';
+import {HoystInput} from '../../../design/components/HoystInput';
 import {HoystScreen} from '../../../design/components/HoystScreen';
 import {HoystText} from '../../../design/components/HoystText';
 import {StatusAvatarRow} from '../../../design/components/StatusAvatarRow';
@@ -35,7 +45,7 @@ import {useUserProfileStore} from '../../../store/profile-store';
 import {useSessionStore} from '../../../store/session-store';
 import {removeTapIn} from '../../check-in/services/check-in-service';
 import {getCircleDetail} from '../mockData';
-import {joinCircle} from '../services/circle-service';
+import {deleteCircle, joinCircle} from '../services/circle-service';
 import {subscribeToPublicCircle} from '../services/public-circle-service';
 import {
   buildPublicCircleDetail,
@@ -45,10 +55,15 @@ import type {CircleDetailModel, CircleSummary} from '../../../types/models';
 import type {RootStackParamList} from '../../../navigation/types';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'CircleDetail'>;
+type HoystChipTone = React.ComponentProps<typeof HoystChip>['tone'];
+type DetailStatusPill = {
+  label: string;
+  tone: HoystChipTone;
+};
 
 function getCategoryTone(
   category: string,
-): React.ComponentProps<typeof HoystChip>['tone'] {
+): HoystChipTone {
   if (category === 'Fitness') {
     return 'green';
   }
@@ -62,6 +77,32 @@ function getCategoryTone(
   }
 
   return 'neutral';
+}
+
+function getDetailStatusPill(
+  detail: CircleDetailModel,
+): DetailStatusPill | undefined {
+  if (detail.viewerMembershipStatus === 'pending') {
+    return {label: 'Pending', tone: 'purple'};
+  }
+
+  if (!detail.viewerRole) {
+    return undefined;
+  }
+
+  if (detail.viewerTodayStatus === 'skip') {
+    return {label: 'Skipped', tone: 'orange'};
+  }
+
+  if (!detail.viewerHasCheckedIn) {
+    return {label: 'Needs You', tone: 'orange'};
+  }
+
+  if (detail.remainingCheckIns && detail.remainingCheckIns > 0) {
+    return {label: 'Pending', tone: 'purple'};
+  }
+
+  return {label: 'Complete', tone: 'green'};
 }
 
 function getRoleLabel(detail: CircleDetailModel) {
@@ -319,6 +360,94 @@ function DetailProgressPanel({
   );
 }
 
+function DeleteCircleConfirmModal({
+  canConfirm,
+  circleTitle,
+  confirmText,
+  isDeleting,
+  onCancel,
+  onConfirm,
+  onConfirmTextChange,
+  visible,
+}: {
+  canConfirm: boolean;
+  circleTitle: string;
+  confirmText: string;
+  isDeleting: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+  onConfirmTextChange: (value: string) => void;
+  visible: boolean;
+}) {
+  const theme = useHoystTheme();
+
+  return (
+    <Modal
+      animationType="fade"
+      onRequestClose={isDeleting ? undefined : onCancel}
+      transparent
+      visible={visible}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={styles.modalKeyboard}>
+        <View style={styles.modalOverlay}>
+          <GlassPanel style={styles.modalPanel}>
+            <View style={styles.modalHeader}>
+              <Trash2 color={theme.danger} size={22} strokeWidth={2.3} />
+              <HoystText style={{color: theme.danger}} variant="title">
+                Delete circle
+              </HoystText>
+            </View>
+            <View style={styles.modalCopy}>
+              <HoystText tone="muted">
+                This permanently deletes the circle, members, requests, and Tap
+                In history.
+              </HoystText>
+              <HoystText variant="bodyStrong">{circleTitle}</HoystText>
+              <HoystText tone="muted" variant="caption">
+                Type the circle name to confirm.
+              </HoystText>
+            </View>
+            <HoystInput
+              accessibilityLabel="Confirm circle name"
+              autoCapitalize="none"
+              autoCorrect={false}
+              editable={!isDeleting}
+              onChangeText={onConfirmTextChange}
+              placeholder={circleTitle}
+              value={confirmText}
+            />
+            <View style={styles.modalActions}>
+              <HoystButton
+                disabled={isDeleting}
+                label="Cancel"
+                onPress={onCancel}
+                variant="outline"
+              />
+              <HoystButton
+                backgroundColor={`${theme.danger}24`}
+                borderColor={`${theme.danger}66`}
+                disabled={!canConfirm || isDeleting}
+                icon={
+                  <Trash2
+                    color={theme.danger}
+                    size={18}
+                    strokeWidth={2.3}
+                  />
+                }
+                label={isDeleting ? 'Deleting...' : 'Delete Circle'}
+                onPress={onConfirm}
+                textColor={theme.danger}
+                variant="outline"
+              />
+            </View>
+          </GlassPanel>
+        </View>
+      </KeyboardAvoidingView>
+    </Modal>
+  );
+}
+
 export function CircleDetailScreen({
   navigation,
   route,
@@ -328,7 +457,10 @@ export function CircleDetailScreen({
   const [joinRequested, setJoinRequested] = useState(false);
   const [isJoining, setIsJoining] = useState(false);
   const [isRemovingTapIn, setIsRemovingTapIn] = useState(false);
-  const [managed, setManaged] = useState(false);
+  const [isDeleteConfirmVisible, setIsDeleteConfirmVisible] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  const [isDeletingCircle, setIsDeletingCircle] = useState(false);
+  const [isOwnerToolsExpanded, setIsOwnerToolsExpanded] = useState(false);
   const [publicCircle, setPublicCircle] = useState<CircleSummary | undefined>();
   const [memberCircle, setMemberCircle] = useState<
     CircleDetailModel | undefined
@@ -456,17 +588,9 @@ export function CircleDetailScreen({
       : theme.danger;
   const statusLabel =
     detail.state === 'done' ? 'Done' : `${detail.completionRate}%`;
-  const statusCopy = isMemberCircle
-    ? detail.viewerTodayStatus === 'skip'
-      ? 'Grace skip used today'
-      : !detail.viewerHasCheckedIn
-      ? 'Needs your Tap In'
-      : detail.remainingCheckIns && detail.remainingCheckIns > 0
-      ? `${detail.remainingCheckIns} pending today`
-      : 'Daily Tap In complete'
-    : detail.viewerMembershipStatus === 'pending'
-    ? 'Pending approval before Tap In unlocks.'
-    : detail.matchCopy ?? 'Preview the circle before you jump in.';
+  const detailStatusPill = getDetailStatusPill(detail);
+  const previewCopy =
+    detail.matchCopy ?? 'Preview the circle before you jump in.';
   const streakValue =
     detail.streakDays ?? Number.parseInt(detail.streakLabel, 10);
   const showFlameIcon = Number.isFinite(streakValue) && streakValue > 7;
@@ -482,6 +606,9 @@ export function CircleDetailScreen({
     isMemberCircle &&
     (detail.viewerTodayStatus === 'done' ||
       detail.viewerTodayStatus === 'skip');
+  const canDeleteCircle = isMemberCircle && detail.viewerRole === 'owner';
+  const canConfirmDeleteCircle =
+    deleteConfirmText.trim().toLowerCase() === detail.title.trim().toLowerCase();
   const removeActionLabel =
     detail.viewerTodayStatus === 'skip' ? 'Remove Skip' : 'Remove Tap In';
 
@@ -526,6 +653,42 @@ export function CircleDetailScreen({
         },
       ],
     );
+  };
+
+  const openDeleteCircleConfirm = () => {
+    setDeleteConfirmText('');
+    setIsDeleteConfirmVisible(true);
+  };
+
+  const closeDeleteCircleConfirm = () => {
+    if (isDeletingCircle) {
+      return;
+    }
+
+    setDeleteConfirmText('');
+    setIsDeleteConfirmVisible(false);
+  };
+
+  const handleDeleteCircle = async () => {
+    if (!canConfirmDeleteCircle || isDeletingCircle) {
+      return;
+    }
+
+    setIsDeletingCircle(true);
+    try {
+      await deleteCircle(detail.id);
+      setIsDeleteConfirmVisible(false);
+      setDeleteConfirmText('');
+      navigation.goBack();
+      Alert.alert('Circle deleted', `${detail.title} has been deleted.`);
+    } catch (error) {
+      const message =
+        (error as {message?: string}).message ??
+        'Could not delete this circle. Try again.';
+      Alert.alert('Delete failed', message);
+    } finally {
+      setIsDeletingCircle(false);
+    }
   };
 
   return (
@@ -591,9 +754,16 @@ export function CircleDetailScreen({
         <View style={styles.heroCopy}>
           <HoystText style={styles.heroTitle}>{detail.title}</HoystText>
           <HoystText tone="muted">{detail.dailyGoal}</HoystText>
-          <HoystText style={{color: progressTone}} variant="caption">
-            {statusCopy}
-          </HoystText>
+          {detailStatusPill ? (
+            <HoystChip
+              label={detailStatusPill.label}
+              tone={detailStatusPill.tone}
+            />
+          ) : (
+            <HoystText tone="muted" variant="caption">
+              {previewCopy}
+            </HoystText>
+          )}
         </View>
 
         <View style={styles.metaRow}>
@@ -734,22 +904,66 @@ export function CircleDetailScreen({
                 />
               )}
             </View>
-            <DashboardUtilityAction
-              icon={
-                <Settings2
-                  color={managed ? theme.success : theme.text}
-                  size={16}
-                  strokeWidth={2.2}
+            {canDeleteCircle ? (
+              <View style={styles.circleToolsGroup}>
+                <HoystText
+                  style={styles.circleToolsHeader}
+                  tone="muted"
+                  variant="label">
+                  Circle tools
+                </HoystText>
+                <DashboardUtilityAction
+                  icon={
+                    <Settings2
+                      color={
+                        isOwnerToolsExpanded ? theme.accentSecondary : theme.text
+                      }
+                      size={16}
+                      strokeWidth={2.2}
+                    />
+                  }
+                  label={isOwnerToolsExpanded ? 'Hide tools' : 'Manage'}
+                  onPress={() =>
+                    setIsOwnerToolsExpanded(currentValue => !currentValue)
+                  }
+                  supportingText="Owner settings"
                 />
-              }
-              label={managed ? 'Queued' : 'Manage'}
-              onPress={() => setManaged(true)}
-              supportingText={
-                detail.viewerRole === 'member'
-                  ? 'Member settings'
-                  : 'Circle tools'
-              }
-            />
+                {isOwnerToolsExpanded ? (
+                  <View style={styles.ownerToolsActions}>
+                    <DashboardUtilityAction
+                      icon={
+                        <Trash2
+                          color={theme.danger}
+                          size={17}
+                          strokeWidth={2.2}
+                        />
+                      }
+                      label="Delete Circle"
+                      labelColor={theme.danger}
+                      onPress={openDeleteCircleConfirm}
+                      showChevron={false}
+                      supportingText="Permanent"
+                    />
+                  </View>
+                ) : null}
+              </View>
+            ) : (
+              <DashboardUtilityAction
+                icon={
+                  <Settings2
+                    color={theme.text}
+                    size={16}
+                    strokeWidth={2.2}
+                  />
+                }
+                label="Manage"
+                supportingText={
+                  detail.viewerRole === 'member'
+                    ? 'Member settings'
+                    : 'Circle tools'
+                }
+              />
+            )}
           </View>
         ) : (
           <View style={styles.publicActionStack}>
@@ -810,6 +1024,18 @@ export function CircleDetailScreen({
           <ActivityFeedCard item={item} key={item.id} />
         ))}
       </View>
+      <DeleteCircleConfirmModal
+        canConfirm={canConfirmDeleteCircle}
+        circleTitle={detail.title}
+        confirmText={deleteConfirmText}
+        isDeleting={isDeletingCircle}
+        onCancel={closeDeleteCircleConfirm}
+        onConfirm={() => {
+          handleDeleteCircle().catch(() => undefined);
+        }}
+        onConfirmTextChange={setDeleteConfirmText}
+        visible={isDeleteConfirmVisible}
+      />
     </HoystScreen>
   );
 }
@@ -920,6 +1146,16 @@ const styles = StyleSheet.create({
     gap: 10,
     width: '100%',
   },
+  circleToolsGroup: {
+    gap: 8,
+  },
+  circleToolsHeader: {
+    paddingHorizontal: 2,
+  },
+  ownerToolsActions: {
+    gap: 8,
+    paddingLeft: 12,
+  },
   primaryActionWrap: {
     marginBottom: 2,
   },
@@ -1021,6 +1257,30 @@ const styles = StyleSheet.create({
   },
   publicActionStack: {
     gap: 10,
+  },
+  modalActions: {
+    gap: 10,
+  },
+  modalCopy: {
+    gap: 8,
+  },
+  modalHeader: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 8,
+  },
+  modalKeyboard: {
+    flex: 1,
+  },
+  modalOverlay: {
+    alignItems: 'stretch',
+    backgroundColor: 'rgba(0,0,0,0.52)',
+    flex: 1,
+    justifyContent: 'center',
+    padding: 22,
+  },
+  modalPanel: {
+    alignSelf: 'stretch',
   },
   progressHeader: {
     alignItems: 'center',

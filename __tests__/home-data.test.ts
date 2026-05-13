@@ -6,6 +6,7 @@ import {
   getHomeFilterCounts,
   mapHomeCircleFromData,
   matchesHomeCircleFilter,
+  shouldShowAuthenticatedHomeEmptyState,
   shouldShowHomeCreateCircleButton,
   shouldShowHomeDataErrorPanel,
 } from '../src/features/home/services/home-data-service';
@@ -218,7 +219,9 @@ describe('home data mapping', () => {
     );
 
     expect(homeData.circles).toEqual([]);
+    expect(homeData.hasLoadedMemberships).toBe(false);
     expect(homeData.hasRealProgress).toBe(false);
+    expect(homeData.membershipCount).toBe(0);
     expect(homeData.progressPercent).toBe(0);
     expect(homeData.progressDays.every(day => day.state !== 'done')).toBe(true);
   });
@@ -280,26 +283,104 @@ describe('home data mapping', () => {
     ).toBe(false);
   });
 
-  it('only shows the Home error panel when no circles can render', () => {
+  it('shows the authenticated Home empty state when no circles can render', () => {
+    expect(
+      shouldShowAuthenticatedHomeEmptyState({
+        circleCount: 0,
+        hasHomeDataError: false,
+        hasLoadedMemberships: true,
+        isAuthenticatedHome: true,
+        isLoadingHomeData: false,
+        membershipCount: 0,
+      }),
+    ).toBe(true);
+    expect(
+      shouldShowAuthenticatedHomeEmptyState({
+        circleCount: 0,
+        hasHomeDataError: false,
+        hasLoadedMemberships: true,
+        isAuthenticatedHome: true,
+        isLoadingHomeData: true,
+        membershipCount: 0,
+      }),
+    ).toBe(false);
+    expect(
+      shouldShowAuthenticatedHomeEmptyState({
+        circleCount: 1,
+        hasHomeDataError: false,
+        hasLoadedMemberships: true,
+        isAuthenticatedHome: true,
+        isLoadingHomeData: false,
+        membershipCount: 1,
+      }),
+    ).toBe(false);
+    expect(
+      shouldShowAuthenticatedHomeEmptyState({
+        circleCount: 0,
+        hasHomeDataError: false,
+        hasLoadedMemberships: true,
+        isAuthenticatedHome: false,
+        isLoadingHomeData: false,
+        membershipCount: 0,
+      }),
+    ).toBe(false);
+    expect(
+      shouldShowAuthenticatedHomeEmptyState({
+        circleCount: 0,
+        hasHomeDataError: true,
+        hasLoadedMemberships: true,
+        isAuthenticatedHome: true,
+        isLoadingHomeData: false,
+        membershipCount: 0,
+      }),
+    ).toBe(true);
+    expect(
+      shouldShowAuthenticatedHomeEmptyState({
+        circleCount: 0,
+        hasHomeDataError: false,
+        hasLoadedMemberships: true,
+        isAuthenticatedHome: true,
+        isLoadingHomeData: false,
+        membershipCount: 1,
+      }),
+    ).toBe(false);
+  });
+
+  it('only shows the Home error panel when known circles cannot render', () => {
     expect(
       shouldShowHomeDataErrorPanel({
         circleCount: 0,
         hasHomeDataError: true,
+        hasLoadedMemberships: true,
         isLoadingHomeData: false,
+        membershipCount: 1,
       }),
     ).toBe(true);
     expect(
       shouldShowHomeDataErrorPanel({
         circleCount: 1,
         hasHomeDataError: true,
+        hasLoadedMemberships: true,
         isLoadingHomeData: false,
+        membershipCount: 1,
       }),
     ).toBe(false);
     expect(
       shouldShowHomeDataErrorPanel({
         circleCount: 0,
         hasHomeDataError: true,
+        hasLoadedMemberships: true,
         isLoadingHomeData: true,
+        membershipCount: 1,
+      }),
+    ).toBe(false);
+    expect(
+      shouldShowHomeDataErrorPanel({
+        circleCount: 0,
+        hasHomeDataError: true,
+        hasLoadedMemberships: true,
+        isLoadingHomeData: false,
+        membershipCount: 0,
       }),
     ).toBe(false);
   });

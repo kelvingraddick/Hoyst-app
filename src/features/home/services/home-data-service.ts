@@ -26,7 +26,9 @@ export type HomeProgressCell = {
 
 export type HomeData = {
   circles: CircleManagementCard[];
+  hasLoadedMemberships: boolean;
   hasRealProgress: boolean;
+  membershipCount: number;
   personalStreakDays: number;
   progressDays: HomeProgressCell[];
   progressPercent: number;
@@ -301,7 +303,9 @@ export function createEmptyHomeData(timezone = 'UTC', now = new Date()) {
 
   return {
     circles: [],
+    hasLoadedMemberships: false,
     hasRealProgress: false,
+    membershipCount: 0,
     personalStreakDays: 0,
     progressDays,
     progressPercent: 0,
@@ -313,11 +317,15 @@ export function createEmptyHomeData(timezone = 'UTC', now = new Date()) {
 export function buildHomeDataFromCircles({
   circles,
   completedDateKeys,
+  hasLoadedMemberships = true,
+  membershipCount = circles.length,
   timezone,
   now = new Date(),
 }: {
   circles: CircleManagementCard[];
   completedDateKeys: ReadonlySet<string>;
+  hasLoadedMemberships?: boolean;
+  membershipCount?: number;
   now?: Date;
   timezone: string;
 }) {
@@ -327,7 +335,9 @@ export function buildHomeDataFromCircles({
 
   return {
     circles,
+    hasLoadedMemberships,
     hasRealProgress: completedDateKeys.size > 0,
+    membershipCount,
     personalStreakDays: calculatePersonalStreak(
       completedDateKeys,
       timezone,
@@ -527,16 +537,49 @@ export function shouldShowHomeCreateCircleButton({
   return isAuthenticatedHome || showAccountPrompt;
 }
 
-export function shouldShowHomeDataErrorPanel({
+export function shouldShowAuthenticatedHomeEmptyState({
   circleCount,
   hasHomeDataError,
+  hasLoadedMemberships,
+  isAuthenticatedHome,
   isLoadingHomeData,
+  membershipCount,
 }: {
   circleCount: number;
   hasHomeDataError: boolean;
+  hasLoadedMemberships: boolean;
+  isAuthenticatedHome: boolean;
   isLoadingHomeData: boolean;
+  membershipCount: number;
 }) {
-  return hasHomeDataError && !isLoadingHomeData && circleCount === 0;
+  return (
+    isAuthenticatedHome &&
+    !isLoadingHomeData &&
+    circleCount === 0 &&
+    membershipCount === 0 &&
+    (hasLoadedMemberships || !hasHomeDataError)
+  );
+}
+
+export function shouldShowHomeDataErrorPanel({
+  circleCount,
+  hasHomeDataError,
+  hasLoadedMemberships,
+  isLoadingHomeData,
+  membershipCount,
+}: {
+  circleCount: number;
+  hasHomeDataError: boolean;
+  hasLoadedMemberships: boolean;
+  isLoadingHomeData: boolean;
+  membershipCount: number;
+}) {
+  return (
+    hasHomeDataError &&
+    !isLoadingHomeData &&
+    circleCount === 0 &&
+    (!hasLoadedMemberships || membershipCount > 0)
+  );
 }
 
 function getMembershipCircleId(
@@ -666,6 +709,8 @@ export function subscribeToHomeData({
       buildHomeDataFromCircles({
         circles,
         completedDateKeys: recentCompletedDateKeys(states, recentDateKeys),
+        hasLoadedMemberships: true,
+        membershipCount: memberships.size,
         timezone,
       }),
     );

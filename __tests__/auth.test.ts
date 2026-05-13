@@ -1,11 +1,24 @@
 jest.mock('@react-native-async-storage/async-storage', () =>
   require('@react-native-async-storage/async-storage/jest/async-storage-mock'),
 );
+jest.mock('@react-navigation/native', () => ({
+  CommonActions: {
+    reset: jest.fn(payload => ({payload, type: 'RESET'})),
+  },
+}));
 
 import {useSessionStore} from '../src/store/session-store';
-import {useOnboardingStore} from '../src/store/onboarding-store';
+import {
+  normalizeOnboardingStep,
+  useOnboardingStore,
+} from '../src/store/onboarding-store';
 import {continueAsGuestFromAuth} from '../src/features/auth/services/auth-dismiss';
+import {finalizeReadyProfileOnboardingSetup} from '../src/features/auth/services/onboarding-finalizer';
 import {buildOnboardingPreferences} from '../src/features/auth/services/onboarding-payload';
+import {
+  completeOnboardingSetup,
+  shouldCreateStarterCircle,
+} from '../src/features/auth/services/onboarding-completion';
 import {
   getOnboardingSignInParams,
   getProfileSignInParams,
@@ -17,8 +30,12 @@ import {
   normalizeHandle,
   validateHandle,
 } from '../src/features/auth/services/profile-validation';
+import {dismissAuthModals} from '../src/navigation/auth-modal-dismiss';
+import {getAuthInitialRouteName} from '../src/navigation/auth-stack-policy';
 import {getStateWithoutAuthModal} from '../src/navigation/auth-modal-state';
+import {canResumePendingAction} from '../src/navigation/pending-action-resume';
 import {getRootNavigatorMode} from '../src/navigation/root-mode';
+import {resolveStarterCircleDecision} from '../functions/src/auth/starter-circle-plan';
 
 describe('auth profile validation', () => {
   it('normalizes handles before reservation', () => {
@@ -71,6 +88,27 @@ describe('session pending actions', () => {
     });
     expect(useSessionStore.getState().consumePendingAction()).toBeUndefined();
   });
+
+  it('waits to resume pending actions while starter setup is pending', () => {
+    expect(
+      canResumePendingAction({
+        hasPendingStarterCircleSetup: true,
+        status: 'authenticatedReady',
+      }),
+    ).toBe(false);
+    expect(
+      canResumePendingAction({
+        hasPendingStarterCircleSetup: false,
+        status: 'authenticatedReady',
+      }),
+    ).toBe(true);
+    expect(
+      canResumePendingAction({
+        hasPendingStarterCircleSetup: false,
+        status: 'authenticating',
+      }),
+    ).toBe(false);
+  });
 });
 
 describe('adaptive auth entry intent', () => {
@@ -110,10 +148,10 @@ describe('adaptive auth entry intent', () => {
     });
   });
 
-  it('opens welcome sign-in action in email sign-in mode', () => {
+  it('opens welcome sign-in action with social providers first', () => {
     expect(resolveSignInRouteIntent(getWelcomeSignInParams())).toEqual({
       entryPoint: 'welcome',
-      method: 'email',
+      method: undefined,
       mode: 'signIn',
     });
   });
@@ -253,6 +291,41 @@ describe('root navigator mode policy', () => {
   });
 });
 
+describe('auth stack route policy', () => {
+  it('keeps onboarding profile completion inside the welcome wizard', () => {
+    expect(
+      getAuthInitialRouteName({
+        currentStep: 'auth',
+        status: 'authenticatedIncompleteProfile',
+      }),
+    ).toBe('Welcome');
+    expect(
+      getAuthInitialRouteName({
+        currentStep: 'finishProfile',
+        status: 'authenticatedIncompleteProfile',
+      }),
+    ).toBe('Welcome');
+  });
+
+  it('keeps non-onboarding incomplete profiles on the standalone screen', () => {
+    expect(
+      getAuthInitialRouteName({
+        currentStep: 'welcome',
+        status: 'authenticatedIncompleteProfile',
+      }),
+    ).toBe('CompleteProfile');
+  });
+
+  it('starts complete authenticated sessions on the welcome stack until reset', () => {
+    expect(
+      getAuthInitialRouteName({
+        currentStep: 'auth',
+        status: 'authenticatedReady',
+      }),
+    ).toBe('Welcome');
+  });
+});
+
 describe('auth modal dismissal state', () => {
   it('removes only the auth modal when main tabs are underneath', () => {
     expect(
@@ -312,6 +385,25 @@ describe('auth modal dismissal state', () => {
       }),
     ).toBeUndefined();
   });
+
+  it('does not pop auth when no root reset is available', () => {
+    const navigation = {
+      dispatch: jest.fn(),
+      getState: () => ({
+        index: 1,
+        routes: [
+          {key: 'auth-1', name: 'Auth'},
+          {key: 'auth-2', name: 'Auth'},
+        ],
+      }),
+      goBack: jest.fn(),
+    };
+
+    dismissAuthModals(navigation as never);
+
+    expect(navigation.dispatch).not.toHaveBeenCalled();
+    expect(navigation.goBack).not.toHaveBeenCalled();
+  });
 });
 
 describe('onboarding store', () => {
@@ -325,29 +417,95 @@ describe('onboarding store', () => {
 
     store.setCurrentStep('goal');
     store.nextStep();
-    expect(useOnboardingStore.getState().currentStep).toBe('categories');
+    expect(useOnboardingStore.getState().currentStep).toBe('circleTitle');
 
     useOnboardingStore.getState().previousStep();
     expect(useOnboardingStore.getState().currentStep).toBe('goal');
   });
 
-  it('tracks selections and builds onboarding preferences', () => {
+  it('tracks the goal and builds onboarding preferences', () => {
     const store = useOnboardingStore.getState();
 
     store.setGoal('fitness');
-    store.setCategory('fitness');
-    store.setCategory('deep_work');
-    store.setReminderPreference('morning');
-    store.setSocialComfort('trusted_circle');
-    store.setPace('daily');
 
     expect(useOnboardingStore.getState().getPreferences()).toEqual({
-      categories: ['fitness', 'deep_work'],
       goal: 'fitness',
-      pace: 'daily',
-      reminderPreference: 'morning',
-      socialComfort: 'trusted_circle',
     });
+  });
+
+  it('persists starter circle fields and skip intent', () => {
+    const store = useOnboardingStore.getState();
+
+    store.setGoal('focus');
+    store.setStarterCircleField('title', 'Maker Mornings');
+    store.setStarterCircleField('dailyTask', 'Ship one focused block');
+    store.setFirstCircleSkipped(true);
+
+    expect(useOnboardingStore.getState().starterCircleDraft).toMatchObject({
+      category: 'Deep Work',
+      dailyTask: 'Ship one focused block',
+      title: 'Maker Mornings',
+    });
+    expect(useOnboardingStore.getState().firstCircleSkipped).toBe(true);
+  });
+
+  it('prepares and clears a pending starter circle setup', () => {
+    const store = useOnboardingStore.getState();
+
+    store.setStarterCircleField('title', 'Maker Mornings');
+    store.setStarterCircleField('dailyTask', 'Ship one focused block');
+
+    const setupId = store.prepareStarterCircleSetup();
+
+    expect(setupId).toMatch(/^starter-/);
+    expect(useOnboardingStore.getState()).toMatchObject({
+      firstCircleSkipped: false,
+      hasPendingStarterCircleSetup: true,
+      starterCircleSetupId: setupId,
+    });
+    expect(useOnboardingStore.getState().prepareStarterCircleSetup()).toBe(
+      setupId,
+    );
+
+    useOnboardingStore.getState().setFirstCircleSkipped(true);
+
+    expect(useOnboardingStore.getState()).toMatchObject({
+      firstCircleSkipped: true,
+      hasPendingStarterCircleSetup: false,
+      starterCircleSetupId: undefined,
+    });
+  });
+
+  it('clears stale starter circle skip intent when starting a new attempt', () => {
+    const store = useOnboardingStore.getState();
+
+    store.setFirstCircleSkipped(true);
+    store.setGoal('fitness');
+
+    expect(useOnboardingStore.getState().firstCircleSkipped).toBe(false);
+
+    const setupId = useOnboardingStore
+      .getState()
+      .prepareStarterCircleSetup();
+
+    useOnboardingStore.getState().setFirstCircleSkipped(true);
+    useOnboardingStore.getState().startOnboardingWizard();
+
+    expect(useOnboardingStore.getState()).toMatchObject({
+      firstCircleSkipped: false,
+      hasPendingStarterCircleSetup: false,
+      starterCircleSetupId: undefined,
+    });
+    expect(useOnboardingStore.getState().starterCircleSetupId).not.toBe(setupId);
+  });
+
+  it('normalizes removed persisted steps to active onboarding steps', () => {
+    expect(normalizeOnboardingStep('categories')).toBe('circleTitle');
+    expect(normalizeOnboardingStep('reminders')).toBe('circleTitle');
+    expect(normalizeOnboardingStep('pace')).toBe('circleTitle');
+    expect(normalizeOnboardingStep('profile')).toBe('circleTitle');
+    expect(normalizeOnboardingStep('preview')).toBe('circleReview');
+    expect(normalizeOnboardingStep('finishProfile')).toBe('finishProfile');
   });
 
   it('does not repeat first-run onboarding after guest continuation', () => {
@@ -372,11 +530,22 @@ describe('onboarding store', () => {
     });
   });
 
-  it('sends returning protected-action guests straight to auth choice', () => {
+  it('starts the onboarding wizard from the welcome step', () => {
+    const store = useOnboardingStore.getState();
+
+    store.setGoal('focus');
+    store.setCurrentStep('auth');
+    store.startOnboardingWizard();
+
+    expect(useOnboardingStore.getState().currentStep).toBe('welcome');
+    expect(useOnboardingStore.getState().goal).toBe('focus');
+  });
+
+  it('sends returning protected-action guests back through onboarding', () => {
     useOnboardingStore.getState().markSeen();
     useOnboardingStore.getState().startForProtectedAction();
 
-    expect(useOnboardingStore.getState().currentStep).toBe('auth');
+    expect(useOnboardingStore.getState().currentStep).toBe('coach');
   });
 });
 
@@ -384,22 +553,228 @@ describe('onboarding complete profile payload', () => {
   it('includes onboarding preferences when present', () => {
     expect(
       buildOnboardingPreferences({
-        categories: ['wellness', 'learning'],
         goal: 'wellness',
-        pace: 'three_weekly',
-        reminderPreference: 'evening',
-        socialComfort: 'invite_later',
       }),
     ).toEqual({
-      categories: ['wellness', 'learning'],
       goal: 'wellness',
-      pace: 'three_weekly',
-      reminderPreference: 'evening',
-      socialComfort: 'invite_later',
     });
   });
 
   it('omits onboarding preferences when there is no intake data', () => {
-    expect(buildOnboardingPreferences({categories: []})).toBeUndefined();
+    expect(buildOnboardingPreferences({})).toBeUndefined();
+  });
+});
+
+describe('onboarding completion finalizer', () => {
+  const profile = {
+    displayName: 'Kelvin North',
+    handle: 'kelvin_north',
+    timezone: 'America/New_York',
+  };
+
+  it('completes profile and creates the starter circle when ready', async () => {
+    const completeProfile = jest.fn().mockResolvedValue({
+      handle: 'kelvin_north',
+      starterCircle: {circleId: 'circle-1'},
+      uid: 'user-1',
+    });
+    const starterCircleDraft = {
+      ...useOnboardingStore.getState().starterCircleDraft,
+      dailyTask: 'Read 20 pages',
+      graceRules: {
+        skip: {
+          allowance: 1,
+          windowDays: 7,
+        },
+      },
+      maxSize: 2,
+      title: 'Readers',
+    };
+
+    await expect(
+      completeOnboardingSetup(
+        {
+          firstCircleSkipped: false,
+          profile,
+          starterCircleDraft,
+          starterCircleSetupId: 'setup-1',
+        },
+        {completeProfile},
+      ),
+    ).resolves.toEqual({
+      circle: {circleId: 'circle-1'},
+      circleCreated: true,
+    });
+    expect(completeProfile).toHaveBeenCalledWith(
+      expect.objectContaining({
+        ...profile,
+        starterCircle: expect.objectContaining({
+          dailyTask: 'Read 20 pages',
+          graceRules: {
+            skip: {
+              allowance: 2,
+              windowDays: 7,
+            },
+          },
+          maxSize: 10,
+          setupId: 'setup-1',
+          title: 'Readers',
+        }),
+      }),
+    );
+  });
+
+  it('skips circle creation when the user chose account only', async () => {
+    const completeProfile = jest.fn().mockResolvedValue({
+      handle: 'kelvin_north',
+      uid: 'user-1',
+    });
+    const starterCircleDraft = {
+      ...useOnboardingStore.getState().starterCircleDraft,
+      dailyTask: 'Read 20 pages',
+      title: 'Readers',
+    };
+
+    await expect(
+      completeOnboardingSetup(
+        {firstCircleSkipped: true, profile, starterCircleDraft},
+        {completeProfile},
+      ),
+    ).resolves.toEqual({circleCreated: false});
+    expect(completeProfile).toHaveBeenCalledWith(profile);
+  });
+
+  it('surfaces starter circle failures after profile completion starts', async () => {
+    const completeProfile = jest.fn().mockRejectedValue(new Error('Create failed'));
+    const onProfileCompleted = jest.fn();
+    const starterCircleDraft = {
+      ...useOnboardingStore.getState().starterCircleDraft,
+      dailyTask: 'Read 20 pages',
+      title: 'Readers',
+    };
+
+    await expect(
+      completeOnboardingSetup(
+        {
+          firstCircleSkipped: false,
+          profile,
+          starterCircleDraft,
+          starterCircleSetupId: 'setup-1',
+        },
+        {completeProfile, onProfileCompleted},
+      ),
+    ).rejects.toThrow('Create failed');
+    expect(onProfileCompleted).not.toHaveBeenCalled();
+  });
+
+  it('does not create an incomplete starter circle draft', () => {
+    expect(
+      shouldCreateStarterCircle({
+        firstCircleSkipped: false,
+        starterCircleDraft: useOnboardingStore.getState().starterCircleDraft,
+      }),
+    ).toBe(false);
+  });
+
+  it('requires a setup id before creating a starter circle', async () => {
+    const completeProfile = jest.fn();
+    const starterCircleDraft = {
+      ...useOnboardingStore.getState().starterCircleDraft,
+      dailyTask: 'Read 20 pages',
+      title: 'Readers',
+    };
+
+    await expect(
+      completeOnboardingSetup(
+        {firstCircleSkipped: false, profile, starterCircleDraft},
+        {completeProfile},
+      ),
+    ).rejects.toThrow('Starter circle setup is missing.');
+    expect(completeProfile).not.toHaveBeenCalled();
+  });
+});
+
+describe('ready profile onboarding finalizer', () => {
+  it('finalizes a ready account with the pending starter setup id', async () => {
+    const completeProfile = jest.fn().mockResolvedValue({
+      handle: 'kelvin_north',
+      starterCircle: {circleId: 'circle-1'},
+      uid: 'user-1',
+    });
+    const starterCircleDraft = {
+      ...useOnboardingStore.getState().starterCircleDraft,
+      dailyTask: 'Read 20 pages',
+      title: 'Readers',
+    };
+
+    await expect(
+      finalizeReadyProfileOnboardingSetup(
+        {
+          firstCircleSkipped: false,
+          onboardingPreferences: {goal: 'focus'},
+          profile: {
+            handle: 'kelvin_north',
+            id: 'user-1',
+            name: 'Kelvin North',
+            timezone: 'America/New_York',
+          },
+          starterCircleDraft,
+          starterCircleSetupId: 'setup-2',
+          timezone: 'America/New_York',
+        },
+        {completeProfile},
+      ),
+    ).resolves.toMatchObject({
+      circle: {circleId: 'circle-1'},
+      circleCreated: true,
+    });
+    expect(completeProfile).toHaveBeenCalledWith(
+      expect.objectContaining({
+        displayName: 'Kelvin North',
+        handle: 'kelvin_north',
+        onboardingPreferences: {goal: 'focus'},
+        starterCircle: expect.objectContaining({
+          setupId: 'setup-2',
+        }),
+      }),
+    );
+  });
+});
+
+describe('starter circle callable decision', () => {
+  it('creates, reuses, and repairs starter circles per setup id', () => {
+    expect(
+      resolveStarterCircleDecision({
+        existingCircleIsValid: false,
+        hasStarterCirclePayload: false,
+      }),
+    ).toBe('skip');
+    expect(
+      resolveStarterCircleDecision({
+        existingCircleId: 'circle-1',
+        existingCircleIsValid: true,
+        existingSetupId: 'setup-1',
+        hasStarterCirclePayload: true,
+        setupId: 'setup-1',
+      }),
+    ).toBe('reuse');
+    expect(
+      resolveStarterCircleDecision({
+        existingCircleId: 'circle-1',
+        existingCircleIsValid: false,
+        existingSetupId: 'setup-1',
+        hasStarterCirclePayload: true,
+        setupId: 'setup-1',
+      }),
+    ).toBe('repair');
+    expect(
+      resolveStarterCircleDecision({
+        existingCircleId: 'circle-1',
+        existingCircleIsValid: true,
+        existingSetupId: 'setup-1',
+        hasStarterCirclePayload: true,
+        setupId: 'setup-2',
+      }),
+    ).toBe('create');
   });
 });

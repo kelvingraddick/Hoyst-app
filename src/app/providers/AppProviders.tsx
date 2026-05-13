@@ -6,6 +6,7 @@ import {SafeAreaProvider} from 'react-native-safe-area-context';
 import {QueryClient, QueryClientProvider} from '@tanstack/react-query';
 
 import {AuthStateProvider} from '../../features/auth/providers/AuthStateProvider';
+import {OnboardingSetupFinalizer} from '../../features/auth/providers/OnboardingSetupFinalizer';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -23,7 +24,10 @@ export function AppProviders({
     <GestureHandlerRootView style={styles.root}>
       <SafeAreaProvider>
         <QueryClientProvider client={queryClient}>
-          <AuthStateProvider>{children}</AuthStateProvider>
+          <AuthStateProvider>
+            <OnboardingSetupFinalizer />
+            {children}
+          </AuthStateProvider>
         </QueryClientProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
