@@ -29,10 +29,18 @@ function LoadingScreen(): React.JSX.Element {
 
 export function RootNavigator(): React.JSX.Element {
   const status = useSessionStore(state => state.status);
+  const currentStep = useOnboardingStore(state => state.currentStep);
   const hasHydratedOnboarding = useOnboardingStore(state => state.hasHydrated);
-  const hasSeenOnboarding = useOnboardingStore(state => state.hasSeenOnboarding);
+  const hasPendingStarterCircleSetup = useOnboardingStore(
+    state => state.hasPendingStarterCircleSetup,
+  );
+  const hasSeenOnboarding = useOnboardingStore(
+    state => state.hasSeenOnboarding,
+  );
   const mode = getRootNavigatorMode({
+    currentStep,
     hasHydratedOnboarding,
+    hasPendingStarterCircleSetup,
     hasSeenOnboarding,
     status,
   });

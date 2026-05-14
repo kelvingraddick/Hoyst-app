@@ -1,14 +1,28 @@
-import React from 'react';
+import React, {useEffect} from 'react';
 import {StatusBar} from 'react-native';
-import {NavigationContainer} from '@react-navigation/native';
+import {
+  NavigationContainer,
+  useNavigationContainerRef,
+} from '@react-navigation/native';
 
 import {AppProviders} from './providers/AppProviders';
 import {createNavigationTheme} from '../design/theme/navigationTheme';
 import {useHoystTheme} from '../design/theme/useHoystTheme';
 import {RootNavigator} from '../navigation/RootNavigator';
+import type {RootStackParamList} from '../navigation/types';
+import {
+  initializePushNotifications,
+  setNotificationNavigationRef,
+} from '../lib/notifications';
 
 function HoystAppInner(): React.JSX.Element {
   const theme = useHoystTheme();
+  const navigationRef = useNavigationContainerRef<RootStackParamList>();
+
+  useEffect(() => {
+    initializePushNotifications();
+    setNotificationNavigationRef(navigationRef);
+  }, [navigationRef]);
 
   return (
     <>
@@ -16,7 +30,9 @@ function HoystAppInner(): React.JSX.Element {
         barStyle={theme.isDark ? 'light-content' : 'dark-content'}
         backgroundColor={theme.background}
       />
-      <NavigationContainer theme={createNavigationTheme(theme)}>
+      <NavigationContainer
+        ref={navigationRef}
+        theme={createNavigationTheme(theme)}>
         <RootNavigator />
       </NavigationContainer>
     </>

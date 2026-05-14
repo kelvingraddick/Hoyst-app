@@ -1,4 +1,4 @@
-import React, {useState} from 'react';
+import React, {useEffect, useState} from 'react';
 import {
   Alert,
   KeyboardAvoidingView,
@@ -9,7 +9,6 @@ import {
   Switch,
   View,
 } from 'react-native';
-import {CommonActions} from '@react-navigation/native';
 import {
   ArrowLeft,
   Bell,
@@ -38,6 +37,7 @@ import {HoystScreen} from '../../../design/components/HoystScreen';
 import {HoystText} from '../../../design/components/HoystText';
 import {LayeredAvatar} from '../../../design/components/LayeredAvatar';
 import {useHoystTheme} from '../../../design/theme/useHoystTheme';
+import {getSettingsFallbackRoute} from '../../../navigation/settings-fallback-route';
 import type {RootStackParamList} from '../../../navigation/types';
 import {deleteAccount} from '../../auth/services/account-service';
 import {signOutOfHoyst} from '../../auth/services/auth-service';
@@ -49,6 +49,11 @@ import {
   getProfileAvatarSource,
   getProfileInitials,
 } from '../../profile/services/profile-display';
+import {
+  subscribeToNotificationSettings,
+  updateNotificationSettings,
+  type NotificationSettings,
+} from '../services/notification-settings-service';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Settings'>;
 
@@ -243,11 +248,7 @@ function SettingsRow({
   );
 }
 
-function SettingsValue({
-  children,
-}: {
-  children: string;
-}): React.JSX.Element {
+function SettingsValue({children}: {children: string}): React.JSX.Element {
   return (
     <HoystText
       ellipsizeMode="tail"
@@ -410,13 +411,16 @@ export function SettingsScreen({navigation}: Props): React.JSX.Element {
   const status = useSessionStore(state => state.status);
   const user = useSessionStore(state => state.user);
   const notifications = useSettingsStore(state => state.notifications);
+  const setNotificationSettings = useSettingsStore(
+    state => state.setNotificationSettings,
+  );
   const setNotificationPreference = useSettingsStore(
     state => state.setNotificationPreference,
   );
+  const resetSettings = useSettingsStore(state => state.reset);
   const beginAuthFlow = useSessionStore(state => state.beginAuthFlow);
-  const startForProtectedAction = useOnboardingStore(
-    state => state.startForProtectedAction,
-  );
+  const clearPendingAction = useSessionStore(state => state.clearPendingAction);
+  const resetOnboarding = useOnboardingStore(state => state.reset);
   const setGuest = useSessionStore(state => state.setGuest);
   const [isDeleteConfirmVisible, setIsDeleteConfirmVisible] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
@@ -428,7 +432,42 @@ export function SettingsScreen({navigation}: Props): React.JSX.Element {
       return;
     }
 
-    navigation.navigate('MainTabs');
+    const fallbackRoute = getSettingsFallbackRoute(
+      navigation.getState().routeNames,
+    );
+
+    if (fallbackRoute === 'MainTabs') {
+      navigation.navigate('MainTabs', {screen: 'Home'});
+      return;
+    }
+
+    if (fallbackRoute === 'Auth') {
+      navigation.navigate('Auth', {screen: 'Welcome'});
+    }
+  };
+
+  useEffect(() => {
+    if (!user?.uid) {
+      return undefined;
+    }
+
+    return subscribeToNotificationSettings({
+      onSettings: setNotificationSettings,
+      uid: user.uid,
+    });
+  }, [setNotificationSettings, user?.uid]);
+
+  const setServerNotificationPreference = (
+    key: keyof NotificationSettings,
+    value: boolean,
+  ) => {
+    const previousValue = notifications[key];
+
+    setNotificationPreference(key, value);
+    updateNotificationSettings({[key]: value}).catch(() => {
+      setNotificationPreference(key, previousValue);
+      Alert.alert('Could not update notifications', 'Try again in a moment.');
+    });
   };
 
   if (!isReady || !profile) {
@@ -449,8 +488,9 @@ export function SettingsScreen({navigation}: Props): React.JSX.Element {
           <HoystButton
             label="Get started"
             onPress={() => {
-              beginAuthFlow({type: 'settings'});
-              startForProtectedAction();
+              clearPendingAction();
+              beginAuthFlow();
+              resetOnboarding();
               navigation.navigate('Auth', {screen: 'Welcome'});
             }}
           />
@@ -489,15 +529,12 @@ export function SettingsScreen({navigation}: Props): React.JSX.Element {
       await deleteAccount();
       setIsDeleteConfirmVisible(false);
       setDeleteConfirmText('');
+      clearPendingAction();
+      resetOnboarding();
+      resetSettings();
       setProfile(undefined);
       await signOutOfHoyst().catch(() => undefined);
       setGuest();
-      navigation.dispatch(
-        CommonActions.reset({
-          index: 0,
-          routes: [{name: 'MainTabs'}],
-        }),
-      );
       Alert.alert('Account deleted', 'Your Hoyst account has been deleted.');
     } catch (error) {
       const message =
@@ -533,7 +570,11 @@ export function SettingsScreen({navigation}: Props): React.JSX.Element {
           onPress={() => navigation.navigate('EditProfile')}
           title="Edit profile"
           trailing={
-            <ChevronRight color={theme.textSubtle} size={18} strokeWidth={2.2} />
+            <ChevronRight
+              color={theme.textSubtle}
+              size={18}
+              strokeWidth={2.2}
+            />
           }
         />
         <SettingsRow
@@ -550,7 +591,9 @@ export function SettingsScreen({navigation}: Props): React.JSX.Element {
           iconColor={theme.danger}
           iconTone="danger"
           onPress={() => {
-            signOutOfHoyst().finally(setGuest).catch(() => undefined);
+            signOutOfHoyst()
+              .finally(setGuest)
+              .catch(() => undefined);
           }}
           title="Sign out"
         />
@@ -565,7 +608,7 @@ export function SettingsScreen({navigation}: Props): React.JSX.Element {
           trailing={
             <SettingsSwitch
               onValueChange={value =>
-                setNotificationPreference('tapInReminders', value)
+                setServerNotificationPreference('tapInReminders', value)
               }
               value={notifications.tapInReminders}
             />
@@ -580,7 +623,7 @@ export function SettingsScreen({navigation}: Props): React.JSX.Element {
           trailing={
             <SettingsSwitch
               onValueChange={value =>
-                setNotificationPreference('circleActivity', value)
+                setServerNotificationPreference('circleActivity', value)
               }
               value={notifications.circleActivity}
             />
@@ -595,7 +638,7 @@ export function SettingsScreen({navigation}: Props): React.JSX.Element {
           trailing={
             <SettingsSwitch
               onValueChange={value =>
-                setNotificationPreference('productUpdates', value)
+                setServerNotificationPreference('productUpdates', value)
               }
               value={notifications.productUpdates}
             />
@@ -650,7 +693,11 @@ export function SettingsScreen({navigation}: Props): React.JSX.Element {
           iconTone="blue"
           title="Help"
           trailing={
-            <ChevronRight color={theme.textSubtle} size={18} strokeWidth={2.2} />
+            <ChevronRight
+              color={theme.textSubtle}
+              size={18}
+              strokeWidth={2.2}
+            />
           }
         />
         <SettingsRow
@@ -660,7 +707,11 @@ export function SettingsScreen({navigation}: Props): React.JSX.Element {
           iconTone="green"
           title="Privacy Policy"
           trailing={
-            <ChevronRight color={theme.textSubtle} size={18} strokeWidth={2.2} />
+            <ChevronRight
+              color={theme.textSubtle}
+              size={18}
+              strokeWidth={2.2}
+            />
           }
         />
         <SettingsRow
@@ -670,7 +721,11 @@ export function SettingsScreen({navigation}: Props): React.JSX.Element {
           iconTone="neutral"
           title="Terms"
           trailing={
-            <ChevronRight color={theme.textSubtle} size={18} strokeWidth={2.2} />
+            <ChevronRight
+              color={theme.textSubtle}
+              size={18}
+              strokeWidth={2.2}
+            />
           }
         />
       </SettingsSection>

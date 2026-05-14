@@ -1,5 +1,9 @@
 import {firebaseFunctions} from '../../../lib/firebase/functions';
-import type {CircleJoinMode, CirclePrivacy, GraceRule} from '../../../types/models';
+import type {
+  CircleJoinMode,
+  CirclePrivacy,
+  GraceRule,
+} from '../../../types/models';
 
 export type CreateCircleInput = {
   category: string;
@@ -24,6 +28,26 @@ export async function joinCircle(circleId: string, inviteCode?: string) {
   const callable = firebaseFunctions().httpsCallable('joinCircle');
   const result = await callable({circleId, inviteCode});
   return result.data as {status: 'active' | 'pending'};
+}
+
+export async function reviewJoinRequest({
+  approved,
+  circleId,
+  requesterId,
+}: {
+  approved: boolean;
+  circleId: string;
+  requesterId: string;
+}) {
+  const callable = firebaseFunctions().httpsCallable('reviewJoinRequest');
+  const result = await callable({approved, circleId, requesterId});
+  return result.data as {status: 'approved' | 'declined'};
+}
+
+export async function pokeCircleMembers(circleId: string) {
+  const callable = firebaseFunctions().httpsCallable('pokeCircleMembers');
+  const result = await callable({circleId});
+  return result.data as {poked: number};
 }
 
 export async function deleteCircle(circleId: string) {

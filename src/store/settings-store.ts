@@ -8,6 +8,10 @@ type SettingsState = {
     productUpdates: boolean;
     tapInReminders: boolean;
   };
+  reset: () => void;
+  setNotificationSettings: (
+    notificationSettings: Partial<SettingsState['notifications']>,
+  ) => void;
   setNotificationPreference: (
     key: keyof SettingsState['notifications'],
     value: boolean,
@@ -24,6 +28,14 @@ export const useSettingsStore = create<SettingsState>()(
   persist(
     set => ({
       notifications: defaultNotifications,
+      reset: () => set({notifications: defaultNotifications}),
+      setNotificationSettings: notificationSettings =>
+        set(state => ({
+          notifications: {
+            ...state.notifications,
+            ...notificationSettings,
+          },
+        })),
       setNotificationPreference: (key, value) =>
         set(state => ({
           notifications: {

@@ -45,7 +45,12 @@ import {useUserProfileStore} from '../../../store/profile-store';
 import {useSessionStore} from '../../../store/session-store';
 import {removeTapIn} from '../../check-in/services/check-in-service';
 import {getCircleDetail} from '../mockData';
-import {deleteCircle, joinCircle} from '../services/circle-service';
+import {
+  deleteCircle,
+  joinCircle,
+  pokeCircleMembers,
+  reviewJoinRequest,
+} from '../services/circle-service';
 import {subscribeToPublicCircle} from '../services/public-circle-service';
 import {
   buildPublicCircleDetail,
@@ -61,9 +66,7 @@ type DetailStatusPill = {
   tone: HoystChipTone;
 };
 
-function getCategoryTone(
-  category: string,
-): HoystChipTone {
+function getCategoryTone(category: string): HoystChipTone {
   if (category === 'Fitness') {
     return 'green';
   }
@@ -429,11 +432,7 @@ function DeleteCircleConfirmModal({
                 borderColor={`${theme.danger}66`}
                 disabled={!canConfirm || isDeleting}
                 icon={
-                  <Trash2
-                    color={theme.danger}
-                    size={18}
-                    strokeWidth={2.3}
-                  />
+                  <Trash2 color={theme.danger} size={18} strokeWidth={2.3} />
                 }
                 label={isDeleting ? 'Deleting...' : 'Delete Circle'}
                 onPress={onConfirm}
@@ -454,6 +453,8 @@ export function CircleDetailScreen({
 }: Props): React.JSX.Element {
   const theme = useHoystTheme();
   const [poked, setPoked] = useState(false);
+  const [isPoking, setIsPoking] = useState(false);
+  const [reviewingRequestId, setReviewingRequestId] = useState<string>();
   const [joinRequested, setJoinRequested] = useState(false);
   const [isJoining, setIsJoining] = useState(false);
   const [isRemovingTapIn, setIsRemovingTapIn] = useState(false);
@@ -479,8 +480,18 @@ export function CircleDetailScreen({
       getCircleDetail(route.params.circleId),
     [memberCircle, publicCircle, route.params.circleId],
   );
-  const pendingMembers = useMemo(
-    () => detail?.members.filter(member => member.state === 'pending') ?? [],
+  const pendingTapInMembers = useMemo(
+    () =>
+      detail?.members.filter(
+        member =>
+          member.state === 'pending' && member.membershipStatus !== 'pending',
+      ) ?? [],
+    [detail?.members],
+  );
+  const pendingJoinRequests = useMemo(
+    () =>
+      detail?.members.filter(member => member.membershipStatus === 'pending') ??
+      [],
     [detail?.members],
   );
   const missedMembers =
@@ -608,7 +619,8 @@ export function CircleDetailScreen({
       detail.viewerTodayStatus === 'skip');
   const canDeleteCircle = isMemberCircle && detail.viewerRole === 'owner';
   const canConfirmDeleteCircle =
-    deleteConfirmText.trim().toLowerCase() === detail.title.trim().toLowerCase();
+    deleteConfirmText.trim().toLowerCase() ===
+    detail.title.trim().toLowerCase();
   const removeActionLabel =
     detail.viewerTodayStatus === 'skip' ? 'Remove Skip' : 'Remove Tap In';
 
@@ -688,6 +700,38 @@ export function CircleDetailScreen({
       Alert.alert('Delete failed', message);
     } finally {
       setIsDeletingCircle(false);
+    }
+  };
+
+  const handleReviewJoinRequest = async (
+    requesterId: string,
+    approved: boolean,
+  ) => {
+    if (reviewingRequestId) {
+      return;
+    }
+
+    setReviewingRequestId(requesterId);
+    try {
+      const result = await reviewJoinRequest({
+        approved,
+        circleId: detail.id,
+        requesterId,
+      });
+      Alert.alert(
+        result.status === 'approved' ? 'Request approved' : 'Request declined',
+        result.status === 'approved'
+          ? 'They can Tap In with the circle now.'
+          : 'The request has been declined.',
+      );
+    } catch (error) {
+      Alert.alert(
+        'Review failed',
+        (error as {message?: string}).message ??
+          'Could not review this request.',
+      );
+    } finally {
+      setReviewingRequestId(undefined);
     }
   };
 
@@ -820,7 +864,7 @@ export function CircleDetailScreen({
           </HoystText>
           <HoystText tone="muted" variant="caption">
             {isMemberCircle
-              ? `${pendingMembers.length} pending, ${missedMembers.length} missed`
+              ? `${pendingTapInMembers.length} pending, ${missedMembers.length} missed`
               : isPendingMembership
               ? 'Pending approval'
               : getJoinModeLabel(detail)}
@@ -863,13 +907,13 @@ export function CircleDetailScreen({
             ) : null}
             <View style={styles.quickActionRow}>
               <DashboardQuickAction
-                emphasized={pendingMembers.length > 0 && !poked}
+                emphasized={pendingTapInMembers.length > 0 && !poked}
                 icon={
                   <BellRing
                     color={
                       poked
                         ? theme.success
-                        : pendingMembers.length > 0
+                        : pendingTapInMembers.length > 0
                         ? theme.accentSecondary
                         : theme.text
                     }
@@ -878,12 +922,42 @@ export function CircleDetailScreen({
                   />
                 }
                 label={
-                  poked ? 'Poked' : `Poke ${pendingMembers.length || 'All'}`
+                  isPoking
+                    ? 'Poking...'
+                    : poked
+                    ? 'Poked'
+                    : `Poke ${pendingTapInMembers.length || 'All'}`
                 }
-                onPress={() => setPoked(true)}
+                onPress={() => {
+                  if (isPoking) {
+                    return;
+                  }
+
+                  setIsPoking(true);
+                  pokeCircleMembers(detail.id)
+                    .then(result => {
+                      setPoked(true);
+                      Alert.alert(
+                        'Poke sent',
+                        result.poked > 0
+                          ? `${result.poked} member${
+                              result.poked === 1 ? '' : 's'
+                            } nudged.`
+                          : 'Everyone is already covered today.',
+                      );
+                    })
+                    .catch(error => {
+                      Alert.alert(
+                        'Poke failed',
+                        (error as {message?: string}).message ??
+                          'Could not send a poke.',
+                      );
+                    })
+                    .finally(() => setIsPoking(false));
+                }}
                 supportingText={
-                  pendingMembers.length > 0
-                    ? `${pendingMembers.length} pending`
+                  pendingTapInMembers.length > 0
+                    ? `${pendingTapInMembers.length} pending`
                     : 'Warm nudge'
                 }
               />
@@ -916,7 +990,9 @@ export function CircleDetailScreen({
                   icon={
                     <Settings2
                       color={
-                        isOwnerToolsExpanded ? theme.accentSecondary : theme.text
+                        isOwnerToolsExpanded
+                          ? theme.accentSecondary
+                          : theme.text
                       }
                       size={16}
                       strokeWidth={2.2}
@@ -930,6 +1006,55 @@ export function CircleDetailScreen({
                 />
                 {isOwnerToolsExpanded ? (
                   <View style={styles.ownerToolsActions}>
+                    {pendingJoinRequests.length > 0 ? (
+                      <View style={styles.joinRequestStack}>
+                        {pendingJoinRequests.map(member => (
+                          <View
+                            key={member.id}
+                            style={[
+                              styles.joinRequestRow,
+                              {
+                                backgroundColor: theme.surfaceSoft,
+                                borderColor: theme.borderStrong,
+                              },
+                            ]}>
+                            <View style={styles.joinRequestCopy}>
+                              <HoystText variant="bodyStrong">
+                                {member.name}
+                              </HoystText>
+                              <HoystText tone="muted" variant="caption">
+                                Wants to join
+                              </HoystText>
+                            </View>
+                            <View style={styles.joinRequestActions}>
+                              <HoystButton
+                                disabled={reviewingRequestId === member.id}
+                                label="Decline"
+                                onPress={() => {
+                                  handleReviewJoinRequest(
+                                    member.id,
+                                    false,
+                                  ).catch(() => undefined);
+                                }}
+                                style={styles.joinRequestButton}
+                                variant="outline"
+                              />
+                              <HoystButton
+                                disabled={reviewingRequestId === member.id}
+                                label="Approve"
+                                onPress={() => {
+                                  handleReviewJoinRequest(
+                                    member.id,
+                                    true,
+                                  ).catch(() => undefined);
+                                }}
+                                style={styles.joinRequestButton}
+                              />
+                            </View>
+                          </View>
+                        ))}
+                      </View>
+                    ) : null}
                     <DashboardUtilityAction
                       icon={
                         <Trash2
@@ -950,11 +1075,7 @@ export function CircleDetailScreen({
             ) : (
               <DashboardUtilityAction
                 icon={
-                  <Settings2
-                    color={theme.text}
-                    size={16}
-                    strokeWidth={2.2}
-                  />
+                  <Settings2 color={theme.text} size={16} strokeWidth={2.2} />
                 }
                 label="Manage"
                 supportingText={
@@ -1155,6 +1276,28 @@ const styles = StyleSheet.create({
   ownerToolsActions: {
     gap: 8,
     paddingLeft: 12,
+  },
+  joinRequestActions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  joinRequestButton: {
+    flex: 1,
+  },
+  joinRequestCopy: {
+    flex: 1,
+    gap: 2,
+  },
+  joinRequestRow: {
+    alignItems: 'center',
+    borderRadius: radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    flexDirection: 'row',
+    gap: 10,
+    padding: 10,
+  },
+  joinRequestStack: {
+    gap: 8,
   },
   primaryActionWrap: {
     marginBottom: 2,

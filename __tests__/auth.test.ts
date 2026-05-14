@@ -8,6 +8,7 @@ jest.mock('@react-navigation/native', () => ({
 }));
 
 import {useSessionStore} from '../src/store/session-store';
+import {useSettingsStore} from '../src/store/settings-store';
 import {
   normalizeOnboardingStep,
   useOnboardingStore,
@@ -35,6 +36,7 @@ import {getAuthInitialRouteName} from '../src/navigation/auth-stack-policy';
 import {getStateWithoutAuthModal} from '../src/navigation/auth-modal-state';
 import {canResumePendingAction} from '../src/navigation/pending-action-resume';
 import {getRootNavigatorMode} from '../src/navigation/root-mode';
+import {getSettingsFallbackRoute} from '../src/navigation/settings-fallback-route';
 import {resolveStarterCircleDecision} from '../functions/src/auth/starter-circle-plan';
 
 describe('auth profile validation', () => {
@@ -74,6 +76,15 @@ describe('session pending actions', () => {
       circleId: 'circle-1',
       type: 'joinCircle',
     });
+  });
+
+  it('clears stale protected actions when auth starts without an action', () => {
+    useSessionStore.getState().setPendingAction({type: 'settings'});
+
+    useSessionStore.getState().beginAuthFlow();
+
+    expect(useSessionStore.getState().status).toBe('authenticating');
+    expect(useSessionStore.getState().pendingAction).toBeUndefined();
   });
 
   it('consumes pending actions once after profile completion', () => {
@@ -121,7 +132,9 @@ describe('adaptive auth entry intent', () => {
   });
 
   it('opens onboarding email choice in registration mode', () => {
-    expect(resolveSignInRouteIntent(getOnboardingSignInParams('email'))).toEqual({
+    expect(
+      resolveSignInRouteIntent(getOnboardingSignInParams('email')),
+    ).toEqual({
       entryPoint: 'onboarding',
       method: 'email',
       mode: 'register',
@@ -129,7 +142,9 @@ describe('adaptive auth entry intent', () => {
   });
 
   it('opens onboarding phone choice in registration mode', () => {
-    expect(resolveSignInRouteIntent(getOnboardingSignInParams('phone'))).toEqual({
+    expect(
+      resolveSignInRouteIntent(getOnboardingSignInParams('phone')),
+    ).toEqual({
       entryPoint: 'onboarding',
       method: 'phone',
       mode: 'register',
@@ -289,6 +304,40 @@ describe('root navigator mode policy', () => {
       }),
     ).toBe('main');
   });
+
+  it('keeps ready onboarding accounts in auth while starter setup is pending', () => {
+    expect(
+      getRootNavigatorMode({
+        currentStep: 'finishProfile',
+        hasHydratedOnboarding: true,
+        hasPendingStarterCircleSetup: true,
+        hasSeenOnboarding: false,
+        status: 'authenticatedReady',
+      }),
+    ).toBe('authFirst');
+  });
+
+  it('keeps ready onboarding auth visible until the user finishes setup', () => {
+    expect(
+      getRootNavigatorMode({
+        currentStep: 'auth',
+        hasHydratedOnboarding: true,
+        hasSeenOnboarding: false,
+        status: 'authenticatedReady',
+      }),
+    ).toBe('authFirst');
+  });
+
+  it('keeps ready onboarding notification opt-in visible until setup continues', () => {
+    expect(
+      getRootNavigatorMode({
+        currentStep: 'notifications',
+        hasHydratedOnboarding: true,
+        hasSeenOnboarding: false,
+        status: 'authenticatedReady',
+      }),
+    ).toBe('authFirst');
+  });
 });
 
 describe('auth stack route policy', () => {
@@ -302,6 +351,12 @@ describe('auth stack route policy', () => {
     expect(
       getAuthInitialRouteName({
         currentStep: 'finishProfile',
+        status: 'authenticatedIncompleteProfile',
+      }),
+    ).toBe('Welcome');
+    expect(
+      getAuthInitialRouteName({
+        currentStep: 'notifications',
         status: 'authenticatedIncompleteProfile',
       }),
     ).toBe('Welcome');
@@ -406,6 +461,36 @@ describe('auth modal dismissal state', () => {
   });
 });
 
+describe('settings fallback routing', () => {
+  it('returns Home tabs when the main navigator is active', () => {
+    expect(getSettingsFallbackRoute(['MainTabs', 'Settings'])).toBe('MainTabs');
+  });
+
+  it('returns onboarding auth when tabs are not registered', () => {
+    expect(getSettingsFallbackRoute(['Auth', 'Settings'])).toBe('Auth');
+  });
+
+  it('does not invent a route when no safe fallback exists', () => {
+    expect(getSettingsFallbackRoute(['Settings'])).toBeUndefined();
+  });
+});
+
+describe('settings auth entry', () => {
+  it('starts onboarding without a Settings resume target', () => {
+    useSessionStore.getState().setPendingAction({type: 'settings'});
+
+    useSessionStore.getState().clearPendingAction();
+    useSessionStore.getState().beginAuthFlow();
+    useOnboardingStore.getState().reset();
+
+    expect(useSessionStore.getState()).toMatchObject({
+      pendingAction: undefined,
+      status: 'authenticating',
+    });
+    expect(useOnboardingStore.getState().currentStep).toBe('welcome');
+  });
+});
+
 describe('onboarding store', () => {
   beforeEach(() => {
     useOnboardingStore.getState().reset();
@@ -421,6 +506,17 @@ describe('onboarding store', () => {
 
     useOnboardingStore.getState().previousStep();
     expect(useOnboardingStore.getState().currentStep).toBe('goal');
+  });
+
+  it('routes circle review through notification opt-in before auth', () => {
+    const store = useOnboardingStore.getState();
+
+    store.setCurrentStep('circleReview');
+    store.nextStep();
+    expect(useOnboardingStore.getState().currentStep).toBe('notifications');
+
+    useOnboardingStore.getState().nextStep();
+    expect(useOnboardingStore.getState().currentStep).toBe('auth');
   });
 
   it('tracks the goal and builds onboarding preferences', () => {
@@ -484,9 +580,7 @@ describe('onboarding store', () => {
 
     expect(useOnboardingStore.getState().firstCircleSkipped).toBe(false);
 
-    const setupId = useOnboardingStore
-      .getState()
-      .prepareStarterCircleSetup();
+    const setupId = useOnboardingStore.getState().prepareStarterCircleSetup();
 
     useOnboardingStore.getState().setFirstCircleSkipped(true);
     useOnboardingStore.getState().startOnboardingWizard();
@@ -496,7 +590,9 @@ describe('onboarding store', () => {
       hasPendingStarterCircleSetup: false,
       starterCircleSetupId: undefined,
     });
-    expect(useOnboardingStore.getState().starterCircleSetupId).not.toBe(setupId);
+    expect(useOnboardingStore.getState().starterCircleSetupId).not.toBe(
+      setupId,
+    );
   });
 
   it('normalizes removed persisted steps to active onboarding steps', () => {
@@ -505,6 +601,7 @@ describe('onboarding store', () => {
     expect(normalizeOnboardingStep('pace')).toBe('circleTitle');
     expect(normalizeOnboardingStep('profile')).toBe('circleTitle');
     expect(normalizeOnboardingStep('preview')).toBe('circleReview');
+    expect(normalizeOnboardingStep('notifications')).toBe('notifications');
     expect(normalizeOnboardingStep('finishProfile')).toBe('finishProfile');
   });
 
@@ -546,6 +643,24 @@ describe('onboarding store', () => {
     useOnboardingStore.getState().startForProtectedAction();
 
     expect(useOnboardingStore.getState().currentStep).toBe('coach');
+  });
+});
+
+describe('settings store', () => {
+  it('resets persisted account preferences to guest defaults', () => {
+    useSettingsStore.getState().setNotificationSettings({
+      circleActivity: false,
+      productUpdates: false,
+      tapInReminders: false,
+    });
+
+    useSettingsStore.getState().reset();
+
+    expect(useSettingsStore.getState().notifications).toEqual({
+      circleActivity: true,
+      productUpdates: true,
+      tapInReminders: true,
+    });
   });
 });
 
@@ -645,7 +760,9 @@ describe('onboarding completion finalizer', () => {
   });
 
   it('surfaces starter circle failures after profile completion starts', async () => {
-    const completeProfile = jest.fn().mockRejectedValue(new Error('Create failed'));
+    const completeProfile = jest
+      .fn()
+      .mockRejectedValue(new Error('Create failed'));
     const onProfileCompleted = jest.fn();
     const starterCircleDraft = {
       ...useOnboardingStore.getState().starterCircleDraft,

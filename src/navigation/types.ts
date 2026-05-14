@@ -31,11 +31,11 @@ export type AuthStackParamList = {
   CompleteProfile: undefined;
 };
 
-export type TapInSource = 'home' | 'circle_detail' | 'tap_in';
+export type TapInSource = 'circle_detail' | 'home' | 'notification' | 'tap_in';
 
 export type RootStackParamList = {
   Loading: undefined;
-  MainTabs: undefined;
+  MainTabs: NavigatorScreenParams<AppTabsParamList> | undefined;
   Auth: NavigatorScreenParams<AuthStackParamList> | undefined;
   Settings: undefined;
   EditProfile: undefined;

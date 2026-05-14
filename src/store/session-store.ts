@@ -44,10 +44,10 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   status: 'initializing',
   user: undefined,
   beginAuthFlow: pendingAction =>
-    set(state => ({
-      pendingAction: pendingAction ?? state.pendingAction,
+    set({
+      pendingAction,
       status: 'authenticating',
-    })),
+    }),
   clearPendingAction: () => set({pendingAction: undefined}),
   consumePendingAction: () => {
     const pendingAction = get().pendingAction;

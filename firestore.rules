@@ -37,6 +37,11 @@ service cloud.firestore {
     match /userPrivate/{uid} {
       allow read: if isSelf(uid);
       allow create, update, delete: if false;
+
+      match /inbox/{eventId} {
+        allow read: if isSelf(uid);
+        allow write: if false;
+      }
     }
 
     match /handles/{handle} {

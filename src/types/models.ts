@@ -50,6 +50,7 @@ export type CircleMemberStatus = {
   initials: string;
   avatarImage?: ImageSourcePropType;
   avatarUrl?: string;
+  membershipStatus?: CircleMembershipStatus;
   state: CircleMemberState;
   badgeCount?: number;
 };
@@ -70,6 +71,38 @@ export type CircleActivityItem = {
   timestamp: string;
   actionLabel?: string;
   imageVariant?: 'workout' | 'none';
+};
+
+export type InboxEventType =
+  | 'circle_at_risk'
+  | 'join_approved'
+  | 'join_declined'
+  | 'join_request'
+  | 'member_joined'
+  | 'poke'
+  | 'tap_in_final_warning'
+  | 'tap_in_midday_reminder';
+
+export type InboxDeeplink =
+  | {screen: 'CircleDetail'; circleId: string}
+  | {screen: 'Inbox'}
+  | {screen: 'TapInComposer'; circleId: string; source: 'notification'};
+
+export type InboxEvent = {
+  actor?: {
+    avatarUrl?: string;
+    displayName?: string;
+    handle?: string;
+    uid?: string;
+  };
+  body: string;
+  circleId?: string;
+  createdAtLabel: string;
+  deeplink: InboxDeeplink;
+  id: string;
+  isRead: boolean;
+  title: string;
+  type: InboxEventType;
 };
 
 export type CircleSummary = {

@@ -6,6 +6,7 @@ import {z} from 'zod';
 import {db} from '../firebase';
 import {canUseSkipGrace, getRollingDateKeys} from './grace';
 import {getRemoveTapInDecision} from './remove';
+import {notifyCircleAtRisk} from '../notifications';
 
 const submitTapInSchema = z.object({
   circleId: z.string().trim().min(1),
@@ -71,7 +72,7 @@ export const submitTapIn = onCall(async request => {
   const memberRef = circleRef.collection('members').doc(uid);
   const now = FieldValue.serverTimestamp();
 
-  return db.runTransaction(async transaction => {
+  const result = await db.runTransaction(async transaction => {
     const [circleSnapshot, memberSnapshot] = await Promise.all([
       transaction.get(circleRef),
       transaction.get(memberRef),
@@ -154,6 +155,52 @@ export const submitTapIn = onCall(async request => {
 
     return {checkInId: uid, dateKey};
   });
+
+  const [circleSnapshot, memberSnapshots, checkInSnapshots] = await Promise.all(
+    [
+      circleRef.get(),
+      circleRef.collection('members').where('status', '==', 'active').get(),
+      circleRef
+        .collection('days')
+        .doc(result.dateKey)
+        .collection('checkIns')
+        .get(),
+    ],
+  );
+  const circle = circleSnapshot.data();
+  const coveredUids = new Set(
+    checkInSnapshots.docs
+      .filter(snapshot => ['done', 'skip'].includes(snapshot.data().status))
+      .map(snapshot => snapshot.id),
+  );
+  const pendingMembers = memberSnapshots.docs
+    .map(snapshot => snapshot.data())
+    .filter(memberData => {
+      const memberUid = memberData.uid;
+      return (
+        typeof memberUid === 'string' &&
+        memberUid !== uid &&
+        !coveredUids.has(memberUid)
+      );
+    });
+  const remainingCount = pendingMembers.length;
+
+  if (remainingCount > 0 && remainingCount <= 2) {
+    await Promise.all(
+      pendingMembers.map(memberData =>
+        notifyCircleAtRisk({
+          circleId: input.circleId,
+          circleTitle:
+            typeof circle?.title === 'string' ? circle.title : 'Your circle',
+          dateKey: result.dateKey,
+          remainingCount,
+          targetUid: memberData.uid,
+        }),
+      ),
+    ).catch(error => console.error('notify_circle_at_risk_failed', error));
+  }
+
+  return result;
 });
 
 export const removeTapIn = onCall(async request => {

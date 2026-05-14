@@ -8,6 +8,7 @@ const zod_1 = require("zod");
 const firebase_1 = require("../firebase");
 const grace_1 = require("./grace");
 const remove_1 = require("./remove");
+const notifications_1 = require("../notifications");
 const submitTapInSchema = zod_1.z.object({
     circleId: zod_1.z.string().trim().min(1),
     note: zod_1.z.string().trim().max(1000).optional(),
@@ -61,7 +62,7 @@ exports.submitTapIn = (0, https_1.onCall)(async (request) => {
     const circleRef = firebase_1.db.collection('circles').doc(input.circleId);
     const memberRef = circleRef.collection('members').doc(uid);
     const now = firestore_1.FieldValue.serverTimestamp();
-    return firebase_1.db.runTransaction(async (transaction) => {
+    const result = await firebase_1.db.runTransaction(async (transaction) => {
         const [circleSnapshot, memberSnapshot] = await Promise.all([
             transaction.get(circleRef),
             transaction.get(memberRef),
@@ -117,6 +118,38 @@ exports.submitTapIn = (0, https_1.onCall)(async (request) => {
         }, { merge: true });
         return { checkInId: uid, dateKey };
     });
+    const [circleSnapshot, memberSnapshots, checkInSnapshots] = await Promise.all([
+        circleRef.get(),
+        circleRef.collection('members').where('status', '==', 'active').get(),
+        circleRef
+            .collection('days')
+            .doc(result.dateKey)
+            .collection('checkIns')
+            .get(),
+    ]);
+    const circle = circleSnapshot.data();
+    const coveredUids = new Set(checkInSnapshots.docs
+        .filter(snapshot => ['done', 'skip'].includes(snapshot.data().status))
+        .map(snapshot => snapshot.id));
+    const pendingMembers = memberSnapshots.docs
+        .map(snapshot => snapshot.data())
+        .filter(memberData => {
+        const memberUid = memberData.uid;
+        return (typeof memberUid === 'string' &&
+            memberUid !== uid &&
+            !coveredUids.has(memberUid));
+    });
+    const remainingCount = pendingMembers.length;
+    if (remainingCount > 0 && remainingCount <= 2) {
+        await Promise.all(pendingMembers.map(memberData => (0, notifications_1.notifyCircleAtRisk)({
+            circleId: input.circleId,
+            circleTitle: typeof circle?.title === 'string' ? circle.title : 'Your circle',
+            dateKey: result.dateKey,
+            remainingCount,
+            targetUid: memberData.uid,
+        }))).catch(error => console.error('notify_circle_at_risk_failed', error));
+    }
+    return result;
 });
 exports.removeTapIn = (0, https_1.onCall)(async (request) => {
     const input = removeTapInSchema.parse(request.data);

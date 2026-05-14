@@ -6,6 +6,7 @@ export type OnboardingStep =
   | 'circleDailyTask'
   | 'circlePrivacy'
   | 'circleReview'
+  | 'notifications'
   | 'auth'
   | 'finishProfile';
 
@@ -36,6 +37,7 @@ export const onboardingSteps: OnboardingStep[] = [
   'circleDailyTask',
   'circlePrivacy',
   'circleReview',
+  'notifications',
   'auth',
   'finishProfile',
 ];

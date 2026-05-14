@@ -15,6 +15,7 @@ export function OnboardingSetupFinalizer(): null {
   const [retryTick, setRetryTick] = useState(0);
   const clearPendingAction = useSessionStore(state => state.clearPendingAction);
   const status = useSessionStore(state => state.status);
+  const currentStep = useOnboardingStore(state => state.currentStep);
   const clearStarterCircleSetup = useOnboardingStore(
     state => state.clearStarterCircleSetup,
   );
@@ -27,7 +28,9 @@ export function OnboardingSetupFinalizer(): null {
   const hasPendingStarterCircleSetup = useOnboardingStore(
     state => state.hasPendingStarterCircleSetup,
   );
-  const hasSeenOnboarding = useOnboardingStore(state => state.hasSeenOnboarding);
+  const hasSeenOnboarding = useOnboardingStore(
+    state => state.hasSeenOnboarding,
+  );
   const markSeen = useOnboardingStore(state => state.markSeen);
   const profile = useUserProfileStore(state => state.profile);
   const starterCircleDraft = useOnboardingStore(
@@ -48,6 +51,15 @@ export function OnboardingSetupFinalizer(): null {
 
   useEffect(() => {
     if (status !== 'authenticatedReady' || !profile) {
+      return;
+    }
+
+    if (
+      !hasSeenOnboarding &&
+      (currentStep === 'notifications' ||
+        currentStep === 'auth' ||
+        currentStep === 'finishProfile')
+    ) {
       return;
     }
 
@@ -115,6 +127,7 @@ export function OnboardingSetupFinalizer(): null {
   }, [
     clearPendingAction,
     clearStarterCircleSetup,
+    currentStep,
     firstCircleSkipped,
     getOnboardingPreferences,
     hasPendingStarterCircleSetup,

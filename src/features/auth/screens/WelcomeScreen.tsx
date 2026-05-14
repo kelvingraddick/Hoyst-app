@@ -17,6 +17,7 @@ import LinearGradient from 'react-native-linear-gradient';
 import {
   Apple,
   ArrowLeft,
+  BellRing,
   Check,
   Chrome,
   Clock3,
@@ -42,6 +43,7 @@ import {useHoystTheme} from '../../../design/theme/useHoystTheme';
 import {gradients} from '../../../design/tokens/gradients';
 import {radius} from '../../../design/tokens/radius';
 import {firebaseAuth} from '../../../lib/firebase/auth';
+import {requestPushNotificationPermission} from '../../../lib/notifications';
 import type {
   AuthStackParamList,
   RootStackParamList,
@@ -50,6 +52,7 @@ import type {
 import {dismissAuthModals} from '../../../navigation/auth-modal-dismiss';
 import {useOnboardingStore} from '../../../store/onboarding-store';
 import {useSessionStore} from '../../../store/session-store';
+import {useUserProfileStore} from '../../../store/profile-store';
 import {
   getOptionLabel,
   goalOptions,
@@ -92,9 +95,10 @@ const stepCopy: Record<Exclude<OnboardingStep, 'welcome'>, StepCopy> = {
     title: 'Save your rhythm',
   },
   coach: {
-    body: 'Let\'s help you create your account and a first circle you can invite people into.',
-    prompt: 'A circle works best when the promise is small, visible, and repeatable.',
-    title: 'Let\'s get started',
+    body: "Let's help you create your account and a first circle you can invite people into.",
+    prompt:
+      'A circle works best when the promise is small, visible, and repeatable.',
+    title: "Let's get started",
   },
   goal: {
     body: 'This helps Hoyst shape the first circle around the kind of accountability you want.',
@@ -115,6 +119,11 @@ const stepCopy: Record<Exclude<OnboardingStep, 'welcome'>, StepCopy> = {
     body: 'After account creation, Hoyst will save your profile and create this circle.',
     prompt: 'Ready to save your setup?',
     title: 'Review your first circle',
+  },
+  notifications: {
+    body: 'Hoyst can nudge you before a streak slips and warn you when today is almost closed.',
+    prompt: 'Keep your first circle alive with timely reminders.',
+    title: 'Protect your streak',
   },
   circleTitle: {
     body: 'Give the circle a name people can recognize and rally around.',
@@ -137,6 +146,7 @@ const stepIcons: Record<Exclude<OnboardingStep, 'welcome'>, LucideIcon> = {
   coach: Sparkles,
   finishProfile: UserRound,
   goal: Target,
+  notifications: BellRing,
 };
 
 const circlePrivacyOptions: OnboardingOption<CirclePrivacyMode>[] = [
@@ -271,7 +281,10 @@ function ProgressHeader({
           colors={[...gradients.primaryRing]}
           end={{x: 1, y: 0}}
           start={{x: 0, y: 0}}
-          style={[styles.progressFill, {width: `${Math.round(progress * 100)}%`}]}
+          style={[
+            styles.progressFill,
+            {width: `${Math.round(progress * 100)}%`},
+          ]}
         />
       </View>
       <IconButton
@@ -419,7 +432,10 @@ function PreviewRow({
       <View
         style={[
           styles.previewIcon,
-          {backgroundColor: `${accentColor}20`, borderColor: `${accentColor}66`},
+          {
+            backgroundColor: `${accentColor}20`,
+            borderColor: `${accentColor}66`,
+          },
         ]}>
         <Icon color={accentColor} size={20} strokeWidth={2.3} />
       </View>
@@ -473,6 +489,8 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
   const theme = useHoystTheme();
   const [circleSetupError, setCircleSetupError] = useState<string>();
   const [isBusy, setIsBusy] = useState(false);
+  const [isRequestingPushPermission, setIsRequestingPushPermission] =
+    useState(false);
   const [profileWasCompleted, setProfileWasCompleted] = useState(false);
   const currentStep = useOnboardingStore(state => state.currentStep);
   const displayName = useOnboardingStore(state => state.displayName);
@@ -522,6 +540,7 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
   const setGuest = useSessionStore(state => state.setGuest);
   const status = useSessionStore(state => state.status);
   const user = useSessionStore(state => state.user);
+  const profile = useUserProfileStore(state => state.profile);
   const rootNavigation =
     navigation.getParent<NativeStackNavigationProp<RootStackParamList>>();
   const handleValidation = useMemo(() => validateHandle(handle), [handle]);
@@ -538,16 +557,16 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
     currentStep === 'goal'
       ? Boolean(goal)
       : currentStep === 'finishProfile'
-        ? displayName.trim().length > 0 && handleValidation.isValid
-        : currentStep === 'circleTitle'
-          ? starterCircleDraft.title.trim().length > 0 &&
-            starterCircleDraft.title.trim().length <= 80
-          : currentStep === 'circleDailyTask'
-            ? starterCircleDraft.dailyTask.trim().length > 0 &&
-              starterCircleDraft.dailyTask.trim().length <= 160
-            : currentStep === 'circleReview'
-              ? firstCircleSkipped || isStarterCircleDraftReady(starterCircleDraft)
-              : true;
+      ? displayName.trim().length > 0 && handleValidation.isValid
+      : currentStep === 'circleTitle'
+      ? starterCircleDraft.title.trim().length > 0 &&
+        starterCircleDraft.title.trim().length <= 80
+      : currentStep === 'circleDailyTask'
+      ? starterCircleDraft.dailyTask.trim().length > 0 &&
+        starterCircleDraft.dailyTask.trim().length <= 160
+      : currentStep === 'circleReview'
+      ? firstCircleSkipped || isStarterCircleDraftReady(starterCircleDraft)
+      : true;
   const authProviderColors = {
     apple: {
       backgroundColor: theme.isDark
@@ -606,31 +625,49 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
     }
   };
 
-  useEffect(() => {
-    if (status === 'authenticatedIncompleteProfile' && currentStep === 'auth') {
-      setCurrentStep('finishProfile');
-    }
-  }, [currentStep, setCurrentStep, status]);
+  const hasPendingStarterCircleSetup = useOnboardingStore(
+    state => state.hasPendingStarterCircleSetup,
+  );
 
   useEffect(() => {
     if (
-      status !== 'authenticatedIncompleteProfile' ||
+      (status === 'authenticatedIncompleteProfile' ||
+        (status === 'authenticatedReady' && hasPendingStarterCircleSetup)) &&
+      currentStep === 'auth'
+    ) {
+      setCurrentStep('finishProfile');
+    }
+  }, [currentStep, hasPendingStarterCircleSetup, setCurrentStep, status]);
+
+  useEffect(() => {
+    if (
+      (status !== 'authenticatedIncompleteProfile' &&
+        status !== 'authenticatedReady') ||
       currentStep !== 'finishProfile'
     ) {
       return;
     }
 
-    if (!displayName.trim() && user?.displayName) {
-      setDisplayName(user.displayName);
+    if (!displayName.trim()) {
+      setDisplayName(profile?.name ?? user?.displayName ?? '');
+    }
+
+    if (!handle.trim() && profile?.handle) {
+      setHandle(profile.handle);
     }
 
     if (!timezone.trim()) {
-      setTimezone(getLocalTimezone());
+      setTimezone(profile?.timezone ?? getLocalTimezone());
     }
   }, [
     currentStep,
     displayName,
+    handle,
+    profile?.handle,
+    profile?.name,
+    profile?.timezone,
     setDisplayName,
+    setHandle,
     setTimezone,
     status,
     timezone,
@@ -726,7 +763,23 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
     nextStep();
   };
 
-  const renderOptions = <T extends string,>(
+  const continueFromNotifications = async (shouldRequestPermission: boolean) => {
+    if (isRequestingPushPermission) {
+      return;
+    }
+
+    if (!shouldRequestPermission) {
+      nextStep();
+      return;
+    }
+
+    setIsRequestingPushPermission(true);
+    await requestPushNotificationPermission().catch(() => undefined);
+    setIsRequestingPushPermission(false);
+    nextStep();
+  };
+
+  const renderOptions = <T extends string>(
     options: OnboardingOption<T>[],
     selected: T | undefined,
     onSelect: (id: T) => void,
@@ -749,11 +802,7 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
     if (currentStep === 'welcome') {
       return (
         <View style={styles.welcomeBody}>
-          <BrandMark
-            isDark={theme.isDark}
-            kind="logo"
-            style={styles.logo}
-          />
+          <BrandMark isDark={theme.isDark} kind="logo" style={styles.logo} />
           <View style={styles.heroMark}>
             <TapInRingMark innerSize={68} outerSize={118} />
           </View>
@@ -859,7 +908,9 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
                 </View>
                 <HoystButton
                   label={isBusy ? 'Retrying...' : 'Retry first circle'}
-                  onPress={canContinue && !isBusy ? submitFinishProfile : undefined}
+                  onPress={
+                    canContinue && !isBusy ? submitFinishProfile : undefined
+                  }
                 />
                 <HoystButton
                   label="Skip first circle"
@@ -882,7 +933,9 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
               placeholder="The 5AM Vanguard"
               value={starterCircleDraft.title}
             />
-            <HoystText tone={canContinue ? 'muted' : 'danger'} variant="caption">
+            <HoystText
+              tone={canContinue ? 'muted' : 'danger'}
+              variant="caption">
               {starterCircleDraft.title.trim().length}/80 characters
             </HoystText>
           </View>
@@ -902,7 +955,9 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
               textAlignVertical="top"
               value={starterCircleDraft.dailyTask}
             />
-            <HoystText tone={canContinue ? 'muted' : 'danger'} variant="caption">
+            <HoystText
+              tone={canContinue ? 'muted' : 'danger'}
+              variant="caption">
               {starterCircleDraft.dailyTask.trim().length}/160 characters
             </HoystText>
           </View>
@@ -934,7 +989,11 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
           <View style={styles.coachPreview}>
             <PreviewRow
               accent="green"
-              detail={getOptionLabel(goalOptions, goal, 'Explore momentum circles')}
+              detail={getOptionLabel(
+                goalOptions,
+                goal,
+                'Explore momentum circles',
+              )}
               icon={Target}
               label="Primary goal"
             />
@@ -952,15 +1011,41 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
             />
             <PreviewRow
               accent="purple"
-              detail={`${starterCircleDraft.privacyMode === 'link_only' ? 'Link-only' : starterCircleDraft.privacyMode}: ${
+              detail={`${
+                starterCircleDraft.privacyMode === 'link_only'
+                  ? 'Link-only'
+                  : starterCircleDraft.privacyMode
+              }: ${
                 starterCircleDraft.joinMode === 'open'
                   ? 'Open seats'
                   : starterCircleDraft.joinMode === 'request_to_join'
-                    ? 'Request approval'
-                    : 'Invite link'
+                  ? 'Request approval'
+                  : 'Invite link'
               }`}
               icon={Share2}
               label="Access"
+            />
+          </View>
+        ) : null}
+        {currentStep === 'notifications' ? (
+          <View style={styles.coachPreview}>
+            <PreviewRow
+              accent="green"
+              detail="A helpful nudge before your daily promise slips away."
+              icon={BellRing}
+              label="Tap In reminders"
+            />
+            <PreviewRow
+              accent="orange"
+              detail="A last-call warning when there are 2 hours left."
+              icon={Clock3}
+              label="2-hour warnings"
+            />
+            <PreviewRow
+              accent="purple"
+              detail="Only important updates like requests, joins, pokes, and circles at risk."
+              icon={Shield}
+              label="Circle alerts"
             />
           </View>
         ) : null}
@@ -1047,17 +1132,17 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
   const primaryLabel =
     currentStep === 'welcome'
       ? 'Get started'
-      : currentStep === 'circleReview'
-        ? 'Continue to account'
-        : currentStep === 'finishProfile'
-          ? isBusy
-            ? 'Saving...'
-            : shouldCreateCircle
-              ? 'Finish setup'
-              : 'Complete account'
-        : currentStep === 'auth'
-          ? 'Continue as guest'
-          : 'Continue';
+      : currentStep === 'notifications'
+      ? 'Enable reminders'
+      : currentStep === 'finishProfile'
+      ? isBusy
+        ? 'Saving...'
+        : shouldCreateCircle
+        ? 'Finish setup'
+        : 'Complete account'
+      : currentStep === 'auth'
+      ? 'Continue as guest'
+      : 'Continue';
   const isCircleSetupStep =
     currentStep === 'circleTitle' ||
     currentStep === 'circleDailyTask' ||
@@ -1066,9 +1151,11 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
   const secondaryLabel =
     currentStep === 'welcome'
       ? 'I already have an account'
+      : currentStep === 'notifications'
+      ? 'Not now'
       : isCircleSetupStep
-        ? 'Skip first circle'
-        : undefined;
+      ? 'Skip first circle'
+      : undefined;
   const authEntryPoint: SignInEntryPoint = pendingAction
     ? pendingAction.type === 'settings'
       ? 'settings'
@@ -1078,24 +1165,33 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
     currentStep === 'welcome'
       ? () => setCurrentStep('coach')
       : currentStep === 'auth'
-        ? continueAsGuest
-        : currentStep === 'finishProfile'
-          ? submitFinishProfile
-        : goNext;
+      ? continueAsGuest
+      : currentStep === 'finishProfile'
+      ? submitFinishProfile
+      : currentStep === 'notifications'
+      ? () => {
+          continueFromNotifications(true).catch(() => undefined);
+        }
+      : goNext;
   const secondaryAction =
     currentStep === 'welcome'
       ? () => {
           navigation.navigate('SignIn', getWelcomeSignInParams());
         }
+      : currentStep === 'notifications'
+      ? () => {
+          continueFromNotifications(false).catch(() => undefined);
+        }
       : isCircleSetupStep
-        ? () => {
-            setFirstCircleSkipped(true);
-            setCurrentStep('auth');
-          }
-        : undefined;
+      ? () => {
+          setFirstCircleSkipped(true);
+          setCurrentStep('auth');
+        }
+      : undefined;
 
   return (
-    <SafeAreaView style={[styles.safeArea, {backgroundColor: theme.background}]}>
+    <SafeAreaView
+      style={[styles.safeArea, {backgroundColor: theme.background}]}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.keyboardView}>
@@ -1112,7 +1208,7 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
           <View style={styles.content}>{renderContent()}</View>
         </ScrollView>
         <StickyCta
-          disabled={!canContinue || isBusy}
+          disabled={!canContinue || isBusy || isRequestingPushPermission}
           label={primaryLabel}
           onPress={primaryAction}
           secondaryLabel={secondaryLabel}

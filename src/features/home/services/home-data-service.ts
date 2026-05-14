@@ -173,10 +173,14 @@ function mergeMemberProfileData(
     return memberData;
   }
 
-  const avatarUrl = getMemberAvatarUrl(memberData) || getMemberAvatarUrl(profileData);
+  const avatarUrl =
+    getMemberAvatarUrl(memberData) || getMemberAvatarUrl(profileData);
   const displayName = asString(
     memberData.displayName,
-    asString(memberData.name, asString(profileData.displayName, asString(profileData.name))),
+    asString(
+      memberData.name,
+      asString(profileData.displayName, asString(profileData.name)),
+    ),
   );
   const handle = asString(memberData.handle, asString(profileData.handle));
 
@@ -213,6 +217,7 @@ function mapMemberStatus(
   memberData: PlainData,
   todayCheckInStatuses: ReadonlyMap<string, CheckInStatus>,
 ): CircleMemberStatus | undefined {
+  const status = normalizeMembershipStatus(memberData.status);
   const uid = asString(memberData.uid, asString(memberData.id));
   const name = getMemberLabel(memberData);
 
@@ -226,6 +231,7 @@ function mapMemberStatus(
     ...(avatarUrl ? {avatarUrl} : {}),
     id: uid,
     initials: getInitials(name),
+    membershipStatus: status,
     name,
     state: getMemberState(memberData, todayCheckInStatuses),
   };
@@ -271,8 +277,8 @@ function buildProgressDays(
     state: completedDateKeys.has(day.dateKey)
       ? 'done'
       : day.dateKey === todayDateKey
-        ? 'today'
-        : 'future',
+      ? 'today'
+      : 'future',
   }));
 }
 
@@ -397,9 +403,7 @@ export function mapHomeCircleFromData({
   const progressBase = Math.max(activeMemberCount, isPending ? 0 : memberCount);
   const todayCheckInCount = coveredCheckIns.size;
   const progressPercent =
-    progressBase > 0
-      ? Math.round((todayCheckInCount / progressBase) * 100)
-      : 0;
+    progressBase > 0 ? Math.round((todayCheckInCount / progressBase) * 100) : 0;
   const viewerTodayStatus = uid ? coveredCheckIns.get(uid) : undefined;
   const viewerHasCheckedIn = isPending ? true : Boolean(viewerTodayStatus);
   const remainingCheckIns = isPending
@@ -409,10 +413,10 @@ export function mapHomeCircleFromData({
   const state = isPending
     ? 'active'
     : remainingCheckIns === 0 && progressBase > 0
-      ? 'done'
-      : !viewerHasCheckedIn && progressPercent < 50
-        ? 'risk'
-        : 'active';
+    ? 'done'
+    : !viewerHasCheckedIn && progressPercent < 50
+    ? 'risk'
+    : 'active';
   const matchCopy = isPending
     ? 'Pending approval before Tap In unlocks.'
     : asString(circleData.matchCopy);
@@ -438,8 +442,8 @@ export function mapHomeCircleFromData({
     streakLabel: isPending
       ? 'Pending approval'
       : streakDays > 0
-        ? `${streakDays}d streak`
-        : 'Start today',
+      ? `${streakDays}d streak`
+      : 'Start today',
     title,
     viewerHasCheckedIn,
     viewerMembershipStatus: membershipStatus,
@@ -455,7 +459,8 @@ export function getHomeCircleUrgencyRank(circle: CircleManagementCard) {
 
   const needsViewer = !circle.viewerHasCheckedIn;
   const isAtRisk = circle.state === 'risk';
-  const hasPendingToday = circle.state !== 'done' && circle.remainingCheckIns > 0;
+  const hasPendingToday =
+    circle.state !== 'done' && circle.remainingCheckIns > 0;
 
   if (needsViewer && isAtRisk) {
     return 0;
@@ -515,13 +520,19 @@ export function sortHomeCircles(circles: CircleManagementCard[]) {
 }
 
 export function getHomeFilterCounts(circles: CircleManagementCard[]) {
-  const filters: CircleManagementFilter[] = ['all', 'needsYou', 'atRisk', 'done'];
+  const filters: CircleManagementFilter[] = [
+    'all',
+    'needsYou',
+    'atRisk',
+    'done',
+  ];
 
   return filters.reduce(
     (counts, filter) => ({
       ...counts,
-      [filter]: circles.filter(circle => matchesHomeCircleFilter(circle, filter))
-        .length,
+      [filter]: circles.filter(circle =>
+        matchesHomeCircleFilter(circle, filter),
+      ).length,
     }),
     {} as Record<CircleManagementFilter, number>,
   );
@@ -646,20 +657,17 @@ function syncMemberProfileListeners({
     const unsubscribe = firestore
       .collection(collections.users)
       .doc(memberUid)
-      .onSnapshot(
-        snapshot => {
-          const profileData = snapshotData(snapshot);
+      .onSnapshot(snapshot => {
+        const profileData = snapshotData(snapshot);
 
-          if (profileData) {
-            state.memberProfiles.set(memberUid, profileData);
-          } else {
-            state.memberProfiles.delete(memberUid);
-          }
+        if (profileData) {
+          state.memberProfiles.set(memberUid, profileData);
+        } else {
+          state.memberProfiles.delete(memberUid);
+        }
 
-          onUpdate();
-        },
-        onError,
-      );
+        onUpdate();
+      }, onError);
 
     state.memberProfileUnsubscribes.set(memberUid, unsubscribe);
   });
@@ -746,13 +754,10 @@ export function subscribeToHomeData({
       });
 
       circleUnsubscribes.push(
-        circleRef.onSnapshot(
-          snapshot => {
-            state.circleData = snapshotData(snapshot);
-            emit();
-          },
-          onError,
-        ),
+        circleRef.onSnapshot(snapshot => {
+          state.circleData = snapshotData(snapshot);
+          emit();
+        }, onError),
       );
 
       if (membershipStatus !== 'active') {
@@ -760,27 +765,22 @@ export function subscribeToHomeData({
       }
 
       circleUnsubscribes.push(
-        circleRef.collection('members').onSnapshot(
-          snapshot => {
-            state.membersData = snapshot.docs
-              .map(snapshotData)
-              .filter(
-                (memberData): memberData is PlainData =>
-                  Boolean(
-                    memberData &&
-                      activeStatuses.has(asString(memberData.status)),
-                  ),
-              );
-            syncMemberProfileListeners({
-              memberRecords: state.membersData,
-              onError,
-              onUpdate: emit,
-              state,
-            });
-            emit();
-          },
-          onError,
-        ),
+        circleRef.collection('members').onSnapshot(snapshot => {
+          state.membersData = snapshot.docs
+            .map(snapshotData)
+            .filter((memberData): memberData is PlainData =>
+              Boolean(
+                memberData && activeStatuses.has(asString(memberData.status)),
+              ),
+            );
+          syncMemberProfileListeners({
+            memberRecords: state.membersData,
+            onError,
+            onUpdate: emit,
+            state,
+          });
+          emit();
+        }, onError),
       );
 
       const todayDateKey = recentDateKeys[recentDateKeys.length - 1];
@@ -791,30 +791,24 @@ export function subscribeToHomeData({
             .collection('days')
             .doc(todayDateKey)
             .collection('checkIns')
-            .onSnapshot(
-              snapshot => {
-                state.todayCheckInStatuses = new Map(
-                  snapshot.docs
-                    .map(doc => {
-                      const uidValue = asString(doc.data().uid, doc.id);
-                      const status =
-                        normalizeCheckInStatus(doc.data().status) ?? 'done';
+            .onSnapshot(snapshot => {
+              state.todayCheckInStatuses = new Map(
+                snapshot.docs
+                  .map(doc => {
+                    const uidValue = asString(doc.data().uid, doc.id);
+                    const status =
+                      normalizeCheckInStatus(doc.data().status) ?? 'done';
 
-                      return uidValue && isCoveredCheckInStatus(status)
-                        ? ([uidValue, status] as const)
-                        : undefined;
-                    })
-                    .filter(
-                      (
-                        entry,
-                      ): entry is readonly [string, CheckInStatus] =>
-                        Boolean(entry),
-                    ),
-                );
-                emit();
-              },
-              onError,
-            ),
+                    return uidValue && isCoveredCheckInStatus(status)
+                      ? ([uidValue, status] as const)
+                      : undefined;
+                  })
+                  .filter((entry): entry is readonly [string, CheckInStatus] =>
+                    Boolean(entry),
+                  ),
+              );
+              emit();
+            }, onError),
         );
       }
 
@@ -825,17 +819,14 @@ export function subscribeToHomeData({
             .doc(dateKey)
             .collection('checkIns')
             .doc(uid)
-            .onSnapshot(
-              snapshot => {
-                state.recentUserCheckIns.set(
-                  dateKey,
-                  snapshot.exists() &&
-                    isCoveredCheckInStatus(snapshot.data()?.status),
-                );
-                emit();
-              },
-              onError,
-            ),
+            .onSnapshot(snapshot => {
+              state.recentUserCheckIns.set(
+                dateKey,
+                snapshot.exists() &&
+                  isCoveredCheckInStatus(snapshot.data()?.status),
+              );
+              emit();
+            }, onError),
         );
       });
     });
@@ -927,26 +918,22 @@ export function subscribeToMemberCircleDetail({
     }
 
     activeUnsubscribes.push(
-      circleRef.collection('members').onSnapshot(
-        snapshot => {
-          state.membersData = snapshot.docs
-            .map(snapshotData)
-            .filter(
-              (memberData): memberData is PlainData =>
-                Boolean(
-                  memberData && activeStatuses.has(asString(memberData.status)),
-                ),
-            );
-          syncMemberProfileListeners({
-            memberRecords: state.membersData,
-            onError,
-            onUpdate: emit,
-            state,
-          });
-          emit();
-        },
-        onError,
-      ),
+      circleRef.collection('members').onSnapshot(snapshot => {
+        state.membersData = snapshot.docs
+          .map(snapshotData)
+          .filter((memberData): memberData is PlainData =>
+            Boolean(
+              memberData && activeStatuses.has(asString(memberData.status)),
+            ),
+          );
+        syncMemberProfileListeners({
+          memberRecords: state.membersData,
+          onError,
+          onUpdate: emit,
+          state,
+        });
+        emit();
+      }, onError),
     );
 
     if (todayDateKey) {
@@ -955,30 +942,24 @@ export function subscribeToMemberCircleDetail({
           .collection('days')
           .doc(todayDateKey)
           .collection('checkIns')
-          .onSnapshot(
-            snapshot => {
-              state.todayCheckInStatuses = new Map(
-                snapshot.docs
-                  .map(doc => {
-                    const uidValue = asString(doc.data().uid, doc.id);
-                    const status =
-                      normalizeCheckInStatus(doc.data().status) ?? 'done';
+          .onSnapshot(snapshot => {
+            state.todayCheckInStatuses = new Map(
+              snapshot.docs
+                .map(doc => {
+                  const uidValue = asString(doc.data().uid, doc.id);
+                  const status =
+                    normalizeCheckInStatus(doc.data().status) ?? 'done';
 
-                    return uidValue && isCoveredCheckInStatus(status)
-                      ? ([uidValue, status] as const)
-                      : undefined;
-                  })
-                  .filter(
-                    (
-                      entry,
-                    ): entry is readonly [string, CheckInStatus] =>
-                      Boolean(entry),
-                  ),
-              );
-              emit();
-            },
-            onError,
-          ),
+                  return uidValue && isCoveredCheckInStatus(status)
+                    ? ([uidValue, status] as const)
+                    : undefined;
+                })
+                .filter((entry): entry is readonly [string, CheckInStatus] =>
+                  Boolean(entry),
+                ),
+            );
+            emit();
+          }, onError),
       );
     }
 
@@ -989,39 +970,30 @@ export function subscribeToMemberCircleDetail({
           .doc(dateKey)
           .collection('checkIns')
           .doc(uid)
-          .onSnapshot(
-            snapshot => {
-              state.recentUserCheckIns.set(
-                dateKey,
-                snapshot.exists() &&
-                  isCoveredCheckInStatus(snapshot.data()?.status),
-              );
-              emit();
-            },
-            onError,
-          ),
+          .onSnapshot(snapshot => {
+            state.recentUserCheckIns.set(
+              dateKey,
+              snapshot.exists() &&
+                isCoveredCheckInStatus(snapshot.data()?.status),
+            );
+            emit();
+          }, onError),
       );
     });
   };
 
-  const unsubscribeCircle = circleRef.onSnapshot(
-    snapshot => {
-      state.circleData = snapshotData(snapshot);
-      emit();
-    },
-    onError,
-  );
+  const unsubscribeCircle = circleRef.onSnapshot(snapshot => {
+    state.circleData = snapshotData(snapshot);
+    emit();
+  }, onError);
   const unsubscribeMembership = circleRef
     .collection('members')
     .doc(uid)
-    .onSnapshot(
-      snapshot => {
-        membershipData = snapshotData(snapshot);
-        startActiveListeners();
-        emit();
-      },
-      onError,
-    );
+    .onSnapshot(snapshot => {
+      membershipData = snapshotData(snapshot);
+      startActiveListeners();
+      emit();
+    }, onError);
 
   return () => {
     unsubscribeCircle();
@@ -1053,7 +1025,8 @@ export function buildCircleDetailFromHomeCircle(
 export function buildPublicCircleDetail(
   summary: CircleSummary,
 ): CircleDetailModel {
-  const progressPercent = summary.progressPercent ?? summary.completionRate ?? 0;
+  const progressPercent =
+    summary.progressPercent ?? summary.completionRate ?? 0;
 
   return {
     ...summary,

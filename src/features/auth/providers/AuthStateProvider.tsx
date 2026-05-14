@@ -2,8 +2,12 @@ import React, {useEffect, type PropsWithChildren} from 'react';
 import type {FirebaseAuthTypes} from '@react-native-firebase/auth';
 
 import {firebaseAuth} from '../../../lib/firebase/auth';
+import {clearPushUser, identifyPushUser} from '../../../lib/notifications';
 import {useUserProfileStore} from '../../../store/profile-store';
-import {useSessionStore, type AuthSessionUser} from '../../../store/session-store';
+import {
+  useSessionStore,
+  type AuthSessionUser,
+} from '../../../store/session-store';
 import {configureAuthProviders} from '../services/auth-service';
 import {
   subscribeToUserProfile,
@@ -46,11 +50,13 @@ export function AuthStateProvider({
 
       if (!user) {
         setProfile(undefined);
+        clearPushUser().catch(() => undefined);
         setGuest();
         return;
       }
 
       const sessionUser = mapAuthUser(user);
+      identifyPushUser(user.uid).catch(() => undefined);
       setAuthenticatedIncompleteProfile(sessionUser);
 
       unsubscribeProfile = subscribeToUserProfile(
