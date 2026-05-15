@@ -57,7 +57,7 @@ export function AuthStateProvider({
 
       const sessionUser = mapAuthUser(user);
       identifyPushUser(user.uid).catch(() => undefined);
-      setAuthenticatedIncompleteProfile(sessionUser);
+      setInitializing();
 
       unsubscribeProfile = subscribeToUserProfile(
         user.uid,

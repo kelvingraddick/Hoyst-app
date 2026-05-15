@@ -58,7 +58,7 @@ export function OnboardingSetupFinalizer(): null {
       !hasSeenOnboarding &&
       (currentStep === 'notifications' ||
         currentStep === 'auth' ||
-        currentStep === 'finishProfile')
+        (currentStep === 'finishProfile' && hasPendingStarterCircleSetup))
     ) {
       return;
     }

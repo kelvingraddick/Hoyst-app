@@ -59,7 +59,6 @@ export type OnboardingStoreState = OnboardingIntentDraft & {
     joinMode: Extract<CircleJoinMode, 'open' | 'request_to_join'>,
   ) => void;
   setTimezone: (timezone: string) => void;
-  startForProtectedAction: () => void;
   startOnboardingWizard: () => void;
 };
 
@@ -219,11 +218,6 @@ export const useOnboardingStore = create<OnboardingStoreState>()(
           },
           timezone,
         })),
-      startForProtectedAction: () =>
-        set({
-          currentStep: 'coach',
-          firstCircleSkipped: false,
-        }),
       startOnboardingWizard: () =>
         set({
           currentStep: 'welcome',

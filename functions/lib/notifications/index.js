@@ -1,6 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.notificationModules = exports.markInboxEventRead = exports.updateNotificationSettings = exports.sendFinalTapInWarnings = exports.sendMiddayTapInReminders = exports.oneSignalAppId = exports.oneSignalRestApiKey = void 0;
+exports.getJoinRequestNotificationDedupeKey = getJoinRequestNotificationDedupeKey;
 exports.createInboxEvent = createInboxEvent;
 exports.notifyOwnerJoinRequest = notifyOwnerJoinRequest;
 exports.notifyOwnerNewJoin = notifyOwnerNewJoin;
@@ -16,6 +17,15 @@ const zod_1 = require("zod");
 const firebase_1 = require("../firebase");
 exports.oneSignalRestApiKey = (0, params_1.defineSecret)('ONESIGNAL_REST_API_KEY');
 exports.oneSignalAppId = (0, params_1.defineString)('ONESIGNAL_APP_ID', { default: '' });
+function getJoinRequestNotificationDedupeKey({ circleId, requesterId, requestToken, }) {
+    const safeRequesterId = typeof requesterId === 'string' && requesterId.trim().length > 0
+        ? requesterId.trim()
+        : 'unknown';
+    const safeRequestToken = typeof requestToken === 'string' && requestToken.trim().length > 0
+        ? requestToken.trim()
+        : 'current';
+    return `join_request_${circleId}_${safeRequesterId}_${safeRequestToken}`;
+}
 const notificationSettingsSchema = zod_1.z.object({
     circleActivity: zod_1.z.boolean().optional(),
     productUpdates: zod_1.z.boolean().optional(),
@@ -188,14 +198,18 @@ async function createInboxEvent({ actor, body, circleId, dedupeKey, deeplink, pr
     }, { merge: true });
     return { created: true, eventId, pushStatus: pushResult.status };
 }
-async function notifyOwnerJoinRequest({ circleId, circleTitle, ownerId, requester, }) {
+async function notifyOwnerJoinRequest({ circleId, circleTitle, ownerId, requestToken, requester, }) {
     const actor = buildActor(requester);
     const actorName = actor?.displayName ?? 'Someone';
     return createInboxEvent({
         actor,
         body: `${actorName} requested to join ${circleTitle}.`,
         circleId,
-        dedupeKey: `join_request_${circleId}_${actor?.uid ?? 'unknown'}`,
+        dedupeKey: getJoinRequestNotificationDedupeKey({
+            circleId,
+            requesterId: actor?.uid,
+            requestToken,
+        }),
         deeplink: { circleId, screen: 'CircleDetail' },
         preferenceKey: 'circleActivity',
         title: 'New join request',

@@ -1,4 +1,7 @@
-import {getReminderEligibility} from '../functions/src/notifications';
+import {
+  getJoinRequestNotificationDedupeKey,
+  getReminderEligibility,
+} from '../functions/src/notifications';
 
 describe('notification reminder eligibility', () => {
   it('allows active members with due Tap Ins and enabled reminders', () => {
@@ -68,5 +71,32 @@ describe('notification reminder eligibility', () => {
         uid: 'user-1',
       }),
     ).toMatchObject({eligible: false, reason: 'preference-disabled'});
+  });
+});
+
+describe('join request notification dedupe keys', () => {
+  it('dedupes the same pending request with its request token', () => {
+    expect(
+      getJoinRequestNotificationDedupeKey({
+        circleId: 'circle-1',
+        requesterId: 'user-1',
+        requestToken: 'request-a',
+      }),
+    ).toBe('join_request_circle-1_user-1_request-a');
+  });
+
+  it('allows a later request from the same user to create a new event', () => {
+    const firstRequest = getJoinRequestNotificationDedupeKey({
+      circleId: 'circle-1',
+      requesterId: 'user-1',
+      requestToken: 'request-a',
+    });
+    const secondRequest = getJoinRequestNotificationDedupeKey({
+      circleId: 'circle-1',
+      requesterId: 'user-1',
+      requestToken: 'request-b',
+    });
+
+    expect(secondRequest).not.toBe(firstRequest);
   });
 });

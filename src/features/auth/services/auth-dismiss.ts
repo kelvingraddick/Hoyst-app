@@ -15,12 +15,13 @@ export async function continueAsGuestFromAuth({
   setGuest,
   signOut,
 }: ContinueAsGuestFromAuthInput) {
+  clearPendingAction();
+  markOnboardingSeen();
+
   if (hasAuthenticatedUser()) {
     await signOut();
   }
 
-  clearPendingAction();
-  markOnboardingSeen();
   setGuest();
   dismissAuth();
 }

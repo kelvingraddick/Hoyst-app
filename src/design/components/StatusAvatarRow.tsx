@@ -10,6 +10,47 @@ type StatusAvatarRowProps = {
   members: CircleMemberStatus[];
 };
 
+function getMemberStatusColor(
+  member: CircleMemberStatus,
+  theme: ReturnType<typeof useHoystTheme>,
+) {
+  if (member.state === 'done') {
+    return theme.success;
+  }
+
+  if (member.state === 'pending') {
+    return member.membershipStatus === 'pending'
+      ? theme.accentSecondary
+      : theme.warning;
+  }
+
+  if (member.state === 'skipped') {
+    return theme.warning;
+  }
+
+  return theme.textSubtle;
+}
+
+function getMemberStatusLabel(member: CircleMemberStatus) {
+  if (member.membershipStatus === 'pending') {
+    return 'PENDING';
+  }
+
+  if (member.state === 'done') {
+    return 'DONE';
+  }
+
+  if (member.state === 'skipped') {
+    return 'SKIPPED';
+  }
+
+  if (member.state === 'pending') {
+    return 'NEEDS';
+  }
+
+  return 'MISSED';
+}
+
 export function StatusAvatarRow({
   members,
 }: StatusAvatarRowProps): React.JSX.Element {
@@ -18,12 +59,8 @@ export function StatusAvatarRow({
   return (
     <View style={styles.row}>
       {members.map(member => {
-        const label =
-          member.state === 'done'
-            ? 'DONE'
-            : member.state === 'pending'
-            ? 'PENDING'
-            : 'MISSED';
+        const label = getMemberStatusLabel(member);
+        const labelColor = getMemberStatusColor(member, theme);
 
         return (
           <View key={member.id} style={styles.member}>
@@ -60,15 +97,7 @@ export function StatusAvatarRow({
                 </View>
               ) : null}
             </View>
-            <HoystText
-              style={
-                member.state === 'done'
-                  ? {color: theme.success}
-                  : member.state === 'pending'
-                  ? {color: theme.accentSecondary}
-                  : {color: theme.textSubtle}
-              }
-              variant="tiny">
+            <HoystText style={{color: labelColor}} variant="tiny">
               {label}
             </HoystText>
           </View>

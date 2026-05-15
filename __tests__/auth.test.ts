@@ -21,12 +21,9 @@ import {
   shouldCreateStarterCircle,
 } from '../src/features/auth/services/onboarding-completion';
 import {
-  getOnboardingSignInParams,
   getProfileSignInParams,
   getWelcomeSignInParams,
   resolveSignInRouteIntent,
-  shouldResumeOnboardingAfterRegistration,
-  switchSignInMode,
 } from '../src/features/auth/services/auth-route-intent';
 import {
   normalizeHandle,
@@ -134,39 +131,6 @@ describe('adaptive auth entry intent', () => {
     expect(resolveSignInRouteIntent()).toEqual({
       entryPoint: undefined,
       method: undefined,
-      mode: 'signIn',
-    });
-  });
-
-  it('opens onboarding email choice in registration mode', () => {
-    expect(
-      resolveSignInRouteIntent(getOnboardingSignInParams('email')),
-    ).toEqual({
-      entryPoint: 'onboarding',
-      method: 'email',
-      mode: 'register',
-    });
-  });
-
-  it('opens onboarding phone choice in registration mode', () => {
-    expect(
-      resolveSignInRouteIntent(getOnboardingSignInParams('phone')),
-    ).toEqual({
-      entryPoint: 'onboarding',
-      method: 'phone',
-      mode: 'register',
-    });
-  });
-
-  it('keeps protected action choices in registration mode', () => {
-    expect(
-      resolveSignInRouteIntent(
-        getOnboardingSignInParams('email', 'protectedAction'),
-      ),
-    ).toEqual({
-      entryPoint: 'protectedAction',
-      method: 'email',
-      mode: 'register',
     });
   });
 
@@ -174,7 +138,6 @@ describe('adaptive auth entry intent', () => {
     expect(resolveSignInRouteIntent(getWelcomeSignInParams())).toEqual({
       entryPoint: 'welcome',
       method: undefined,
-      mode: 'signIn',
     });
   });
 
@@ -182,79 +145,19 @@ describe('adaptive auth entry intent', () => {
     expect(resolveSignInRouteIntent(getProfileSignInParams())).toEqual({
       entryPoint: 'profile',
       method: undefined,
-      mode: 'signIn',
     });
   });
 
-  it('preserves method when switching between sign in and register', () => {
+  it('preserves a selected returning-user sign-in method', () => {
     expect(
-      switchSignInMode({
-        entryPoint: 'onboarding',
-        method: 'phone',
-        mode: 'register',
+      resolveSignInRouteIntent({
+        entryPoint: 'welcome',
+        method: 'email',
       }),
     ).toEqual({
-      entryPoint: 'onboarding',
-      method: 'phone',
-      mode: 'signIn',
+      entryPoint: 'welcome',
+      method: 'email',
     });
-  });
-
-  it('resumes onboarding profile setup after onboarding registration', () => {
-    expect(
-      shouldResumeOnboardingAfterRegistration({
-        entryPoint: 'onboarding',
-        method: 'email',
-        mode: 'register',
-      }),
-    ).toBe(true);
-    expect(
-      shouldResumeOnboardingAfterRegistration({
-        entryPoint: 'protectedAction',
-        method: 'email',
-        mode: 'register',
-      }),
-    ).toBe(true);
-    expect(
-      shouldResumeOnboardingAfterRegistration({
-        currentStep: 'auth',
-        entryPoint: 'welcome',
-        method: 'phone',
-        mode: 'register',
-      }),
-    ).toBe(true);
-    expect(
-      shouldResumeOnboardingAfterRegistration({
-        currentStep: 'finishProfile',
-        entryPoint: 'welcome',
-        method: 'phone',
-        mode: 'register',
-      }),
-    ).toBe(true);
-  });
-
-  it('keeps direct registration on the non-onboarding profile path', () => {
-    expect(
-      shouldResumeOnboardingAfterRegistration({
-        entryPoint: 'welcome',
-        method: 'email',
-        mode: 'register',
-      }),
-    ).toBe(false);
-    expect(
-      shouldResumeOnboardingAfterRegistration({
-        entryPoint: 'profile',
-        method: 'email',
-        mode: 'register',
-      }),
-    ).toBe(false);
-    expect(
-      shouldResumeOnboardingAfterRegistration({
-        entryPoint: 'onboarding',
-        method: 'email',
-        mode: 'signIn',
-      }),
-    ).toBe(false);
   });
 });
 
@@ -282,7 +185,7 @@ describe('auth dismiss flow', () => {
     expect(dismissAuth).toHaveBeenCalledTimes(1);
   });
 
-  it('signs out before continuing as guest when a user is present', async () => {
+  it('signs out when continuing as guest with a user present', async () => {
     const signOut = jest.fn().mockResolvedValue(undefined);
 
     await continueAsGuestFromAuth({
@@ -295,6 +198,29 @@ describe('auth dismiss flow', () => {
     });
 
     expect(signOut).toHaveBeenCalledTimes(1);
+  });
+
+  it('marks onboarding seen before sign-out can publish guest state', async () => {
+    const events: string[] = [];
+
+    await continueAsGuestFromAuth({
+      clearPendingAction: () => events.push('clearPendingAction'),
+      dismissAuth: () => events.push('dismissAuth'),
+      hasAuthenticatedUser: () => true,
+      markOnboardingSeen: () => events.push('markOnboardingSeen'),
+      setGuest: () => events.push('setGuest'),
+      signOut: async () => {
+        events.push('signOut');
+      },
+    });
+
+    expect(events).toEqual([
+      'clearPendingAction',
+      'markOnboardingSeen',
+      'signOut',
+      'setGuest',
+      'dismissAuth',
+    ]);
   });
 });
 
@@ -401,6 +327,18 @@ describe('root navigator mode policy', () => {
         status: 'authenticatedReady',
       }),
     ).toBe('authFirst');
+  });
+
+  it('does not restart ready users on stale profile completion', () => {
+    expect(
+      getRootNavigatorMode({
+        currentStep: 'finishProfile',
+        hasHydratedOnboarding: true,
+        hasPendingStarterCircleSetup: false,
+        hasSeenOnboarding: false,
+        status: 'authenticatedReady',
+      }),
+    ).toBe('main');
   });
 
   it('only registers account routes for ready users in the main app', () => {
@@ -596,7 +534,7 @@ describe('settings auth entry', () => {
 
     useSessionStore.getState().clearPendingAction();
     useSessionStore.getState().beginAuthFlow();
-    useOnboardingStore.getState().reset();
+    useOnboardingStore.getState().startOnboardingWizard();
 
     expect(useSessionStore.getState()).toMatchObject({
       pendingAction: undefined,
@@ -733,9 +671,9 @@ describe('onboarding store', () => {
     useSessionStore
       .getState()
       .beginAuthFlow({circleId: 'circle-3', type: 'joinCircle'});
-    useOnboardingStore.getState().startForProtectedAction();
+    useOnboardingStore.getState().startOnboardingWizard();
 
-    expect(useOnboardingStore.getState().currentStep).toBe('coach');
+    expect(useOnboardingStore.getState().currentStep).toBe('welcome');
     expect(useSessionStore.getState().pendingAction).toEqual({
       circleId: 'circle-3',
       type: 'joinCircle',
@@ -755,9 +693,9 @@ describe('onboarding store', () => {
 
   it('sends returning protected-action guests back through onboarding', () => {
     useOnboardingStore.getState().markSeen();
-    useOnboardingStore.getState().startForProtectedAction();
+    useOnboardingStore.getState().startOnboardingWizard();
 
-    expect(useOnboardingStore.getState().currentStep).toBe('coach');
+    expect(useOnboardingStore.getState().currentStep).toBe('welcome');
   });
 });
 

@@ -128,6 +128,10 @@ function getJoinModeLabel(detail: CircleDetailModel) {
   return detail.joinLabel ?? 'Requests open';
 }
 
+function formatNeedsTapInCount(count: number) {
+  return count === 1 ? '1 needs Tap In' : `${count} need Tap In`;
+}
+
 function TopBarButton({
   children,
   onPress,
@@ -452,6 +456,15 @@ export function CircleDetailScreen({
   route,
 }: Props): React.JSX.Element {
   const theme = useHoystTheme();
+  const returnTab = route.params.source === 'notification' ? 'Inbox' : 'Home';
+  const navigateBack = useCallback(() => {
+    if (navigation.canGoBack()) {
+      navigation.goBack();
+      return;
+    }
+
+    navigation.replace('MainTabs', {screen: returnTab});
+  }, [navigation, returnTab]);
   const [poked, setPoked] = useState(false);
   const [isPoking, setIsPoking] = useState(false);
   const [reviewingRequestId, setReviewingRequestId] = useState<string>();
@@ -480,7 +493,7 @@ export function CircleDetailScreen({
       getCircleDetail(route.params.circleId),
     [memberCircle, publicCircle, route.params.circleId],
   );
-  const pendingTapInMembers = useMemo(
+  const needsTapInMembers = useMemo(
     () =>
       detail?.members.filter(
         member =>
@@ -565,7 +578,7 @@ export function CircleDetailScreen({
       <HoystScreen contentContainerStyle={styles.content}>
         <View style={styles.topBar}>
           <View style={styles.brandRow}>
-            <TopBarButton onPress={() => navigation.goBack()}>
+            <TopBarButton onPress={navigateBack}>
               <ArrowLeft color={theme.text} size={22} strokeWidth={2.3} />
             </TopBarButton>
             <BrandMark isDark={theme.isDark} kind="logo" style={styles.logo} />
@@ -600,6 +613,7 @@ export function CircleDetailScreen({
   const statusLabel =
     detail.state === 'done' ? 'Done' : `${detail.completionRate}%`;
   const detailStatusPill = getDetailStatusPill(detail);
+  const needsTapInCopy = formatNeedsTapInCount(needsTapInMembers.length);
   const previewCopy =
     detail.matchCopy ?? 'Preview the circle before you jump in.';
   const streakValue =
@@ -691,7 +705,7 @@ export function CircleDetailScreen({
       await deleteCircle(detail.id);
       setIsDeleteConfirmVisible(false);
       setDeleteConfirmText('');
-      navigation.goBack();
+      navigateBack();
       Alert.alert('Circle deleted', `${detail.title} has been deleted.`);
     } catch (error) {
       const message =
@@ -739,7 +753,7 @@ export function CircleDetailScreen({
     <HoystScreen contentContainerStyle={styles.content}>
       <View style={styles.topBar}>
         <View style={styles.brandRow}>
-          <TopBarButton onPress={() => navigation.goBack()}>
+          <TopBarButton onPress={navigateBack}>
             <ArrowLeft color={theme.text} size={22} strokeWidth={2.3} />
           </TopBarButton>
           <BrandMark isDark={theme.isDark} kind="logo" style={styles.logo} />
@@ -864,7 +878,7 @@ export function CircleDetailScreen({
           </HoystText>
           <HoystText tone="muted" variant="caption">
             {isMemberCircle
-              ? `${pendingTapInMembers.length} pending, ${missedMembers.length} missed`
+              ? `${needsTapInCopy}, ${missedMembers.length} missed`
               : isPendingMembership
               ? 'Pending approval'
               : getJoinModeLabel(detail)}
@@ -907,13 +921,13 @@ export function CircleDetailScreen({
             ) : null}
             <View style={styles.quickActionRow}>
               <DashboardQuickAction
-                emphasized={pendingTapInMembers.length > 0 && !poked}
+                emphasized={needsTapInMembers.length > 0 && !poked}
                 icon={
                   <BellRing
                     color={
                       poked
                         ? theme.success
-                        : pendingTapInMembers.length > 0
+                        : needsTapInMembers.length > 0
                         ? theme.accentSecondary
                         : theme.text
                     }
@@ -926,7 +940,7 @@ export function CircleDetailScreen({
                     ? 'Poking...'
                     : poked
                     ? 'Poked'
-                    : `Poke ${pendingTapInMembers.length || 'All'}`
+                    : `Poke ${needsTapInMembers.length || 'All'}`
                 }
                 onPress={() => {
                   if (isPoking) {
@@ -956,8 +970,8 @@ export function CircleDetailScreen({
                     .finally(() => setIsPoking(false));
                 }}
                 supportingText={
-                  pendingTapInMembers.length > 0
-                    ? `${pendingTapInMembers.length} pending`
+                  needsTapInMembers.length > 0
+                    ? needsTapInCopy
                     : 'Warm nudge'
                 }
               />

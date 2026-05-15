@@ -425,6 +425,9 @@ export function SettingsScreen({navigation}: Props): React.JSX.Element {
   const beginAuthFlow = useSessionStore(state => state.beginAuthFlow);
   const clearPendingAction = useSessionStore(state => state.clearPendingAction);
   const resetOnboarding = useOnboardingStore(state => state.reset);
+  const startOnboardingWizard = useOnboardingStore(
+    state => state.startOnboardingWizard,
+  );
   const setGuest = useSessionStore(state => state.setGuest);
   const [isDeleteConfirmVisible, setIsDeleteConfirmVisible] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
@@ -494,7 +497,7 @@ export function SettingsScreen({navigation}: Props): React.JSX.Element {
             onPress={() => {
               clearPendingAction();
               beginAuthFlow();
-              resetOnboarding();
+              startOnboardingWizard();
               navigation.navigate('Auth', {screen: 'Welcome'});
             }}
           />

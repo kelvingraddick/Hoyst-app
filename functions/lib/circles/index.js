@@ -1,6 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.deleteCircle = exports.pokeCircleMembers = exports.reviewJoinRequest = exports.joinCircle = exports.createCircle = void 0;
+const node_crypto_1 = require("node:crypto");
 const firestore_1 = require("firebase-admin/firestore");
 const storage_1 = require("firebase-admin/storage");
 const https_1 = require("firebase-functions/v2/https");
@@ -156,17 +157,21 @@ exports.joinCircle = (0, https_1.onCall)({ secrets: [notifications_1.oneSignalRe
         .collection('publicCircleIndex')
         .doc(input.circleId);
     const now = firestore_1.FieldValue.serverTimestamp();
+    const requestToken = (0, node_crypto_1.randomUUID)();
     const result = await firebase_1.db.runTransaction(async (transaction) => {
-        const [circleSnapshot, memberSnapshot] = await Promise.all([
+        const [circleSnapshot, memberSnapshot, joinRequestSnapshot] = await Promise.all([
             transaction.get(circleRef),
             transaction.get(memberRef),
+            transaction.get(joinRequestRef),
         ]);
         if (!circleSnapshot.exists) {
             throw new https_1.HttpsError('not-found', 'Circle not found.');
         }
         const circle = circleSnapshot.data();
-        if (memberSnapshot.data()?.status === 'active') {
-            return { status: 'active' };
+        const member = memberSnapshot.data();
+        const joinRequest = joinRequestSnapshot.data();
+        if (member?.status === 'active') {
+            return { shouldNotifyOwner: false, status: 'active' };
         }
         if ((circle?.memberCount ?? 0) >= (circle?.maxSize ?? 0)) {
             throw new https_1.HttpsError('resource-exhausted', 'This circle is full.');
@@ -176,11 +181,28 @@ exports.joinCircle = (0, https_1.onCall)({ secrets: [notifications_1.oneSignalRe
             throw new https_1.HttpsError('permission-denied', 'A valid invite is required.');
         }
         if (circle?.joinMode === 'request_to_join') {
+            if (member?.status === 'pending' || joinRequest?.status === 'pending') {
+                const existingRequestToken = asOptionalString(joinRequest?.notificationToken) ??
+                    asOptionalString(member?.notificationToken);
+                if (!existingRequestToken && joinRequestSnapshot.exists) {
+                    transaction.set(joinRequestRef, { notificationToken: requestToken }, { merge: true });
+                    if (memberSnapshot.exists) {
+                        transaction.set(memberRef, { notificationToken: requestToken }, { merge: true });
+                    }
+                    return {
+                        requestToken,
+                        shouldNotifyOwner: true,
+                        status: 'pending',
+                    };
+                }
+                return { shouldNotifyOwner: false, status: 'pending' };
+            }
             transaction.set(joinRequestRef, {
                 avatarUrl: profile.avatarUrl ?? null,
                 createdAt: now,
                 displayName: profile.displayName,
                 handle: profile.handle,
+                notificationToken: requestToken,
                 status: 'pending',
                 uid,
             }, { merge: true });
@@ -188,12 +210,17 @@ exports.joinCircle = (0, https_1.onCall)({ secrets: [notifications_1.oneSignalRe
                 avatarUrl: profile.avatarUrl ?? null,
                 displayName: profile.displayName,
                 handle: profile.handle,
+                notificationToken: requestToken,
                 requestedAt: now,
                 role: 'member',
                 status: 'pending',
                 uid,
             }, { merge: true });
-            return { status: 'pending' };
+            return {
+                requestToken,
+                shouldNotifyOwner: true,
+                status: 'pending',
+            };
         }
         const memberPreview = {
             avatarUrl: profile.avatarUrl ?? null,
@@ -213,17 +240,18 @@ exports.joinCircle = (0, https_1.onCall)({ secrets: [notifications_1.oneSignalRe
                 updatedAt: now,
             }, { merge: true });
         }
-        return { status: 'active' };
+        return { shouldNotifyOwner: true, status: 'active' };
     });
     const circleSnapshot = await circleRef.get();
     const circle = circleSnapshot.data();
     const ownerId = asOptionalString(circle?.ownerId);
     const circleTitle = asOptionalString(circle?.title) ?? 'your circle';
-    if (ownerId && result.status === 'pending') {
+    if (ownerId && result.status === 'pending' && result.shouldNotifyOwner) {
         await (0, notifications_1.notifyOwnerJoinRequest)({
             circleId: input.circleId,
             circleTitle,
             ownerId,
+            requestToken: result.requestToken,
             requester: {
                 avatarUrl: profile.avatarUrl ?? null,
                 displayName: profile.displayName,
@@ -232,7 +260,9 @@ exports.joinCircle = (0, https_1.onCall)({ secrets: [notifications_1.oneSignalRe
             },
         }).catch(error => console.error('notify_owner_join_request_failed', error));
     }
-    else if (ownerId && result.status === 'active') {
+    else if (ownerId &&
+        result.status === 'active' &&
+        result.shouldNotifyOwner) {
         await (0, notifications_1.notifyOwnerNewJoin)({
             circleId: input.circleId,
             circleTitle,
@@ -245,7 +275,7 @@ exports.joinCircle = (0, https_1.onCall)({ secrets: [notifications_1.oneSignalRe
             ownerId,
         }).catch(error => console.error('notify_owner_new_join_failed', error));
     }
-    return result;
+    return { status: result.status };
 });
 exports.reviewJoinRequest = (0, https_1.onCall)({ secrets: [notifications_1.oneSignalRestApiKey] }, async (request) => {
     const { profile, uid } = await requireCompletedProfile(request.auth?.uid);

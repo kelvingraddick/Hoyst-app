@@ -12,8 +12,8 @@ export function useProtectedAction(
 ) {
   const status = useSessionStore(state => state.status);
   const beginAuthFlow = useSessionStore(state => state.beginAuthFlow);
-  const startForProtectedAction = useOnboardingStore(
-    state => state.startForProtectedAction,
+  const startOnboardingWizard = useOnboardingStore(
+    state => state.startOnboardingWizard,
   );
 
   return (
@@ -26,7 +26,7 @@ export function useProtectedAction(
     }
 
     beginAuthFlow(pendingAction);
-    startForProtectedAction();
+    startOnboardingWizard();
     navigation?.navigate('Auth', {screen: 'Welcome'});
   };
 }

@@ -8,20 +8,13 @@ export type AppTabsParamList = {
   Profile: undefined;
 };
 
-export type SignInEntryPoint =
-  | 'welcome'
-  | 'onboarding'
-  | 'protectedAction'
-  | 'profile';
+export type SignInEntryPoint = 'welcome' | 'profile';
 
 export type SignInMethod = 'email' | 'phone';
-
-export type SignInMode = 'signIn' | 'register';
 
 export type SignInRouteParams = {
   entryPoint?: SignInEntryPoint;
   method?: SignInMethod;
-  mode: SignInMode;
 };
 
 export type AuthStackParamList = {
@@ -40,7 +33,11 @@ export type RootStackParamList = {
   EditProfile: undefined;
   TapInPicker: undefined;
   CreateCircle: undefined;
-  CircleDetail: {circleId: string; resumeAction?: 'join'};
+  CircleDetail: {
+    circleId: string;
+    resumeAction?: 'join';
+    source?: 'notification';
+  };
   TapInComposer: {circleId: string; source: TapInSource};
   TapInComplete: {
     circleId: string;

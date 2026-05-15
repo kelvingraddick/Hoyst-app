@@ -46,7 +46,7 @@ function handleNotificationClick(event: NotificationClickEvent) {
   }
 
   if (circleId) {
-    navigationRef.navigate('CircleDetail', {circleId});
+    navigationRef.navigate('CircleDetail', {circleId, source: 'notification'});
     return;
   }
 

@@ -26,7 +26,6 @@ import {dismissAuthModals} from '../../../navigation/auth-modal-dismiss';
 import {
   confirmPhoneSignIn,
   getSameEmailProviders,
-  registerWithEmail,
   sendPasswordReset,
   signInWithApple,
   signInWithEmail,
@@ -36,11 +35,7 @@ import {
   type AuthServiceError,
 } from '../services/auth-service';
 import {continueAsGuestFromAuth} from '../services/auth-dismiss';
-import {
-  resolveSignInRouteIntent,
-  shouldResumeOnboardingAfterRegistration,
-  switchSignInMode,
-} from '../services/auth-route-intent';
+import {resolveSignInRouteIntent} from '../services/auth-route-intent';
 
 type Props = NativeStackScreenProps<AuthStackParamList, 'SignIn'>;
 
@@ -63,8 +58,6 @@ function getErrorMessage(error: unknown) {
 export function SignInScreen({navigation, route}: Props): React.JSX.Element {
   const theme = useHoystTheme();
   const initialIntent = resolveSignInRouteIntent(route.params);
-  const [mode, setMode] = useState(initialIntent.mode);
-  const [entryPoint, setEntryPoint] = useState(initialIntent.entryPoint);
   const [method, setMethod] = useState<SignInMethod | undefined>(
     initialIntent.method,
   );
@@ -82,20 +75,16 @@ export function SignInScreen({navigation, route}: Props): React.JSX.Element {
   const clearPendingAction = useSessionStore(state => state.clearPendingAction);
   const setGuest = useSessionStore(state => state.setGuest);
   const markOnboardingSeen = useOnboardingStore(state => state.markSeen);
-  const currentStep = useOnboardingStore(state => state.currentStep);
-  const setCurrentStep = useOnboardingStore(state => state.setCurrentStep);
+  const startOnboardingWizard = useOnboardingStore(
+    state => state.startOnboardingWizard,
+  );
   const rootNavigation =
     navigation.getParent<NativeStackNavigationProp<RootStackParamList>>();
-  const isRegisterMode = mode === 'register';
   const isActionBusy = isBusy || isDismissing;
-  const failureTitle = isRegisterMode ? 'Registration failed' : 'Sign in failed';
-  const headerTitle = isRegisterMode ? 'Create your account' : 'Welcome back';
-  const headerBody = isRegisterMode
-    ? 'Save your profile, join circles, and keep your Tap In rhythm across devices.'
-    : 'Sign in to rejoin your circles, Tap In, and manage your profile.';
-  const modeSwitchLabel = isRegisterMode
-    ? 'Already have an account? Sign in'
-    : 'New to Hoyst? Create an account';
+  const failureTitle = 'Sign in failed';
+  const headerTitle = 'Welcome back';
+  const headerBody = 'Sign in to rejoin your circles, Tap In, and manage your profile.';
+  const onboardingLinkLabel = 'New to Hoyst? Get started';
   const activeProviderLabel =
     activeProvider === 'apple'
       ? 'Apple'
@@ -132,39 +121,8 @@ export function SignInScreen({navigation, route}: Props): React.JSX.Element {
   useEffect(() => {
     const nextIntent = resolveSignInRouteIntent(route.params);
 
-    setMode(nextIntent.mode);
-    setEntryPoint(nextIntent.entryPoint);
     setMethod(nextIntent.method);
   }, [route.params]);
-
-  const shouldResumeOnboardingRegistration = () =>
-    shouldResumeOnboardingAfterRegistration({
-      currentStep,
-      entryPoint,
-      method,
-      mode,
-    });
-
-  const prepareOnboardingRegistrationResume = () => {
-    if (!shouldResumeOnboardingRegistration()) {
-      return false;
-    }
-
-    setCurrentStep('finishProfile');
-    return true;
-  };
-
-  const resumeOnboardingAfterRegistration = () => {
-    if (!shouldResumeOnboardingRegistration()) {
-      return;
-    }
-
-    setCurrentStep('finishProfile');
-    navigation.reset({
-      index: 0,
-      routes: [{name: 'Welcome'}],
-    });
-  };
 
   const runAuth = async (action: () => Promise<unknown>) => {
     setIsBusy(true);
@@ -180,28 +138,7 @@ export function SignInScreen({navigation, route}: Props): React.JSX.Element {
   };
 
   const handleEmail = () => {
-    const shouldRestoreAuthStep =
-      isRegisterMode && prepareOnboardingRegistrationResume();
-
-    runAuth(async () => {
-      if (isRegisterMode) {
-        await registerWithEmail(email, password);
-        return;
-      }
-
-      return signInWithEmail(email, password);
-    })
-      .then(didSucceed => {
-        if (didSucceed && isRegisterMode) {
-          resumeOnboardingAfterRegistration();
-          return;
-        }
-
-        if (!didSucceed && shouldRestoreAuthStep) {
-          setCurrentStep('auth');
-        }
-      })
-      .catch(() => undefined);
+    runAuth(() => signInWithEmail(email, password)).catch(() => undefined);
   };
 
   const handleProviderAuth = async (provider: 'apple' | 'google') => {
@@ -247,21 +184,9 @@ export function SignInScreen({navigation, route}: Props): React.JSX.Element {
       return;
     }
 
-    const shouldRestoreAuthStep =
-      isRegisterMode && prepareOnboardingRegistrationResume();
-
-    runAuth(() => confirmPhoneSignIn(confirmation, smsCode))
-      .then(didSucceed => {
-        if (didSucceed && isRegisterMode) {
-          resumeOnboardingAfterRegistration();
-          return;
-        }
-
-        if (!didSucceed && shouldRestoreAuthStep) {
-          setCurrentStep('auth');
-        }
-      })
-      .catch(() => undefined);
+    runAuth(() => confirmPhoneSignIn(confirmation, smsCode)).catch(
+      () => undefined,
+    );
   };
 
   const explainSameEmailProviders = async () => {
@@ -288,10 +213,9 @@ export function SignInScreen({navigation, route}: Props): React.JSX.Element {
     setMethod(nextMethod);
   };
 
-  const toggleMode = () => {
-    setMode(currentMode =>
-      switchSignInMode({method, mode: currentMode}).mode,
-    );
+  const startAccountCreation = () => {
+    startOnboardingWizard();
+    navigation.navigate('Welcome');
   };
 
   const dismissToGuest = async () => {
@@ -356,29 +280,19 @@ export function SignInScreen({navigation, route}: Props): React.JSX.Element {
               value={password}
             />
             <HoystButton
-              label={
-                isActionBusy
-                  ? 'Working...'
-                  : isRegisterMode
-                    ? 'Create account'
-                    : 'Sign in'
-              }
+              label={isActionBusy ? 'Working...' : 'Sign in'}
               onPress={isActionBusy ? undefined : handleEmail}
             />
-            {!isRegisterMode ? (
-              <>
-                <HoystButton
-                  label="Send password reset"
-                  onPress={isActionBusy ? undefined : handleResetPassword}
-                  variant="ghost"
-                />
-                <HoystButton
-                  label="Check same-email providers"
-                  onPress={isActionBusy ? undefined : explainSameEmailProviders}
-                  variant="ghost"
-                />
-              </>
-            ) : null}
+            <HoystButton
+              label="Send password reset"
+              onPress={isActionBusy ? undefined : handleResetPassword}
+              variant="ghost"
+            />
+            <HoystButton
+              label="Check same-email providers"
+              onPress={isActionBusy ? undefined : explainSameEmailProviders}
+              variant="ghost"
+            />
           </View>
         </GlassPanel>
       ) : null}
@@ -405,12 +319,8 @@ export function SignInScreen({navigation, route}: Props): React.JSX.Element {
                 isActionBusy
                   ? 'Working...'
                   : confirmation
-                    ? isRegisterMode
-                      ? 'Create account'
-                      : 'Sign in'
-                    : isRegisterMode
-                      ? 'Send registration code'
-                      : 'Send sign-in code'
+                    ? 'Sign in'
+                    : 'Send sign-in code'
               }
               onPress={
                 isActionBusy
@@ -520,9 +430,9 @@ export function SignInScreen({navigation, route}: Props): React.JSX.Element {
             />
           ) : null}
         </View>
-        <Pressable onPress={toggleMode} style={styles.modeFooter}>
+        <Pressable onPress={startAccountCreation} style={styles.modeFooter}>
           <HoystText tone="muted" variant="button">
-            {modeSwitchLabel}
+            {onboardingLinkLabel}
           </HoystText>
         </Pressable>
       </GlassPanel>

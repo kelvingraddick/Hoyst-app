@@ -49,6 +49,27 @@ export type CreateNotificationInput = {
   uid: string;
 };
 
+export function getJoinRequestNotificationDedupeKey({
+  circleId,
+  requesterId,
+  requestToken,
+}: {
+  circleId: string;
+  requesterId?: string | null;
+  requestToken?: string | null;
+}) {
+  const safeRequesterId =
+    typeof requesterId === 'string' && requesterId.trim().length > 0
+      ? requesterId.trim()
+      : 'unknown';
+  const safeRequestToken =
+    typeof requestToken === 'string' && requestToken.trim().length > 0
+      ? requestToken.trim()
+      : 'current';
+
+  return `join_request_${circleId}_${safeRequesterId}_${safeRequestToken}`;
+}
+
 export type NotificationSendResult = {
   created: boolean;
   eventId: string;
@@ -318,11 +339,13 @@ export async function notifyOwnerJoinRequest({
   circleId,
   circleTitle,
   ownerId,
+  requestToken,
   requester,
 }: {
   circleId: string;
   circleTitle: string;
   ownerId: string;
+  requestToken?: string | null;
   requester?: DocumentData;
 }) {
   const actor = buildActor(requester);
@@ -332,7 +355,11 @@ export async function notifyOwnerJoinRequest({
     actor,
     body: `${actorName} requested to join ${circleTitle}.`,
     circleId,
-    dedupeKey: `join_request_${circleId}_${actor?.uid ?? 'unknown'}`,
+    dedupeKey: getJoinRequestNotificationDedupeKey({
+      circleId,
+      requesterId: actor?.uid,
+      requestToken,
+    }),
     deeplink: {circleId, screen: 'CircleDetail'},
     preferenceKey: 'circleActivity',
     title: 'New join request',

@@ -33,8 +33,7 @@ export function getRootNavigatorMode({
       !hasSeenOnboarding &&
       (hasPendingStarterCircleSetup ||
         currentStep === 'notifications' ||
-        currentStep === 'auth' ||
-        currentStep === 'finishProfile')) ||
+        currentStep === 'auth')) ||
     (status === 'guest' && !hasSeenOnboarding)
   ) {
     return 'authFirst';

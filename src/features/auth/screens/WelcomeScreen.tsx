@@ -12,6 +12,7 @@ import type {
   NativeStackNavigationProp,
   NativeStackScreenProps,
 } from '@react-navigation/native-stack';
+import type {FirebaseAuthTypes} from '@react-native-firebase/auth';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import LinearGradient from 'react-native-linear-gradient';
 import {
@@ -47,7 +48,7 @@ import {requestPushNotificationPermission} from '../../../lib/notifications';
 import type {
   AuthStackParamList,
   RootStackParamList,
-  SignInEntryPoint,
+  SignInMethod,
 } from '../../../navigation/types';
 import {dismissAuthModals} from '../../../navigation/auth-modal-dismiss';
 import {useOnboardingStore} from '../../../store/onboarding-store';
@@ -64,16 +65,16 @@ import type {CircleJoinMode, CirclePrivacyMode} from '../../../types/models';
 import {normalizeHandle, validateHandle} from '../services/profile-validation';
 import {isStarterCircleDraftReady} from '../services/onboarding-circle';
 import {
+  confirmPhoneSignIn,
+  registerWithEmail,
   signInWithApple,
   signInWithGoogle,
   signOutOfHoyst,
+  startPhoneSignIn,
   type AuthServiceError,
 } from '../services/auth-service';
 import {continueAsGuestFromAuth} from '../services/auth-dismiss';
-import {
-  getOnboardingSignInParams,
-  getWelcomeSignInParams,
-} from '../services/auth-route-intent';
+import {getWelcomeSignInParams} from '../services/auth-route-intent';
 import {completeProfile, getLocalTimezone} from '../services/account-service';
 import {
   completeOnboardingSetup,
@@ -487,7 +488,14 @@ function StickyCta({
 
 export function WelcomeScreen({navigation}: Props): React.JSX.Element {
   const theme = useHoystTheme();
+  const [authMethod, setAuthMethod] = useState<SignInMethod>();
   const [circleSetupError, setCircleSetupError] = useState<string>();
+  const [registrationEmail, setRegistrationEmail] = useState('');
+  const [registrationPassword, setRegistrationPassword] = useState('');
+  const [registrationPhoneNumber, setRegistrationPhoneNumber] = useState('');
+  const [registrationSmsCode, setRegistrationSmsCode] = useState('');
+  const [phoneConfirmation, setPhoneConfirmation] =
+    useState<FirebaseAuthTypes.ConfirmationResult>();
   const [isBusy, setIsBusy] = useState(false);
   const [isRequestingPushPermission, setIsRequestingPushPermission] =
     useState(false);
@@ -536,7 +544,6 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
   );
   const setTimezone = useOnboardingStore(state => state.setTimezone);
   const clearPendingAction = useSessionStore(state => state.clearPendingAction);
-  const pendingAction = useSessionStore(state => state.pendingAction);
   const setGuest = useSessionStore(state => state.setGuest);
   const status = useSessionStore(state => state.status);
   const user = useSessionStore(state => state.user);
@@ -620,6 +627,70 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
       }
     } catch (error) {
       Alert.alert('Sign in failed', getErrorMessage(error));
+    } finally {
+      setIsBusy(false);
+    }
+  };
+
+  const selectRegistrationMethod = (nextMethod: SignInMethod) => {
+    setAuthMethod(nextMethod);
+
+    if (nextMethod === 'email') {
+      setPhoneConfirmation(undefined);
+      setRegistrationSmsCode('');
+    }
+  };
+
+  const registerWithEmailFromOnboarding = async () => {
+    if (!registrationEmail.trim() || !registrationPassword) {
+      Alert.alert(
+        'Add your email',
+        'Enter your email and password before creating an account.',
+      );
+      return;
+    }
+
+    setIsBusy(true);
+    try {
+      await registerWithEmail(registrationEmail, registrationPassword);
+      setCurrentStep('finishProfile');
+    } catch (error) {
+      Alert.alert('Registration failed', getErrorMessage(error));
+    } finally {
+      setIsBusy(false);
+    }
+  };
+
+  const sendRegistrationCode = async () => {
+    if (!registrationPhoneNumber.trim()) {
+      Alert.alert('Add your phone number', 'Enter your phone number first.');
+      return;
+    }
+
+    setIsBusy(true);
+    try {
+      const nextConfirmation = await startPhoneSignIn(registrationPhoneNumber);
+      setPhoneConfirmation(nextConfirmation);
+      Alert.alert('Code sent', 'Enter the SMS code to continue.');
+    } catch (error) {
+      Alert.alert('Registration failed', getErrorMessage(error));
+    } finally {
+      setIsBusy(false);
+    }
+  };
+
+  const confirmRegistrationCode = async () => {
+    if (!phoneConfirmation || !registrationSmsCode.trim()) {
+      Alert.alert('Add the SMS code', 'Enter the code from the text message.');
+      return;
+    }
+
+    setIsBusy(true);
+    try {
+      await confirmPhoneSignIn(phoneConfirmation, registrationSmsCode);
+      setCurrentStep('finishProfile');
+    } catch (error) {
+      Alert.alert('Registration failed', getErrorMessage(error));
     } finally {
       setIsBusy(false);
     }
@@ -1081,48 +1152,137 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
               textColor={authProviderColors.google.foregroundColor}
               variant="outline"
             />
-            <HoystButton
-              backgroundColor={authProviderColors.email.backgroundColor}
-              borderColor={authProviderColors.email.borderColor}
-              icon={
-                <Mail
-                  color={authProviderColors.email.foregroundColor}
-                  size={20}
-                  strokeWidth={2.3}
+            {authMethod === 'email' ? (
+              <View
+                style={[
+                  styles.inlineAuthForm,
+                  {backgroundColor: theme.surface, borderColor: theme.border},
+                ]}>
+                <View style={styles.fieldBlock}>
+                  <HoystText tone="muted" variant="label">
+                    Email
+                  </HoystText>
+                  <HoystInput
+                    autoCapitalize="none"
+                    keyboardType="email-address"
+                    onChangeText={setRegistrationEmail}
+                    placeholder="Email"
+                    value={registrationEmail}
+                  />
+                </View>
+                <View style={styles.fieldBlock}>
+                  <HoystText tone="muted" variant="label">
+                    Password
+                  </HoystText>
+                  <HoystInput
+                    onChangeText={setRegistrationPassword}
+                    placeholder="Password"
+                    secureTextEntry
+                    value={registrationPassword}
+                  />
+                </View>
+                <HoystButton
+                  label={isBusy ? 'Working...' : 'Create account'}
+                  onPress={
+                    isBusy
+                      ? undefined
+                      : () => {
+                          registerWithEmailFromOnboarding().catch(
+                            () => undefined,
+                          );
+                        }
+                  }
                 />
-              }
-              label="Continue with Email"
-              onPress={() => {
-                setCurrentStep('auth');
-                navigation.navigate(
-                  'SignIn',
-                  getOnboardingSignInParams('email', authEntryPoint),
-                );
-              }}
-              textColor={authProviderColors.email.foregroundColor}
-              variant="outline"
-            />
-            <HoystButton
-              backgroundColor={authProviderColors.phone.backgroundColor}
-              borderColor={authProviderColors.phone.borderColor}
-              icon={
-                <Phone
-                  color={authProviderColors.phone.foregroundColor}
-                  size={20}
-                  strokeWidth={2.3}
+              </View>
+            ) : (
+              <HoystButton
+                backgroundColor={authProviderColors.email.backgroundColor}
+                borderColor={authProviderColors.email.borderColor}
+                icon={
+                  <Mail
+                    color={authProviderColors.email.foregroundColor}
+                    size={20}
+                    strokeWidth={2.3}
+                  />
+                }
+                label="Continue with Email"
+                onPress={
+                  isBusy ? undefined : () => selectRegistrationMethod('email')
+                }
+                textColor={authProviderColors.email.foregroundColor}
+                variant="outline"
+              />
+            )}
+            {authMethod === 'phone' ? (
+              <View
+                style={[
+                  styles.inlineAuthForm,
+                  {backgroundColor: theme.surface, borderColor: theme.border},
+                ]}>
+                <View style={styles.fieldBlock}>
+                  <HoystText tone="muted" variant="label">
+                    Phone
+                  </HoystText>
+                  <HoystInput
+                    keyboardType="phone-pad"
+                    onChangeText={setRegistrationPhoneNumber}
+                    placeholder="+1 555 000 0000"
+                    value={registrationPhoneNumber}
+                  />
+                </View>
+                {phoneConfirmation ? (
+                  <View style={styles.fieldBlock}>
+                    <HoystText tone="muted" variant="label">
+                      SMS code
+                    </HoystText>
+                    <HoystInput
+                      keyboardType="number-pad"
+                      onChangeText={setRegistrationSmsCode}
+                      placeholder="SMS code"
+                      value={registrationSmsCode}
+                    />
+                  </View>
+                ) : null}
+                <HoystButton
+                  label={
+                    isBusy
+                      ? 'Working...'
+                      : phoneConfirmation
+                      ? 'Create account'
+                      : 'Send registration code'
+                  }
+                  onPress={
+                    isBusy
+                      ? undefined
+                      : () => {
+                          const action = phoneConfirmation
+                            ? confirmRegistrationCode
+                            : sendRegistrationCode;
+
+                          action().catch(() => undefined);
+                        }
+                  }
                 />
-              }
-              label="Continue with Phone"
-              onPress={() => {
-                setCurrentStep('auth');
-                navigation.navigate(
-                  'SignIn',
-                  getOnboardingSignInParams('phone', authEntryPoint),
-                );
-              }}
-              textColor={authProviderColors.phone.foregroundColor}
-              variant="outline"
-            />
+              </View>
+            ) : (
+              <HoystButton
+                backgroundColor={authProviderColors.phone.backgroundColor}
+                borderColor={authProviderColors.phone.borderColor}
+                icon={
+                  <Phone
+                    color={authProviderColors.phone.foregroundColor}
+                    size={20}
+                    strokeWidth={2.3}
+                  />
+                }
+                label="Continue with Phone"
+                onPress={
+                  isBusy ? undefined : () => selectRegistrationMethod('phone')
+                }
+                textColor={authProviderColors.phone.foregroundColor}
+                variant="outline"
+              />
+            )}
           </View>
         ) : null}
       </>
@@ -1156,9 +1316,6 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
       : isCircleSetupStep
       ? 'Skip first circle'
       : undefined;
-  const authEntryPoint: SignInEntryPoint = pendingAction
-    ? 'protectedAction'
-    : 'onboarding';
   const primaryAction =
     currentStep === 'welcome'
       ? () => setCurrentStep('coach')
@@ -1406,6 +1563,12 @@ const styles = StyleSheet.create({
   },
   authChoices: {
     gap: 12,
+  },
+  inlineAuthForm: {
+    borderRadius: 20,
+    borderWidth: 1,
+    gap: 12,
+    padding: 14,
   },
   footer: {
     borderTopWidth: StyleSheet.hairlineWidth,

@@ -46,8 +46,8 @@ export function AppTabsNavigator(): React.JSX.Element {
   const hasPendingStarterCircleSetup = useOnboardingStore(
     state => state.hasPendingStarterCircleSetup,
   );
-  const startForProtectedAction = useOnboardingStore(
-    state => state.startForProtectedAction,
+  const startOnboardingWizard = useOnboardingStore(
+    state => state.startOnboardingWizard,
   );
   const rootNavigation =
     useNavigation<NativeStackNavigationProp<RootStackParamList>>();
@@ -154,7 +154,7 @@ export function AppTabsNavigator(): React.JSX.Element {
             }
 
             beginAuthFlow({type: 'tapInPicker'});
-            startForProtectedAction();
+            startOnboardingWizard();
             parentNavigation?.navigate('Auth', {screen: 'Welcome'});
           },
         })}
