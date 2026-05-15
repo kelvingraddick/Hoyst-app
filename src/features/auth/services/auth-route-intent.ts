@@ -4,11 +4,16 @@ import type {
   SignInMode,
   SignInRouteParams,
 } from '../../../navigation/types';
+import type {OnboardingStep} from './onboarding-options';
 
 export type SignInRouteIntent = {
   entryPoint?: SignInEntryPoint;
   method?: SignInMethod;
   mode: SignInMode;
+};
+
+type RegistrationResumeInput = SignInRouteIntent & {
+  currentStep?: OnboardingStep;
 };
 
 export function resolveSignInRouteIntent(
@@ -53,4 +58,16 @@ export function switchSignInMode(
     ...intent,
     mode: intent.mode === 'signIn' ? 'register' : 'signIn',
   };
+}
+
+export function shouldResumeOnboardingAfterRegistration(
+  intent: RegistrationResumeInput,
+) {
+  return (
+    intent.mode === 'register' &&
+    (intent.currentStep === 'auth' ||
+      intent.currentStep === 'finishProfile' ||
+      intent.entryPoint === 'onboarding' ||
+      intent.entryPoint === 'protectedAction')
+  );
 }

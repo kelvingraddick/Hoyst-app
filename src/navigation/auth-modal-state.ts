@@ -7,6 +7,8 @@ type AuthModalDismissState<Route extends NamedRoute = NamedRoute> = {
   routes: readonly Route[];
 };
 
+const accountRouteNames = new Set(['EditProfile', 'Settings']);
+
 export function getStateWithoutAuthModal<State extends AuthModalDismissState>(
   state: State,
 ): State | undefined {
@@ -17,7 +19,9 @@ export function getStateWithoutAuthModal<State extends AuthModalDismissState>(
     return undefined;
   }
 
-  const routes = state.routes.filter(route => route.name !== 'Auth');
+  const routes = state.routes.filter(
+    route => route.name !== 'Auth' && !accountRouteNames.has(route.name),
+  );
 
   if (routes.length === state.routes.length || routes.length === 0) {
     return undefined;

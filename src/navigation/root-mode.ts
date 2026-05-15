@@ -11,6 +11,11 @@ type RootNavigatorModeInput = {
   status: AuthSessionStatus;
 };
 
+type AccountRouteRegistrationInput = {
+  mode: RootNavigatorMode;
+  status: AuthSessionStatus;
+};
+
 export function getRootNavigatorMode({
   currentStep,
   hasHydratedOnboarding,
@@ -36,4 +41,11 @@ export function getRootNavigatorMode({
   }
 
   return 'main';
+}
+
+export function shouldRegisterAccountRoutes({
+  mode,
+  status,
+}: AccountRouteRegistrationInput): boolean {
+  return mode === 'main' && status === 'authenticatedReady';
 }

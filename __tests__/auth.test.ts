@@ -25,6 +25,7 @@ import {
   getProfileSignInParams,
   getWelcomeSignInParams,
   resolveSignInRouteIntent,
+  shouldResumeOnboardingAfterRegistration,
   switchSignInMode,
 } from '../src/features/auth/services/auth-route-intent';
 import {
@@ -35,8 +36,14 @@ import {dismissAuthModals} from '../src/navigation/auth-modal-dismiss';
 import {getAuthInitialRouteName} from '../src/navigation/auth-stack-policy';
 import {getStateWithoutAuthModal} from '../src/navigation/auth-modal-state';
 import {canResumePendingAction} from '../src/navigation/pending-action-resume';
-import {getRootNavigatorMode} from '../src/navigation/root-mode';
-import {getSettingsFallbackRoute} from '../src/navigation/settings-fallback-route';
+import {
+  getRootNavigatorMode,
+  shouldRegisterAccountRoutes,
+} from '../src/navigation/root-mode';
+import {
+  getSettingsFallbackRoute,
+  getSettingsResetRoute,
+} from '../src/navigation/settings-fallback-route';
 import {resolveStarterCircleDecision} from '../functions/src/auth/starter-circle-plan';
 
 describe('auth profile validation', () => {
@@ -79,7 +86,7 @@ describe('session pending actions', () => {
   });
 
   it('clears stale protected actions when auth starts without an action', () => {
-    useSessionStore.getState().setPendingAction({type: 'settings'});
+    useSessionStore.getState().setPendingAction({type: 'createCircle'});
 
     useSessionStore.getState().beginAuthFlow();
 
@@ -191,6 +198,63 @@ describe('adaptive auth entry intent', () => {
       method: 'phone',
       mode: 'signIn',
     });
+  });
+
+  it('resumes onboarding profile setup after onboarding registration', () => {
+    expect(
+      shouldResumeOnboardingAfterRegistration({
+        entryPoint: 'onboarding',
+        method: 'email',
+        mode: 'register',
+      }),
+    ).toBe(true);
+    expect(
+      shouldResumeOnboardingAfterRegistration({
+        entryPoint: 'protectedAction',
+        method: 'email',
+        mode: 'register',
+      }),
+    ).toBe(true);
+    expect(
+      shouldResumeOnboardingAfterRegistration({
+        currentStep: 'auth',
+        entryPoint: 'welcome',
+        method: 'phone',
+        mode: 'register',
+      }),
+    ).toBe(true);
+    expect(
+      shouldResumeOnboardingAfterRegistration({
+        currentStep: 'finishProfile',
+        entryPoint: 'welcome',
+        method: 'phone',
+        mode: 'register',
+      }),
+    ).toBe(true);
+  });
+
+  it('keeps direct registration on the non-onboarding profile path', () => {
+    expect(
+      shouldResumeOnboardingAfterRegistration({
+        entryPoint: 'welcome',
+        method: 'email',
+        mode: 'register',
+      }),
+    ).toBe(false);
+    expect(
+      shouldResumeOnboardingAfterRegistration({
+        entryPoint: 'profile',
+        method: 'email',
+        mode: 'register',
+      }),
+    ).toBe(false);
+    expect(
+      shouldResumeOnboardingAfterRegistration({
+        entryPoint: 'onboarding',
+        method: 'email',
+        mode: 'signIn',
+      }),
+    ).toBe(false);
   });
 });
 
@@ -338,6 +402,27 @@ describe('root navigator mode policy', () => {
       }),
     ).toBe('authFirst');
   });
+
+  it('only registers account routes for ready users in the main app', () => {
+    expect(
+      shouldRegisterAccountRoutes({
+        mode: 'main',
+        status: 'authenticatedReady',
+      }),
+    ).toBe(true);
+    expect(
+      shouldRegisterAccountRoutes({
+        mode: 'main',
+        status: 'guest',
+      }),
+    ).toBe(false);
+    expect(
+      shouldRegisterAccountRoutes({
+        mode: 'authFirst',
+        status: 'authenticatedReady',
+      }),
+    ).toBe(false);
+  });
 });
 
 describe('auth stack route policy', () => {
@@ -416,6 +501,22 @@ describe('auth modal dismissal state', () => {
     });
   });
 
+  it('drops stale account routes when auth closes', () => {
+    expect(
+      getStateWithoutAuthModal({
+        index: 2,
+        routes: [
+          {key: 'main', name: 'MainTabs'},
+          {key: 'settings', name: 'Settings'},
+          {key: 'auth', name: 'Auth'},
+        ],
+      }),
+    ).toEqual({
+      index: 0,
+      routes: [{key: 'main', name: 'MainTabs'}],
+    });
+  });
+
   it('removes duplicate auth modals in one reset', () => {
     expect(
       getStateWithoutAuthModal({
@@ -473,11 +574,25 @@ describe('settings fallback routing', () => {
   it('does not invent a route when no safe fallback exists', () => {
     expect(getSettingsFallbackRoute(['Settings'])).toBeUndefined();
   });
+
+  it('builds a Home reset only when main tabs are registered', () => {
+    expect(getSettingsResetRoute(['MainTabs', 'Settings'])).toEqual({
+      name: 'MainTabs',
+      params: {screen: 'Home'},
+    });
+  });
+
+  it('builds an onboarding reset when auth is the active root', () => {
+    expect(getSettingsResetRoute(['Auth', 'Settings'])).toEqual({
+      name: 'Auth',
+      params: {screen: 'Welcome'},
+    });
+  });
 });
 
 describe('settings auth entry', () => {
   it('starts onboarding without a Settings resume target', () => {
-    useSessionStore.getState().setPendingAction({type: 'settings'});
+    useSessionStore.getState().setPendingAction({type: 'createCircle'});
 
     useSessionStore.getState().clearPendingAction();
     useSessionStore.getState().beginAuthFlow();

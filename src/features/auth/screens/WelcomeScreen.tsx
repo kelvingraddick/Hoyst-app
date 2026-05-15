@@ -1157,9 +1157,7 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
       ? 'Skip first circle'
       : undefined;
   const authEntryPoint: SignInEntryPoint = pendingAction
-    ? pendingAction.type === 'settings'
-      ? 'settings'
-      : 'protectedAction'
+    ? 'protectedAction'
     : 'onboarding';
   const primaryAction =
     currentStep === 'welcome'

@@ -6,6 +6,7 @@ import {GoogleSignin} from '@react-native-google-signin/google-signin';
 
 import {env} from '../../../config/env';
 import {firebaseAuth} from '../../../lib/firebase/auth';
+import {formatPhoneNumberForFirebase} from './phone-number';
 
 export type AuthLinkingRequired = {
   code: 'linking-required';
@@ -108,7 +109,9 @@ export async function sendPasswordReset(email: string) {
 
 export async function startPhoneSignIn(phoneNumber: string) {
   try {
-    return await firebaseAuth().signInWithPhoneNumber(phoneNumber.trim());
+    return await firebaseAuth().signInWithPhoneNumber(
+      formatPhoneNumberForFirebase(phoneNumber),
+    );
   } catch (error) {
     throw await toAuthServiceErrorWithProviderHints(error);
   }

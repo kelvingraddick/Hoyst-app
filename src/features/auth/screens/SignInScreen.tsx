@@ -38,6 +38,7 @@ import {
 import {continueAsGuestFromAuth} from '../services/auth-dismiss';
 import {
   resolveSignInRouteIntent,
+  shouldResumeOnboardingAfterRegistration,
   switchSignInMode,
 } from '../services/auth-route-intent';
 
@@ -63,6 +64,7 @@ export function SignInScreen({navigation, route}: Props): React.JSX.Element {
   const theme = useHoystTheme();
   const initialIntent = resolveSignInRouteIntent(route.params);
   const [mode, setMode] = useState(initialIntent.mode);
+  const [entryPoint, setEntryPoint] = useState(initialIntent.entryPoint);
   const [method, setMethod] = useState<SignInMethod | undefined>(
     initialIntent.method,
   );
@@ -80,6 +82,8 @@ export function SignInScreen({navigation, route}: Props): React.JSX.Element {
   const clearPendingAction = useSessionStore(state => state.clearPendingAction);
   const setGuest = useSessionStore(state => state.setGuest);
   const markOnboardingSeen = useOnboardingStore(state => state.markSeen);
+  const currentStep = useOnboardingStore(state => state.currentStep);
+  const setCurrentStep = useOnboardingStore(state => state.setCurrentStep);
   const rootNavigation =
     navigation.getParent<NativeStackNavigationProp<RootStackParamList>>();
   const isRegisterMode = mode === 'register';
@@ -129,28 +133,75 @@ export function SignInScreen({navigation, route}: Props): React.JSX.Element {
     const nextIntent = resolveSignInRouteIntent(route.params);
 
     setMode(nextIntent.mode);
+    setEntryPoint(nextIntent.entryPoint);
     setMethod(nextIntent.method);
   }, [route.params]);
+
+  const shouldResumeOnboardingRegistration = () =>
+    shouldResumeOnboardingAfterRegistration({
+      currentStep,
+      entryPoint,
+      method,
+      mode,
+    });
+
+  const prepareOnboardingRegistrationResume = () => {
+    if (!shouldResumeOnboardingRegistration()) {
+      return false;
+    }
+
+    setCurrentStep('finishProfile');
+    return true;
+  };
+
+  const resumeOnboardingAfterRegistration = () => {
+    if (!shouldResumeOnboardingRegistration()) {
+      return;
+    }
+
+    setCurrentStep('finishProfile');
+    navigation.reset({
+      index: 0,
+      routes: [{name: 'Welcome'}],
+    });
+  };
 
   const runAuth = async (action: () => Promise<unknown>) => {
     setIsBusy(true);
     try {
       await action();
+      return true;
     } catch (error) {
       Alert.alert(failureTitle, getErrorMessage(error));
+      return false;
     } finally {
       setIsBusy(false);
     }
   };
 
   const handleEmail = () => {
+    const shouldRestoreAuthStep =
+      isRegisterMode && prepareOnboardingRegistrationResume();
+
     runAuth(async () => {
       if (isRegisterMode) {
-        return registerWithEmail(email, password);
+        await registerWithEmail(email, password);
+        return;
       }
 
       return signInWithEmail(email, password);
-    }).catch(() => undefined);
+    })
+      .then(didSucceed => {
+        if (didSucceed && isRegisterMode) {
+          resumeOnboardingAfterRegistration();
+          return;
+        }
+
+        if (!didSucceed && shouldRestoreAuthStep) {
+          setCurrentStep('auth');
+        }
+      })
+      .catch(() => undefined);
   };
 
   const handleProviderAuth = async (provider: 'apple' | 'google') => {
@@ -196,9 +247,21 @@ export function SignInScreen({navigation, route}: Props): React.JSX.Element {
       return;
     }
 
-    runAuth(() => confirmPhoneSignIn(confirmation, smsCode)).catch(
-      () => undefined,
-    );
+    const shouldRestoreAuthStep =
+      isRegisterMode && prepareOnboardingRegistrationResume();
+
+    runAuth(() => confirmPhoneSignIn(confirmation, smsCode))
+      .then(didSucceed => {
+        if (didSucceed && isRegisterMode) {
+          resumeOnboardingAfterRegistration();
+          return;
+        }
+
+        if (!didSucceed && shouldRestoreAuthStep) {
+          setCurrentStep('auth');
+        }
+      })
+      .catch(() => undefined);
   };
 
   const explainSameEmailProviders = async () => {

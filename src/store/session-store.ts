@@ -21,7 +21,6 @@ export type AuthSessionUser = {
 export type PendingProtectedAction =
   | {type: 'createCircle'}
   | {type: 'joinCircle'; circleId: string}
-  | {type: 'settings'}
   | {type: 'tapIn'; circleId: string; source: TapInSource}
   | {type: 'tapInPicker'};
 

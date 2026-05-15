@@ -12,8 +12,7 @@ export type SignInEntryPoint =
   | 'welcome'
   | 'onboarding'
   | 'protectedAction'
-  | 'profile'
-  | 'settings';
+  | 'profile';
 
 export type SignInMethod = 'email' | 'phone';
 

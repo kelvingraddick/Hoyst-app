@@ -9,6 +9,7 @@ import {
   Switch,
   View,
 } from 'react-native';
+import {CommonActions} from '@react-navigation/native';
 import {
   ArrowLeft,
   Bell,
@@ -37,7 +38,10 @@ import {HoystScreen} from '../../../design/components/HoystScreen';
 import {HoystText} from '../../../design/components/HoystText';
 import {LayeredAvatar} from '../../../design/components/LayeredAvatar';
 import {useHoystTheme} from '../../../design/theme/useHoystTheme';
-import {getSettingsFallbackRoute} from '../../../navigation/settings-fallback-route';
+import {
+  getSettingsFallbackRoute,
+  getSettingsResetRoute,
+} from '../../../navigation/settings-fallback-route';
 import type {RootStackParamList} from '../../../navigation/types';
 import {deleteAccount} from '../../auth/services/account-service';
 import {signOutOfHoyst} from '../../auth/services/auth-service';
@@ -533,6 +537,16 @@ export function SettingsScreen({navigation}: Props): React.JSX.Element {
       resetOnboarding();
       resetSettings();
       setProfile(undefined);
+      const resetRoute = getSettingsResetRoute(navigation.getState().routeNames);
+
+      if (resetRoute) {
+        navigation.dispatch(
+          CommonActions.reset({
+            index: 0,
+            routes: [resetRoute],
+          }),
+        );
+      }
       await signOutOfHoyst().catch(() => undefined);
       setGuest();
       Alert.alert('Account deleted', 'Your Hoyst account has been deleted.');

@@ -82,8 +82,6 @@ export function AppTabsNavigator(): React.JSX.Element {
       });
     } else if (pendingAction.type === 'tapInPicker') {
       rootNavigation.navigate('TapInPicker');
-    } else if (pendingAction.type === 'settings') {
-      rootNavigation.navigate('Settings');
     }
   }, [consumePendingAction, hasPendingStarterCircleSetup, rootNavigation, status]);
 

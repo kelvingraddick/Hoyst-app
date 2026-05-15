@@ -14,7 +14,7 @@ import {useOnboardingStore} from '../store/onboarding-store';
 import {useSessionStore} from '../store/session-store';
 import {AppTabsNavigator} from './AppTabsNavigator';
 import {AuthStackNavigator} from './AuthStackNavigator';
-import {getRootNavigatorMode} from './root-mode';
+import {getRootNavigatorMode, shouldRegisterAccountRoutes} from './root-mode';
 import type {RootStackParamList} from './types';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -46,6 +46,7 @@ export function RootNavigator(): React.JSX.Element {
   });
   const canPresentAuthModal =
     mode === 'main' && status !== 'authenticatedReady';
+  const canRegisterAccountRoutes = shouldRegisterAccountRoutes({mode, status});
 
   return (
     <Stack.Navigator key={mode}>
@@ -79,22 +80,26 @@ export function RootNavigator(): React.JSX.Element {
           }}
         />
       ) : null}
-      <Stack.Screen
-        component={SettingsScreen}
-        name="Settings"
-        options={{
-          animation: 'slide_from_right',
-          headerShown: false,
-        }}
-      />
-      <Stack.Screen
-        component={EditProfileScreen}
-        name="EditProfile"
-        options={{
-          animation: 'slide_from_right',
-          headerShown: false,
-        }}
-      />
+      {canRegisterAccountRoutes ? (
+        <>
+          <Stack.Screen
+            component={SettingsScreen}
+            name="Settings"
+            options={{
+              animation: 'slide_from_right',
+              headerShown: false,
+            }}
+          />
+          <Stack.Screen
+            component={EditProfileScreen}
+            name="EditProfile"
+            options={{
+              animation: 'slide_from_right',
+              headerShown: false,
+            }}
+          />
+        </>
+      ) : null}
       <Stack.Screen
         component={TapInPickerScreen}
         name="TapInPicker"
