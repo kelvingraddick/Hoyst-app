@@ -16,25 +16,36 @@
                         <rect key="frame" x="0.0" y="0.0" width="375" height="667"/>
                         <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                         <subviews>
-                            <label opaque="NO" clipsSubviews="YES" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Hoyst" textAlignment="center" lineBreakMode="middleTruncation" baselineAdjustment="alignBaselines" minimumFontSize="18" translatesAutoresizingMaskIntoConstraints="NO" id="GJd-Yh-RWb">
-                                <rect key="frame" x="0.0" y="202" width="375" height="43"/>
-                                <fontDescription key="fontDescription" type="boldSystem" pointSize="36"/>
-                                <nil key="highlightedColor"/>
-                            </label>
-                            <label opaque="NO" clipsSubviews="YES" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Powered by React Native" textAlignment="center" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" minimumFontSize="9" translatesAutoresizingMaskIntoConstraints="NO" id="MN2-I3-ftu">
-                                <rect key="frame" x="0.0" y="626" width="375" height="21"/>
-                                <fontDescription key="fontDescription" type="system" pointSize="17"/>
-                                <nil key="highlightedColor"/>
-                            </label>
+                            <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" image="LaunchLogo" translatesAutoresizingMaskIntoConstraints="NO" id="QW9-xh-Qk1">
+                                <rect key="frame" x="125.5" y="230.5" width="124" height="52"/>
+                                <constraints>
+                                    <constraint firstAttribute="height" constant="52" id="1xR-Ri-hBV"/>
+                                    <constraint firstAttribute="width" constant="124" id="RBc-FC-vha"/>
+                                </constraints>
+                            </imageView>
+                            <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" image="LaunchRing" translatesAutoresizingMaskIntoConstraints="NO" id="Wjx-tS-43i">
+                                <rect key="frame" x="128.5" y="310.5" width="118" height="118"/>
+                                <constraints>
+                                    <constraint firstAttribute="height" constant="118" id="Myi-h8-Q4v"/>
+                                    <constraint firstAttribute="width" constant="118" id="cS9-5n-dpm"/>
+                                </constraints>
+                            </imageView>
+                            <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" image="LaunchRing" translatesAutoresizingMaskIntoConstraints="NO" id="J3n-Lu-nTU">
+                                <rect key="frame" x="153.5" y="335.5" width="68" height="68"/>
+                                <constraints>
+                                    <constraint firstAttribute="height" constant="68" id="7Sf-No-6Lb"/>
+                                    <constraint firstAttribute="width" constant="68" id="9fZ-k3-A1Q"/>
+                                </constraints>
+                            </imageView>
                         </subviews>
-                        <color key="backgroundColor" systemColor="systemBackgroundColor" cocoaTouchSystemColor="whiteColor"/>
+                        <color key="backgroundColor" name="LaunchBackground"/>
                         <constraints>
-                            <constraint firstItem="Bcu-3y-fUS" firstAttribute="bottom" secondItem="MN2-I3-ftu" secondAttribute="bottom" constant="20" id="OZV-Vh-mqD"/>
-                            <constraint firstItem="Bcu-3y-fUS" firstAttribute="centerX" secondItem="GJd-Yh-RWb" secondAttribute="centerX" id="Q3B-4B-g5h"/>
-                            <constraint firstItem="MN2-I3-ftu" firstAttribute="centerX" secondItem="Bcu-3y-fUS" secondAttribute="centerX" id="akx-eg-2ui"/>
-                            <constraint firstItem="MN2-I3-ftu" firstAttribute="leading" secondItem="Bcu-3y-fUS" secondAttribute="leading" id="i1E-0Y-4RG"/>
-                            <constraint firstItem="GJd-Yh-RWb" firstAttribute="centerY" secondItem="Ze5-6b-2t3" secondAttribute="bottom" multiplier="1/3" constant="1" id="moa-c2-u7t"/>
-                            <constraint firstItem="GJd-Yh-RWb" firstAttribute="leading" secondItem="Bcu-3y-fUS" secondAttribute="leading" symbolic="YES" id="x7j-FC-K8j"/>
+                            <constraint firstItem="QW9-xh-Qk1" firstAttribute="centerX" secondItem="Bcu-3y-fUS" secondAttribute="centerX" id="5sH-Hj-1DI"/>
+                            <constraint firstItem="Wjx-tS-43i" firstAttribute="centerX" secondItem="QW9-xh-Qk1" secondAttribute="centerX" id="IKw-N8-tEF"/>
+                            <constraint firstItem="J3n-Lu-nTU" firstAttribute="centerX" secondItem="Wjx-tS-43i" secondAttribute="centerX" id="Uph-km-gQN"/>
+                            <constraint firstItem="J3n-Lu-nTU" firstAttribute="centerY" secondItem="Wjx-tS-43i" secondAttribute="centerY" id="dZz-1k-zjO"/>
+                            <constraint firstItem="Wjx-tS-43i" firstAttribute="top" secondItem="QW9-xh-Qk1" secondAttribute="bottom" constant="28" id="nuS-hE-2ug"/>
+                            <constraint firstItem="Wjx-tS-43i" firstAttribute="centerY" secondItem="Ze5-6b-2t3" secondAttribute="centerY" constant="36" id="pBc-nV-oW4"/>
                         </constraints>
                         <viewLayoutGuide key="safeArea" id="Bcu-3y-fUS"/>
                     </view>
@@ -44,4 +55,11 @@
             <point key="canvasLocation" x="52.173913043478265" y="375"/>
         </scene>
     </scenes>
+    <resources>
+        <image name="LaunchLogo" width="1900" height="800"/>
+        <image name="LaunchRing" width="512" height="512"/>
+        <namedColor name="LaunchBackground">
+            <color red="0.96078431372549022" green="0.96078431372549022" blue="0.96862745098039216" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
+        </namedColor>
+    </resources>
 </document>
