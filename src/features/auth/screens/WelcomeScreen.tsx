@@ -635,10 +635,8 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
   const selectRegistrationMethod = (nextMethod: SignInMethod) => {
     setAuthMethod(nextMethod);
 
-    if (nextMethod === 'email') {
-      setPhoneConfirmation(undefined);
-      setRegistrationSmsCode('');
-    }
+    setPhoneConfirmation(undefined);
+    setRegistrationSmsCode('');
   };
 
   const registerWithEmailFromOnboarding = async () => {
@@ -709,6 +707,16 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
       setCurrentStep('finishProfile');
     }
   }, [currentStep, hasPendingStarterCircleSetup, setCurrentStep, status]);
+
+  useEffect(() => {
+    if (
+      status === 'authenticatedReady' &&
+      currentStep === 'auth' &&
+      !hasPendingStarterCircleSetup
+    ) {
+      markSeen();
+    }
+  }, [currentStep, hasPendingStarterCircleSetup, markSeen, status]);
 
   useEffect(() => {
     if (
