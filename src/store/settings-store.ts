@@ -2,13 +2,17 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import {create} from 'zustand';
 import {createJSONStorage, persist} from 'zustand/middleware';
 
+export type AppearancePreference = 'dark' | 'system' | 'light';
+
 type SettingsState = {
+  appearance: AppearancePreference;
   notifications: {
     circleActivity: boolean;
     productUpdates: boolean;
     tapInReminders: boolean;
   };
   reset: () => void;
+  setAppearancePreference: (appearance: AppearancePreference) => void;
   setNotificationSettings: (
     notificationSettings: Partial<SettingsState['notifications']>,
   ) => void;
@@ -24,11 +28,19 @@ const defaultNotifications = {
   tapInReminders: true,
 };
 
+const defaultAppearance: AppearancePreference = 'dark';
+
 export const useSettingsStore = create<SettingsState>()(
   persist(
     set => ({
+      appearance: defaultAppearance,
       notifications: defaultNotifications,
-      reset: () => set({notifications: defaultNotifications}),
+      reset: () =>
+        set({
+          appearance: defaultAppearance,
+          notifications: defaultNotifications,
+        }),
+      setAppearancePreference: appearance => set({appearance}),
       setNotificationSettings: notificationSettings =>
         set(state => ({
           notifications: {

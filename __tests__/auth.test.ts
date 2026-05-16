@@ -9,6 +9,7 @@ jest.mock('@react-navigation/native', () => ({
 
 import {useSessionStore} from '../src/store/session-store';
 import {useSettingsStore} from '../src/store/settings-store';
+import {resolveHoystThemeScheme} from '../src/design/theme/useHoystTheme';
 import {
   normalizeOnboardingStep,
   useOnboardingStore,
@@ -37,10 +38,6 @@ import {
   getRootNavigatorMode,
   shouldRegisterAccountRoutes,
 } from '../src/navigation/root-mode';
-import {
-  getSettingsFallbackRoute,
-  getSettingsResetRoute,
-} from '../src/navigation/settings-fallback-route';
 import {resolveStarterCircleDecision} from '../functions/src/auth/starter-circle-plan';
 
 describe('auth profile validation', () => {
@@ -200,7 +197,7 @@ describe('auth dismiss flow', () => {
     expect(signOut).toHaveBeenCalledTimes(1);
   });
 
-  it('marks onboarding seen before sign-out can publish guest state', async () => {
+  it('publishes guest mode before sign-out can keep auth visible', async () => {
     const events: string[] = [];
 
     await continueAsGuestFromAuth({
@@ -217,9 +214,9 @@ describe('auth dismiss flow', () => {
     expect(events).toEqual([
       'clearPendingAction',
       'markOnboardingSeen',
-      'signOut',
       'setGuest',
       'dismissAuth',
+      'signOut',
     ]);
   });
 });
@@ -445,7 +442,7 @@ describe('auth modal dismissal state', () => {
         index: 2,
         routes: [
           {key: 'main', name: 'MainTabs'},
-          {key: 'settings', name: 'Settings'},
+          {key: 'edit-profile', name: 'EditProfile'},
           {key: 'auth', name: 'Auth'},
         ],
       }),
@@ -497,50 +494,6 @@ describe('auth modal dismissal state', () => {
 
     expect(navigation.dispatch).not.toHaveBeenCalled();
     expect(navigation.goBack).not.toHaveBeenCalled();
-  });
-});
-
-describe('settings fallback routing', () => {
-  it('returns Home tabs when the main navigator is active', () => {
-    expect(getSettingsFallbackRoute(['MainTabs', 'Settings'])).toBe('MainTabs');
-  });
-
-  it('returns onboarding auth when tabs are not registered', () => {
-    expect(getSettingsFallbackRoute(['Auth', 'Settings'])).toBe('Auth');
-  });
-
-  it('does not invent a route when no safe fallback exists', () => {
-    expect(getSettingsFallbackRoute(['Settings'])).toBeUndefined();
-  });
-
-  it('builds a Home reset only when main tabs are registered', () => {
-    expect(getSettingsResetRoute(['MainTabs', 'Settings'])).toEqual({
-      name: 'MainTabs',
-      params: {screen: 'Home'},
-    });
-  });
-
-  it('builds an onboarding reset when auth is the active root', () => {
-    expect(getSettingsResetRoute(['Auth', 'Settings'])).toEqual({
-      name: 'Auth',
-      params: {screen: 'Welcome'},
-    });
-  });
-});
-
-describe('settings auth entry', () => {
-  it('starts onboarding without a Settings resume target', () => {
-    useSessionStore.getState().setPendingAction({type: 'createCircle'});
-
-    useSessionStore.getState().clearPendingAction();
-    useSessionStore.getState().beginAuthFlow();
-    useOnboardingStore.getState().startOnboardingWizard();
-
-    expect(useSessionStore.getState()).toMatchObject({
-      pendingAction: undefined,
-      status: 'authenticating',
-    });
-    expect(useOnboardingStore.getState().currentStep).toBe('welcome');
   });
 });
 
@@ -700,7 +653,26 @@ describe('onboarding store', () => {
 });
 
 describe('settings store', () => {
+  beforeEach(() => {
+    useSettingsStore.getState().reset();
+  });
+
+  it('defaults appearance to dark', () => {
+    expect(useSettingsStore.getState().appearance).toBe('dark');
+  });
+
+  it('updates appearance preference', () => {
+    useSettingsStore.getState().setAppearancePreference('system');
+
+    expect(useSettingsStore.getState().appearance).toBe('system');
+
+    useSettingsStore.getState().setAppearancePreference('light');
+
+    expect(useSettingsStore.getState().appearance).toBe('light');
+  });
+
   it('resets persisted account preferences to guest defaults', () => {
+    useSettingsStore.getState().setAppearancePreference('light');
     useSettingsStore.getState().setNotificationSettings({
       circleActivity: false,
       productUpdates: false,
@@ -709,11 +681,27 @@ describe('settings store', () => {
 
     useSettingsStore.getState().reset();
 
+    expect(useSettingsStore.getState().appearance).toBe('dark');
     expect(useSettingsStore.getState().notifications).toEqual({
       circleActivity: true,
       productUpdates: true,
       tapInReminders: true,
     });
+  });
+});
+
+describe('theme appearance resolution', () => {
+  it('forces dark regardless of system setting', () => {
+    expect(resolveHoystThemeScheme('dark', 'light')).toBe('dark');
+  });
+
+  it('forces light regardless of system setting', () => {
+    expect(resolveHoystThemeScheme('light', 'dark')).toBe('light');
+  });
+
+  it('follows system setting when requested', () => {
+    expect(resolveHoystThemeScheme('system', 'dark')).toBe('dark');
+    expect(resolveHoystThemeScheme('system', 'light')).toBe('light');
   });
 });
 

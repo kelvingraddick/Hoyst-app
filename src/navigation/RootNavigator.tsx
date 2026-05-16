@@ -6,7 +6,6 @@ import {HoystText} from '../design/components/HoystText';
 import {CreateCircleScreen} from '../features/create-circle/screens/CreateCircleScreen';
 import {CircleDetailScreen} from '../features/circles/screens/CircleDetailScreen';
 import {EditProfileScreen} from '../features/settings/screens/EditProfileScreen';
-import {SettingsScreen} from '../features/settings/screens/SettingsScreen';
 import {TapInCompleteScreen} from '../features/check-in/screens/TapInCompleteScreen';
 import {TapInComposerScreen} from '../features/check-in/screens/TapInComposerScreen';
 import {TapInPickerScreen} from '../features/check-in/screens/TapInPickerScreen';
@@ -81,24 +80,14 @@ export function RootNavigator(): React.JSX.Element {
         />
       ) : null}
       {canRegisterAccountRoutes ? (
-        <>
-          <Stack.Screen
-            component={SettingsScreen}
-            name="Settings"
-            options={{
-              animation: 'slide_from_right',
-              headerShown: false,
-            }}
-          />
-          <Stack.Screen
-            component={EditProfileScreen}
-            name="EditProfile"
-            options={{
-              animation: 'slide_from_right',
-              headerShown: false,
-            }}
-          />
-        </>
+        <Stack.Screen
+          component={EditProfileScreen}
+          name="EditProfile"
+          options={{
+            animation: 'slide_from_right',
+            headerShown: false,
+          }}
+        />
       ) : null}
       <Stack.Screen
         component={TapInPickerScreen}

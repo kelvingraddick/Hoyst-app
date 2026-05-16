@@ -29,7 +29,6 @@ export type RootStackParamList = {
   Loading: undefined;
   MainTabs: NavigatorScreenParams<AppTabsParamList> | undefined;
   Auth: NavigatorScreenParams<AuthStackParamList> | undefined;
-  Settings: undefined;
   EditProfile: undefined;
   TapInPicker: undefined;
   CreateCircle: undefined;
