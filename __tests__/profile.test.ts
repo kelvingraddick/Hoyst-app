@@ -58,6 +58,19 @@ describe('profile store', () => {
       name: 'Kelvin North',
     });
   });
+
+  it('updates the saved avatar URL on a real profile', () => {
+    useUserProfileStore.setState({profile});
+
+    useUserProfileStore.getState().updateProfile({
+      avatarUrl: 'https://example.com/new-avatar.png',
+      name: profile.name,
+    });
+
+    expect(useUserProfileStore.getState().profile?.avatarUrl).toBe(
+      'https://example.com/new-avatar.png',
+    );
+  });
 });
 
 describe('profile display helpers', () => {
@@ -189,10 +202,7 @@ describe('personal daily streak calculation', () => {
 
   it('uses the requested timezone for date keys', () => {
     expect(
-      getDateKey(
-        new Date('2026-05-07T03:00:00.000Z'),
-        'America/New_York',
-      ),
+      getDateKey(new Date('2026-05-07T03:00:00.000Z'), 'America/New_York'),
     ).toBe('2026-05-06');
   });
 });

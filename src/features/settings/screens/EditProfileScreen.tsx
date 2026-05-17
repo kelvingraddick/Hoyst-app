@@ -1,7 +1,8 @@
 import React, {useState} from 'react';
 import {Alert, Pressable, StyleSheet, View} from 'react-native';
-import {ArrowLeft} from 'lucide-react-native';
+import {ArrowLeft, ImagePlus} from 'lucide-react-native';
 import type {NativeStackScreenProps} from '@react-navigation/native-stack';
+import {launchImageLibrary} from 'react-native-image-picker';
 
 import {GlassPanel} from '../../../design/components/GlassPanel';
 import {HoystButton} from '../../../design/components/HoystButton';
@@ -12,7 +13,10 @@ import {LayeredAvatar} from '../../../design/components/LayeredAvatar';
 import {actionShadow} from '../../../design/tokens/actions';
 import {useHoystTheme} from '../../../design/theme/useHoystTheme';
 import {TimezonePicker} from '../../auth/components/TimezonePicker';
-import {updateProfileFields} from '../../auth/services/account-service';
+import {
+  updateProfileFields,
+  uploadProfileAvatar,
+} from '../../auth/services/account-service';
 import type {RootStackParamList} from '../../../navigation/types';
 import {useUserProfileStore} from '../../../store/profile-store';
 import {useSessionStore} from '../../../store/session-store';
@@ -31,15 +35,35 @@ export function EditProfileScreen({navigation}: Props): React.JSX.Element {
   const [name, setName] = useState(profile?.name ?? '');
   const [bio, setBio] = useState(profile?.bio ?? '');
   const [timezone, setTimezone] = useState(profile?.timezone ?? 'UTC');
+  const [selectedAvatarUri, setSelectedAvatarUri] = useState<string>();
   const [isSaving, setIsSaving] = useState(false);
 
   const isSaveDisabled =
     !profile ||
     !name.trim() ||
     isSaving ||
-    (name.trim() === profile.name &&
+    (!selectedAvatarUri &&
+      name.trim() === profile.name &&
       bio.trim() === (profile.bio ?? '') &&
       timezone.trim() === profile.timezone);
+
+  const chooseProfileAvatar = async () => {
+    const response = await launchImageLibrary({
+      mediaType: 'photo',
+      quality: 0.8,
+      selectionLimit: 1,
+    });
+
+    if (response.errorMessage) {
+      Alert.alert('Could not choose photo', response.errorMessage);
+      return;
+    }
+
+    const uri = response.assets?.[0]?.uri;
+    if (uri) {
+      setSelectedAvatarUri(uri);
+    }
+  };
 
   const onSave = async () => {
     if (isSaveDisabled || !profile) {
@@ -48,7 +72,17 @@ export function EditProfileScreen({navigation}: Props): React.JSX.Element {
 
     setIsSaving(true);
     try {
-      const avatarUrl = profile.avatarUrl ?? user?.photoURL;
+      if (selectedAvatarUri && !user?.uid) {
+        throw new Error('Sign in is required to upload your avatar.');
+      }
+
+      const avatarUrl =
+        selectedAvatarUri && user?.uid
+          ? await uploadProfileAvatar({
+              uid: user.uid,
+              uri: selectedAvatarUri,
+            })
+          : profile.avatarUrl ?? user?.photoURL;
 
       await updateProfileFields({
         avatarUrl,
@@ -108,7 +142,9 @@ export function EditProfileScreen({navigation}: Props): React.JSX.Element {
   }
 
   const initials = getProfileInitials(profile);
-  const avatarSource = getProfileAvatarSource(profile, user?.photoURL);
+  const avatarSource = selectedAvatarUri
+    ? {uri: selectedAvatarUri}
+    : getProfileAvatarSource(profile, user?.photoURL);
 
   return (
     <HoystScreen contentContainerStyle={styles.content}>
@@ -140,6 +176,29 @@ export function EditProfileScreen({navigation}: Props): React.JSX.Element {
             <HoystText variant="title">{profile.name}</HoystText>
             <HoystText tone="muted">@{profile.handle}</HoystText>
             <HoystText tone="muted">{profile.timezone}</HoystText>
+            <HoystButton
+              backgroundColor={theme.surfaceHigh}
+              borderColor={theme.borderStrong}
+              icon={
+                <ImagePlus
+                  color={theme.accentSecondary}
+                  size={18}
+                  strokeWidth={2.3}
+                />
+              }
+              label={avatarSource ? 'Change photo' : 'Add photo'}
+              onPress={() => {
+                chooseProfileAvatar().catch(error => {
+                  Alert.alert(
+                    'Could not choose photo',
+                    (error as {message?: string}).message ?? 'Try again.',
+                  );
+                });
+              }}
+              style={styles.avatarButton}
+              textColor={theme.text}
+              variant="outline"
+            />
           </View>
         </View>
         <HoystText tone="muted" variant="caption">
@@ -229,6 +288,10 @@ const styles = StyleSheet.create({
   heroCopy: {
     flex: 1,
     gap: 4,
+  },
+  avatarButton: {
+    alignSelf: 'flex-start',
+    marginTop: 8,
   },
   fieldGroup: {
     gap: 8,
