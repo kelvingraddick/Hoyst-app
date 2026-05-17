@@ -1,4 +1,4 @@
-import React, {useCallback, useMemo, useState} from 'react';
+import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {Pressable, Share, StyleSheet, View} from 'react-native';
 import {Bell, ChevronRight, Medal} from 'lucide-react-native';
 import type {BottomTabNavigationProp} from '@react-navigation/bottom-tabs';
@@ -21,6 +21,8 @@ import {useProtectedAction} from '../../auth/hooks/useProtectedAction';
 import {
   createEmptyHomeData,
   getHomeFilterCounts,
+  getHomeGreetingContext,
+  getHomeGreetingFallback,
   matchesHomeCircleFilter,
   shouldShowAuthenticatedHomeEmptyState,
   shouldShowHomeCreateCircleButton,
@@ -30,6 +32,13 @@ import {
   type HomeData,
 } from '../services/home-data-service';
 import {
+  buildHomeGreetingCacheKey,
+  clearExpiredHomeGreetingCacheEntries,
+  generateHomeGreeting,
+  getCachedHomeGreeting,
+  setCachedHomeGreeting,
+} from '../services/home-greeting-service';
+import {
   getProfileAvatarSource,
   getProfileInitials,
 } from '../../profile/services/profile-display';
@@ -37,6 +46,7 @@ import type {
   AppTabsParamList,
   RootStackParamList,
 } from '../../../navigation/types';
+import {navigateToAuthWelcome} from '../../../navigation/auth-modal-navigation';
 import type {
   CircleManagementCard,
   CircleManagementFilter,
@@ -63,6 +73,12 @@ const filterTones: Record<
 };
 
 const filters: CircleManagementFilter[] = ['all', 'needsYou', 'atRisk', 'done'];
+
+type HomeGreetingState = {
+  requestKey: string;
+  headline: string;
+  source: 'fallback' | 'gemini';
+};
 
 function canInvite(circle: CircleManagementCard) {
   return Boolean(
@@ -108,6 +124,9 @@ export function HomeScreen(): React.JSX.Element {
   const [pokedCircleIds, setPokedCircleIds] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
+  const [homeGreetingState, setHomeGreetingState] =
+    useState<HomeGreetingState>();
+  const homeGreetingInFlightKeyRef = useRef<string | undefined>(undefined);
   const profile = useUserProfileStore(state => state.profile);
   const status = useSessionStore(state => state.status);
   const user = useSessionStore(state => state.user);
@@ -116,6 +135,7 @@ export function HomeScreen(): React.JSX.Element {
   const startOnboardingWizard = useOnboardingStore(
     state => state.startOnboardingWizard,
   );
+  const setOnboardingStep = useOnboardingStore(state => state.setCurrentStep);
   const navigation =
     useNavigation<BottomTabNavigationProp<AppTabsParamList, 'Home'>>();
   const rootNavigation =
@@ -194,7 +214,46 @@ export function HomeScreen(): React.JSX.Element {
       theme.warning,
     ],
   );
-  const firstName = profile ? profile.name.split(' ')[0] : 'there';
+  const homeGreetingContext = useMemo(
+    () =>
+      getHomeGreetingContext({
+        circles: homeData.circles,
+        firstName: profile?.name,
+        timezone,
+      }),
+    [homeData.circles, profile?.name, timezone],
+  );
+  const homeGreetingFallback = useMemo(
+    () =>
+      getHomeGreetingFallback({
+        circles: homeData.circles,
+        firstName: profile?.name,
+        timezone,
+      }),
+    [homeData.circles, profile?.name, timezone],
+  );
+  const homeGreetingRequestKey = useMemo(
+    () =>
+      buildHomeGreetingCacheKey({
+        context: homeGreetingContext,
+        dateKey: homeData.todayDateKey,
+        uid: user?.uid ?? 'guest',
+      }),
+    [homeData.todayDateKey, homeGreetingContext, user?.uid],
+  );
+  const activeHomeGreetingState =
+    homeGreetingState?.requestKey === homeGreetingRequestKey
+      ? homeGreetingState
+      : undefined;
+  const canGenerateHomeGreeting =
+    isAuthenticatedHome &&
+    !isLoadingHomeData &&
+    (homeData.hasLoadedMemberships || hasHomeDataError);
+  const shouldHoldHomeGreeting =
+    isAuthenticatedHome && !activeHomeGreetingState;
+  const homeGreeting =
+    activeHomeGreetingState?.headline ??
+    (isAuthenticatedHome ? undefined : homeGreetingFallback);
   const initials = getProfileInitials(profile);
   const avatarSource = getProfileAvatarSource(profile, user?.photoURL);
   const progressLabel =
@@ -226,16 +285,109 @@ export function HomeScreen(): React.JSX.Element {
     showAccountPrompt,
   });
 
+  useEffect(() => {
+    void clearExpiredHomeGreetingCacheEntries();
+  }, []);
+
+  useEffect(() => {
+    if (!canGenerateHomeGreeting) {
+      setHomeGreetingState(undefined);
+      return undefined;
+    }
+
+    let isActive = true;
+
+    const loadHomeGreeting = async () => {
+      const cachedGreeting = await getCachedHomeGreeting(
+        homeGreetingRequestKey,
+      );
+
+      if (!isActive) {
+        return;
+      }
+
+      if (cachedGreeting) {
+        setHomeGreetingState({
+          requestKey: homeGreetingRequestKey,
+          headline: cachedGreeting.headline,
+          source: 'gemini',
+        });
+      } else {
+        setHomeGreetingState(undefined);
+      }
+
+      if (homeGreetingInFlightKeyRef.current === homeGreetingRequestKey) {
+        return;
+      }
+
+      homeGreetingInFlightKeyRef.current = homeGreetingRequestKey;
+
+      try {
+        const result = await generateHomeGreeting({
+          context: homeGreetingContext,
+          dateKey: homeData.todayDateKey,
+        });
+
+        if (!isActive) {
+          return;
+        }
+
+        const state = {
+          requestKey: homeGreetingRequestKey,
+          headline:
+            result.source === 'gemini' ? result.headline : homeGreetingFallback,
+          source: result.source,
+        } satisfies HomeGreetingState;
+
+        setHomeGreetingState(state);
+
+        if (result.source === 'gemini') {
+          await setCachedHomeGreeting(homeGreetingRequestKey, result);
+        }
+      } catch {
+        if (!isActive) {
+          return;
+        }
+
+        setHomeGreetingState({
+          requestKey: homeGreetingRequestKey,
+          headline: homeGreetingFallback,
+          source: 'fallback',
+        });
+      } finally {
+        if (homeGreetingInFlightKeyRef.current === homeGreetingRequestKey) {
+          homeGreetingInFlightKeyRef.current = undefined;
+        }
+      }
+    };
+
+    void loadHomeGreeting();
+
+    return () => {
+      isActive = false;
+    };
+  }, [
+    canGenerateHomeGreeting,
+    hasHomeDataError,
+    homeData.hasLoadedMemberships,
+    homeGreetingContext,
+    homeGreetingFallback,
+    homeGreetingRequestKey,
+    isAuthenticatedHome,
+    isLoadingHomeData,
+  ]);
+
   const openAccountAuth = () => {
     if (isIncompleteProfile) {
-      rootNavigation?.navigate('Auth', {screen: 'CompleteProfile'});
+      setOnboardingStep('finishProfile');
+      navigateToAuthWelcome(rootNavigation);
       return;
     }
 
     clearPendingAction();
     beginAuthFlow();
     startOnboardingWizard();
-    rootNavigation?.navigate('Auth', {screen: 'Welcome'});
+    navigateToAuthWelcome(rootNavigation);
   };
 
   const openCircleDetail = (circleId: string) => {
@@ -279,13 +431,11 @@ export function HomeScreen(): React.JSX.Element {
     }
 
     if (!circle.viewerHasCheckedIn) {
-      requireAccount(
-        {circleId: circle.id, source: 'home', type: 'tapIn'},
-        () =>
-          rootNavigation?.navigate('TapInComposer', {
-            circleId: circle.id,
-            source: 'home',
-          }),
+      requireAccount({circleId: circle.id, source: 'home', type: 'tapIn'}, () =>
+        rootNavigation?.navigate('TapInComposer', {
+          circleId: circle.id,
+          source: 'home',
+        }),
       );
       return;
     }
@@ -324,7 +474,35 @@ export function HomeScreen(): React.JSX.Element {
       </View>
 
       <View style={styles.heroCopy}>
-        <HoystText variant="headline">Good morning, {firstName}</HoystText>
+        {homeGreeting ? (
+          <HoystText style={styles.homeGreetingHeadline} variant="headline">
+            {homeGreeting}
+          </HoystText>
+        ) : shouldHoldHomeGreeting ? (
+          <View
+            accessibilityElementsHidden
+            importantForAccessibility="no-hide-descendants"
+            style={styles.homeGreetingPlaceholder}>
+            <View
+              style={[
+                styles.homeGreetingSkeletonLine,
+                {
+                  backgroundColor: theme.surfaceStrong,
+                  borderColor: theme.border,
+                },
+              ]}
+            />
+            <View
+              style={[
+                styles.homeGreetingSkeletonLineShort,
+                {
+                  backgroundColor: theme.surfaceStrong,
+                  borderColor: theme.border,
+                },
+              ]}
+            />
+          </View>
+        ) : null}
         <HoystText tone="muted" variant="label">
           {homeData.todayLabel}
         </HoystText>
@@ -347,13 +525,16 @@ export function HomeScreen(): React.JSX.Element {
             const progressCellStateStyle = isDone
               ? styles.progressCellDone
               : isMissed
-                ? styles.progressCellMissed
-                : isToday
-                  ? styles.progressCellToday
-                  : undefined;
+              ? styles.progressCellMissed
+              : isToday
+              ? styles.progressCellToday
+              : undefined;
             const progressCellThemeStyle = progressCellStateStyle
               ? undefined
-              : {backgroundColor: theme.surfaceStrong, borderColor: theme.border};
+              : {
+                  backgroundColor: theme.surfaceStrong,
+                  borderColor: theme.border,
+                };
 
             return (
               <View
@@ -368,10 +549,10 @@ export function HomeScreen(): React.JSX.Element {
                     color: isDone
                       ? theme.success
                       : isMissed
-                        ? theme.danger
-                        : isToday
-                          ? theme.accentSecondary
-                          : theme.textMuted,
+                      ? theme.danger
+                      : isToday
+                      ? theme.accentSecondary
+                      : theme.textMuted,
                   }}
                   variant="bodyStrong">
                   {day.label}
@@ -418,9 +599,7 @@ export function HomeScreen(): React.JSX.Element {
           </View>
           <View style={styles.emptyActions}>
             <HoystButton
-              label={
-                isIncompleteProfile ? 'Complete profile' : 'Get started'
-              }
+              label={isIncompleteProfile ? 'Complete profile' : 'Get started'}
               onPress={openAccountAuth}
             />
             <HoystButton
@@ -546,7 +725,10 @@ export function HomeScreen(): React.JSX.Element {
             </View>
             <HoystText
               numberOfLines={1}
-              style={[styles.createButtonLabel, {color: theme.actionForeground}]}
+              style={[
+                styles.createButtonLabel,
+                {color: theme.actionForeground},
+              ]}
               variant="button">
               Create Circle
             </HoystText>
@@ -585,6 +767,30 @@ const styles = StyleSheet.create({
   },
   heroCopy: {
     gap: 8,
+  },
+  homeGreetingHeadline: {
+    fontSize: 25,
+    letterSpacing: 0,
+    lineHeight: 29,
+  },
+  homeGreetingPlaceholder: {
+    gap: 8,
+    minHeight: 58,
+    paddingTop: 3,
+  },
+  homeGreetingSkeletonLine: {
+    borderRadius: 8,
+    borderWidth: 1,
+    height: 20,
+    opacity: 0.7,
+    width: '92%',
+  },
+  homeGreetingSkeletonLineShort: {
+    borderRadius: 8,
+    borderWidth: 1,
+    height: 20,
+    opacity: 0.5,
+    width: '64%',
   },
   progressHeader: {
     alignItems: 'center',

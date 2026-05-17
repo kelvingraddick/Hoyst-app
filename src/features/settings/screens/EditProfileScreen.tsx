@@ -11,6 +11,7 @@ import {HoystText} from '../../../design/components/HoystText';
 import {LayeredAvatar} from '../../../design/components/LayeredAvatar';
 import {actionShadow} from '../../../design/tokens/actions';
 import {useHoystTheme} from '../../../design/theme/useHoystTheme';
+import {TimezonePicker} from '../../auth/components/TimezonePicker';
 import {updateProfileFields} from '../../auth/services/account-service';
 import type {RootStackParamList} from '../../../navigation/types';
 import {useUserProfileStore} from '../../../store/profile-store';
@@ -29,13 +30,16 @@ export function EditProfileScreen({navigation}: Props): React.JSX.Element {
   const user = useSessionStore(state => state.user);
   const [name, setName] = useState(profile?.name ?? '');
   const [bio, setBio] = useState(profile?.bio ?? '');
+  const [timezone, setTimezone] = useState(profile?.timezone ?? 'UTC');
   const [isSaving, setIsSaving] = useState(false);
 
   const isSaveDisabled =
     !profile ||
     !name.trim() ||
     isSaving ||
-    (name.trim() === profile.name && bio.trim() === (profile.bio ?? ''));
+    (name.trim() === profile.name &&
+      bio.trim() === (profile.bio ?? '') &&
+      timezone.trim() === profile.timezone);
 
   const onSave = async () => {
     if (isSaveDisabled || !profile) {
@@ -50,11 +54,13 @@ export function EditProfileScreen({navigation}: Props): React.JSX.Element {
         avatarUrl,
         bio: bio.trim() || undefined,
         displayName: name.trim(),
+        timezone: timezone.trim() || 'UTC',
       });
       updateProfile({
         avatarUrl,
         bio,
         name,
+        timezone,
       });
       navigation.goBack();
     } catch (error) {
@@ -137,8 +143,7 @@ export function EditProfileScreen({navigation}: Props): React.JSX.Element {
           </View>
         </View>
         <HoystText tone="muted" variant="caption">
-          Handles are immutable after onboarding. Avatar and timezone editing
-          will land later.
+          Handles are immutable after onboarding.
         </HoystText>
       </GlassPanel>
 
@@ -167,6 +172,12 @@ export function EditProfileScreen({navigation}: Props): React.JSX.Element {
             value={bio}
           />
         </View>
+        <TimezonePicker
+          helperText="This sets your personal reset window and profile defaults."
+          modalTitle="Profile timezone"
+          onChange={setTimezone}
+          value={timezone}
+        />
         <HoystButton
           label={isSaving ? 'Saving...' : 'Save changes'}
           onPress={

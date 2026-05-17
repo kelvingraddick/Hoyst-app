@@ -133,6 +133,7 @@ export type CircleSummary = {
   matchCopy?: string;
   completionLabel?: string;
   progressLabel?: string;
+  timezone?: string;
 };
 
 export type TodayCircleCard = CircleSummary & {

@@ -1,3 +1,5 @@
+import {getFirebaseApp} from '../../../lib/firebase/app';
+import {firebaseAuth} from '../../../lib/firebase/auth';
 import {firebaseFunctions} from '../../../lib/firebase/functions';
 import type {
   CircleJoinMode,
@@ -17,11 +19,53 @@ export type CreateCircleInput = {
   title: string;
   timezone?: string;
 };
+export type UpdateCircleInput = CreateCircleInput & {
+  circleId: string;
+};
 
 export async function createCircle(input: CreateCircleInput) {
   const callable = firebaseFunctions().httpsCallable('createCircle');
   const result = await callable(input);
   return result.data as {circleId: string; inviteCode?: string};
+}
+
+export async function updateCircle(input: UpdateCircleInput) {
+  const idToken = await firebaseAuth().currentUser?.getIdToken(true);
+
+  if (!idToken) {
+    throw new Error('Sign in is required.');
+  }
+
+  const projectId = getFirebaseApp().options.projectId;
+  const response = await fetch(
+    `https://us-central1-${projectId}.cloudfunctions.net/updateCircle`,
+    {
+      body: JSON.stringify({
+        data: {
+          ...input,
+          idToken,
+        },
+      }),
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      method: 'POST',
+    },
+  );
+  const payload = (await response.json()) as {
+    error?: {message?: string; status?: string};
+    result?: {updated: true};
+  };
+
+  if (!response.ok || payload.error || !payload.result) {
+    throw new Error(
+      payload.error?.message ??
+        payload.error?.status ??
+        'Could not save circle changes.',
+    );
+  }
+
+  return payload.result;
 }
 
 export async function joinCircle(circleId: string, inviteCode?: string) {

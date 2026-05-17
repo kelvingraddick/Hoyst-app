@@ -1,8 +1,7 @@
-import React, {useEffect} from 'react';
+import React, {useEffect, useRef} from 'react';
 import {Platform, StyleSheet, View} from 'react-native';
 import {createBottomTabNavigator} from '@react-navigation/bottom-tabs';
-import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
-import {useNavigation} from '@react-navigation/native';
+import type {NativeStackScreenProps} from '@react-navigation/native-stack';
 import {
   Bell,
   Compass,
@@ -19,12 +18,15 @@ import {TapInRingMark} from '../design/components/TapInRingMark';
 import {useHoystTheme} from '../design/theme/useHoystTheme';
 import {HoystTabBarBackground} from './components/HoystTabBarBackground';
 import {canResumePendingAction} from './pending-action-resume';
+import {navigateToAuthWelcome} from './auth-modal-navigation';
+import {getRootAuthPresentation} from './root-mode';
 import type {AppTabsParamList, RootStackParamList} from './types';
 import {useOnboardingStore} from '../store/onboarding-store';
 import {useSessionStore} from '../store/session-store';
 
 const Tab = createBottomTabNavigator<AppTabsParamList>();
 
+type Props = NativeStackScreenProps<RootStackParamList, 'MainTabs'>;
 type StandardTabName = Exclude<keyof AppTabsParamList, 'TapIn'>;
 
 const routeIcons: Record<StandardTabName, LucideIcon> = {
@@ -38,19 +40,27 @@ function TapInPlaceholder(): React.JSX.Element {
   return <View />;
 }
 
-export function AppTabsNavigator(): React.JSX.Element {
+export function AppTabsNavigator({
+  navigation: rootNavigation,
+}: Props): React.JSX.Element {
   const theme = useHoystTheme();
   const status = useSessionStore(state => state.status);
   const beginAuthFlow = useSessionStore(state => state.beginAuthFlow);
   const consumePendingAction = useSessionStore(state => state.consumePendingAction);
+  const pendingAction = useSessionStore(state => state.pendingAction);
+  const currentStep = useOnboardingStore(state => state.currentStep);
+  const hasHydratedOnboarding = useOnboardingStore(state => state.hasHydrated);
+  const hasSeenOnboarding = useOnboardingStore(
+    state => state.hasSeenOnboarding,
+  );
   const hasPendingStarterCircleSetup = useOnboardingStore(
     state => state.hasPendingStarterCircleSetup,
   );
   const startOnboardingWizard = useOnboardingStore(
     state => state.startOnboardingWizard,
   );
-  const rootNavigation =
-    useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const setCurrentStep = useOnboardingStore(state => state.setCurrentStep);
+  const didAutoPresentOnboardingRef = useRef(false);
 
   useEffect(() => {
     if (
@@ -83,7 +93,56 @@ export function AppTabsNavigator(): React.JSX.Element {
     } else if (pendingAction.type === 'tapInPicker') {
       rootNavigation.navigate('TapInPicker');
     }
-  }, [consumePendingAction, hasPendingStarterCircleSetup, rootNavigation, status]);
+  }, [
+    consumePendingAction,
+    hasPendingStarterCircleSetup,
+    rootNavigation,
+    status,
+  ]);
+
+  useEffect(() => {
+    const presentation = getRootAuthPresentation({
+      currentStep,
+      hasHydratedOnboarding,
+      hasSeenOnboarding,
+      pendingAction,
+      status,
+    });
+
+    if (
+      presentation === 'onboarding' &&
+      !didAutoPresentOnboardingRef.current
+    ) {
+      startOnboardingWizard();
+      didAutoPresentOnboardingRef.current =
+        navigateToAuthWelcome(rootNavigation);
+      return;
+    }
+
+    if (presentation === 'finishProfile') {
+      const rootState = rootNavigation.getState();
+      const isAuthActive = rootState.routes.some(route => route.name === 'Auth');
+      const shouldForceFinishProfile =
+        currentStep === 'welcome' || currentStep === 'auth';
+
+      if (shouldForceFinishProfile) {
+        setCurrentStep('finishProfile');
+      }
+
+      if (!isAuthActive) {
+        navigateToAuthWelcome(rootNavigation);
+      }
+    }
+  }, [
+    currentStep,
+    hasHydratedOnboarding,
+    hasSeenOnboarding,
+    pendingAction,
+    rootNavigation,
+    setCurrentStep,
+    startOnboardingWizard,
+    status,
+  ]);
 
   return (
     <Tab.Navigator
@@ -141,21 +200,18 @@ export function AppTabsNavigator(): React.JSX.Element {
       <Tab.Screen component={ExploreScreen} name="Explore" />
       <Tab.Screen
         component={TapInPlaceholder}
-        listeners={({navigation}) => ({
+        listeners={() => ({
           tabPress: event => {
             event.preventDefault();
 
-            const parentNavigation =
-              navigation.getParent<NativeStackNavigationProp<RootStackParamList>>();
-
             if (status === 'authenticatedReady') {
-              parentNavigation?.navigate('TapInPicker');
+              rootNavigation.navigate('TapInPicker');
               return;
             }
 
             beginAuthFlow({type: 'tapInPicker'});
             startOnboardingWizard();
-            parentNavigation?.navigate('Auth', {screen: 'Welcome'});
+            navigateToAuthWelcome(rootNavigation);
           },
         })}
         name="TapIn"

@@ -1,4 +1,5 @@
 # Hoyst-app
+
 iOS, Android, and macOS app for the Hoyst accountability platform
 
 ## Firebase backend
@@ -51,6 +52,13 @@ Do not put backend-only credentials in `.env`. Cloud Functions secrets such as
 email provider API keys or push notification REST API keys should be set as
 Firebase Functions secrets, not committed to this repo and not bundled into the
 mobile app.
+
+The dynamic Home greeting uses Gemini only from Cloud Functions. Set the API key
+as a Functions secret when enabling generated greetings:
+
+```sh
+npx firebase functions:secrets:set GEMINI_API_KEY
+```
 
 Google native app config is intentionally kept out of git. On a fresh machine,
 download the Firebase app config files from the Firebase console or restore

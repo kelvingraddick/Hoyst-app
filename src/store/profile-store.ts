@@ -2,7 +2,8 @@ import {create} from 'zustand';
 
 import type {UserProfile} from '../types/models';
 
-type EditableProfileFields = Pick<UserProfile, 'avatarUrl' | 'bio' | 'name'>;
+type EditableProfileFields = Pick<UserProfile, 'avatarUrl' | 'bio' | 'name'> &
+  Partial<Pick<UserProfile, 'timezone'>>;
 
 type UserProfileState = {
   profile?: UserProfile;
@@ -27,9 +28,13 @@ export const useUserProfileStore = create<UserProfileState>(set => ({
             updates.bio === undefined
               ? state.profile.bio
               : updates.bio.trim()
-                ? updates.bio.trim()
-                : undefined,
+              ? updates.bio.trim()
+              : undefined,
           name: updates.name.trim(),
+          timezone:
+            updates.timezone === undefined
+              ? state.profile.timezone
+              : updates.timezone.trim() || 'UTC',
         },
       };
     }),

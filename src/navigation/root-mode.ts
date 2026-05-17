@@ -1,13 +1,17 @@
-import type {AuthSessionStatus} from '../store/session-store';
+import type {
+  AuthSessionStatus,
+  PendingProtectedAction,
+} from '../store/session-store';
 import type {OnboardingStep} from '../features/auth/services/onboarding-options';
 
-export type RootNavigatorMode = 'loading' | 'authFirst' | 'main';
+export type RootNavigatorMode = 'loading' | 'main';
+export type RootAuthPresentation = 'onboarding' | 'finishProfile';
 
 type RootNavigatorModeInput = {
   currentStep?: OnboardingStep;
   hasHydratedOnboarding: boolean;
   hasPendingStarterCircleSetup?: boolean;
-  hasSeenOnboarding: boolean;
+  hasSeenOnboarding?: boolean;
   status: AuthSessionStatus;
 };
 
@@ -16,30 +20,89 @@ type AccountRouteRegistrationInput = {
   status: AuthSessionStatus;
 };
 
+type ReadyOnboardingInput = {
+  currentStep?: OnboardingStep;
+  hasPendingStarterCircleSetup?: boolean;
+  hasSeenOnboarding: boolean;
+  status: AuthSessionStatus;
+};
+
+type AuthModalRegistrationInput = ReadyOnboardingInput & {
+  mode: RootNavigatorMode;
+};
+
+type RootAuthPresentationInput = {
+  currentStep?: OnboardingStep;
+  hasHydratedOnboarding: boolean;
+  hasSeenOnboarding: boolean;
+  pendingAction?: PendingProtectedAction;
+  status: AuthSessionStatus;
+};
+
 export function getRootNavigatorMode({
-  currentStep,
   hasHydratedOnboarding,
-  hasPendingStarterCircleSetup,
-  hasSeenOnboarding,
   status,
 }: RootNavigatorModeInput): RootNavigatorMode {
   if (status === 'initializing' || !hasHydratedOnboarding) {
     return 'loading';
   }
 
-  if (
-    status === 'authenticatedIncompleteProfile' ||
-    (status === 'authenticatedReady' &&
-      !hasSeenOnboarding &&
-      (hasPendingStarterCircleSetup ||
-        currentStep === 'notifications' ||
-        currentStep === 'auth')) ||
-    (status === 'guest' && !hasSeenOnboarding)
-  ) {
-    return 'authFirst';
+  return 'main';
+}
+
+export function hasActiveReadyOnboarding({
+  currentStep,
+  hasPendingStarterCircleSetup,
+  hasSeenOnboarding,
+  status,
+}: ReadyOnboardingInput): boolean {
+  return (
+    status === 'authenticatedReady' &&
+    !hasSeenOnboarding &&
+    (hasPendingStarterCircleSetup ||
+      currentStep === 'notifications' ||
+      currentStep === 'auth' ||
+      currentStep === 'finishProfile')
+  );
+}
+
+export function shouldRegisterAuthModal({
+  mode,
+  status: _status,
+  ..._readyOnboardingInput
+}: AuthModalRegistrationInput): boolean {
+  return mode === 'main';
+}
+
+export function shouldDismissAuthModal({
+  status,
+  ...readyOnboardingInput
+}: ReadyOnboardingInput): boolean {
+  return (
+    status === 'authenticatedReady' &&
+    !hasActiveReadyOnboarding({status, ...readyOnboardingInput})
+  );
+}
+
+export function getRootAuthPresentation({
+  hasHydratedOnboarding,
+  hasSeenOnboarding,
+  pendingAction,
+  status,
+}: RootAuthPresentationInput): RootAuthPresentation | undefined {
+  if (!hasHydratedOnboarding) {
+    return undefined;
   }
 
-  return 'main';
+  if (status === 'authenticatedIncompleteProfile') {
+    return 'finishProfile';
+  }
+
+  if (status === 'guest' && !hasSeenOnboarding && !pendingAction) {
+    return 'onboarding';
+  }
+
+  return undefined;
 }
 
 export function shouldRegisterAccountRoutes({

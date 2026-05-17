@@ -1,6 +1,7 @@
 import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
 
 import type {RootStackParamList} from '../../../navigation/types';
+import {navigateToAuthWelcome} from '../../../navigation/auth-modal-navigation';
 import {useOnboardingStore} from '../../../store/onboarding-store';
 import {
   useSessionStore,
@@ -27,6 +28,6 @@ export function useProtectedAction(
 
     beginAuthFlow(pendingAction);
     startOnboardingWizard();
-    navigation?.navigate('Auth', {screen: 'Welcome'});
+    navigateToAuthWelcome(navigation);
   };
 }

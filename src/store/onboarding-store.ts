@@ -128,7 +128,6 @@ export const useOnboardingStore = create<OnboardingStoreState>()(
         }),
       markSeen: () =>
         set({
-          currentStep: 'welcome',
           hasSeenOnboarding: true,
         }),
       nextStep: () =>

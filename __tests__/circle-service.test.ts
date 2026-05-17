@@ -1,5 +1,6 @@
 const mockCallable = jest.fn();
 const mockHttpsCallable = jest.fn(() => mockCallable);
+const mockGetIdToken = jest.fn();
 
 jest.mock('../src/lib/firebase/functions', () => ({
   firebaseFunctions: jest.fn(() => ({
@@ -7,15 +8,34 @@ jest.mock('../src/lib/firebase/functions', () => ({
   })),
 }));
 
+jest.mock('../src/lib/firebase/auth', () => ({
+  firebaseAuth: jest.fn(() => ({
+    currentUser: {
+      getIdToken: mockGetIdToken,
+    },
+  })),
+}));
+
+jest.mock('../src/lib/firebase/app', () => ({
+  getFirebaseApp: jest.fn(() => ({
+    options: {
+      projectId: 'hoyst-firebase-app',
+    },
+  })),
+}));
+
 import {
   deleteCircle,
   pokeCircleMembers,
   reviewJoinRequest,
+  updateCircle,
 } from '../src/features/circles/services/circle-service';
 
 describe('circle service', () => {
   beforeEach(() => {
+    global.fetch = jest.fn();
     mockCallable.mockReset();
+    mockGetIdToken.mockReset();
     mockHttpsCallable.mockClear();
   });
 
@@ -26,6 +46,49 @@ describe('circle service', () => {
 
     expect(mockHttpsCallable).toHaveBeenCalledWith('deleteCircle');
     expect(mockCallable).toHaveBeenCalledWith({circleId: 'circle-1'});
+  });
+
+  it('calls the updateCircle callable with editable circle settings', async () => {
+    const input = {
+      category: 'Fitness',
+      circleId: 'circle-1',
+      dailyTask: 'Move for 30 minutes',
+      graceRules: {
+        skip: {
+          allowance: 2,
+          windowDays: 7,
+        },
+      },
+      joinMode: 'open' as const,
+      maxSize: 12,
+      privacy: 'public' as const,
+      timezone: 'America/New_York',
+      title: 'Morning movers',
+    };
+    mockGetIdToken.mockResolvedValueOnce('id-token-1');
+    (global.fetch as jest.Mock).mockResolvedValueOnce({
+      json: async () => ({result: {updated: true}}),
+      ok: true,
+    });
+
+    await expect(updateCircle(input)).resolves.toEqual({updated: true});
+
+    expect(mockGetIdToken).toHaveBeenCalledWith(true);
+    expect(global.fetch).toHaveBeenCalledWith(
+      'https://us-central1-hoyst-firebase-app.cloudfunctions.net/updateCircle',
+      {
+        body: JSON.stringify({
+          data: {
+            ...input,
+            idToken: 'id-token-1',
+          },
+        }),
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        method: 'POST',
+      },
+    );
   });
 
   it('calls the reviewJoinRequest callable with the review decision', async () => {

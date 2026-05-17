@@ -165,6 +165,9 @@ export function TapInPickerScreen({navigation}: Props): React.JSX.Element {
     <HoystScreen contentContainerStyle={styles.content}>
       <View style={styles.closeRow}>
         <Pressable
+          accessibilityLabel="Close Tap In picker"
+          accessibilityRole="button"
+          hitSlop={8}
           onPress={() => navigation.goBack()}
           style={({pressed}) => [
             styles.closeButton,
@@ -212,10 +215,10 @@ export function TapInPickerScreen({navigation}: Props): React.JSX.Element {
               circle.state === 'risk'
                 ? theme.danger
                 : circle.progressPercent >= 80
-                  ? theme.success
-                  : circle.progressPercent >= 50
-                    ? theme.accentSecondary
-                    : theme.warning;
+                ? theme.success
+                : circle.progressPercent >= 50
+                ? theme.accentSecondary
+                : theme.warning;
             const privacyIcon =
               circle.privacy === 'public' ? (
                 <Globe2 color={theme.textSubtle} size={14} strokeWidth={2.1} />
@@ -438,19 +441,23 @@ export function TapInPickerScreen({navigation}: Props): React.JSX.Element {
             const actionLabel = canPoke
               ? `Poke ${circle.remainingCheckIns}`
               : canShare
-                ? 'Share'
-                : 'View';
+              ? 'Share'
+              : 'View';
             const statusTone = canPoke
               ? theme.accentSecondary
               : circle.viewerTodayStatus === 'skip'
-                ? theme.warning
-                : theme.success;
+              ? theme.warning
+              : theme.success;
             const statusLabel = canPoke
               ? `${circle.remainingCheckIns} pending today`
               : circle.viewerTodayStatus === 'skip'
-                ? 'Grace skip used today'
+              ? 'Grace skip used today'
               : 'Daily Tap In complete';
-            const ActionIcon = canPoke ? BellRing : canShare ? Send : ArrowRight;
+            const ActionIcon = canPoke
+              ? BellRing
+              : canShare
+              ? Send
+              : ArrowRight;
 
             return (
               <GlassPanel key={circle.id} style={styles.secondaryCard}>
@@ -531,14 +538,16 @@ const styles = StyleSheet.create({
   },
   closeRow: {
     alignItems: 'flex-end',
+    paddingTop: 14,
+    paddingBottom: 8,
   },
   closeButton: {
     alignItems: 'center',
-    borderRadius: 16,
+    borderRadius: radius.pill,
     borderWidth: 1,
-    height: 34,
+    height: 46,
     justifyContent: 'center',
-    width: 34,
+    width: 46,
   },
   heroPanel: {
     minHeight: 238,

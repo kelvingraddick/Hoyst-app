@@ -4,6 +4,9 @@ import {
   buildHomeDataFromCircles,
   createEmptyHomeData,
   getHomeFilterCounts,
+  getHomeGreetingContext,
+  getHomeGreetingFallback,
+  getHomeGreetingTimeWindow,
   mapHomeCircleFromData,
   matchesHomeCircleFilter,
   shouldShowAuthenticatedHomeEmptyState,
@@ -383,5 +386,206 @@ describe('home data mapping', () => {
         membershipCount: 0,
       }),
     ).toBe(false);
+  });
+});
+
+describe('Home greeting fallback', () => {
+  const makeActiveCard = () =>
+    mapHomeCircleFromData({
+      circleData,
+      circleId: 'circle-active',
+      membersData: [
+        {displayName: 'Kelvin North', status: 'active', uid: 'user-1'},
+        {displayName: 'Ava Stone', status: 'active', uid: 'user-2'},
+      ],
+      membershipData: {
+        displayName: 'Kelvin North',
+        role: 'member',
+        status: 'active',
+        uid: 'user-1',
+      },
+      todayCheckInStatuses: new Map([['user-1', 'done']]),
+    })!;
+
+  it('classifies greeting time windows by local hour', () => {
+    expect(
+      getHomeGreetingTimeWindow({
+        now: new Date('2026-05-07T09:00:00.000Z'),
+        timezone: 'UTC',
+      }),
+    ).toBe('morning');
+    expect(
+      getHomeGreetingTimeWindow({
+        now: new Date('2026-05-07T12:00:00.000Z'),
+        timezone: 'UTC',
+      }),
+    ).toBe('midday');
+    expect(
+      getHomeGreetingTimeWindow({
+        now: new Date('2026-05-07T16:00:00.000Z'),
+        timezone: 'UTC',
+      }),
+    ).toBe('afternoon');
+    expect(
+      getHomeGreetingTimeWindow({
+        now: new Date('2026-05-07T22:00:00.000Z'),
+        timezone: 'UTC',
+      }),
+    ).toBe('evening');
+  });
+
+  it('uses short time-based copy with the first name', () => {
+    const circles = [makeActiveCard()];
+
+    expect(
+      getHomeGreetingFallback({
+        circles,
+        firstName: 'Aaron North',
+        now: new Date('2026-05-07T09:00:00.000Z'),
+        timezone: 'UTC',
+      }),
+    ).toBe('Aaron, morning. New day, same goals, fewer excuses.');
+    expect(
+      getHomeGreetingFallback({
+        circles,
+        firstName: 'Aaron North',
+        now: new Date('2026-05-07T12:00:00.000Z'),
+        timezone: 'UTC',
+      }),
+    ).toBe('Aaron, midday check. Winning, or just looking busy?');
+    expect(
+      getHomeGreetingFallback({
+        circles,
+        firstName: 'Aaron North',
+        now: new Date('2026-05-07T16:00:00.000Z'),
+        timezone: 'UTC',
+      }),
+    ).toBe('Aaron, afternoon test. Finish strong so tonight feels earned.');
+    expect(
+      getHomeGreetingFallback({
+        circles,
+        firstName: 'Aaron North',
+        now: new Date('2026-05-07T22:00:00.000Z'),
+        timezone: 'UTC',
+      }),
+    ).toBe('Aaron, last lap. Make the day look planned.');
+  });
+
+  it('handles missing names without inventing one', () => {
+    expect(
+      getHomeGreetingFallback({
+        circles: [makeActiveCard()],
+        now: new Date('2026-05-07T12:00:00.000Z'),
+        timezone: 'UTC',
+      }),
+    ).toBe('Midday check. Winning, or just looking busy?');
+  });
+
+  it('prioritizes zero-circle, needs-you, at-risk, done, and pending states', () => {
+    const needsYouCard = mapHomeCircleFromData({
+      circleData,
+      circleId: 'circle-needs-you',
+      membersData: [
+        {displayName: 'Kelvin North', status: 'active', uid: 'user-1'},
+        {displayName: 'Ava Stone', status: 'active', uid: 'user-2'},
+      ],
+      membershipData: {
+        displayName: 'Kelvin North',
+        role: 'member',
+        status: 'active',
+        uid: 'user-1',
+      },
+      todayCheckInStatuses: new Map([['user-2', 'done']]),
+    })!;
+    const atRiskCard = {
+      ...makeActiveCard(),
+      state: 'risk' as const,
+      viewerHasCheckedIn: true,
+    };
+    const doneCard = mapHomeCircleFromData({
+      circleData,
+      circleId: 'circle-done',
+      membersData: [
+        {displayName: 'Kelvin North', status: 'active', uid: 'user-1'},
+        {displayName: 'Ava Stone', status: 'active', uid: 'user-2'},
+      ],
+      membershipData: {
+        displayName: 'Kelvin North',
+        role: 'member',
+        status: 'active',
+        uid: 'user-1',
+      },
+      todayCheckInStatuses: new Map([
+        ['user-1', 'done'],
+        ['user-2', 'done'],
+      ]),
+    })!;
+    const pendingCard = mapHomeCircleFromData({
+      circleData,
+      circleId: 'circle-pending',
+      membershipData: {
+        displayName: 'Kelvin North',
+        role: 'member',
+        status: 'pending',
+        uid: 'user-1',
+      },
+    })!;
+
+    expect(
+      getHomeGreetingFallback({
+        circles: [],
+        firstName: 'Aaron',
+        timezone: 'UTC',
+      }),
+    ).toBe('Aaron, no circles yet. Bold strategy, let us fix it.');
+    expect(
+      getHomeGreetingFallback({
+        circles: [needsYouCard],
+        firstName: 'Aaron',
+        timezone: 'UTC',
+      }),
+    ).toBe('Aaron, your circles are waiting. Make it quick and undeniable.');
+    expect(
+      getHomeGreetingFallback({
+        circles: [atRiskCard],
+        firstName: 'Aaron',
+        timezone: 'UTC',
+      }),
+    ).toBe('Aaron, pressure is up. Perfect, now it counts.');
+    expect(
+      getHomeGreetingFallback({
+        circles: [doneCard],
+        firstName: 'Aaron',
+        timezone: 'UTC',
+      }),
+    ).toBe('Aaron, all checked in. Try not to act surprised.');
+    expect(
+      getHomeGreetingFallback({
+        circles: [pendingCard],
+        firstName: 'Aaron',
+        timezone: 'UTC',
+      }),
+    ).toBe('Aaron, pending approval. Patience, but make it productive.');
+  });
+
+  it('builds a minimal Gemini-safe context from circle state', () => {
+    const context = getHomeGreetingContext({
+      circles: [makeActiveCard()],
+      firstName: 'Aaron North',
+      now: new Date('2026-05-07T12:00:00.000Z'),
+      timezone: 'UTC',
+    });
+
+    expect(context).toEqual({
+      circleSummary: {
+        atRiskCount: 0,
+        circleCount: 1,
+        doneCount: 0,
+        needsYouCount: 0,
+        pendingCount: 0,
+      },
+      firstName: 'Aaron',
+      timeWindow: 'midday',
+    });
   });
 });

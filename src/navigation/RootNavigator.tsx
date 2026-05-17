@@ -5,6 +5,7 @@ import {HoystScreen} from '../design/components/HoystScreen';
 import {HoystText} from '../design/components/HoystText';
 import {CreateCircleScreen} from '../features/create-circle/screens/CreateCircleScreen';
 import {CircleDetailScreen} from '../features/circles/screens/CircleDetailScreen';
+import {EditCircleScreen} from '../features/circles/screens/EditCircleScreen';
 import {EditProfileScreen} from '../features/settings/screens/EditProfileScreen';
 import {TapInCompleteScreen} from '../features/check-in/screens/TapInCompleteScreen';
 import {TapInComposerScreen} from '../features/check-in/screens/TapInComposerScreen';
@@ -13,7 +14,10 @@ import {useOnboardingStore} from '../store/onboarding-store';
 import {useSessionStore} from '../store/session-store';
 import {AppTabsNavigator} from './AppTabsNavigator';
 import {AuthStackNavigator} from './AuthStackNavigator';
-import {getRootNavigatorMode, shouldRegisterAccountRoutes} from './root-mode';
+import {
+  getRootNavigatorMode,
+  shouldRegisterAccountRoutes,
+} from './root-mode';
 import type {RootStackParamList} from './types';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -28,23 +32,11 @@ function LoadingScreen(): React.JSX.Element {
 
 export function RootNavigator(): React.JSX.Element {
   const status = useSessionStore(state => state.status);
-  const currentStep = useOnboardingStore(state => state.currentStep);
   const hasHydratedOnboarding = useOnboardingStore(state => state.hasHydrated);
-  const hasPendingStarterCircleSetup = useOnboardingStore(
-    state => state.hasPendingStarterCircleSetup,
-  );
-  const hasSeenOnboarding = useOnboardingStore(
-    state => state.hasSeenOnboarding,
-  );
   const mode = getRootNavigatorMode({
-    currentStep,
     hasHydratedOnboarding,
-    hasPendingStarterCircleSetup,
-    hasSeenOnboarding,
     status,
   });
-  const canPresentAuthModal =
-    mode === 'main' && status !== 'authenticatedReady';
   const canRegisterAccountRoutes = shouldRegisterAccountRoutes({mode, status});
 
   return (
@@ -55,12 +47,6 @@ export function RootNavigator(): React.JSX.Element {
           name="Loading"
           options={{headerShown: false}}
         />
-      ) : mode === 'authFirst' ? (
-        <Stack.Screen
-          component={AuthStackNavigator}
-          name="Auth"
-          options={{headerShown: false}}
-        />
       ) : (
         <Stack.Screen
           component={AppTabsNavigator}
@@ -68,7 +54,7 @@ export function RootNavigator(): React.JSX.Element {
           options={{headerShown: false}}
         />
       )}
-      {canPresentAuthModal ? (
+      {mode === 'main' ? (
         <Stack.Screen
           component={AuthStackNavigator}
           name="Auth"
@@ -101,6 +87,14 @@ export function RootNavigator(): React.JSX.Element {
       <Stack.Screen
         component={CircleDetailScreen}
         name="CircleDetail"
+        options={{
+          animation: 'slide_from_right',
+          headerShown: false,
+        }}
+      />
+      <Stack.Screen
+        component={EditCircleScreen}
+        name="EditCircle"
         options={{
           animation: 'slide_from_right',
           headerShown: false,

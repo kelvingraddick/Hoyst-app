@@ -1,7 +1,8 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.deleteCircle = exports.pokeCircleMembers = exports.reviewJoinRequest = exports.joinCircle = exports.createCircle = void 0;
+exports.deleteCircle = exports.updateCircle = exports.pokeCircleMembers = exports.reviewJoinRequest = exports.joinCircle = exports.createCircle = void 0;
 const node_crypto_1 = require("node:crypto");
+const auth_1 = require("firebase-admin/auth");
 const firestore_1 = require("firebase-admin/firestore");
 const storage_1 = require("firebase-admin/storage");
 const https_1 = require("firebase-functions/v2/https");
@@ -41,16 +42,33 @@ const pokeCircleMembersSchema = zod_1.z.object({
 const deleteCircleSchema = zod_1.z.object({
     circleId: zod_1.z.string().trim().min(1),
 });
-async function requireCompletedProfile(uid) {
-    if (!uid) {
+const updateCircleSchema = createCircleSchema.extend({
+    circleId: zod_1.z.string().trim().min(1),
+    idToken: zod_1.z.string().trim().min(1).optional(),
+});
+async function getAuthenticatedUid(uid, idToken) {
+    if (uid) {
+        return uid;
+    }
+    if (!idToken) {
         throw new https_1.HttpsError('unauthenticated', 'Sign in is required.');
     }
-    const snapshot = await firebase_1.db.collection('users').doc(uid).get();
+    try {
+        const decodedToken = await (0, auth_1.getAuth)().verifyIdToken(idToken);
+        return decodedToken.uid;
+    }
+    catch {
+        throw new https_1.HttpsError('unauthenticated', 'Sign in is required.');
+    }
+}
+async function requireCompletedProfile(uid, idToken) {
+    const authenticatedUid = await getAuthenticatedUid(uid, idToken);
+    const snapshot = await firebase_1.db.collection('users').doc(authenticatedUid).get();
     const profile = snapshot.data();
     if (!profile || profile.onboardingStatus !== 'complete') {
         throw new https_1.HttpsError('failed-precondition', 'Complete your profile first.');
     }
-    return { profile, uid };
+    return { profile, uid: authenticatedUid };
 }
 function createInviteCode() {
     return Math.random().toString(36).slice(2, 10);
@@ -78,6 +96,17 @@ function buildMemberPublicPreview(profile, uid) {
         avatarUrl: profile.avatarUrl ?? null,
         displayName: profile.displayName,
         handle: profile.handle,
+        uid,
+    };
+}
+function buildPublicPreviewFromMember(member, uid) {
+    return {
+        avatarUrl: member.avatarUrl ?? null,
+        displayName: asOptionalString(member.displayName) ??
+            asOptionalString(member.name) ??
+            asOptionalString(member.handle) ??
+            'Hoyst member',
+        handle: asOptionalString(member.handle) ?? null,
         uid,
     };
 }
@@ -429,6 +458,71 @@ exports.pokeCircleMembers = (0, https_1.onCall)({ secrets: [notifications_1.oneS
         targetUid: asOptionalString(memberData.uid) ?? '',
     })));
     return { poked: targets.length };
+});
+exports.updateCircle = (0, https_1.onCall)(async (request) => {
+    const input = updateCircleSchema.parse(request.data);
+    const { uid } = await requireCompletedProfile(request.auth?.uid, input.idToken);
+    const circleRef = firebase_1.db.collection('circles').doc(input.circleId);
+    const memberRef = circleRef.collection('members').doc(uid);
+    const publicIndexRef = firebase_1.db.collection('publicCircleIndex').doc(input.circleId);
+    const [circleSnapshot, memberSnapshot, activeMemberSnapshots] = await Promise.all([
+        circleRef.get(),
+        memberRef.get(),
+        circleRef.collection('members').where('status', '==', 'active').get(),
+    ]);
+    if (!circleSnapshot.exists) {
+        throw new https_1.HttpsError('not-found', 'Circle not found.');
+    }
+    const circle = circleSnapshot.data();
+    const member = memberSnapshot.data();
+    if (circle?.ownerId !== uid ||
+        member?.role !== 'owner' ||
+        member?.status !== 'active') {
+        throw new https_1.HttpsError('permission-denied', 'Only the circle owner can edit this circle.');
+    }
+    const storedMemberCount = typeof circle?.memberCount === 'number' && Number.isFinite(circle.memberCount)
+        ? circle.memberCount
+        : 0;
+    const memberCount = Math.max(storedMemberCount, activeMemberSnapshots.size);
+    if (input.maxSize < memberCount) {
+        throw new https_1.HttpsError('failed-precondition', 'Max size cannot be below the current member count.');
+    }
+    const now = firestore_1.FieldValue.serverTimestamp();
+    const circleUpdate = {
+        category: input.category,
+        dailyTask: input.dailyTask,
+        graceRules: input.graceRules ?? {
+            skip: {
+                allowance: 2,
+                windowDays: 7,
+            },
+        },
+        joinMode: input.joinMode,
+        maxSize: input.maxSize,
+        privacy: input.privacy,
+        title: input.title,
+        timezone: input.timezone ?? circle?.timezone ?? 'UTC',
+        updatedAt: now,
+    };
+    const batch = firebase_1.db.batch();
+    batch.update(circleRef, circleUpdate);
+    if (input.privacy === 'public') {
+        batch.set(publicIndexRef, {
+            category: input.category,
+            dailyTask: input.dailyTask,
+            joinMode: input.joinMode,
+            maxSize: input.maxSize,
+            memberCount,
+            members: activeMemberSnapshots.docs.map(snapshot => buildPublicPreviewFromMember(snapshot.data(), snapshot.id)),
+            title: input.title,
+            updatedAt: now,
+        });
+    }
+    else {
+        batch.delete(publicIndexRef);
+    }
+    await batch.commit();
+    return { updated: true };
 });
 exports.deleteCircle = (0, https_1.onCall)(async (request) => {
     const { uid } = await requireCompletedProfile(request.auth?.uid);

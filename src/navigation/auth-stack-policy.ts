@@ -8,17 +8,8 @@ type AuthInitialRouteInput = {
 };
 
 export function getAuthInitialRouteName({
-  currentStep,
-  status,
+  currentStep: _currentStep,
+  status: _status,
 }: AuthInitialRouteInput): keyof AuthStackParamList {
-  if (
-    status === 'authenticatedIncompleteProfile' &&
-    currentStep !== 'notifications' &&
-    currentStep !== 'auth' &&
-    currentStep !== 'finishProfile'
-  ) {
-    return 'CompleteProfile';
-  }
-
   return 'Welcome';
 }

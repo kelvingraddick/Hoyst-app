@@ -1,6 +1,6 @@
 import React, {useEffect, useState} from 'react';
 import {Alert, Image, Pressable, StyleSheet, View} from 'react-native';
-import {Camera, CheckCircle2, ImagePlus, Trash2, X} from 'lucide-react-native';
+import {Camera, ImagePlus, Trash2, X} from 'lucide-react-native';
 import {launchCamera, launchImageLibrary} from 'react-native-image-picker';
 import type {NativeStackScreenProps} from '@react-navigation/native-stack';
 
@@ -30,6 +30,110 @@ type Props = NativeStackScreenProps<RootStackParamList, 'TapInComposer'>;
 const initialTapInDraft: TapInDraft = {
   note: '',
 };
+
+type ComposerActionProps = {
+  disabled?: boolean;
+  label: string;
+  onPress?: () => void;
+};
+
+function ComposerPrimaryAction({
+  disabled,
+  label,
+  onPress,
+}: ComposerActionProps): React.JSX.Element {
+  const theme = useHoystTheme();
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      disabled={disabled}
+      onPress={disabled ? undefined : onPress}
+      style={({pressed}) => [
+        styles.composerPrimaryPressable,
+        {
+          opacity: disabled
+            ? 0.42
+            : pressed
+              ? actionMotion.pressedOpacity
+              : 1,
+          shadowColor: theme.actionShadowColor,
+          shadowOpacity: theme.actionShadowOpacity,
+          transform: [
+            {scale: pressed && !disabled ? actionMotion.pressedScale : 1},
+          ],
+        },
+      ]}>
+      <View
+        style={[
+          styles.composerPrimaryFill,
+          {
+            backgroundColor: theme.actionSurface,
+            borderColor: theme.actionBorder,
+          },
+        ]}>
+        <TapInRingMark innerSize={18} outerSize={32} />
+        <HoystText
+          numberOfLines={1}
+          style={[styles.composerPrimaryLabel, {color: theme.actionForeground}]}
+          variant="button">
+          {label}
+        </HoystText>
+      </View>
+    </Pressable>
+  );
+}
+
+type ComposerUtilityActionProps = ComposerActionProps & {
+  tone?: 'muted' | 'skip';
+};
+
+function ComposerUtilityAction({
+  disabled,
+  label,
+  onPress,
+  tone = 'muted',
+}: ComposerUtilityActionProps): React.JSX.Element {
+  const theme = useHoystTheme();
+  const isSkip = tone === 'skip';
+  const labelColor = isSkip ? theme.warning : theme.textSubtle;
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      disabled={disabled}
+      onPress={disabled ? undefined : onPress}
+      style={({pressed}) => [
+        styles.composerUtilityPressable,
+        {
+          opacity: disabled
+            ? 0.42
+            : pressed
+              ? actionMotion.pressedOpacity
+              : 1,
+          transform: [
+            {scale: pressed && !disabled ? actionMotion.pressedScale : 1},
+          ],
+        },
+      ]}>
+      <View
+        style={[
+          styles.composerUtilityFill,
+          {
+            backgroundColor: isSkip ? theme.surfaceSoft : 'transparent',
+            borderColor: isSkip ? theme.warning : theme.border,
+          },
+        ]}>
+        <HoystText
+          numberOfLines={1}
+          style={[styles.composerUtilityLabel, {color: labelColor}]}
+          variant="button">
+          {label}
+        </HoystText>
+      </View>
+    </Pressable>
+  );
+}
 
 export function TapInComposerScreen({
   navigation,
@@ -98,10 +202,10 @@ export function TapInComposerScreen({
     );
   }
 
-  const notePreview =
-    draft.note.trim().length > 0
-      ? draft.note.trim()
-      : 'Your circle will see the note you add here.';
+  const trimmedNote = draft.note.trim();
+  const hasPreviewNote = trimmedNote.length > 0;
+  const hasPreviewPhoto = Boolean(draft.photoUri);
+  const shouldShowPreview = hasPreviewNote || hasPreviewPhoto;
   const statusLabel =
     detail.state === 'risk'
       ? 'Group streak at risk'
@@ -230,21 +334,21 @@ export function TapInComposerScreen({
       </View>
 
       <GlassPanel style={styles.heroPanel}>
-        <View style={styles.iconWrap}>
-          <TapInRingMark innerSize={56} outerSize={100} />
-        </View>
-        <View style={styles.titleBlock}>
-          <HoystText style={styles.centerText} variant="display">
-            Tap In
-          </HoystText>
-          <HoystText style={styles.centerText} tone="muted">
-            Give your circle the useful proof, context, or momentum from today.
-          </HoystText>
-        </View>
-        <View style={styles.summaryChips}>
-          <HoystChip label={detail.category.toUpperCase()} tone="neutral" />
-          <HoystChip label={`${detail.completionRate}% in`} tone="green" />
-          <HoystChip label={statusLabel} tone="orange" />
+        <View style={styles.heroHeader}>
+          <TapInRingMark innerSize={44} outerSize={78} />
+          <View style={styles.heroCopy}>
+            <HoystText style={styles.heroTitle} variant="display">
+              Tap In
+            </HoystText>
+            <HoystText style={styles.centerText} tone="muted">
+              Share today's proof, context, or momentum with your circle.
+            </HoystText>
+          </View>
+          <View style={styles.summaryChips}>
+            <HoystChip label={detail.category.toUpperCase()} tone="neutral" />
+            <HoystChip label={`${detail.completionRate}% in`} tone="green" />
+            <HoystChip label={statusLabel} tone="orange" />
+          </View>
         </View>
       </GlassPanel>
 
@@ -417,42 +521,42 @@ export function TapInComposerScreen({
                 </View>
               </View>
 
-              <View style={styles.fieldBlock}>
-                <HoystText tone="muted" variant="label">
-                  Preview
-                </HoystText>
-                <View
-                  style={[
-                    styles.previewCard,
-                    {
-                      backgroundColor: theme.surfaceSoft,
-                      borderColor: theme.borderStrong,
-                    },
-                  ]}>
-                  <View style={styles.previewHeader}>
-                    <TapInRingMark innerSize={22} outerSize={40} />
-                    <View style={styles.previewHeaderCopy}>
-                      <HoystText style={styles.previewTitle}>
-                        {detail.title}
-                      </HoystText>
-                      <HoystText tone="muted" variant="caption">
-                        {detail.dailyTask}
-                      </HoystText>
-                    </View>
-                  </View>
-                  <HoystText tone={draft.note.trim() ? 'primary' : 'muted'}>
-                    {notePreview}
+              {shouldShowPreview ? (
+                <View style={styles.fieldBlock}>
+                  <HoystText tone="muted" variant="label">
+                    Preview
                   </HoystText>
                   <View
                     style={[
-                      styles.previewImageWrap,
+                      styles.previewCard,
                       {
-                        backgroundColor: theme.surfaceHigh,
-                        borderColor: theme.border,
+                        backgroundColor: theme.surfaceSoft,
+                        borderColor: theme.borderStrong,
                       },
                     ]}>
+                    <View style={styles.previewHeader}>
+                      <TapInRingMark innerSize={22} outerSize={40} />
+                      <View style={styles.previewHeaderCopy}>
+                        <HoystText style={styles.previewTitle}>
+                          {detail.title}
+                        </HoystText>
+                        <HoystText tone="muted" variant="caption">
+                          {detail.dailyTask}
+                        </HoystText>
+                      </View>
+                    </View>
+                    {hasPreviewNote ? (
+                      <HoystText>{trimmedNote}</HoystText>
+                    ) : null}
                     {draft.photoUri ? (
-                      <>
+                      <View
+                        style={[
+                          styles.previewImageWrap,
+                          {
+                            backgroundColor: theme.surfaceHigh,
+                            borderColor: theme.border,
+                          },
+                        ]}>
                         <Image
                           source={{uri: draft.photoUri}}
                           style={styles.previewImage}
@@ -467,34 +571,16 @@ export function TapInComposerScreen({
                           style={styles.removePhotoButton}>
                           <X color={theme.text} size={14} strokeWidth={2.2} />
                         </Pressable>
-                      </>
-                    ) : (
-                      <View style={styles.previewEmpty}>
-                        <ImagePlus
-                          color={theme.textSubtle}
-                          size={20}
-                          strokeWidth={2.1}
-                        />
-                        <HoystText tone="muted" variant="caption">
-                          Add a photo to include it here.
-                        </HoystText>
                       </View>
-                    )}
+                    ) : null}
                   </View>
                 </View>
-              </View>
+              ) : null}
             </View>
 
             <View style={styles.actionStack}>
-              <HoystButton
+              <ComposerPrimaryAction
                 disabled={isSubmitting}
-                icon={
-                  <CheckCircle2
-                    color={theme.actionForeground}
-                    size={18}
-                    strokeWidth={2.3}
-                  />
-                }
                 label={isSubmitting ? 'Submitting...' : 'Confirm Tap In'}
                 onPress={
                   isSubmitting
@@ -503,17 +589,9 @@ export function TapInComposerScreen({
                         handleConfirm().catch(() => undefined);
                     }
                 }
-                style={[
-                  styles.confirmGlow,
-                  {
-                    shadowColor: theme.success,
-                  },
-                ]}
               />
               {canSkip ? (
-                <HoystButton
-                  backgroundColor="transparent"
-                  borderColor={theme.actionBorder}
+                <ComposerUtilityAction
                   disabled={isSubmitting}
                   label={`Use Skip (${skipGraceRule?.allowance ?? 0} per ${
                     skipGraceRule?.windowDays ?? 1
@@ -525,17 +603,10 @@ export function TapInComposerScreen({
                           handleConfirm('skip').catch(() => undefined);
                         }
                   }
-                  variant="outline"
+                  tone="skip"
                 />
               ) : null}
-              <Pressable onPress={resetAndClose} style={styles.textAction}>
-                <HoystText
-                  style={styles.centerText}
-                  tone="muted"
-                  variant="bodyStrong">
-                  Discard
-                </HoystText>
-              </Pressable>
+              <ComposerUtilityAction label="Discard" onPress={resetAndClose} />
             </View>
           </>
         )}
@@ -560,22 +631,27 @@ const styles = StyleSheet.create({
     width: 34,
   },
   heroPanel: {
-    minHeight: 220,
+    minHeight: 160,
   },
-  iconWrap: {
+  heroHeader: {
     alignItems: 'center',
-  },
-  titleBlock: {
-    gap: 8,
+    gap: 10,
   },
   centerText: {
+    textAlign: 'center',
+  },
+  heroCopy: {
+    alignItems: 'center',
+    gap: 6,
+  },
+  heroTitle: {
     textAlign: 'center',
   },
   summaryChips: {
     alignSelf: 'center',
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 10,
+    gap: 6,
     justifyContent: 'center',
   },
   contextPanel: {
@@ -607,14 +683,53 @@ const styles = StyleSheet.create({
     gap: 18,
   },
   actionStack: {
-    gap: 12,
+    gap: 10,
     marginTop: 6,
   },
-  confirmGlow: {
+  composerPrimaryPressable: {
+    borderRadius: radius.md,
     elevation: actionShadow.elevation,
     shadowOffset: actionShadow.offset,
-    shadowOpacity: 0.34,
-    shadowRadius: 28,
+    shadowRadius: actionShadow.compactRadius,
+    width: '100%',
+  },
+  composerPrimaryFill: {
+    alignItems: 'center',
+    borderRadius: radius.md,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: 8,
+    justifyContent: 'center',
+    minHeight: 58,
+    paddingHorizontal: 18,
+    width: '100%',
+  },
+  composerPrimaryLabel: {
+    flexShrink: 1,
+    fontSize: 16,
+    fontWeight: '800',
+    lineHeight: 20,
+    textAlign: 'center',
+  },
+  composerUtilityPressable: {
+    borderRadius: radius.md,
+    width: '100%',
+  },
+  composerUtilityFill: {
+    alignItems: 'center',
+    borderRadius: radius.md,
+    borderWidth: 1,
+    justifyContent: 'center',
+    minHeight: 52,
+    paddingHorizontal: 18,
+    width: '100%',
+  },
+  composerUtilityLabel: {
+    flexShrink: 1,
+    fontSize: 15,
+    fontWeight: '800',
+    lineHeight: 19,
+    textAlign: 'center',
   },
   textAction: {
     alignItems: 'center',
@@ -689,20 +804,12 @@ const styles = StyleSheet.create({
   previewImageWrap: {
     borderRadius: radius.md,
     borderWidth: 1,
-    minHeight: 168,
+    height: 168,
     overflow: 'hidden',
   },
   previewImage: {
     height: '100%',
     width: '100%',
-  },
-  previewEmpty: {
-    alignItems: 'center',
-    flex: 1,
-    gap: 8,
-    justifyContent: 'center',
-    minHeight: 168,
-    padding: 16,
   },
   removePhotoButton: {
     alignItems: 'center',

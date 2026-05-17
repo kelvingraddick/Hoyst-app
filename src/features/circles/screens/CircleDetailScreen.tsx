@@ -19,6 +19,7 @@ import {
   Flame,
   Globe2,
   Lock,
+  Pencil,
   Send,
   Settings2,
   Trash2,
@@ -686,6 +687,10 @@ export function CircleDetailScreen({
     setIsDeleteConfirmVisible(true);
   };
 
+  const openEditCircle = () => {
+    navigation.navigate('EditCircle', {circleId: detail.id});
+  };
+
   const closeDeleteCircleConfirm = () => {
     if (isDeletingCircle) {
       return;
@@ -1069,6 +1074,18 @@ export function CircleDetailScreen({
                         ))}
                       </View>
                     ) : null}
+                    <DashboardUtilityAction
+                      icon={
+                        <Pencil
+                          color={theme.text}
+                          size={17}
+                          strokeWidth={2.2}
+                        />
+                      }
+                      label="Edit Circle"
+                      onPress={openEditCircle}
+                      supportingText="Owner settings"
+                    />
                     <DashboardUtilityAction
                       icon={
                         <Trash2

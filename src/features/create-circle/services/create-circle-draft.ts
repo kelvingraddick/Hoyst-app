@@ -2,6 +2,7 @@ import type {
   CircleJoinMode,
   CirclePrivacy,
   CirclePrivacyMode,
+  CircleSummary,
   CreateCircleDraft,
   GraceRule,
 } from '../../../types/models';
@@ -70,12 +71,68 @@ export function getPrivacyChoiceFields(
   };
 }
 
+export function getCirclePrivacyMode({
+  joinMode,
+  privacy,
+}: Pick<CircleSummary, 'joinMode' | 'privacy'>): CirclePrivacyMode {
+  if (privacy === 'public') {
+    return 'public';
+  }
+
+  if (joinMode === 'invite_only') {
+    return 'link_only';
+  }
+
+  return 'private';
+}
+
+export function buildCircleEditDraft(
+  circle: Pick<
+    CircleSummary,
+    | 'category'
+    | 'dailyTask'
+    | 'graceRules'
+    | 'joinMode'
+    | 'maxSize'
+    | 'privacy'
+    | 'title'
+  > & {timezone?: string},
+  fallbackTimezone?: string,
+): CreateCircleDraft {
+  const initialDraft = createInitialCircleDraft(fallbackTimezone);
+  const privacyMode = getCirclePrivacyMode(circle);
+
+  return {
+    ...initialDraft,
+    category: circle.category,
+    dailyTask: circle.dailyTask,
+    graceRules: {
+      skip: normalizeSkipGraceRule(
+        circle.graceRules?.skip ?? initialDraft.graceRules.skip,
+      ),
+    },
+    joinMode: circle.joinMode ?? initialDraft.joinMode,
+    maxSize: clampCircleMaxSize(circle.maxSize ?? initialDraft.maxSize),
+    privacy: circle.privacy ?? initialDraft.privacy,
+    privacyMode,
+    timezone: circle.timezone?.trim() || initialDraft.timezone,
+    title: circle.title,
+  };
+}
+
 export function clampCircleMaxSize(value: number) {
   if (!Number.isFinite(value)) {
     return 2;
   }
 
   return Math.min(100, Math.max(2, Math.round(value)));
+}
+
+export function isCircleMaxSizeBelowMemberCount(
+  maxSize: number,
+  memberCount: number,
+) {
+  return clampCircleMaxSize(maxSize) < Math.max(0, Math.round(memberCount));
 }
 
 export function normalizeSkipGraceRule(rule: GraceRule): GraceRule {

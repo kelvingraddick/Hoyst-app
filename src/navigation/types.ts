@@ -20,7 +20,6 @@ export type SignInRouteParams = {
 export type AuthStackParamList = {
   Welcome: undefined;
   SignIn: SignInRouteParams | undefined;
-  CompleteProfile: undefined;
 };
 
 export type TapInSource = 'circle_detail' | 'home' | 'notification' | 'tap_in';
@@ -30,6 +29,7 @@ export type RootStackParamList = {
   MainTabs: NavigatorScreenParams<AppTabsParamList> | undefined;
   Auth: NavigatorScreenParams<AuthStackParamList> | undefined;
   EditProfile: undefined;
+  EditCircle: {circleId: string};
   TapInPicker: undefined;
   CreateCircle: undefined;
   CircleDetail: {

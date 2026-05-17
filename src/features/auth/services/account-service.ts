@@ -4,6 +4,7 @@ import firestore from '@react-native-firebase/firestore';
 import {firebaseAuth} from '../../../lib/firebase/auth';
 import {firebaseFirestore} from '../../../lib/firebase/firestore';
 import {firebaseFunctions} from '../../../lib/firebase/functions';
+import {firebaseStorage} from '../../../lib/firebase/storage';
 import {collections} from '../../../types/firestore';
 import type {UserProfile} from '../../../types/models';
 import type {CreateCircleInput} from '../../circles/services/circle-service';
@@ -80,6 +81,20 @@ export async function completeProfile(input: CompleteProfileInput) {
   return result.data as CompleteProfileResult;
 }
 
+export async function uploadProfileAvatar({
+  uid,
+  uri,
+}: {
+  uid: string;
+  uri: string;
+}) {
+  const reference = firebaseStorage().ref(`users/${uid}/avatar/profile.jpg`);
+
+  await reference.putFile(uri);
+
+  return reference.getDownloadURL();
+}
+
 export async function deleteAccount() {
   const callable = firebaseFunctions().httpsCallable('deleteAccount');
   const result = await callable();
@@ -91,6 +106,7 @@ export async function updateProfileFields(input: {
   avatarUrl?: string;
   bio?: string;
   displayName: string;
+  timezone?: string;
 }) {
   const uid = firebaseAuth().currentUser?.uid;
 
@@ -98,15 +114,21 @@ export async function updateProfileFields(input: {
     throw new Error('Sign in is required.');
   }
 
+  const updates: Record<string, unknown> = {
+    avatarUrl: input.avatarUrl ?? null,
+    bio: input.bio ?? null,
+    displayName: input.displayName,
+    updatedAt: firestore.FieldValue.serverTimestamp(),
+  };
+
+  if (input.timezone !== undefined) {
+    updates.timezone = input.timezone.trim() || 'UTC';
+  }
+
   await firebaseFirestore()
     .collection(collections.users)
     .doc(uid)
-    .update({
-      avatarUrl: input.avatarUrl ?? null,
-      bio: input.bio ?? null,
-      displayName: input.displayName,
-      updatedAt: firestore.FieldValue.serverTimestamp(),
-    });
+    .update(updates);
 }
 
 export async function updateProfileAvatarUrlFromAuth(avatarUrl: string) {
@@ -117,11 +139,8 @@ export async function updateProfileAvatarUrlFromAuth(avatarUrl: string) {
     return;
   }
 
-  await firebaseFirestore()
-    .collection(collections.users)
-    .doc(uid)
-    .update({
-      avatarUrl: normalizedAvatarUrl,
-      updatedAt: firestore.FieldValue.serverTimestamp(),
-    });
+  await firebaseFirestore().collection(collections.users).doc(uid).update({
+    avatarUrl: normalizedAvatarUrl,
+    updatedAt: firestore.FieldValue.serverTimestamp(),
+  });
 }

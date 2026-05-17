@@ -1,11 +1,5 @@
 import React, {useMemo, useState} from 'react';
-import {
-  Alert,
-  Pressable,
-  Share,
-  StyleSheet,
-  View,
-} from 'react-native';
+import {Alert, Pressable, Share, StyleSheet, View} from 'react-native';
 import {
   ArrowLeft,
   BookOpen,
@@ -34,6 +28,7 @@ import {HoystText} from '../../../design/components/HoystText';
 import {radius} from '../../../design/tokens/radius';
 import {useHoystTheme} from '../../../design/theme/useHoystTheme';
 import {useUserProfileStore} from '../../../store/profile-store';
+import {TimezonePicker} from '../../auth/components/TimezonePicker';
 import {createCircle} from '../../circles/services/circle-service';
 import {
   buildCreateCirclePayload,
@@ -237,6 +232,7 @@ function IconButton({
       accessibilityLabel={accessibilityLabel}
       accessibilityRole="button"
       disabled={disabled}
+      hitSlop={8}
       onPress={disabled ? undefined : onPress}
       style={({pressed}) => [
         styles.iconButton,
@@ -410,13 +406,7 @@ function NumericStepper({
   );
 }
 
-function SummaryRow({
-  label,
-  value,
-}: {
-  label: string;
-  value: string;
-}) {
+function SummaryRow({label, value}: {label: string; value: string}) {
   return (
     <View style={styles.summaryRow}>
       <HoystText tone="muted" variant="label">
@@ -485,7 +475,9 @@ export function CreateCircleScreen({navigation}: Props): React.JSX.Element {
     }
 
     if (currentStep === 'timezone') {
-      return draft.timezone.trim().length > 0 && draft.timezone.trim().length <= 80;
+      return (
+        draft.timezone.trim().length > 0 && draft.timezone.trim().length <= 80
+      );
     }
 
     return true;
@@ -632,11 +624,13 @@ export function CreateCircleScreen({navigation}: Props): React.JSX.Element {
             Daily task description
           </HoystText>
           <HoystInput
+            blurOnSubmit
             maxLength={160}
             multiline
             numberOfLines={4}
             onChangeText={value => setField('dailyTask', value)}
             placeholder="Read 20 pages, then Tap In with one takeaway."
+            returnKeyType="done"
             style={styles.textArea}
             textAlignVertical="top"
             value={draft.dailyTask}
@@ -709,7 +703,10 @@ export function CreateCircleScreen({navigation}: Props): React.JSX.Element {
             <GlassPanel>
               <View style={styles.sectionHeader}>
                 <HoystText variant="bodyStrong">Public join rule</HoystText>
-                <HoystChip label={getJoinModeLabel(draft.joinMode)} tone="green" />
+                <HoystChip
+                  label={getJoinModeLabel(draft.joinMode)}
+                  tone="green"
+                />
               </View>
               {renderOptions(
                 publicJoinOptions,
@@ -761,18 +758,12 @@ export function CreateCircleScreen({navigation}: Props): React.JSX.Element {
 
     if (currentStep === 'timezone') {
       return (
-        <View style={styles.fieldBlock}>
-          <HoystText tone="muted" variant="label">
-            Timezone
-          </HoystText>
-          <HoystInput
-            autoCapitalize="none"
-            maxLength={80}
-            onChangeText={value => setField('timezone', value)}
-            placeholder="America/New_York"
-            value={draft.timezone}
-          />
-        </View>
+        <TimezonePicker
+          helperText="This controls when each daily Tap In window resets."
+          modalTitle="Circle timezone"
+          onChange={value => setField('timezone', value)}
+          value={draft.timezone}
+        />
       );
     }
 
@@ -810,7 +801,10 @@ export function CreateCircleScreen({navigation}: Props): React.JSX.Element {
           <View
             style={[
               styles.successIcon,
-              {backgroundColor: `${theme.success}20`, borderColor: theme.success},
+              {
+                backgroundColor: `${theme.success}20`,
+                borderColor: theme.success,
+              },
             ]}>
             <Check color={theme.success} size={28} strokeWidth={3} />
           </View>
@@ -855,7 +849,11 @@ export function CreateCircleScreen({navigation}: Props): React.JSX.Element {
   }
 
   return (
-    <HoystScreen contentContainerStyle={styles.content}>
+    <HoystScreen
+      contentContainerStyle={styles.content}
+      keyboardAvoiding
+      keyboardDismissMode="interactive"
+      keyboardShouldPersistTaps="handled">
       <ProgressHeader
         currentStep={currentStep}
         onBack={goBack}
@@ -913,9 +911,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderRadius: radius.pill,
     borderWidth: 1,
-    height: 42,
+    height: 46,
     justifyContent: 'center',
-    width: 42,
+    width: 46,
   },
   invitePanel: {
     alignItems: 'center',
@@ -971,6 +969,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flexDirection: 'row',
     gap: 12,
+    paddingTop: 14,
+    paddingBottom: 8,
   },
   progressTrack: {
     borderRadius: radius.pill,

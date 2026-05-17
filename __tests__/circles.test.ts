@@ -4,9 +4,12 @@ import {mapPublicCircleIndexSnapshot} from '../src/features/circles/services/pub
 import {getCircleDetail} from '../src/features/circles/mockData';
 import {
   buildCreateCirclePayload,
+  buildCircleEditDraft,
   clampCircleMaxSize,
   createInitialCircleDraft,
+  getCirclePrivacyMode,
   getPrivacyChoiceFields,
+  isCircleMaxSizeBelowMemberCount,
 } from '../src/features/create-circle/services/create-circle-draft';
 import {
   buildStarterCirclePayload,
@@ -137,6 +140,55 @@ describe('create circle payload mapping', () => {
     });
     expect(clampCircleMaxSize(-10)).toBe(2);
     expect(clampCircleMaxSize(52.7)).toBe(53);
+  });
+
+  it('derives edit drafts from existing circle settings', () => {
+    const draft = buildCircleEditDraft(
+      {
+        category: 'Deep Work',
+        dailyTask: 'Ship one focused block',
+        graceRules: {
+          skip: {
+            allowance: 4,
+            windowDays: 14,
+          },
+        },
+        joinMode: 'invite_only',
+        maxSize: 8,
+        privacy: 'private',
+        timezone: 'America/Chicago',
+        title: 'Maker Mornings',
+      },
+      'America/New_York',
+    );
+
+    expect(draft).toMatchObject({
+      category: 'Deep Work',
+      dailyTask: 'Ship one focused block',
+      graceRules: {
+        skip: {
+          allowance: 4,
+          windowDays: 14,
+        },
+      },
+      joinMode: 'invite_only',
+      maxSize: 8,
+      privacy: 'private',
+      privacyMode: 'link_only',
+      timezone: 'America/Chicago',
+      title: 'Maker Mornings',
+    });
+    expect(getCirclePrivacyMode({joinMode: 'open', privacy: 'public'})).toBe(
+      'public',
+    );
+    expect(
+      getCirclePrivacyMode({
+        joinMode: 'request_to_join',
+        privacy: 'private',
+      }),
+    ).toBe('private');
+    expect(isCircleMaxSizeBelowMemberCount(4, 5)).toBe(true);
+    expect(isCircleMaxSizeBelowMemberCount(5, 5)).toBe(false);
   });
 
   it('derives starter circle defaults from onboarding goals', () => {

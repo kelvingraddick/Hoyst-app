@@ -35,7 +35,10 @@ import {getAuthInitialRouteName} from '../src/navigation/auth-stack-policy';
 import {getStateWithoutAuthModal} from '../src/navigation/auth-modal-state';
 import {canResumePendingAction} from '../src/navigation/pending-action-resume';
 import {
+  getRootAuthPresentation,
   getRootNavigatorMode,
+  shouldDismissAuthModal,
+  shouldRegisterAuthModal,
   shouldRegisterAccountRoutes,
 } from '../src/navigation/root-mode';
 import {resolveStarterCircleDecision} from '../functions/src/auth/starter-circle-plan';
@@ -217,6 +220,38 @@ describe('auth dismiss flow', () => {
       'setGuest',
       'dismissAuth',
       'signOut',
+      'markOnboardingSeen',
+      'setGuest',
+      'dismissAuth',
+    ]);
+  });
+
+  it('continues as guest even when sign-out cleanup fails', async () => {
+    const events: string[] = [];
+
+    await expect(
+      continueAsGuestFromAuth({
+        clearPendingAction: () => events.push('clearPendingAction'),
+        dismissAuth: () => events.push('dismissAuth'),
+        hasAuthenticatedUser: () => true,
+        markOnboardingSeen: () => events.push('markOnboardingSeen'),
+        setGuest: () => events.push('setGuest'),
+        signOut: async () => {
+          events.push('signOut');
+          throw new Error('User was already deleted.');
+        },
+      }),
+    ).resolves.toBeUndefined();
+
+    expect(events).toEqual([
+      'clearPendingAction',
+      'markOnboardingSeen',
+      'setGuest',
+      'dismissAuth',
+      'signOut',
+      'markOnboardingSeen',
+      'setGuest',
+      'dismissAuth',
     ]);
   });
 });
@@ -242,24 +277,24 @@ describe('root navigator mode policy', () => {
     ).toBe('loading');
   });
 
-  it('starts with auth for first-run guests', () => {
+  it('starts with main tabs for first-run guests', () => {
     expect(
       getRootNavigatorMode({
         hasHydratedOnboarding: true,
         hasSeenOnboarding: false,
         status: 'guest',
       }),
-    ).toBe('authFirst');
+    ).toBe('main');
   });
 
-  it('starts with auth for incomplete authenticated profiles', () => {
+  it('starts with main tabs for incomplete authenticated profiles', () => {
     expect(
       getRootNavigatorMode({
         hasHydratedOnboarding: true,
         hasSeenOnboarding: true,
         status: 'authenticatedIncompleteProfile',
       }),
-    ).toBe('authFirst');
+    ).toBe('main');
   });
 
   it('starts with main tabs for returning guests', () => {
@@ -292,7 +327,7 @@ describe('root navigator mode policy', () => {
     ).toBe('main');
   });
 
-  it('keeps ready onboarding accounts in auth while starter setup is pending', () => {
+  it('keeps ready onboarding accounts in main while starter setup is pending', () => {
     expect(
       getRootNavigatorMode({
         currentStep: 'finishProfile',
@@ -301,10 +336,10 @@ describe('root navigator mode policy', () => {
         hasSeenOnboarding: false,
         status: 'authenticatedReady',
       }),
-    ).toBe('authFirst');
+    ).toBe('main');
   });
 
-  it('keeps ready onboarding auth visible until the user finishes setup', () => {
+  it('keeps ready onboarding auth in main until the user finishes setup', () => {
     expect(
       getRootNavigatorMode({
         currentStep: 'auth',
@@ -312,10 +347,10 @@ describe('root navigator mode policy', () => {
         hasSeenOnboarding: false,
         status: 'authenticatedReady',
       }),
-    ).toBe('authFirst');
+    ).toBe('main');
   });
 
-  it('keeps ready onboarding notification opt-in visible until setup continues', () => {
+  it('keeps ready onboarding notification opt-in in main until setup continues', () => {
     expect(
       getRootNavigatorMode({
         currentStep: 'notifications',
@@ -323,7 +358,7 @@ describe('root navigator mode policy', () => {
         hasSeenOnboarding: false,
         status: 'authenticatedReady',
       }),
-    ).toBe('authFirst');
+    ).toBe('main');
   });
 
   it('does not restart ready users on stale profile completion', () => {
@@ -353,10 +388,125 @@ describe('root navigator mode policy', () => {
     ).toBe(false);
     expect(
       shouldRegisterAccountRoutes({
-        mode: 'authFirst',
+        mode: 'loading',
         status: 'authenticatedReady',
       }),
     ).toBe(false);
+  });
+});
+
+describe('root auth modal policy', () => {
+  it('auto-presents onboarding for first-run guests without pending actions', () => {
+    expect(
+      getRootAuthPresentation({
+        hasHydratedOnboarding: true,
+        hasSeenOnboarding: false,
+        status: 'guest',
+      }),
+    ).toBe('onboarding');
+  });
+
+  it('does not auto-present onboarding when a pending action exists', () => {
+    expect(
+      getRootAuthPresentation({
+        hasHydratedOnboarding: true,
+        hasSeenOnboarding: false,
+        pendingAction: {type: 'createCircle'},
+        status: 'guest',
+      }),
+    ).toBeUndefined();
+  });
+
+  it('does not auto-present onboarding for returning guests', () => {
+    expect(
+      getRootAuthPresentation({
+        hasHydratedOnboarding: true,
+        hasSeenOnboarding: true,
+        status: 'guest',
+      }),
+    ).toBeUndefined();
+  });
+
+  it('auto-presents onboarding finish profile for incomplete authenticated profiles', () => {
+    expect(
+      getRootAuthPresentation({
+        currentStep: 'welcome',
+        hasHydratedOnboarding: true,
+        hasSeenOnboarding: true,
+        status: 'authenticatedIncompleteProfile',
+      }),
+    ).toBe('finishProfile');
+  });
+
+  it('keeps incomplete profile presentation inside onboarding registration', () => {
+    expect(
+      getRootAuthPresentation({
+        currentStep: 'auth',
+        hasHydratedOnboarding: true,
+        hasSeenOnboarding: false,
+        status: 'authenticatedIncompleteProfile',
+      }),
+    ).toBe('finishProfile');
+    expect(
+      getRootAuthPresentation({
+        currentStep: 'finishProfile',
+        hasHydratedOnboarding: true,
+        hasSeenOnboarding: false,
+        status: 'authenticatedIncompleteProfile',
+      }),
+    ).toBe('finishProfile');
+  });
+
+  it('registers auth modal for active ready onboarding work', () => {
+    expect(
+      shouldRegisterAuthModal({
+        currentStep: 'auth',
+        hasPendingStarterCircleSetup: false,
+        hasSeenOnboarding: false,
+        mode: 'main',
+        status: 'authenticatedReady',
+      }),
+    ).toBe(true);
+  });
+
+  it('keeps auth modal route registered throughout main mode', () => {
+    expect(
+      shouldRegisterAuthModal({
+        currentStep: 'welcome',
+        hasPendingStarterCircleSetup: false,
+        hasSeenOnboarding: true,
+        mode: 'main',
+        status: 'authenticatedReady',
+      }),
+    ).toBe(true);
+    expect(
+      shouldRegisterAuthModal({
+        currentStep: 'welcome',
+        hasPendingStarterCircleSetup: false,
+        hasSeenOnboarding: true,
+        mode: 'loading',
+        status: 'authenticatedReady',
+      }),
+    ).toBe(false);
+  });
+
+  it('keeps auth modal open while ready onboarding work is active', () => {
+    expect(
+      shouldDismissAuthModal({
+        currentStep: 'notifications',
+        hasPendingStarterCircleSetup: false,
+        hasSeenOnboarding: false,
+        status: 'authenticatedReady',
+      }),
+    ).toBe(false);
+    expect(
+      shouldDismissAuthModal({
+        currentStep: 'welcome',
+        hasPendingStarterCircleSetup: false,
+        hasSeenOnboarding: true,
+        status: 'authenticatedReady',
+      }),
+    ).toBe(true);
   });
 });
 
@@ -382,13 +532,13 @@ describe('auth stack route policy', () => {
     ).toBe('Welcome');
   });
 
-  it('keeps non-onboarding incomplete profiles on the standalone screen', () => {
+  it('keeps non-onboarding incomplete profiles inside the welcome wizard', () => {
     expect(
       getAuthInitialRouteName({
         currentStep: 'welcome',
         status: 'authenticatedIncompleteProfile',
       }),
-    ).toBe('CompleteProfile');
+    ).toBe('Welcome');
   });
 
   it('starts complete authenticated sessions on the welcome stack until reset', () => {
@@ -618,6 +768,51 @@ describe('onboarding store', () => {
     expect(useOnboardingStore.getState().hasSeenOnboarding).toBe(true);
     expect(useSessionStore.getState().status).toBe('guest');
     expect(useSessionStore.getState().user).toBeUndefined();
+  });
+
+  it('keeps guests in main mode after account deletion resets onboarding', () => {
+    useOnboardingStore.getState().setCurrentStep('auth');
+    useOnboardingStore.getState().reset();
+    useOnboardingStore.getState().markSeen();
+    useSessionStore.getState().setGuest();
+
+    expect(useOnboardingStore.getState()).toMatchObject({
+      currentStep: 'welcome',
+      hasSeenOnboarding: true,
+    });
+    expect(
+      getRootNavigatorMode({
+        currentStep: useOnboardingStore.getState().currentStep,
+        hasHydratedOnboarding: true,
+        hasSeenOnboarding: useOnboardingStore.getState().hasSeenOnboarding,
+        status: useSessionStore.getState().status,
+      }),
+    ).toBe('main');
+  });
+
+  it('does not rewind the wizard when continuing as guest from auth', async () => {
+    useOnboardingStore.getState().setCurrentStep('auth');
+
+    await continueAsGuestFromAuth({
+      clearPendingAction: useSessionStore.getState().clearPendingAction,
+      dismissAuth: jest.fn(),
+      hasAuthenticatedUser: () => false,
+      markOnboardingSeen: useOnboardingStore.getState().markSeen,
+      setGuest: useSessionStore.getState().setGuest,
+      signOut: jest.fn(),
+    });
+
+    expect(useOnboardingStore.getState().currentStep).toBe('auth');
+    expect(useOnboardingStore.getState().hasSeenOnboarding).toBe(true);
+    expect(useSessionStore.getState().status).toBe('guest');
+    expect(
+      getRootNavigatorMode({
+        currentStep: useOnboardingStore.getState().currentStep,
+        hasHydratedOnboarding: true,
+        hasSeenOnboarding: useOnboardingStore.getState().hasSeenOnboarding,
+        status: useSessionStore.getState().status,
+      }),
+    ).toBe('main');
   });
 
   it('preserves pending protected action while starting onboarding', () => {

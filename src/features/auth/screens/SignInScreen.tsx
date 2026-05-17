@@ -83,14 +83,15 @@ export function SignInScreen({navigation, route}: Props): React.JSX.Element {
   const isActionBusy = isBusy || isDismissing;
   const failureTitle = 'Sign in failed';
   const headerTitle = 'Welcome back';
-  const headerBody = 'Sign in to rejoin your circles, Tap In, and manage your profile.';
+  const headerBody =
+    'Sign in to rejoin your circles, Tap In, and manage your profile.';
   const onboardingLinkLabel = 'New to Hoyst? Get started';
   const activeProviderLabel =
     activeProvider === 'apple'
       ? 'Apple'
       : activeProvider === 'google'
-        ? 'Google'
-        : undefined;
+      ? 'Google'
+      : undefined;
   const authProviderColors = {
     apple: {
       backgroundColor: theme.isDark
@@ -154,13 +155,19 @@ export function SignInScreen({navigation, route}: Props): React.JSX.Element {
 
   const handleResetPassword = async () => {
     if (!email.trim()) {
-      Alert.alert('Add your email', 'Enter your email before requesting a reset.');
+      Alert.alert(
+        'Add your email',
+        'Enter your email before requesting a reset.',
+      );
       return;
     }
 
     try {
       await sendPasswordReset(email);
-      Alert.alert('Reset sent', 'Check your inbox for the password reset link.');
+      Alert.alert(
+        'Reset sent',
+        'Check your inbox for the password reset link.',
+      );
     } catch (error) {
       Alert.alert('Reset failed', getErrorMessage(error));
     }
@@ -246,6 +253,7 @@ export function SignInScreen({navigation, route}: Props): React.JSX.Element {
           accessibilityLabel="Continue as guest"
           accessibilityRole="button"
           disabled={isActionBusy}
+          hitSlop={8}
           onPress={dismissToGuest}
           style={({pressed}) => [
             styles.closeButton,
@@ -319,15 +327,15 @@ export function SignInScreen({navigation, route}: Props): React.JSX.Element {
                 isActionBusy
                   ? 'Working...'
                   : confirmation
-                    ? 'Sign in'
-                    : 'Send sign-in code'
+                  ? 'Sign in'
+                  : 'Send sign-in code'
               }
               onPress={
                 isActionBusy
                   ? undefined
                   : confirmation
-                    ? handlePhoneConfirm
-                    : handlePhoneStart
+                  ? handlePhoneConfirm
+                  : handlePhoneStart
               }
             />
           </View>
@@ -445,9 +453,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderRadius: radius.pill,
     borderWidth: 1,
-    height: 44,
+    height: 46,
     justifyContent: 'center',
-    width: 44,
+    width: 46,
   },
   header: {
     gap: 10,
@@ -464,6 +472,6 @@ const styles = StyleSheet.create({
   },
   topBar: {
     alignItems: 'flex-end',
-    paddingTop: 6,
+    paddingTop: 22,
   },
 });

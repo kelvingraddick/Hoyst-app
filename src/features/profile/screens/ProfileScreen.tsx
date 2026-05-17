@@ -9,13 +9,11 @@ import {
   Switch,
   View,
 } from 'react-native';
-import {CommonActions} from '@react-navigation/native';
 import {
   Bell,
   BellRing,
   Check,
   ChevronRight,
-  Clock3,
   FileText,
   LifeBuoy,
   LockKeyhole,
@@ -47,6 +45,7 @@ import type {
   AppTabsParamList,
   RootStackParamList,
 } from '../../../navigation/types';
+import {navigateToAuthWelcome} from '../../../navigation/auth-modal-navigation';
 import {useOnboardingStore} from '../../../store/onboarding-store';
 import {useUserProfileStore} from '../../../store/profile-store';
 import {useSessionStore} from '../../../store/session-store';
@@ -567,9 +566,11 @@ export function ProfileScreen({navigation}: Props): React.JSX.Element {
   const clearPendingAction = useSessionStore(state => state.clearPendingAction);
   const setGuest = useSessionStore(state => state.setGuest);
   const resetOnboarding = useOnboardingStore(state => state.reset);
+  const markOnboardingSeen = useOnboardingStore(state => state.markSeen);
   const startOnboardingWizard = useOnboardingStore(
     state => state.startOnboardingWizard,
   );
+  const setOnboardingStep = useOnboardingStore(state => state.setCurrentStep);
   const [isDeleteConfirmVisible, setIsDeleteConfirmVisible] = useState(false);
   const [isAppearanceModalVisible, setIsAppearanceModalVisible] =
     useState(false);
@@ -587,10 +588,11 @@ export function ProfileScreen({navigation}: Props): React.JSX.Element {
     clearPendingAction();
     beginAuthFlow();
     startOnboardingWizard();
-    rootNavigation?.navigate('Auth', {screen: 'Welcome'});
+    navigateToAuthWelcome(rootNavigation);
   };
-  const openCompleteProfile = () => {
-    rootNavigation?.navigate('Auth', {screen: 'CompleteProfile'});
+  const openFinishProfile = () => {
+    setOnboardingStep('finishProfile');
+    navigateToAuthWelcome(rootNavigation);
   };
   const selectAppearancePreference = (nextAppearance: AppearancePreference) => {
     setAppearancePreference(nextAppearance);
@@ -631,7 +633,7 @@ export function ProfileScreen({navigation}: Props): React.JSX.Element {
               Ins unlock.
             </HoystText>
           </View>
-          <HoystButton label="Complete profile" onPress={openCompleteProfile} />
+          <HoystButton label="Complete profile" onPress={openFinishProfile} />
         </GlassPanel>
       </HoystScreen>
     );
@@ -737,19 +739,14 @@ export function ProfileScreen({navigation}: Props): React.JSX.Element {
     setIsDeletingAccount(true);
     try {
       await deleteAccount();
+      await signOutOfHoyst().catch(() => undefined);
       setIsDeleteConfirmVisible(false);
       setDeleteConfirmText('');
       clearPendingAction();
       resetOnboarding();
+      markOnboardingSeen();
       resetSettings();
       setProfile(undefined);
-      rootNavigation?.dispatch(
-        CommonActions.reset({
-          index: 0,
-          routes: [{name: 'MainTabs', params: {screen: 'Home'}}],
-        }),
-      );
-      await signOutOfHoyst().catch(() => undefined);
       setGuest();
       Alert.alert('Account deleted', 'Your Hoyst account has been deleted.');
     } catch (error) {
@@ -803,7 +800,7 @@ export function ProfileScreen({navigation}: Props): React.JSX.Element {
       <View style={styles.settingsStack}>
         <SettingsSection title="Account">
           <SettingsRow
-            detail="Update your name, handle, and bio."
+            detail="Update your name, bio, and timezone."
             icon={UserRound}
             iconTone="blue"
             onPress={() => rootNavigation?.navigate('EditProfile')}
@@ -815,14 +812,6 @@ export function ProfileScreen({navigation}: Props): React.JSX.Element {
                 strokeWidth={2.2}
               />
             }
-          />
-          <SettingsRow
-            detail={profile.timezone}
-            icon={Clock3}
-            iconTone="orange"
-            title="Timezone"
-            trailing={<SettingsValue>Local</SettingsValue>}
-            trailingKind="value"
           />
           <SettingsRow
             detail="Exit the Hoyst shell and return to auth."

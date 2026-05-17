@@ -1,5 +1,6 @@
 import {randomUUID} from 'node:crypto';
 
+import {getAuth} from 'firebase-admin/auth';
 import {FieldValue, type DocumentData} from 'firebase-admin/firestore';
 import {getStorage} from 'firebase-admin/storage';
 import {HttpsError, onCall} from 'firebase-functions/v2/https';
@@ -47,20 +48,39 @@ const pokeCircleMembersSchema = z.object({
 const deleteCircleSchema = z.object({
   circleId: z.string().trim().min(1),
 });
+const updateCircleSchema = createCircleSchema.extend({
+  circleId: z.string().trim().min(1),
+  idToken: z.string().trim().min(1).optional(),
+});
 
-async function requireCompletedProfile(uid?: string) {
-  if (!uid) {
+async function getAuthenticatedUid(uid?: string, idToken?: string) {
+  if (uid) {
+    return uid;
+  }
+
+  if (!idToken) {
     throw new HttpsError('unauthenticated', 'Sign in is required.');
   }
 
-  const snapshot = await db.collection('users').doc(uid).get();
+  try {
+    const decodedToken = await getAuth().verifyIdToken(idToken);
+    return decodedToken.uid;
+  } catch {
+    throw new HttpsError('unauthenticated', 'Sign in is required.');
+  }
+}
+
+async function requireCompletedProfile(uid?: string, idToken?: string) {
+  const authenticatedUid = await getAuthenticatedUid(uid, idToken);
+
+  const snapshot = await db.collection('users').doc(authenticatedUid).get();
   const profile = snapshot.data();
 
   if (!profile || profile.onboardingStatus !== 'complete') {
     throw new HttpsError('failed-precondition', 'Complete your profile first.');
   }
 
-  return {profile, uid};
+  return {profile, uid: authenticatedUid};
 }
 
 function createInviteCode() {
@@ -93,6 +113,19 @@ function buildMemberPublicPreview(profile: DocumentData, uid: string) {
     avatarUrl: profile.avatarUrl ?? null,
     displayName: profile.displayName,
     handle: profile.handle,
+    uid,
+  };
+}
+
+function buildPublicPreviewFromMember(member: DocumentData, uid: string) {
+  return {
+    avatarUrl: member.avatarUrl ?? null,
+    displayName:
+      asOptionalString(member.displayName) ??
+      asOptionalString(member.name) ??
+      asOptionalString(member.handle) ??
+      'Hoyst member',
+    handle: asOptionalString(member.handle) ?? null,
     uid,
   };
 }
@@ -575,6 +608,94 @@ export const pokeCircleMembers = onCall(
     return {poked: targets.length};
   },
 );
+
+export const updateCircle = onCall(async request => {
+  const input = updateCircleSchema.parse(request.data);
+  const {uid} = await requireCompletedProfile(request.auth?.uid, input.idToken);
+  const circleRef = db.collection('circles').doc(input.circleId);
+  const memberRef = circleRef.collection('members').doc(uid);
+  const publicIndexRef = db.collection('publicCircleIndex').doc(input.circleId);
+
+  const [circleSnapshot, memberSnapshot, activeMemberSnapshots] =
+    await Promise.all([
+      circleRef.get(),
+      memberRef.get(),
+      circleRef.collection('members').where('status', '==', 'active').get(),
+    ]);
+
+  if (!circleSnapshot.exists) {
+    throw new HttpsError('not-found', 'Circle not found.');
+  }
+
+  const circle = circleSnapshot.data();
+  const member = memberSnapshot.data();
+
+  if (
+    circle?.ownerId !== uid ||
+    member?.role !== 'owner' ||
+    member?.status !== 'active'
+  ) {
+    throw new HttpsError(
+      'permission-denied',
+      'Only the circle owner can edit this circle.',
+    );
+  }
+
+  const storedMemberCount =
+    typeof circle?.memberCount === 'number' && Number.isFinite(circle.memberCount)
+      ? circle.memberCount
+      : 0;
+  const memberCount = Math.max(storedMemberCount, activeMemberSnapshots.size);
+
+  if (input.maxSize < memberCount) {
+    throw new HttpsError(
+      'failed-precondition',
+      'Max size cannot be below the current member count.',
+    );
+  }
+
+  const now = FieldValue.serverTimestamp();
+  const circleUpdate = {
+    category: input.category,
+    dailyTask: input.dailyTask,
+    graceRules: input.graceRules ?? {
+      skip: {
+        allowance: 2,
+        windowDays: 7,
+      },
+    },
+    joinMode: input.joinMode,
+    maxSize: input.maxSize,
+    privacy: input.privacy,
+    title: input.title,
+    timezone: input.timezone ?? circle?.timezone ?? 'UTC',
+    updatedAt: now,
+  };
+  const batch = db.batch();
+
+  batch.update(circleRef, circleUpdate);
+
+  if (input.privacy === 'public') {
+    batch.set(publicIndexRef, {
+      category: input.category,
+      dailyTask: input.dailyTask,
+      joinMode: input.joinMode,
+      maxSize: input.maxSize,
+      memberCount,
+      members: activeMemberSnapshots.docs.map(snapshot =>
+        buildPublicPreviewFromMember(snapshot.data(), snapshot.id),
+      ),
+      title: input.title,
+      updatedAt: now,
+    });
+  } else {
+    batch.delete(publicIndexRef);
+  }
+
+  await batch.commit();
+
+  return {updated: true as const};
+});
 
 export const deleteCircle = onCall(async request => {
   const {uid} = await requireCompletedProfile(request.auth?.uid);

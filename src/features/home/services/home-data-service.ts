@@ -24,6 +24,26 @@ export type HomeProgressCell = {
   state: ProgressDayState;
 };
 
+export type HomeGreetingTimeWindow =
+  | 'morning'
+  | 'midday'
+  | 'afternoon'
+  | 'evening';
+
+export type HomeGreetingCircleSummary = {
+  atRiskCount: number;
+  circleCount: number;
+  doneCount: number;
+  needsYouCount: number;
+  pendingCount: number;
+};
+
+export type HomeGreetingContext = {
+  circleSummary: HomeGreetingCircleSummary;
+  firstName?: string;
+  timeWindow: HomeGreetingTimeWindow;
+};
+
 export type HomeData = {
   circles: CircleManagementCard[];
   hasLoadedMemberships: boolean;
@@ -82,6 +102,15 @@ function asString(value: unknown, fallback = '') {
 
 function asNumber(value: unknown, fallback: number) {
   return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
+}
+
+function getCleanFirstName(value?: string) {
+  const firstName = value
+    ?.trim()
+    .split(/\s+/)[0]
+    ?.replace(/[^A-Za-z'-]/g, '');
+
+  return firstName && firstName.length > 0 ? firstName.slice(0, 24) : undefined;
 }
 
 function normalizeMembershipStatus(
@@ -302,6 +331,170 @@ function calculatePersonalStreak(
   return count;
 }
 
+export function getHomeGreetingTimeWindow({
+  now = new Date(),
+  timezone,
+}: {
+  now?: Date;
+  timezone: string;
+}): HomeGreetingTimeWindow {
+  const hour = DateTime.fromJSDate(now, {zone: timezone}).hour;
+
+  if (hour >= 5 && hour < 11) {
+    return 'morning';
+  }
+  if (hour >= 11 && hour < 15) {
+    return 'midday';
+  }
+  if (hour >= 15 && hour < 18) {
+    return 'afternoon';
+  }
+  return 'evening';
+}
+
+export function getHomeGreetingCircleSummary(
+  circles: readonly CircleManagementCard[],
+): HomeGreetingCircleSummary {
+  return circles.reduce(
+    (summary, circle) => {
+      if (circle.viewerMembershipStatus === 'pending') {
+        summary.pendingCount += 1;
+        return summary;
+      }
+
+      if (!circle.viewerHasCheckedIn) {
+        summary.needsYouCount += 1;
+      }
+      if (circle.state === 'risk') {
+        summary.atRiskCount += 1;
+      }
+      if (circle.state === 'done') {
+        summary.doneCount += 1;
+      }
+
+      return summary;
+    },
+    {
+      atRiskCount: 0,
+      circleCount: circles.length,
+      doneCount: 0,
+      needsYouCount: 0,
+      pendingCount: 0,
+    },
+  );
+}
+
+export function getHomeGreetingContext({
+  circles,
+  firstName,
+  now,
+  timezone,
+}: {
+  circles: readonly CircleManagementCard[];
+  firstName?: string;
+  now?: Date;
+  timezone: string;
+}): HomeGreetingContext {
+  return {
+    circleSummary: getHomeGreetingCircleSummary(circles),
+    firstName: getCleanFirstName(firstName),
+    timeWindow: getHomeGreetingTimeWindow({now, timezone}),
+  };
+}
+
+function buildGreetingWithName(
+  firstName: string | undefined,
+  copy: string,
+  copyWithoutName?: string,
+) {
+  return firstName ? `${firstName}, ${copy}` : copyWithoutName ?? copy;
+}
+
+export function getHomeGreetingFallback({
+  circles,
+  firstName,
+  now,
+  timezone,
+}: {
+  circles: readonly CircleManagementCard[];
+  firstName?: string;
+  now?: Date;
+  timezone: string;
+}) {
+  const context = getHomeGreetingContext({circles, firstName, now, timezone});
+  const {circleSummary, timeWindow} = context;
+
+  if (circleSummary.circleCount === 0) {
+    return buildGreetingWithName(
+      context.firstName,
+      'no circles yet. Bold strategy, let us fix it.',
+      'No circles yet. Bold strategy, let us fix it.',
+    );
+  }
+
+  if (circleSummary.needsYouCount > 0) {
+    return buildGreetingWithName(
+      context.firstName,
+      'your circles are waiting. Make it quick and undeniable.',
+      'Your circles are waiting. Make it quick and undeniable.',
+    );
+  }
+
+  if (circleSummary.atRiskCount > 0) {
+    return buildGreetingWithName(
+      context.firstName,
+      'pressure is up. Perfect, now it counts.',
+      'Pressure is up. Perfect, now it counts.',
+    );
+  }
+
+  if (circleSummary.pendingCount > 0) {
+    return buildGreetingWithName(
+      context.firstName,
+      'pending approval. Patience, but make it productive.',
+      'Pending approval. Patience, but make it productive.',
+    );
+  }
+
+  if (circleSummary.doneCount === circleSummary.circleCount) {
+    return buildGreetingWithName(
+      context.firstName,
+      'all checked in. Try not to act surprised.',
+      'All checked in. Try not to act surprised.',
+    );
+  }
+
+  if (timeWindow === 'morning') {
+    return buildGreetingWithName(
+      context.firstName,
+      'morning. New day, same goals, fewer excuses.',
+      'Morning. New day, same goals, fewer excuses.',
+    );
+  }
+
+  if (timeWindow === 'midday') {
+    return buildGreetingWithName(
+      context.firstName,
+      'midday check. Winning, or just looking busy?',
+      'Midday check. Winning, or just looking busy?',
+    );
+  }
+
+  if (timeWindow === 'afternoon') {
+    return buildGreetingWithName(
+      context.firstName,
+      'afternoon test. Finish strong so tonight feels earned.',
+      'Afternoon test. Finish strong so tonight feels earned.',
+    );
+  }
+
+  return buildGreetingWithName(
+    context.firstName,
+    'last lap. Make the day look planned.',
+    'Last lap. Make the day look planned.',
+  );
+}
+
 export function createEmptyHomeData(timezone = 'UTC', now = new Date()) {
   const completedDateKeys = new Set<string>();
   const progressDays = buildProgressDays(timezone, completedDateKeys, now);
@@ -445,6 +638,7 @@ export function mapHomeCircleFromData({
       ? `${streakDays}d streak`
       : 'Start today',
     title,
+    timezone: asString(circleData.timezone, 'UTC'),
     viewerHasCheckedIn,
     viewerMembershipStatus: membershipStatus,
     viewerRole: normalizeMemberRole(membershipData.role),

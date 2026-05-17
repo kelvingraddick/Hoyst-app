@@ -16,7 +16,9 @@ export {
   joinCircle,
   pokeCircleMembers,
   reviewJoinRequest,
+  updateCircle,
 } from './circles';
+export {generateHomeGreeting} from './homeGreeting';
 export {getProfileSummary} from './profile';
 
 export const healthcheck = onRequest((request, response) => {

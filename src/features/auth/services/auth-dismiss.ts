@@ -21,6 +21,9 @@ export async function continueAsGuestFromAuth({
   dismissAuth();
 
   if (hasAuthenticatedUser()) {
-    await signOut();
+    await signOut().catch(() => undefined);
+    markOnboardingSeen();
+    setGuest();
+    dismissAuth();
   }
 }

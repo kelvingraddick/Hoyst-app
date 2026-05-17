@@ -23,6 +23,7 @@ import {
   Chrome,
   Clock3,
   Globe2,
+  ImagePlus,
   Mail,
   Phone,
   Shield,
@@ -34,11 +35,13 @@ import {
   X,
   type LucideIcon,
 } from 'lucide-react-native';
+import {launchImageLibrary} from 'react-native-image-picker';
 
 import {BrandMark} from '../../../design/components/BrandMark';
 import {HoystButton} from '../../../design/components/HoystButton';
 import {HoystInput} from '../../../design/components/HoystInput';
 import {HoystText} from '../../../design/components/HoystText';
+import {LayeredAvatar} from '../../../design/components/LayeredAvatar';
 import {TapInRingMark} from '../../../design/components/TapInRingMark';
 import {useHoystTheme} from '../../../design/theme/useHoystTheme';
 import {gradients} from '../../../design/tokens/gradients';
@@ -62,6 +65,7 @@ import {
   type OnboardingStep,
 } from '../services/onboarding-options';
 import type {CircleJoinMode, CirclePrivacyMode} from '../../../types/models';
+import {TimezonePicker} from '../components/TimezonePicker';
 import {normalizeHandle, validateHandle} from '../services/profile-validation';
 import {isStarterCircleDraftReady} from '../services/onboarding-circle';
 import {
@@ -75,7 +79,11 @@ import {
 } from '../services/auth-service';
 import {continueAsGuestFromAuth} from '../services/auth-dismiss';
 import {getWelcomeSignInParams} from '../services/auth-route-intent';
-import {completeProfile, getLocalTimezone} from '../services/account-service';
+import {
+  completeProfile,
+  uploadProfileAvatar,
+} from '../services/account-service';
+import {getLocalTimezone} from '../services/timezone-options';
 import {
   completeOnboardingSetup,
   shouldCreateStarterCircle,
@@ -188,6 +196,17 @@ const publicJoinOptions: OnboardingOption<
   },
 ];
 
+function getInitialsFromName(name: string) {
+  const initials = name
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map(part => part[0]?.toUpperCase() ?? '')
+    .join('');
+
+  return initials || 'YO';
+}
+
 function getErrorMessage(error: unknown) {
   const serviceError = error as AuthServiceError;
 
@@ -231,6 +250,7 @@ function IconButton({
     <Pressable
       accessibilityLabel={accessibilityLabel}
       disabled={disabled}
+      hitSlop={8}
       onPress={onPress}
       style={({pressed}) => [
         styles.iconButton,
@@ -269,7 +289,7 @@ function ProgressHeader({
     <View style={styles.progressHeader}>
       <IconButton
         accessibilityLabel="Go back"
-        disabled={currentStep === 'coach' || currentStep === 'finishProfile'}
+        disabled={currentStep === 'coach'}
         icon={ArrowLeft}
         onPress={onBack}
       />
@@ -500,6 +520,7 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
   const [isRequestingPushPermission, setIsRequestingPushPermission] =
     useState(false);
   const [profileWasCompleted, setProfileWasCompleted] = useState(false);
+  const [selectedAvatarUri, setSelectedAvatarUri] = useState<string>();
   const currentStep = useOnboardingStore(state => state.currentStep);
   const displayName = useOnboardingStore(state => state.displayName);
   const firstCircleSkipped = useOnboardingStore(
@@ -555,6 +576,11 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
     firstCircleSkipped,
     starterCircleDraft,
   });
+  const accountAvatarUrl = profile?.avatarUrl ?? user?.photoURL ?? undefined;
+  const avatarPreviewUri = selectedAvatarUri ?? accountAvatarUrl;
+  const avatarInitials = getInitialsFromName(
+    displayName.trim() || profile?.name || user?.displayName || 'You',
+  );
   const publicJoinMode =
     starterCircleDraft.joinMode === 'open' ||
     starterCircleDraft.joinMode === 'request_to_join'
@@ -564,7 +590,9 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
     currentStep === 'goal'
       ? Boolean(goal)
       : currentStep === 'finishProfile'
-      ? displayName.trim().length > 0 && handleValidation.isValid
+      ? displayName.trim().length > 0 &&
+        handleValidation.isValid &&
+        timezone.trim().length > 0
       : currentStep === 'circleTitle'
       ? starterCircleDraft.title.trim().length > 0 &&
         starterCircleDraft.title.trim().length <= 80
@@ -771,6 +799,16 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
       const setupId = shouldCreateCircle
         ? starterCircleSetupId ?? prepareStarterCircleSetup()
         : undefined;
+      if (selectedAvatarUri && !user?.uid) {
+        throw new Error('Sign in is required to upload your avatar.');
+      }
+      const avatarUrl =
+        selectedAvatarUri && user?.uid
+          ? await uploadProfileAvatar({
+              uid: user.uid,
+              uri: selectedAvatarUri,
+            })
+          : accountAvatarUrl;
 
       setHandle(normalizedHandle);
 
@@ -778,7 +816,7 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
         {
           firstCircleSkipped,
           profile: {
-            ...(user?.photoURL ? {avatarUrl: user.photoURL} : {}),
+            ...(avatarUrl ? {avatarUrl} : {}),
             displayName: displayName.trim(),
             handle: normalizedHandle,
             ...(onboardingPreferences ? {onboardingPreferences} : {}),
@@ -842,7 +880,9 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
     nextStep();
   };
 
-  const continueFromNotifications = async (shouldRequestPermission: boolean) => {
+  const continueFromNotifications = async (
+    shouldRequestPermission: boolean,
+  ) => {
     if (isRequestingPushPermission) {
       return;
     }
@@ -856,6 +896,33 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
     await requestPushNotificationPermission().catch(() => undefined);
     setIsRequestingPushPermission(false);
     nextStep();
+  };
+
+  const chooseProfileAvatar = async () => {
+    const response = await launchImageLibrary({
+      mediaType: 'photo',
+      quality: 0.8,
+      selectionLimit: 1,
+    });
+
+    if (response.errorMessage) {
+      Alert.alert('Could not choose photo', response.errorMessage);
+      return;
+    }
+
+    const uri = response.assets?.[0]?.uri;
+    if (uri) {
+      setSelectedAvatarUri(uri);
+    }
+  };
+
+  const goBack = () => {
+    if (currentStep === 'finishProfile') {
+      setCurrentStep('notifications');
+      return;
+    }
+
+    previousStep();
   };
 
   const renderOptions = <T extends string>(
@@ -928,6 +995,59 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
           : null}
         {currentStep === 'finishProfile' ? (
           <View style={styles.profileFields}>
+            <View
+              style={[
+                styles.avatarPanel,
+                {backgroundColor: theme.surface, borderColor: theme.border},
+              ]}>
+              <LayeredAvatar
+                imageSource={
+                  avatarPreviewUri ? {uri: avatarPreviewUri} : undefined
+                }
+                initials={avatarInitials}
+                size={72}
+                state="done"
+              />
+              <View style={styles.avatarCopy}>
+                <HoystText variant="bodyStrong">Profile photo</HoystText>
+                <HoystText tone="muted">
+                  Use your account photo or add one your circles will recognize.
+                </HoystText>
+                <View style={styles.avatarActions}>
+                  <HoystButton
+                    icon={
+                      <ImagePlus
+                        color={theme.accentSecondary}
+                        size={18}
+                        strokeWidth={2.3}
+                      />
+                    }
+                    label={avatarPreviewUri ? 'Change photo' : 'Add photo'}
+                    backgroundColor={theme.surfaceHigh}
+                    borderColor={theme.borderStrong}
+                    onPress={() => {
+                      chooseProfileAvatar().catch(error => {
+                        Alert.alert(
+                          'Could not choose photo',
+                          (error as {message?: string}).message ?? 'Try again.',
+                        );
+                      });
+                    }}
+                    textColor={theme.text}
+                    variant="outline"
+                  />
+                  {selectedAvatarUri ? (
+                    <HoystButton
+                      label={
+                        accountAvatarUrl ? 'Use account photo' : 'Clear photo'
+                      }
+                      onPress={() => setSelectedAvatarUri(undefined)}
+                      variant="ghost"
+                    />
+                  ) : null}
+                </View>
+              </View>
+            </View>
             <View style={styles.fieldBlock}>
               <HoystText tone="muted" variant="label">
                 Display name
@@ -955,17 +1075,7 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
                 </HoystText>
               ) : null}
             </View>
-            <View style={styles.fieldBlock}>
-              <HoystText tone="muted" variant="label">
-                Timezone
-              </HoystText>
-              <HoystInput
-                autoCapitalize="none"
-                onChangeText={setTimezone}
-                placeholder="America/New_York"
-                value={timezone}
-              />
-            </View>
+            <TimezonePicker onChange={setTimezone} value={timezone} />
             {shouldCreateCircle ? (
               <View style={styles.fieldBlock}>
                 <HoystText tone="muted" variant="label">
@@ -1351,7 +1461,6 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
           setCurrentStep('auth');
         }
       : undefined;
-
   return (
     <SafeAreaView
       style={[styles.safeArea, {backgroundColor: theme.background}]}>
@@ -1360,7 +1469,7 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
         style={styles.keyboardView}>
         <ProgressHeader
           currentStep={currentStep}
-          onBack={previousStep}
+          onBack={goBack}
           onClose={continueAsGuest}
         />
         <ScrollView
@@ -1394,15 +1503,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 12,
     paddingHorizontal: 18,
-    paddingTop: 6,
+    paddingTop: 22,
+    paddingBottom: 8,
   },
   iconButton: {
     alignItems: 'center',
-    borderRadius: 18,
+    borderRadius: 20,
     borderWidth: 1,
-    height: 42,
+    height: 46,
     justifyContent: 'center',
-    width: 42,
+    width: 46,
   },
   progressTrack: {
     borderRadius: radius.pill,
@@ -1419,7 +1529,7 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     paddingBottom: 28,
     paddingHorizontal: 18,
-    paddingTop: 18,
+    paddingTop: 16,
   },
   content: {
     flex: 1,
@@ -1559,6 +1669,22 @@ const styles = StyleSheet.create({
   },
   profileFields: {
     gap: 14,
+  },
+  avatarPanel: {
+    alignItems: 'center',
+    borderRadius: 20,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: 14,
+    padding: 14,
+  },
+  avatarCopy: {
+    flex: 1,
+    gap: 8,
+    minWidth: 0,
+  },
+  avatarActions: {
+    gap: 8,
   },
   recoveryPanel: {
     gap: 12,
