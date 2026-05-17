@@ -1,9 +1,12 @@
+const mockCallable = jest.fn();
+const mockHttpsCallable = jest.fn(() => mockCallable);
+
 jest.mock('@react-native-async-storage/async-storage', () =>
   require('@react-native-async-storage/async-storage/jest/async-storage-mock'),
 );
 jest.mock('../src/lib/firebase/functions', () => ({
   firebaseFunctions: jest.fn(() => ({
-    httpsCallable: jest.fn(),
+    httpsCallable: mockHttpsCallable,
   })),
 }));
 
@@ -12,6 +15,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   buildHomeGreetingCacheKey,
   clearExpiredHomeGreetingCacheEntries,
+  generateHomeGreeting,
   getCachedHomeGreeting,
   setCachedHomeGreeting,
 } from '../src/features/home/services/home-greeting-service';
@@ -32,6 +36,8 @@ const context: HomeGreetingContext = {
 describe('Home greeting client cache', () => {
   beforeEach(async () => {
     jest.restoreAllMocks();
+    mockCallable.mockReset();
+    mockHttpsCallable.mockClear();
     await AsyncStorage.clear();
   });
 
@@ -149,5 +155,53 @@ describe('Home greeting client cache', () => {
         source: 'gemini',
       }),
     ).resolves.toBeUndefined();
+  });
+
+  it('shares one in-flight callable request for duplicate cache-key calls', async () => {
+    const cacheKey = buildHomeGreetingCacheKey({
+      context,
+      dateKey: '2026-05-17',
+      uid: 'user-1',
+    });
+    let resolveCallable: (value: {
+      data: {headline: string; source: 'gemini'};
+    }) => void;
+    const callablePromise = new Promise<{
+      data: {headline: string; source: 'gemini'};
+    }>(resolve => {
+      resolveCallable = resolve;
+    });
+
+    mockCallable.mockReturnValue(callablePromise);
+
+    const firstRequest = generateHomeGreeting({
+      cacheKey,
+      context,
+      dateKey: '2026-05-17',
+    });
+    const secondRequest = generateHomeGreeting({
+      cacheKey,
+      context,
+      dateKey: '2026-05-17',
+    });
+
+    resolveCallable!({
+      data: {
+        headline: 'Aaron, one request did the work.',
+        source: 'gemini',
+      },
+    });
+
+    await expect(Promise.all([firstRequest, secondRequest])).resolves.toEqual([
+      {
+        headline: 'Aaron, one request did the work.',
+        source: 'gemini',
+      },
+      {
+        headline: 'Aaron, one request did the work.',
+        source: 'gemini',
+      },
+    ]);
+    expect(mockCallable).toHaveBeenCalledTimes(1);
   });
 });

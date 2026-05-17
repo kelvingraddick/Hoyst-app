@@ -1,5 +1,5 @@
 import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
-import {Pressable, Share, StyleSheet, View} from 'react-native';
+import {Animated, Pressable, Share, StyleSheet, View} from 'react-native';
 import {Bell, ChevronRight, Medal} from 'lucide-react-native';
 import type {BottomTabNavigationProp} from '@react-navigation/bottom-tabs';
 import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
@@ -112,6 +112,74 @@ function HeaderAction({
   );
 }
 
+function AnimatedHomeGreeting({headline}: {headline: string}) {
+  const opacity = useRef(new Animated.Value(0)).current;
+  const animationRef = useRef<Animated.CompositeAnimation | undefined>(
+    undefined,
+  );
+  const [displayedHeadline, setDisplayedHeadline] = useState(headline);
+
+  useEffect(() => {
+    let isActive = true;
+
+    animationRef.current?.stop();
+
+    if (headline === displayedHeadline) {
+      const fadeIn = Animated.timing(opacity, {
+        duration: 180,
+        toValue: 1,
+        useNativeDriver: true,
+      });
+
+      animationRef.current = fadeIn;
+      fadeIn.start();
+
+      return () => {
+        isActive = false;
+        fadeIn.stop();
+      };
+    }
+
+    const fadeOut = Animated.timing(opacity, {
+      duration: 140,
+      toValue: 0,
+      useNativeDriver: true,
+    });
+
+    animationRef.current = fadeOut;
+    fadeOut.start(({finished}) => {
+      if (!finished || !isActive) {
+        return;
+      }
+
+      setDisplayedHeadline(headline);
+      opacity.setValue(0);
+
+      const fadeIn = Animated.timing(opacity, {
+        duration: 180,
+        toValue: 1,
+        useNativeDriver: true,
+      });
+
+      animationRef.current = fadeIn;
+      fadeIn.start();
+    });
+
+    return () => {
+      isActive = false;
+      fadeOut.stop();
+    };
+  }, [displayedHeadline, headline, opacity]);
+
+  return (
+    <Animated.View style={{opacity}}>
+      <HoystText style={styles.homeGreetingHeadline} variant="headline">
+        {displayedHeadline}
+      </HoystText>
+    </Animated.View>
+  );
+}
+
 export function HomeScreen(): React.JSX.Element {
   const theme = useHoystTheme();
   const [activeFilter, setActiveFilter] =
@@ -126,7 +194,6 @@ export function HomeScreen(): React.JSX.Element {
   );
   const [homeGreetingState, setHomeGreetingState] =
     useState<HomeGreetingState>();
-  const homeGreetingInFlightKeyRef = useRef<string | undefined>(undefined);
   const profile = useUserProfileStore(state => state.profile);
   const status = useSessionStore(state => state.status);
   const user = useSessionStore(state => state.user);
@@ -316,14 +383,9 @@ export function HomeScreen(): React.JSX.Element {
         setHomeGreetingState(undefined);
       }
 
-      if (homeGreetingInFlightKeyRef.current === homeGreetingRequestKey) {
-        return;
-      }
-
-      homeGreetingInFlightKeyRef.current = homeGreetingRequestKey;
-
       try {
         const result = await generateHomeGreeting({
+          cacheKey: homeGreetingRequestKey,
           context: homeGreetingContext,
           dateKey: homeData.todayDateKey,
         });
@@ -354,10 +416,6 @@ export function HomeScreen(): React.JSX.Element {
           headline: homeGreetingFallback,
           source: 'fallback',
         });
-      } finally {
-        if (homeGreetingInFlightKeyRef.current === homeGreetingRequestKey) {
-          homeGreetingInFlightKeyRef.current = undefined;
-        }
       }
     };
 
@@ -475,9 +533,7 @@ export function HomeScreen(): React.JSX.Element {
 
       <View style={styles.heroCopy}>
         {homeGreeting ? (
-          <HoystText style={styles.homeGreetingHeadline} variant="headline">
-            {homeGreeting}
-          </HoystText>
+          <AnimatedHomeGreeting headline={homeGreeting} />
         ) : shouldHoldHomeGreeting ? (
           <View
             accessibilityElementsHidden

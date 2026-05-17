@@ -22,6 +22,10 @@ type CachedHomeGreeting = {
 
 const homeGreetingCachePrefix = '@hoyst/homeGreeting/v1/';
 const homeGreetingCacheMaxAgeMs = 48 * 60 * 60 * 1000;
+const inFlightHomeGreetingRequests = new Map<
+  string,
+  Promise<GenerateHomeGreetingResult>
+>();
 
 function encodeCachePart(value: string) {
   return encodeURIComponent(value).replace(/\./g, '%2E');
@@ -145,25 +149,48 @@ export async function clearExpiredHomeGreetingCacheEntries(): Promise<void> {
 }
 
 export async function generateHomeGreeting({
+  cacheKey,
   context,
   dateKey,
 }: {
+  cacheKey?: string;
   context: HomeGreetingContext;
   dateKey: string;
 }): Promise<GenerateHomeGreetingResult> {
-  const callable = firebaseFunctions().httpsCallable('generateHomeGreeting');
-  const result = await callable({...context, dateKey});
-  const data = result.data as Partial<GenerateHomeGreetingResult> | undefined;
+  if (cacheKey) {
+    const inFlightRequest = inFlightHomeGreetingRequests.get(cacheKey);
 
-  if (
-    typeof data?.headline !== 'string' ||
-    (data.source !== 'fallback' && data.source !== 'gemini')
-  ) {
-    throw new Error('Could not generate Home greeting.');
+    if (inFlightRequest) {
+      return inFlightRequest;
+    }
   }
 
-  return {
-    headline: data.headline,
-    source: data.source,
-  };
+  const callable = firebaseFunctions().httpsCallable('generateHomeGreeting');
+  const request = callable({...context, dateKey}).then(result => {
+    const data = result.data as Partial<GenerateHomeGreetingResult> | undefined;
+
+    if (
+      typeof data?.headline !== 'string' ||
+      (data.source !== 'fallback' && data.source !== 'gemini')
+    ) {
+      throw new Error('Could not generate Home greeting.');
+    }
+
+    return {
+      headline: data.headline,
+      source: data.source,
+    };
+  });
+
+  if (!cacheKey) {
+    return request;
+  }
+
+  const trackedRequest = request.finally(() => {
+    inFlightHomeGreetingRequests.delete(cacheKey);
+  });
+
+  inFlightHomeGreetingRequests.set(cacheKey, trackedRequest);
+
+  return trackedRequest;
 }
