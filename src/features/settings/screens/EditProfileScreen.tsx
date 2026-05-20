@@ -181,7 +181,7 @@ export function EditProfileScreen({navigation}: Props): React.JSX.Element {
               borderColor={theme.borderStrong}
               icon={
                 <ImagePlus
-                  color={theme.accentSecondary}
+                  color={theme.accentSecondaryForeground}
                   size={18}
                   strokeWidth={2.3}
                 />

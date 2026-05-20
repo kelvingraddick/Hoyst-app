@@ -219,18 +219,18 @@ function useAccentColor(accent: OnboardingOption<string>['accent']) {
   const theme = useHoystTheme();
 
   if (accent === 'green') {
-    return theme.success;
+    return theme.successForeground;
   }
 
   if (accent === 'orange') {
-    return theme.accentWarm;
+    return theme.accentWarmForeground;
   }
 
   if (accent === 'blue') {
-    return theme.accentTertiary;
+    return theme.accentTertiaryForeground;
   }
 
-  return theme.accentSecondary;
+  return theme.accentSecondaryForeground;
 }
 
 function IconButton({
@@ -345,7 +345,11 @@ function CoachPrompt({
               styles.speechIcon,
               {backgroundColor: theme.surfaceSoft, borderColor: theme.border},
             ]}>
-            <Icon color={theme.accentSecondary} size={17} strokeWidth={2.3} />
+            <Icon
+              color={theme.accentSecondaryForeground}
+              size={17}
+              strokeWidth={2.3}
+            />
           </View>
           <HoystText variant="label">{copy.title}</HoystText>
         </View>
@@ -422,7 +426,7 @@ function OptionCard<T extends string>({
             },
           ]}>
           {isSelected ? (
-            <Check color={theme.background} size={16} strokeWidth={3} />
+            <Check color={theme.onBrightAccent} size={16} strokeWidth={3} />
           ) : null}
         </View>
       </View>
@@ -614,18 +618,20 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
     },
     google: {
       backgroundColor: 'rgba(66,133,244,0.12)',
-      borderColor: 'rgba(66,133,244,0.42)',
-      foregroundColor: '#4285F4',
+      borderColor: theme.isDark
+        ? 'rgba(66,133,244,0.42)'
+        : 'rgba(26,95,199,0.45)',
+      foregroundColor: theme.isDark ? '#4285F4' : '#1A5FC7',
     },
     email: {
       backgroundColor: 'rgba(255,138,61,0.13)',
       borderColor: 'rgba(255,138,61,0.44)',
-      foregroundColor: theme.accentWarm,
+      foregroundColor: theme.accentWarmForeground,
     },
     phone: {
       backgroundColor: 'rgba(68,216,92,0.12)',
       borderColor: 'rgba(68,216,92,0.42)',
-      foregroundColor: theme.success,
+      foregroundColor: theme.successForeground,
     },
   };
 
@@ -1017,7 +1023,7 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
                   <HoystButton
                     icon={
                       <ImagePlus
-                        color={theme.accentSecondary}
+                        color={theme.accentSecondaryForeground}
                         size={18}
                         strokeWidth={2.3}
                       />

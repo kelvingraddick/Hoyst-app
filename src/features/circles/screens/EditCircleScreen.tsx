@@ -143,18 +143,18 @@ function getToneColor(
   tone: Option<string>['tone'],
 ) {
   if (tone === 'green') {
-    return theme.success;
+    return theme.successForeground;
   }
 
   if (tone === 'orange') {
-    return theme.warning;
+    return theme.warningForeground;
   }
 
   if (tone === 'blue') {
-    return theme.accentTertiary;
+    return theme.accentTertiaryForeground;
   }
 
-  return theme.accentSecondary;
+  return theme.accentSecondaryForeground;
 }
 
 function getJoinModeLabel(joinMode: CircleJoinMode) {
@@ -272,7 +272,7 @@ function OptionCard<T extends string>({
             },
           ]}>
           {isSelected ? (
-            <Check color={theme.background} size={15} strokeWidth={3} />
+            <Check color={theme.onBrightAccent} size={15} strokeWidth={3} />
           ) : null}
         </View>
       </View>
@@ -688,11 +688,11 @@ export function EditCircleScreen({
                 {
                   backgroundColor:
                     draft.maxSize === size
-                      ? `${theme.accentSecondary}22`
+                      ? `${theme.accentSecondaryForeground}22`
                       : theme.surfaceSoft,
                   borderColor:
                     draft.maxSize === size
-                      ? theme.accentSecondary
+                      ? theme.accentSecondaryForeground
                       : theme.border,
                   opacity: pressed ? 0.9 : 1,
                 },
@@ -735,7 +735,9 @@ export function EditCircleScreen({
             styles.toggleRow,
             {
               backgroundColor: theme.surface,
-              borderColor: graceEnabled ? theme.warning : theme.border,
+              borderColor: graceEnabled
+                ? theme.warningForeground
+                : theme.border,
               opacity: pressed ? 0.92 : 1,
             },
           ]}>

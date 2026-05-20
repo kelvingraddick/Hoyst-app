@@ -26,7 +26,7 @@ export function MonthProgressCard({
         <HoystText tone="muted" variant="label">
           {title}
         </HoystText>
-        <HoystText style={{color: theme.success}} variant="caption">
+        <HoystText style={{color: theme.successForeground}} variant="caption">
           {completionLabel}
         </HoystText>
       </View>
@@ -36,10 +36,10 @@ export function MonthProgressCard({
             day.state === 'done'
               ? 'rgba(68,216,92,0.18)'
               : day.state === 'missed'
-                ? 'rgba(255,110,132,0.18)'
-                : day.state === 'today'
-                  ? 'rgba(139,92,246,0.24)'
-                  : theme.surfaceHigh;
+              ? 'rgba(255,110,132,0.18)'
+              : day.state === 'today'
+              ? 'rgba(139,92,246,0.24)'
+              : theme.surfaceHigh;
           const textColor =
             day.state === 'future' ? theme.textSubtle : theme.text;
 

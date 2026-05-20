@@ -213,12 +213,12 @@ export function TapInPickerScreen({navigation}: Props): React.JSX.Element {
           {dueCircles.map(circle => {
             const progressTone =
               circle.state === 'risk'
-                ? theme.danger
+                ? theme.dangerForeground
                 : circle.progressPercent >= 80
-                ? theme.success
+                ? theme.successForeground
                 : circle.progressPercent >= 50
-                ? theme.accentSecondary
-                : theme.warning;
+                ? theme.accentSecondaryForeground
+                : theme.warningForeground;
             const privacyIcon =
               circle.privacy === 'public' ? (
                 <Globe2 color={theme.textSubtle} size={14} strokeWidth={2.1} />
@@ -241,7 +241,7 @@ export function TapInPickerScreen({navigation}: Props): React.JSX.Element {
                     <View style={styles.streakRow}>
                       {circle.streakDays > 7 ? (
                         <Flame
-                          color={theme.warning}
+                          color={theme.warningForeground}
                           size={15}
                           strokeWidth={2.4}
                         />
@@ -250,8 +250,8 @@ export function TapInPickerScreen({navigation}: Props): React.JSX.Element {
                         style={{
                           color:
                             circle.streakDays > 7
-                              ? theme.warning
-                              : theme.success,
+                              ? theme.warningForeground
+                              : theme.successForeground,
                         }}
                         variant="bodyStrong">
                         {circle.streakDays}d streak
@@ -444,10 +444,10 @@ export function TapInPickerScreen({navigation}: Props): React.JSX.Element {
               ? 'Share'
               : 'View';
             const statusTone = canPoke
-              ? theme.accentSecondary
+              ? theme.accentSecondaryForeground
               : circle.viewerTodayStatus === 'skip'
-              ? theme.warning
-              : theme.success;
+              ? theme.warningForeground
+              : theme.successForeground;
             const statusLabel = canPoke
               ? `${circle.remainingCheckIns} pending today`
               : circle.viewerTodayStatus === 'skip'
@@ -466,7 +466,7 @@ export function TapInPickerScreen({navigation}: Props): React.JSX.Element {
                     <View style={styles.secondaryTitleRow}>
                       {circle.state === 'done' ? (
                         <Check
-                          color={theme.success}
+                          color={theme.successForeground}
                           size={15}
                           strokeWidth={2.6}
                         />

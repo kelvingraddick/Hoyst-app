@@ -15,17 +15,17 @@ function getMemberStatusColor(
   theme: ReturnType<typeof useHoystTheme>,
 ) {
   if (member.state === 'done') {
-    return theme.success;
+    return theme.successForeground;
   }
 
   if (member.state === 'pending') {
     return member.membershipStatus === 'pending'
-      ? theme.accentSecondary
-      : theme.warning;
+      ? theme.accentSecondaryForeground
+      : theme.warningForeground;
   }
 
   if (member.state === 'skipped') {
-    return theme.warning;
+    return theme.warningForeground;
   }
 
   return theme.textSubtle;
@@ -87,8 +87,8 @@ export function StatusAvatarRow({
                   ]}>
                   <HoystText
                     style={
-                      member.state === 'done'
-                        ? styles.badgeLabelDark
+                      member.state === 'done' || member.state === 'pending'
+                        ? {color: theme.onBrightAccent}
                         : undefined
                     }
                     variant="tiny">
@@ -128,8 +128,5 @@ const styles = StyleSheet.create({
     position: 'absolute',
     right: -2,
     width: 20,
-  },
-  badgeLabelDark: {
-    color: '#0e0e0e',
   },
 });

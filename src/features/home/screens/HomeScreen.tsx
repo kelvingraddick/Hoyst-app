@@ -262,23 +262,23 @@ export function HomeScreen(): React.JSX.Element {
       },
       needsYou: {
         backgroundColor: theme.surfaceStrong,
-        borderColor: theme.warning,
+        borderColor: theme.warningForeground,
       },
       atRisk: {
         backgroundColor: theme.surfaceStrong,
-        borderColor: theme.accentSecondary,
+        borderColor: theme.accentSecondaryForeground,
       },
       done: {
         backgroundColor: theme.surfaceStrong,
-        borderColor: theme.success,
+        borderColor: theme.successForeground,
       },
     }),
     [
-      theme.accentSecondary,
-      theme.success,
+      theme.accentSecondaryForeground,
+      theme.successForeground,
       theme.surfaceStrong,
       theme.textMuted,
-      theme.warning,
+      theme.warningForeground,
     ],
   );
   const homeGreetingContext = useMemo(
@@ -308,6 +308,7 @@ export function HomeScreen(): React.JSX.Element {
       }),
     [homeData.todayDateKey, homeGreetingContext, user?.uid],
   );
+  const homeGreetingDateKey = homeData.todayDateKey;
   const activeHomeGreetingState =
     homeGreetingState?.requestKey === homeGreetingRequestKey
       ? homeGreetingState
@@ -387,7 +388,7 @@ export function HomeScreen(): React.JSX.Element {
         const result = await generateHomeGreeting({
           cacheKey: homeGreetingRequestKey,
           context: homeGreetingContext,
-          dateKey: homeData.todayDateKey,
+          dateKey: homeGreetingDateKey,
         });
 
         if (!isActive) {
@@ -429,6 +430,7 @@ export function HomeScreen(): React.JSX.Element {
     hasHomeDataError,
     homeData.hasLoadedMemberships,
     homeGreetingContext,
+    homeGreetingDateKey,
     homeGreetingFallback,
     homeGreetingRequestKey,
     isAuthenticatedHome,
@@ -518,7 +520,11 @@ export function HomeScreen(): React.JSX.Element {
         <BrandMark isDark={theme.isDark} kind="logo" style={styles.logo} />
         <View style={styles.topActions}>
           <HeaderAction onPress={() => navigation.navigate('Inbox')}>
-            <Bell color={theme.accentSecondary} size={22} strokeWidth={2.2} />
+            <Bell
+              color={theme.accentSecondaryForeground}
+              size={22}
+              strokeWidth={2.2}
+            />
           </HeaderAction>
           <HeaderAction onPress={() => navigation.navigate('Profile')}>
             <LayeredAvatar
@@ -579,11 +585,21 @@ export function HomeScreen(): React.JSX.Element {
             const isMissed = day.state === 'missed';
             const isToday = day.state === 'today';
             const progressCellStateStyle = isDone
-              ? styles.progressCellDone
+              ? {
+                  backgroundColor: `${theme.success}14`,
+                  borderColor: `${theme.successForeground}55`,
+                }
               : isMissed
-              ? styles.progressCellMissed
+              ? {
+                  backgroundColor: `${theme.danger}14`,
+                  borderColor: `${theme.dangerForeground}55`,
+                }
               : isToday
-              ? styles.progressCellToday
+              ? {
+                  backgroundColor: `${theme.accentSecondary}16`,
+                  borderColor: `${theme.accentSecondaryForeground}80`,
+                  borderStyle: 'dashed' as const,
+                }
               : undefined;
             const progressCellThemeStyle = progressCellStateStyle
               ? undefined
@@ -603,11 +619,11 @@ export function HomeScreen(): React.JSX.Element {
                 <HoystText
                   style={{
                     color: isDone
-                      ? theme.success
+                      ? theme.successForeground
                       : isMissed
-                      ? theme.danger
+                      ? theme.dangerForeground
                       : isToday
-                      ? theme.accentSecondary
+                      ? theme.accentSecondaryForeground
                       : theme.textMuted,
                   }}
                   variant="bodyStrong">
@@ -628,7 +644,7 @@ export function HomeScreen(): React.JSX.Element {
           },
         ]}>
         <View style={[styles.streakIconWrap, styles.streakIconTint]}>
-          <Medal color={theme.warning} size={20} strokeWidth={2.1} />
+          <Medal color={theme.warningForeground} size={20} strokeWidth={2.1} />
         </View>
         <View style={styles.streakCopy}>
           <HoystText style={styles.streakEyebrow} tone="muted" variant="tiny">
@@ -880,19 +896,6 @@ const styles = StyleSheet.create({
     borderWidth: 1.25,
     flex: 1,
     justifyContent: 'center',
-  },
-  progressCellDone: {
-    backgroundColor: 'rgba(68,216,92,0.14)',
-    borderColor: 'rgba(68,216,92,0.34)',
-  },
-  progressCellMissed: {
-    backgroundColor: 'rgba(255,110,132,0.14)',
-    borderColor: 'rgba(255,110,132,0.32)',
-  },
-  progressCellToday: {
-    backgroundColor: 'rgba(139,92,246,0.16)',
-    borderColor: 'rgba(186,158,255,0.5)',
-    borderStyle: 'dashed',
   },
   streakSummary: {
     alignItems: 'center',

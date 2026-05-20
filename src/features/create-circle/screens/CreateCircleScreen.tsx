@@ -200,18 +200,18 @@ function getToneColor(
   tone: Option<string>['tone'],
 ) {
   if (tone === 'green') {
-    return theme.success;
+    return theme.successForeground;
   }
 
   if (tone === 'orange') {
-    return theme.warning;
+    return theme.warningForeground;
   }
 
   if (tone === 'blue') {
-    return theme.accentTertiary;
+    return theme.accentTertiaryForeground;
   }
 
-  return theme.accentSecondary;
+  return theme.accentSecondaryForeground;
 }
 
 function IconButton({
@@ -306,7 +306,7 @@ function OptionCard<T extends string>({
             },
           ]}>
           {isSelected ? (
-            <Check color={theme.background} size={15} strokeWidth={3} />
+            <Check color={theme.onBrightAccent} size={15} strokeWidth={3} />
           ) : null}
         </View>
       </View>
@@ -344,7 +344,7 @@ function ProgressHeader({
           style={[
             styles.progressFill,
             {
-              backgroundColor: theme.accentSecondary,
+              backgroundColor: theme.accentSecondaryForeground,
               width: `${Math.round(progress)}%`,
             },
           ]}
@@ -655,7 +655,9 @@ export function CreateCircleScreen({navigation}: Props): React.JSX.Element {
               styles.toggleRow,
               {
                 backgroundColor: theme.surface,
-                borderColor: graceEnabled ? theme.warning : theme.border,
+                borderColor: graceEnabled
+                  ? theme.warningForeground
+                  : theme.border,
                 opacity: pressed ? 0.92 : 1,
               },
             ]}>
@@ -739,11 +741,11 @@ export function CreateCircleScreen({navigation}: Props): React.JSX.Element {
                   {
                     backgroundColor:
                       draft.maxSize === size
-                        ? `${theme.accentSecondary}22`
+                        ? `${theme.accentSecondaryForeground}22`
                         : theme.surfaceSoft,
                     borderColor:
                       draft.maxSize === size
-                        ? theme.accentSecondary
+                        ? theme.accentSecondaryForeground
                         : theme.border,
                     opacity: pressed ? 0.9 : 1,
                   },
@@ -803,10 +805,10 @@ export function CreateCircleScreen({navigation}: Props): React.JSX.Element {
               styles.successIcon,
               {
                 backgroundColor: `${theme.success}20`,
-                borderColor: theme.success,
+                borderColor: theme.successForeground,
               },
             ]}>
-            <Check color={theme.success} size={28} strokeWidth={3} />
+            <Check color={theme.successForeground} size={28} strokeWidth={3} />
           </View>
           <View style={styles.heroCopy}>
             <HoystText style={styles.centerText} variant="display">
@@ -821,13 +823,19 @@ export function CreateCircleScreen({navigation}: Props): React.JSX.Element {
           <HoystText tone="muted" variant="label">
             Invite link
           </HoystText>
-          <HoystText style={{color: theme.accentSecondary}}>
+          <HoystText style={{color: theme.accentSecondaryForeground}}>
             {inviteLink}
           </HoystText>
         </GlassPanel>
         <View style={styles.footerStack}>
           <HoystButton
-            icon={<Share2 color={theme.text} size={18} strokeWidth={2.3} />}
+            icon={
+              <Share2
+                color={theme.onBrightAccent}
+                size={18}
+                strokeWidth={2.3}
+              />
+            }
             label="Share Invite"
             onPress={() => {
               shareInvite().catch(() => undefined);

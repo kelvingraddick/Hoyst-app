@@ -190,7 +190,9 @@ function DashboardQuickAction({
             backgroundColor: emphasized
               ? `${theme.accent}22`
               : theme.surfaceHigh,
-            borderColor: emphasized ? `${theme.accent}77` : theme.borderStrong,
+            borderColor: emphasized
+              ? `${theme.accentForeground}77`
+              : theme.borderStrong,
           },
         ]}>
         <View style={styles.dashboardQuickIcon}>{icon}</View>
@@ -329,11 +331,21 @@ function DetailProgressPanel({
           const isMissed = day.state === 'missed';
           const isToday = day.state === 'today';
           const progressCellStateStyle = isDone
-            ? styles.progressCellDone
+            ? {
+                backgroundColor: `${theme.success}14`,
+                borderColor: `${theme.successForeground}55`,
+              }
             : isMissed
-            ? styles.progressCellMissed
+            ? {
+                backgroundColor: `${theme.danger}14`,
+                borderColor: `${theme.dangerForeground}55`,
+              }
             : isToday
-            ? styles.progressCellToday
+            ? {
+                backgroundColor: `${theme.accentSecondary}16`,
+                borderColor: `${theme.accentSecondaryForeground}80`,
+                borderStyle: 'dashed' as const,
+              }
             : undefined;
           const progressCellThemeStyle = progressCellStateStyle
             ? undefined
@@ -350,11 +362,11 @@ function DetailProgressPanel({
               <HoystText
                 style={{
                   color: isDone
-                    ? theme.success
+                    ? theme.successForeground
                     : isMissed
-                    ? theme.danger
+                    ? theme.dangerForeground
                     : isToday
-                    ? theme.accentSecondary
+                    ? theme.accentSecondaryForeground
                     : theme.textMuted,
                 }}
                 variant="bodyStrong">
@@ -401,8 +413,14 @@ function DeleteCircleConfirmModal({
         <View style={styles.modalOverlay}>
           <GlassPanel style={styles.modalPanel}>
             <View style={styles.modalHeader}>
-              <Trash2 color={theme.danger} size={22} strokeWidth={2.3} />
-              <HoystText style={{color: theme.danger}} variant="title">
+              <Trash2
+                color={theme.dangerForeground}
+                size={22}
+                strokeWidth={2.3}
+              />
+              <HoystText
+                style={{color: theme.dangerForeground}}
+                variant="title">
                 Delete circle
               </HoystText>
             </View>
@@ -434,14 +452,18 @@ function DeleteCircleConfirmModal({
               />
               <HoystButton
                 backgroundColor={`${theme.danger}24`}
-                borderColor={`${theme.danger}66`}
+                borderColor={`${theme.dangerForeground}66`}
                 disabled={!canConfirm || isDeleting}
                 icon={
-                  <Trash2 color={theme.danger} size={18} strokeWidth={2.3} />
+                  <Trash2
+                    color={theme.dangerForeground}
+                    size={18}
+                    strokeWidth={2.3}
+                  />
                 }
                 label={isDeleting ? 'Deleting...' : 'Delete Circle'}
                 onPress={onConfirm}
-                textColor={theme.danger}
+                textColor={theme.dangerForeground}
                 variant="outline"
               />
             </View>
@@ -605,12 +627,12 @@ export function CircleDetailScreen({
     (detail.viewerRole === 'owner' || detail.viewerRole === 'admin');
   const progressTone =
     detail.completionRate >= 85
-      ? theme.success
+      ? theme.successForeground
       : detail.completionRate >= 70
-      ? theme.accentSecondary
+      ? theme.accentSecondaryForeground
       : detail.completionRate >= 50
-      ? theme.warning
-      : theme.danger;
+      ? theme.warningForeground
+      : theme.dangerForeground;
   const statusLabel =
     detail.state === 'done' ? 'Done' : `${detail.completionRate}%`;
   const detailStatusPill = getDetailStatusPill(detail);
@@ -784,11 +806,17 @@ export function CircleDetailScreen({
             />
             <View style={styles.streakRow}>
               {showFlameIcon ? (
-                <Flame color={theme.warning} size={15} strokeWidth={2.4} />
+                <Flame
+                  color={theme.warningForeground}
+                  size={15}
+                  strokeWidth={2.4}
+                />
               ) : null}
               <HoystText
                 style={{
-                  color: showFlameIcon ? theme.warning : theme.success,
+                  color: showFlameIcon
+                    ? theme.warningForeground
+                    : theme.successForeground,
                 }}
                 variant="bodyStrong">
                 {detail.streakLabel}
@@ -913,9 +941,13 @@ export function CircleDetailScreen({
             {canRemoveTodayCheckIn ? (
               <DashboardUtilityAction
                 icon={
-                  <Trash2 color={theme.danger} size={17} strokeWidth={2.2} />
+                  <Trash2
+                    color={theme.dangerForeground}
+                    size={17}
+                    strokeWidth={2.2}
+                  />
                 }
-                labelColor={theme.danger}
+                labelColor={theme.dangerForeground}
                 label={isRemovingTapIn ? 'Removing...' : removeActionLabel}
                 onPress={
                   isRemovingTapIn ? undefined : confirmRemoveTodayCheckIn
@@ -931,9 +963,9 @@ export function CircleDetailScreen({
                   <BellRing
                     color={
                       poked
-                        ? theme.success
+                        ? theme.successForeground
                         : needsTapInMembers.length > 0
-                        ? theme.accentSecondary
+                        ? theme.accentSecondaryForeground
                         : theme.text
                     }
                     size={18}
@@ -975,9 +1007,7 @@ export function CircleDetailScreen({
                     .finally(() => setIsPoking(false));
                 }}
                 supportingText={
-                  needsTapInMembers.length > 0
-                    ? needsTapInCopy
-                    : 'Warm nudge'
+                  needsTapInMembers.length > 0 ? needsTapInCopy : 'Warm nudge'
                 }
               />
               {canInvite ? (
@@ -1010,7 +1040,7 @@ export function CircleDetailScreen({
                     <Settings2
                       color={
                         isOwnerToolsExpanded
-                          ? theme.accentSecondary
+                          ? theme.accentSecondaryForeground
                           : theme.text
                       }
                       size={16}
@@ -1089,13 +1119,13 @@ export function CircleDetailScreen({
                     <DashboardUtilityAction
                       icon={
                         <Trash2
-                          color={theme.danger}
+                          color={theme.dangerForeground}
                           size={17}
                           strokeWidth={2.2}
                         />
                       }
                       label="Delete Circle"
-                      labelColor={theme.danger}
+                      labelColor={theme.dangerForeground}
                       onPress={openDeleteCircleConfirm}
                       showChevron={false}
                       supportingText="Permanent"
@@ -1488,19 +1518,6 @@ const styles = StyleSheet.create({
     borderWidth: 1.25,
     flex: 1,
     justifyContent: 'center',
-  },
-  progressCellDone: {
-    backgroundColor: 'rgba(68,216,92,0.14)',
-    borderColor: 'rgba(68,216,92,0.34)',
-  },
-  progressCellMissed: {
-    backgroundColor: 'rgba(255,110,132,0.14)',
-    borderColor: 'rgba(255,110,132,0.32)',
-  },
-  progressCellToday: {
-    backgroundColor: 'rgba(139,92,246,0.16)',
-    borderColor: 'rgba(186,158,255,0.5)',
-    borderStyle: 'dashed',
   },
   activitySection: {
     gap: 12,

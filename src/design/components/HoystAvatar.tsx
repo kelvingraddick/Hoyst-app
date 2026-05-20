@@ -33,11 +33,11 @@ export function HoystAvatar({
   const shouldUseBrandRing = useBrandRing ?? tone === 'green';
   const ringColor =
     tone === 'green'
-      ? theme.success
+      ? theme.successForeground
       : tone === 'purple'
-      ? theme.accent
+      ? theme.accentForeground
       : tone === 'muted'
-      ? 'rgba(255,255,255,0.14)'
+      ? theme.borderStrong
       : undefined;
 
   return (
@@ -45,7 +45,10 @@ export function HoystAvatar({
       {shouldUseBrandRing ? (
         <Image
           source={getBrandRing()}
-          style={[styles.brandRing, {height: brandRingSize, width: brandRingSize}]}
+          style={[
+            styles.brandRing,
+            {height: brandRingSize, width: brandRingSize},
+          ]}
         />
       ) : (
         <GradientRing flatColor={ringColor} size={size} strokeWidth={6} />

@@ -43,10 +43,10 @@ export function ActivityFeedCard({
               <HoystText
                 style={
                   item.tone === 'success'
-                    ? {color: theme.success}
+                    ? {color: theme.successForeground}
                     : item.tone === 'pending'
-                    ? {color: theme.accentSecondary}
-                    : {color: theme.warning}
+                    ? {color: theme.accentSecondaryForeground}
+                    : {color: theme.warningForeground}
                 }>
                 {item.message}
               </HoystText>

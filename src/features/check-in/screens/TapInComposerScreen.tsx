@@ -52,11 +52,7 @@ function ComposerPrimaryAction({
       style={({pressed}) => [
         styles.composerPrimaryPressable,
         {
-          opacity: disabled
-            ? 0.42
-            : pressed
-              ? actionMotion.pressedOpacity
-              : 1,
+          opacity: disabled ? 0.42 : pressed ? actionMotion.pressedOpacity : 1,
           shadowColor: theme.actionShadowColor,
           shadowOpacity: theme.actionShadowOpacity,
           transform: [
@@ -96,7 +92,7 @@ function ComposerUtilityAction({
 }: ComposerUtilityActionProps): React.JSX.Element {
   const theme = useHoystTheme();
   const isSkip = tone === 'skip';
-  const labelColor = isSkip ? theme.warning : theme.textSubtle;
+  const labelColor = isSkip ? theme.warningForeground : theme.textSubtle;
 
   return (
     <Pressable
@@ -106,11 +102,7 @@ function ComposerUtilityAction({
       style={({pressed}) => [
         styles.composerUtilityPressable,
         {
-          opacity: disabled
-            ? 0.42
-            : pressed
-              ? actionMotion.pressedOpacity
-              : 1,
+          opacity: disabled ? 0.42 : pressed ? actionMotion.pressedOpacity : 1,
           transform: [
             {scale: pressed && !disabled ? actionMotion.pressedScale : 1},
           ],
@@ -121,7 +113,7 @@ function ComposerUtilityAction({
           styles.composerUtilityFill,
           {
             backgroundColor: isSkip ? theme.surfaceSoft : 'transparent',
-            borderColor: isSkip ? theme.warning : theme.border,
+            borderColor: isSkip ? theme.warningForeground : theme.border,
           },
         ]}>
         <HoystText
@@ -357,7 +349,7 @@ export function TapInComposerScreen({
           <HoystText tone="muted" variant="label">
             Today's Circle
           </HoystText>
-          <HoystText style={{color: theme.success}} variant="caption">
+          <HoystText style={{color: theme.successForeground}} variant="caption">
             {detail.streakDays ?? 0}d streak
           </HoystText>
         </View>
@@ -395,14 +387,18 @@ export function TapInComposerScreen({
             </View>
             <View style={styles.actionStack}>
               <HoystButton
-                borderColor={theme.danger}
+                borderColor={theme.dangerForeground}
                 disabled={isRemovingTapIn}
                 icon={
-                  <Trash2 color={theme.danger} size={18} strokeWidth={2.3} />
+                  <Trash2
+                    color={theme.dangerForeground}
+                    size={18}
+                    strokeWidth={2.3}
+                  />
                 }
                 label={isRemovingTapIn ? 'Removing...' : removeActionLabel}
                 onPress={confirmRemoveTapIn}
-                textColor={theme.danger}
+                textColor={theme.dangerForeground}
                 variant="outline"
               />
               <Pressable onPress={resetAndClose} style={styles.textAction}>
@@ -473,7 +469,10 @@ export function TapInComposerScreen({
                           variant="button">
                           Take Photo
                         </HoystText>
-                        <HoystText numberOfLines={1} tone="muted" variant="caption">
+                        <HoystText
+                          numberOfLines={1}
+                          tone="muted"
+                          variant="caption">
                           Open camera
                         </HoystText>
                       </View>
@@ -512,7 +511,10 @@ export function TapInComposerScreen({
                           variant="button">
                           Library
                         </HoystText>
-                        <HoystText numberOfLines={1} tone="muted" variant="caption">
+                        <HoystText
+                          numberOfLines={1}
+                          tone="muted"
+                          variant="caption">
                           Choose saved
                         </HoystText>
                       </View>
@@ -587,7 +589,7 @@ export function TapInComposerScreen({
                     ? undefined
                     : () => {
                         handleConfirm().catch(() => undefined);
-                    }
+                      }
                 }
               />
               {canSkip ? (

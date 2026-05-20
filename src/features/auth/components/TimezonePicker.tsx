@@ -39,7 +39,9 @@ function TimezoneOptionCard({
   option: TimezonePickerOption;
 }) {
   const theme = useHoystTheme();
-  const accentColor = option.isDetected ? theme.success : theme.accentTertiary;
+  const accentColor = option.isDetected
+    ? theme.successForeground
+    : theme.accentTertiaryForeground;
 
   return (
     <Pressable
@@ -93,7 +95,7 @@ function TimezoneOptionCard({
             },
           ]}>
           {isSelected ? (
-            <Check color={theme.background} size={16} strokeWidth={3} />
+            <Check color={theme.onBrightAccent} size={16} strokeWidth={3} />
           ) : null}
         </View>
       </View>
@@ -161,7 +163,11 @@ export function TimezonePicker({
                 borderColor: theme.border,
               },
             ]}>
-            <Globe2 color={theme.accentSecondary} size={20} strokeWidth={2.3} />
+            <Globe2
+              color={theme.accentSecondaryForeground}
+              size={20}
+              strokeWidth={2.3}
+            />
           </View>
           <View style={styles.timezoneCopy}>
             <HoystText numberOfLines={1} variant="bodyStrong">
@@ -211,7 +217,7 @@ export function TimezonePicker({
                     },
                   ]}>
                   <Globe2
-                    color={theme.accentSecondary}
+                    color={theme.accentSecondaryForeground}
                     size={19}
                     strokeWidth={2.3}
                   />

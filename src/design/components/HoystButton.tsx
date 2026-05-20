@@ -53,19 +53,19 @@ export function HoystButton({
           elevation: actionShadow.elevation,
         }
       : variant === 'ghost'
-        ? {
-            backgroundColor: 'transparent',
-            borderColor: borderColor ?? 'transparent',
-          }
-        : variant === 'outline'
-          ? {
-              backgroundColor: 'transparent',
-              borderColor: borderColor ?? theme.borderStrong,
-            }
-          : {
-              backgroundColor: 'transparent',
-              borderColor: borderColor ?? 'transparent',
-            };
+      ? {
+          backgroundColor: 'transparent',
+          borderColor: borderColor ?? 'transparent',
+        }
+      : variant === 'outline'
+      ? {
+          backgroundColor: 'transparent',
+          borderColor: borderColor ?? theme.borderStrong,
+        }
+      : {
+          backgroundColor: 'transparent',
+          borderColor: borderColor ?? 'transparent',
+        };
 
   return (
     <Pressable
@@ -76,11 +76,7 @@ export function HoystButton({
         styles.base,
         backgroundStyle,
         {
-          opacity: disabled
-            ? 0.42
-            : pressed
-              ? actionMotion.pressedOpacity
-              : 1,
+          opacity: disabled ? 0.42 : pressed ? actionMotion.pressedOpacity : 1,
           transform: [
             {scale: pressed && !disabled ? actionMotion.pressedScale : 1},
           ],
@@ -93,7 +89,9 @@ export function HoystButton({
           style={styles.fill}>
           <View style={styles.content}>
             {renderedIcon}
-            <HoystText style={{color: textColor ?? theme.text}} variant="button">
+            <HoystText
+              style={{color: textColor ?? theme.onBrightAccent}}
+              variant="button">
               {label}
             </HoystText>
           </View>
@@ -105,11 +103,11 @@ export function HoystButton({
             variant === 'primary'
               ? {backgroundColor: backgroundColor ?? theme.actionSurface}
               : variant === 'ghost'
-                ? [
-                    styles.ghostFill,
-                    backgroundColor ? {backgroundColor} : undefined,
-                  ]
-                : {backgroundColor: backgroundColor ?? theme.surfaceSoft},
+              ? [
+                  styles.ghostFill,
+                  backgroundColor ? {backgroundColor} : undefined,
+                ]
+              : {backgroundColor: backgroundColor ?? theme.surfaceSoft},
           ]}>
           <View style={styles.content}>
             {renderedIcon}
@@ -118,10 +116,10 @@ export function HoystButton({
                 variant === 'primary'
                   ? {color: textColor ?? theme.actionForeground}
                   : variant === 'outline'
-                    ? textColor
-                      ? {color: textColor}
-                      : undefined
-                    : {color: textColor ?? theme.text}
+                  ? textColor
+                    ? {color: textColor}
+                    : undefined
+                  : {color: textColor ?? theme.text}
               }
               variant="button">
               {label}

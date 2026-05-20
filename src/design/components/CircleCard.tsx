@@ -3,6 +3,7 @@ import {StyleSheet, View} from 'react-native';
 
 import {GlassPanel} from './GlassPanel';
 import {HoystText} from './HoystText';
+import {useHoystTheme} from '../theme/useHoystTheme';
 
 type CircleCardProps = {
   title: string;
@@ -19,6 +20,8 @@ export function CircleCard({
   statusLabel,
   progress,
 }: CircleCardProps): React.JSX.Element {
+  const theme = useHoystTheme();
+
   return (
     <GlassPanel>
       <View style={styles.header}>
@@ -30,8 +33,16 @@ export function CircleCard({
           {statusLabel}
         </HoystText>
       </View>
-      <View style={styles.track}>
-        <View style={[styles.fill, {width: `${Math.max(6, progress * 100)}%`}]} />
+      <View style={[styles.track, {backgroundColor: theme.surfaceHigh}]}>
+        <View
+          style={[
+            styles.fill,
+            {
+              backgroundColor: theme.successForeground,
+              width: `${Math.max(6, progress * 100)}%`,
+            },
+          ]}
+        />
       </View>
       <HoystText tone="muted" variant="caption">
         {progressLabel}
@@ -51,13 +62,11 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   track: {
-    backgroundColor: 'rgba(255,255,255,0.08)',
     borderRadius: 999,
     height: 10,
     overflow: 'hidden',
   },
   fill: {
-    backgroundColor: '#3BAF4A',
     borderRadius: 999,
     height: '100%',
   },

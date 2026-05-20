@@ -61,10 +61,10 @@ function ExploreCircleCard({
   const seatsOpen = circle.maxSize - circle.memberCount;
   const completionTone =
     circle.completionRate >= 85
-      ? theme.success
+      ? theme.successForeground
       : circle.completionRate >= 75
-      ? theme.accentSecondary
-      : theme.warning;
+      ? theme.accentSecondaryForeground
+      : theme.warningForeground;
 
   return (
     <Pressable
@@ -77,7 +77,9 @@ function ExploreCircleCard({
               label={circle.category.toUpperCase()}
               tone={getCategoryTone(circle.category)}
             />
-            <HoystText style={{color: theme.warning}} variant="caption">
+            <HoystText
+              style={{color: theme.warningForeground}}
+              variant="caption">
               {circle.streakLabel}
             </HoystText>
           </View>

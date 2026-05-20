@@ -105,17 +105,19 @@ export function SignInScreen({navigation, route}: Props): React.JSX.Element {
     email: {
       backgroundColor: 'rgba(255,138,61,0.13)',
       borderColor: 'rgba(255,138,61,0.44)',
-      foregroundColor: theme.accentWarm,
+      foregroundColor: theme.accentWarmForeground,
     },
     google: {
       backgroundColor: 'rgba(66,133,244,0.12)',
-      borderColor: 'rgba(66,133,244,0.42)',
-      foregroundColor: '#4285F4',
+      borderColor: theme.isDark
+        ? 'rgba(66,133,244,0.42)'
+        : 'rgba(26,95,199,0.45)',
+      foregroundColor: theme.isDark ? '#4285F4' : '#1A5FC7',
     },
     phone: {
       backgroundColor: 'rgba(68,216,92,0.12)',
       borderColor: 'rgba(68,216,92,0.42)',
-      foregroundColor: theme.success,
+      foregroundColor: theme.successForeground,
     },
   };
 

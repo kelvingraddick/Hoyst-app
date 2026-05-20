@@ -31,12 +31,12 @@ export function HoystText({
     tone === 'muted'
       ? theme.textMuted
       : tone === 'success'
-        ? theme.success
-        : tone === 'warning'
-          ? theme.warning
-          : tone === 'danger'
-            ? theme.danger
-            : theme.text;
+      ? theme.successForeground
+      : tone === 'warning'
+      ? theme.warningForeground
+      : tone === 'danger'
+      ? theme.dangerForeground
+      : theme.text;
 
   return (
     <Text

@@ -49,61 +49,61 @@ export function TodayCircleCard({
   const completionRate = card.completionRate ?? card.progressPercent;
   const progressTone =
     completionRate >= 85
-      ? theme.success
+      ? theme.successForeground
       : completionRate >= 75
-        ? theme.accentSecondary
-        : theme.warning;
+      ? theme.accentSecondaryForeground
+      : theme.warningForeground;
   const statusLabel = isPendingMembership
     ? 'Pending'
     : card.viewerTodayStatus === 'skip'
-      ? 'Skipped'
-      : !card.viewerHasCheckedIn
-        ? 'Needs You'
-        : card.remainingCheckIns > 0
-          ? 'Pending'
-          : 'Complete';
+    ? 'Skipped'
+    : !card.viewerHasCheckedIn
+    ? 'Needs You'
+    : card.remainingCheckIns > 0
+    ? 'Pending'
+    : 'Complete';
   const statusTone: React.ComponentProps<typeof HoystChip>['tone'] =
     statusLabel === 'Complete'
       ? 'green'
       : statusLabel === 'Needs You'
-        ? 'orange'
-        : statusLabel === 'Skipped'
-          ? 'orange'
-          : 'purple';
+      ? 'orange'
+      : statusLabel === 'Skipped'
+      ? 'orange'
+      : 'purple';
   const fallbackContextLabel = isPendingMembership
     ? 'Pending approval before Tap In unlocks.'
     : !card.viewerHasCheckedIn
     ? 'Needs your Tap In'
     : card.remainingCheckIns > 0
-      ? `${card.remainingCheckIns} pending today`
-      : 'Daily Tap In complete';
+    ? `${card.remainingCheckIns} pending today`
+    : 'Daily Tap In complete';
   const contextLabel = card.matchCopy ?? fallbackContextLabel;
   const statsLabel = isPendingMembership
     ? 'Awaiting approval'
     : card.viewerTodayStatus === 'skip'
-      ? 'Grace skip used today'
+    ? 'Grace skip used today'
     : card.remainingCheckIns > 0
-      ? `${card.remainingCheckIns} pending today`
-      : `${completionRate}% tapped in`;
+    ? `${card.remainingCheckIns} pending today`
+    : `${completionRate}% tapped in`;
   const actionVariant = isPendingMembership
     ? 'view'
     : !card.viewerHasCheckedIn
     ? 'check_in'
     : card.remainingCheckIns > 0
-      ? 'poke'
-      : canShareInvite
-        ? 'share'
-        : 'view';
+    ? 'poke'
+    : canShareInvite
+    ? 'share'
+    : 'view';
   const actionLabel =
     actionVariant === 'check_in'
       ? 'Tap In'
       : actionVariant === 'poke'
-        ? isPoked
-          ? 'Poked'
-          : `Poke ${card.remainingCheckIns}`
-        : actionVariant === 'share'
-          ? 'Share'
-          : 'View';
+      ? isPoked
+        ? 'Poked'
+        : `Poke ${card.remainingCheckIns}`
+      : actionVariant === 'share'
+      ? 'Share'
+      : 'View';
 
   return (
     <Pressable
@@ -119,7 +119,9 @@ export function TodayCircleCard({
               label={card.category.toUpperCase()}
               tone={getCategoryTone(card.category)}
             />
-            <HoystText style={{color: theme.warning}} variant="caption">
+            <HoystText
+              style={{color: theme.warningForeground}}
+              variant="caption">
               {card.streakLabel}
             </HoystText>
           </View>
@@ -174,7 +176,10 @@ export function TodayCircleCard({
               </View>
             ))}
             {card.members.length > 3 ? (
-              <HoystText style={styles.moreCount} tone="muted" variant="caption">
+              <HoystText
+                style={styles.moreCount}
+                tone="muted"
+                variant="caption">
                 +{card.members.length - 3}
               </HoystText>
             ) : null}

@@ -156,18 +156,18 @@ function LoggedOutBenefitRow({
       ? {
           backgroundColor: 'rgba(68,216,92,0.12)',
           borderColor: 'rgba(68,216,92,0.34)',
-          color: theme.success,
+          color: theme.successForeground,
         }
       : tone === 'orange'
       ? {
           backgroundColor: 'rgba(255,138,61,0.12)',
           borderColor: 'rgba(255,138,61,0.34)',
-          color: theme.warning,
+          color: theme.warningForeground,
         }
       : {
           backgroundColor: 'rgba(139,92,246,0.13)',
           borderColor: 'rgba(139,92,246,0.36)',
-          color: theme.accentSecondary,
+          color: theme.accentSecondaryForeground,
         };
 
   return (
@@ -199,15 +199,15 @@ function getSettingsIconColor(
   tone: SettingsIconTone,
 ) {
   if (tone === 'green') {
-    return theme.success;
+    return theme.successForeground;
   }
 
   if (tone === 'orange') {
-    return theme.accentWarm;
+    return theme.accentWarmForeground;
   }
 
   if (tone === 'danger') {
-    return theme.danger;
+    return theme.dangerForeground;
   }
 
   if (tone === 'neutral') {
@@ -215,10 +215,10 @@ function getSettingsIconColor(
   }
 
   if (tone === 'purple') {
-    return theme.accentSecondary;
+    return theme.accentSecondaryForeground;
   }
 
-  return theme.accentTertiary;
+  return theme.accentTertiaryForeground;
 }
 
 function getSettingsIconBackgroundColor(
@@ -364,7 +364,7 @@ function SettingsSwitch({
       onValueChange={onValueChange}
       trackColor={{
         false: theme.borderStrong,
-        true: theme.success,
+        true: theme.successForeground,
       }}
       thumbColor={theme.backgroundElevated}
       value={value}
@@ -395,7 +395,7 @@ function AppearancePreferenceModal({
         <GlassPanel style={styles.modalPanel}>
           <View style={styles.modalHeader}>
             <MoonStar
-              color={theme.accentSecondary}
+              color={theme.accentSecondaryForeground}
               size={22}
               strokeWidth={2.3}
             />
@@ -416,10 +416,10 @@ function AppearancePreferenceModal({
                     styles.appearanceOption,
                     {
                       backgroundColor: isSelected
-                        ? `${theme.accentSecondary}1f`
+                        ? `${theme.accentSecondaryForeground}1f`
                         : theme.surfaceSoft,
                       borderColor: isSelected
-                        ? theme.accentSecondary
+                        ? theme.accentSecondaryForeground
                         : theme.borderStrong,
                     },
                   ]}>
@@ -434,16 +434,16 @@ function AppearancePreferenceModal({
                       styles.appearanceCheck,
                       {
                         backgroundColor: isSelected
-                          ? theme.accentSecondary
+                          ? theme.accentSecondaryForeground
                           : theme.surfaceHigh,
                         borderColor: isSelected
-                          ? theme.accentSecondary
+                          ? theme.accentSecondaryForeground
                           : theme.borderStrong,
                       },
                     ]}>
                     {isSelected ? (
                       <Check
-                        color={theme.background}
+                        color={theme.onBrightAccent}
                         size={15}
                         strokeWidth={3}
                       />
@@ -493,8 +493,14 @@ function DeleteAccountConfirmModal({
         <View style={styles.modalOverlay}>
           <GlassPanel style={styles.modalPanel}>
             <View style={styles.modalHeader}>
-              <Trash2 color={theme.danger} size={22} strokeWidth={2.3} />
-              <HoystText style={{color: theme.danger}} variant="title">
+              <Trash2
+                color={theme.dangerForeground}
+                size={22}
+                strokeWidth={2.3}
+              />
+              <HoystText
+                style={{color: theme.dangerForeground}}
+                variant="title">
                 Delete account
               </HoystText>
             </View>
@@ -526,14 +532,18 @@ function DeleteAccountConfirmModal({
               />
               <HoystButton
                 backgroundColor={`${theme.danger}24`}
-                borderColor={`${theme.danger}66`}
+                borderColor={`${theme.dangerForeground}66`}
                 disabled={!canConfirm || isDeleting}
                 icon={
-                  <Trash2 color={theme.danger} size={18} strokeWidth={2.3} />
+                  <Trash2
+                    color={theme.dangerForeground}
+                    size={18}
+                    strokeWidth={2.3}
+                  />
                 }
                 label={isDeleting ? 'Deleting...' : 'Delete account'}
                 onPress={onConfirm}
-                textColor={theme.danger}
+                textColor={theme.dangerForeground}
                 variant="outline"
               />
             </View>
@@ -816,7 +826,7 @@ export function ProfileScreen({navigation}: Props): React.JSX.Element {
           <SettingsRow
             detail="Exit the Hoyst shell and return to auth."
             icon={LogOut}
-            iconColor={theme.danger}
+            iconColor={theme.dangerForeground}
             iconTone="danger"
             onPress={() => {
               signOutOfHoyst()
@@ -964,7 +974,7 @@ export function ProfileScreen({navigation}: Props): React.JSX.Element {
           <SettingsRow
             detail="Permanently delete your account, circles, history, and uploads."
             icon={Trash2}
-            iconColor={theme.danger}
+            iconColor={theme.dangerForeground}
             iconTone="danger"
             onPress={openDeleteAccountConfirm}
             title="Delete account"

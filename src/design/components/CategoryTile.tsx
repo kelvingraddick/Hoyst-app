@@ -28,18 +28,23 @@ export function CategoryTile({
         styles.base,
         {
           backgroundColor: isSelected ? theme.surfaceHigh : theme.surfaceSoft,
-          borderColor: isSelected ? theme.accentSecondary : theme.border,
+          borderColor: isSelected
+            ? theme.accentSecondaryForeground
+            : theme.border,
           opacity: pressed ? 0.92 : 1,
         },
       ]}>
       <View style={styles.iconWrap}>
         <Icon
-          color={isSelected ? theme.accentSecondary : theme.textSubtle}
+          color={
+            isSelected ? theme.accentSecondaryForeground : theme.textSubtle
+          }
           size={18}
           strokeWidth={2.3}
         />
       </View>
-      <HoystText style={isSelected ? {color: theme.text} : {color: theme.textMuted}}>
+      <HoystText
+        style={isSelected ? {color: theme.text} : {color: theme.textMuted}}>
         {label}
       </HoystText>
     </Pressable>

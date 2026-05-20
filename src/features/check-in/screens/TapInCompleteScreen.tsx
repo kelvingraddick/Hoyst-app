@@ -406,7 +406,9 @@ export function TapInCompleteScreen({
                   backgroundColor: isSkip
                     ? `${theme.warning}24`
                     : `${theme.success}24`,
-                  borderColor: isSkip ? theme.warning : theme.success,
+                  borderColor: isSkip
+                    ? theme.warningForeground
+                    : theme.successForeground,
                 },
                 haloAnimatedStyle,
               ]}
@@ -431,13 +433,15 @@ export function TapInCompleteScreen({
                         ? `${theme.warning}14`
                         : `${theme.success}14`,
                       borderColor: isSkip
-                        ? `${theme.warning}55`
-                        : `${theme.success}55`,
+                        ? `${theme.warningForeground}55`
+                        : `${theme.successForeground}55`,
                     },
                   ]}>
                   <HoystText
                     style={{
-                      color: isSkip ? theme.warning : theme.success,
+                      color: isSkip
+                        ? theme.warningForeground
+                        : theme.successForeground,
                     }}
                     variant="caption">
                     {statusLabel}
@@ -465,7 +469,9 @@ export function TapInCompleteScreen({
                   </HoystText>
                   <HoystText style={styles.summaryTitle}>{dailyTask}</HoystText>
                 </View>
-                <HoystText style={{color: theme.success}} variant="caption">
+                <HoystText
+                  style={{color: theme.successForeground}}
+                  variant="caption">
                   {isSkip ? 'Skipped' : 'Sent'}
                 </HoystText>
               </View>
