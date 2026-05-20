@@ -6,7 +6,7 @@ exports.createInboxEvent = createInboxEvent;
 exports.notifyOwnerJoinRequest = notifyOwnerJoinRequest;
 exports.notifyOwnerNewJoin = notifyOwnerNewJoin;
 exports.notifyJoinRequestReview = notifyJoinRequestReview;
-exports.notifyPoke = notifyPoke;
+exports.notifyNudge = notifyNudge;
 exports.notifyCircleAtRisk = notifyCircleAtRisk;
 exports.getReminderEligibility = getReminderEligibility;
 const firestore_1 = require("firebase-admin/firestore");
@@ -250,18 +250,18 @@ async function notifyJoinRequestReview({ approved, circleId, circleTitle, owner,
         uid: requesterId,
     });
 }
-async function notifyPoke({ actor, circleId, circleTitle, dateKey, targetUid, }) {
+async function notifyNudge({ actor, circleId, circleTitle, dateKey, targetUid, }) {
     const notificationActor = buildActor(actor);
     const actorName = notificationActor?.displayName ?? 'Someone';
     return createInboxEvent({
         actor: notificationActor,
         body: `${actorName} nudged you in ${circleTitle}.`,
         circleId,
-        dedupeKey: `poke_${circleId}_${dateKey}_${targetUid}`,
+        dedupeKey: `nudge_${circleId}_${dateKey}_${targetUid}`,
         deeplink: { circleId, screen: 'TapInComposer', source: 'notification' },
         preferenceKey: 'circleActivity',
         title: 'Tap In nudge',
-        type: 'poke',
+        type: 'nudge',
         uid: targetUid,
     });
 }

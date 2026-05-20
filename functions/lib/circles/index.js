@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.deleteCircle = exports.updateCircle = exports.pokeCircleMembers = exports.reviewJoinRequest = exports.joinCircle = exports.createCircle = void 0;
+exports.deleteCircle = exports.updateCircle = exports.leaveCircle = exports.nudgeCircleMembers = exports.reviewJoinRequest = exports.joinCircle = exports.createCircle = void 0;
 const node_crypto_1 = require("node:crypto");
 const auth_1 = require("firebase-admin/auth");
 const firestore_1 = require("firebase-admin/firestore");
@@ -36,7 +36,10 @@ const reviewJoinRequestSchema = zod_1.z.object({
     circleId: zod_1.z.string().trim().min(1),
     requesterId: zod_1.z.string().trim().min(1),
 });
-const pokeCircleMembersSchema = zod_1.z.object({
+const nudgeCircleMembersSchema = zod_1.z.object({
+    circleId: zod_1.z.string().trim().min(1),
+});
+const leaveCircleSchema = zod_1.z.object({
     circleId: zod_1.z.string().trim().min(1),
 });
 const deleteCircleSchema = zod_1.z.object({
@@ -114,13 +117,60 @@ async function deleteCircleServerMetadata(circleId) {
     const publicIndexRef = firebase_1.db.collection('publicCircleIndex').doc(circleId);
     await Promise.all([
         publicIndexRef.delete(),
-        (0, storage_1.getStorage)()
-            .bucket()
-            .deleteFiles({
-            force: true,
-            prefix: `circles/${circleId}/`,
-        }),
+        deleteStoragePrefix(`circles/${circleId}/`),
     ]);
+}
+function getParentDocument(ref, label) {
+    const parent = ref.parent.parent;
+    if (!parent) {
+        throw new Error(`Could not resolve parent document for ${label}.`);
+    }
+    return parent;
+}
+function getCircleRefFromCheckInRef(ref) {
+    const dayRef = getParentDocument(ref, 'check-in');
+    const circleRef = getParentDocument(dayRef, 'check-in day');
+    return { circleRef, dayRef };
+}
+function isCoveredCheckInStatus(value) {
+    return value === 'done' || value === 'skip';
+}
+function withoutPublicMemberPreview(members, uid) {
+    return Array.isArray(members)
+        ? members.filter(memberPreview => !(typeof memberPreview === 'object' &&
+            memberPreview !== null &&
+            'uid' in memberPreview &&
+            memberPreview.uid === uid))
+        : undefined;
+}
+async function deleteStoragePrefix(prefix) {
+    await (0, storage_1.getStorage)().bucket().deleteFiles({
+        force: true,
+        prefix,
+    });
+}
+async function deleteCircleCheckInsForMember(circleId, uid) {
+    const checkInSnapshots = await firebase_1.db
+        .collectionGroup('checkIns')
+        .where('uid', '==', uid)
+        .get();
+    for (const checkInSnapshot of checkInSnapshots.docs) {
+        const { circleRef, dayRef } = getCircleRefFromCheckInRef(checkInSnapshot.ref);
+        if (circleRef.id !== circleId) {
+            continue;
+        }
+        const status = checkInSnapshot.data().status;
+        const batch = firebase_1.db.batch();
+        batch.delete(checkInSnapshot.ref);
+        if (isCoveredCheckInStatus(status)) {
+            batch.set(dayRef, {
+                checkInCount: firestore_1.FieldValue.increment(-1),
+                updatedAt: firestore_1.FieldValue.serverTimestamp(),
+            }, { merge: true });
+        }
+        await batch.commit();
+        await deleteStoragePrefix(`circles/${circleRef.id}/check-ins/${dayRef.id}/${uid}/`);
+    }
 }
 exports.createCircle = (0, https_1.onCall)(async (request) => {
     const { profile, uid } = await requireCompletedProfile(request.auth?.uid);
@@ -413,9 +463,9 @@ exports.reviewJoinRequest = (0, https_1.onCall)({ secrets: [notifications_1.oneS
     }
     return { status: result.status };
 });
-exports.pokeCircleMembers = (0, https_1.onCall)({ secrets: [notifications_1.oneSignalRestApiKey] }, async (request) => {
+exports.nudgeCircleMembers = (0, https_1.onCall)({ secrets: [notifications_1.oneSignalRestApiKey] }, async (request) => {
     const { profile, uid } = await requireCompletedProfile(request.auth?.uid);
-    const input = pokeCircleMembersSchema.parse(request.data);
+    const input = nudgeCircleMembersSchema.parse(request.data);
     const circleRef = firebase_1.db.collection('circles').doc(input.circleId);
     const memberRef = circleRef.collection('members').doc(uid);
     const now = new Date();
@@ -445,7 +495,7 @@ exports.pokeCircleMembers = (0, https_1.onCall)({ secrets: [notifications_1.oneS
         const targetUid = asOptionalString(memberData.uid);
         return Boolean(targetUid && targetUid !== uid && !coveredUids.has(targetUid));
     });
-    await Promise.all(targets.map(memberData => (0, notifications_1.notifyPoke)({
+    await Promise.all(targets.map(memberData => (0, notifications_1.notifyNudge)({
         actor: {
             avatarUrl: profile.avatarUrl ?? null,
             displayName: profile.displayName,
@@ -457,7 +507,66 @@ exports.pokeCircleMembers = (0, https_1.onCall)({ secrets: [notifications_1.oneS
         dateKey,
         targetUid: asOptionalString(memberData.uid) ?? '',
     })));
-    return { poked: targets.length };
+    return { nudged: targets.length };
+});
+exports.leaveCircle = (0, https_1.onCall)(async (request) => {
+    const { uid } = await requireCompletedProfile(request.auth?.uid);
+    const input = leaveCircleSchema.parse(request.data);
+    const circleRef = firebase_1.db.collection('circles').doc(input.circleId);
+    const memberRef = circleRef.collection('members').doc(uid);
+    const joinRequestRef = circleRef.collection('joinRequests').doc(uid);
+    const publicIndexRef = firebase_1.db.collection('publicCircleIndex').doc(input.circleId);
+    const now = firestore_1.FieldValue.serverTimestamp();
+    const status = await firebase_1.db.runTransaction(async (transaction) => {
+        const [circleSnapshot, memberSnapshot, joinRequestSnapshot, publicIndexSnapshot,] = await Promise.all([
+            transaction.get(circleRef),
+            transaction.get(memberRef),
+            transaction.get(joinRequestRef),
+            transaction.get(publicIndexRef),
+        ]);
+        if (!circleSnapshot.exists) {
+            throw new https_1.HttpsError('not-found', 'Circle not found.');
+        }
+        const circle = circleSnapshot.data();
+        const member = memberSnapshot.data();
+        const joinRequest = joinRequestSnapshot.data();
+        if (circle?.ownerId === uid || member?.role === 'owner') {
+            throw new https_1.HttpsError('failed-precondition', 'Circle owners cannot leave their own circle yet. Delete the circle instead.');
+        }
+        const isActiveMember = member?.status === 'active';
+        const isPendingMember = member?.status === 'pending' || joinRequest?.status === 'pending';
+        const leaveStatus = isActiveMember
+            ? 'left'
+            : 'cancelled';
+        const filteredMembers = withoutPublicMemberPreview(publicIndexSnapshot.data()?.members, uid);
+        if (!isActiveMember && !isPendingMember) {
+            return 'cancelled';
+        }
+        if (memberSnapshot.exists) {
+            transaction.delete(memberRef);
+        }
+        if (joinRequestSnapshot.exists) {
+            transaction.delete(joinRequestRef);
+        }
+        if (isActiveMember) {
+            transaction.update(circleRef, {
+                memberCount: firestore_1.FieldValue.increment(-1),
+                updatedAt: now,
+            });
+        }
+        if (publicIndexSnapshot.exists) {
+            transaction.set(publicIndexRef, {
+                ...(isActiveMember
+                    ? { memberCount: firestore_1.FieldValue.increment(-1) }
+                    : {}),
+                ...(filteredMembers ? { members: filteredMembers } : {}),
+                updatedAt: now,
+            }, { merge: true });
+        }
+        return leaveStatus;
+    });
+    await deleteCircleCheckInsForMember(input.circleId, uid);
+    return { status };
 });
 exports.updateCircle = (0, https_1.onCall)(async (request) => {
     const input = updateCircleSchema.parse(request.data);

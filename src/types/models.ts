@@ -79,7 +79,7 @@ export type InboxEventType =
   | 'join_declined'
   | 'join_request'
   | 'member_joined'
-  | 'poke'
+  | 'nudge'
   | 'tap_in_final_warning'
   | 'tap_in_midday_reminder';
 

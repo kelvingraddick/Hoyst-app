@@ -60,6 +60,7 @@ import {
   updateNotificationSettings,
   type NotificationSettings,
 } from '../../settings/services/notification-settings-service';
+import {requestPushNotificationPermission} from '../../../lib/notifications';
 import {
   formatActiveCircleCountLabel,
   formatPersonalStreakLabel,
@@ -608,11 +609,32 @@ export function ProfileScreen({navigation}: Props): React.JSX.Element {
     setAppearancePreference(nextAppearance);
     setIsAppearanceModalVisible(false);
   };
-  const setServerNotificationPreference = (
+  const requestPushPermissions = async () => {
+    const granted = await requestPushNotificationPermission().catch(() => false);
+
+    if (!granted) {
+      Alert.alert(
+        'Enable push notifications',
+        'Allow Hoyst notifications in iOS Settings, then try again.',
+      );
+    }
+
+    return granted;
+  };
+  const setServerNotificationPreference = async (
     key: keyof NotificationSettings,
     value: boolean,
   ) => {
     const previousValue = notifications[key];
+
+    if (value) {
+      const granted = await requestPushPermissions();
+
+      if (!granted) {
+        setNotificationPreference(key, previousValue);
+        return;
+      }
+    }
 
     setNotificationPreference(key, value);
     updateNotificationSettings({[key]: value}).catch(() => {
@@ -893,10 +915,10 @@ export function ProfileScreen({navigation}: Props): React.JSX.Element {
             trailingKind="value"
           />
           <SettingsRow
-            detail="Coming soon"
-            disabled
+            detail="Allow Hoyst to send device alerts."
             icon={Shield}
             iconTone="green"
+            onPress={requestPushPermissions}
             title="Push permissions"
             trailing={<SettingsValue>System</SettingsValue>}
             trailingKind="value"

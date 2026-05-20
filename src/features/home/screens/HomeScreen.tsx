@@ -1,5 +1,5 @@
 import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
-import {Animated, Pressable, Share, StyleSheet, View} from 'react-native';
+import {Alert, Animated, Pressable, Share, StyleSheet, View} from 'react-native';
 import {Bell, ChevronRight, Medal} from 'lucide-react-native';
 import type {BottomTabNavigationProp} from '@react-navigation/bottom-tabs';
 import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
@@ -54,6 +54,7 @@ import type {
 import {useOnboardingStore} from '../../../store/onboarding-store';
 import {useUserProfileStore} from '../../../store/profile-store';
 import {useSessionStore} from '../../../store/session-store';
+import {nudgeCircleMembers} from '../../circles/services/circle-service';
 
 const filterLabels: Record<CircleManagementFilter, string> = {
   all: 'All',
@@ -189,9 +190,12 @@ export function HomeScreen(): React.JSX.Element {
   );
   const [isLoadingHomeData, setIsLoadingHomeData] = useState(false);
   const [hasHomeDataError, setHasHomeDataError] = useState(false);
-  const [pokedCircleIds, setPokedCircleIds] = useState<ReadonlySet<string>>(
+  const [nudgedCircleIds, setNudgedCircleIds] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
+  const [nudgingCircleIds, setNudgingCircleIds] = useState<
+    ReadonlySet<string>
+  >(() => new Set());
   const [homeGreetingState, setHomeGreetingState] =
     useState<HomeGreetingState>();
   const profile = useUserProfileStore(state => state.profile);
@@ -467,21 +471,56 @@ export function HomeScreen(): React.JSX.Element {
     }).catch(() => undefined);
   };
 
-  const pokeCircle = (circle: CircleManagementCard) => {
+  const nudgeCircle = (circle: CircleManagementCard) => {
     if (circle.remainingCheckIns <= 0) {
       openCircleDetail(circle.id);
       return;
     }
 
-    setPokedCircleIds(currentPokedCircleIds => {
-      if (currentPokedCircleIds.has(circle.id)) {
-        return currentPokedCircleIds;
-      }
+    if (nudgedCircleIds.has(circle.id) || nudgingCircleIds.has(circle.id)) {
+      return;
+    }
 
-      const nextPokedCircleIds = new Set(currentPokedCircleIds);
-      nextPokedCircleIds.add(circle.id);
-      return nextPokedCircleIds;
+    setNudgingCircleIds(currentNudgingCircleIds => {
+      const nextNudgingCircleIds = new Set(currentNudgingCircleIds);
+      nextNudgingCircleIds.add(circle.id);
+      return nextNudgingCircleIds;
     });
+
+    nudgeCircleMembers(circle.id)
+      .then(result => {
+        setNudgedCircleIds(currentNudgedCircleIds => {
+          const nextNudgedCircleIds = new Set(currentNudgedCircleIds);
+          nextNudgedCircleIds.add(circle.id);
+          return nextNudgedCircleIds;
+        });
+
+        Alert.alert(
+          'Nudge sent',
+          result.nudged > 0
+            ? `${result.nudged} member${
+                result.nudged === 1 ? '' : 's'
+              } nudged.`
+            : 'Everyone is already covered today.',
+        );
+      })
+      .catch(error => {
+        Alert.alert(
+          'Nudge failed',
+          (error as {message?: string}).message ?? 'Could not send a nudge.',
+        );
+      })
+      .finally(() => {
+        setNudgingCircleIds(currentNudgingCircleIds => {
+          if (!currentNudgingCircleIds.has(circle.id)) {
+            return currentNudgingCircleIds;
+          }
+
+          const nextNudgingCircleIds = new Set(currentNudgingCircleIds);
+          nextNudgingCircleIds.delete(circle.id);
+          return nextNudgingCircleIds;
+        });
+      });
   };
 
   const handleCircleAction = (circle: CircleManagementCard) => {
@@ -501,7 +540,7 @@ export function HomeScreen(): React.JSX.Element {
     }
 
     if (circle.remainingCheckIns > 0) {
-      pokeCircle(circle);
+      nudgeCircle(circle);
       return;
     }
 
@@ -763,7 +802,8 @@ export function HomeScreen(): React.JSX.Element {
       {displayedCircles.map(circle => (
         <TodayCircleCard
           card={circle}
-          isPoked={pokedCircleIds.has(circle.id)}
+          isNudged={nudgedCircleIds.has(circle.id)}
+          isNudging={nudgingCircleIds.has(circle.id)}
           key={circle.id}
           onActionPress={() => handleCircleAction(circle)}
           onCardPress={() => openCircleDetail(circle.id)}

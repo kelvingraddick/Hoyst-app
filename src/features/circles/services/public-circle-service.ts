@@ -2,7 +2,11 @@ import type {FirebaseFirestoreTypes} from '@react-native-firebase/firestore';
 
 import {firebaseFirestore} from '../../../lib/firebase/firestore';
 import {collections} from '../../../types/firestore';
-import type {CircleMemberStatus, ExploreCircle} from '../../../types/models';
+import type {
+  CircleMemberState,
+  CircleMemberStatus,
+  ExploreCircle,
+} from '../../../types/models';
 
 type PlainData = Record<string, unknown>;
 
@@ -27,9 +31,30 @@ function getInitials(name: string) {
   return initials || 'HO';
 }
 
+function normalizePublicMemberState(
+  value: unknown,
+  fallback: CircleMemberState,
+): CircleMemberState {
+  if (
+    value === 'done' ||
+    value === 'pending' ||
+    value === 'missed' ||
+    value === 'skipped'
+  ) {
+    return value;
+  }
+
+  if (value === 'skip') {
+    return 'skipped';
+  }
+
+  return fallback;
+}
+
 function mapPublicMemberPreview(
   value: unknown,
   index: number,
+  fallbackState: CircleMemberState = 'pending',
 ): CircleMemberStatus | undefined {
   const data = value && typeof value === 'object' ? (value as PlainData) : undefined;
 
@@ -52,7 +77,10 @@ function mapPublicMemberPreview(
     id,
     initials: getInitials(name),
     name,
-    state: 'done',
+    state: normalizePublicMemberState(
+      data.state ?? data.todayStatus ?? data.checkInStatus,
+      fallbackState,
+    ),
   };
 }
 
@@ -201,7 +229,13 @@ export function mapPublicCircleIndexSnapshot(
 
   const members = Array.isArray(data.members)
     ? data.members
-        .map(mapPublicMemberPreview)
+        .map((member, index) =>
+          mapPublicMemberPreview(
+            member,
+            index,
+            asNumber(data.completionRate, 0) > 0 ? 'done' : 'pending',
+          ),
+        )
         .filter((member): member is CircleMemberStatus => Boolean(member))
     : [];
 

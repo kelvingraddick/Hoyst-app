@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.healthcheck = exports.getProfileSummary = exports.generateHomeGreeting = exports.updateCircle = exports.reviewJoinRequest = exports.pokeCircleMembers = exports.joinCircle = exports.deleteCircle = exports.createCircle = exports.submitTapIn = exports.removeTapIn = exports.deleteAccount = exports.completeProfile = exports.updateNotificationSettings = exports.sendMiddayTapInReminders = exports.sendFinalTapInWarnings = exports.notificationModules = exports.markInboxEventRead = exports.emailModules = void 0;
+exports.healthcheck = exports.getProfileSummary = exports.generateHomeGreeting = exports.updateCircle = exports.reviewJoinRequest = exports.nudgeCircleMembers = exports.leaveCircle = exports.joinCircle = exports.deleteCircle = exports.createCircle = exports.submitTapIn = exports.removeTapIn = exports.deleteAccount = exports.completeProfile = exports.updateNotificationSettings = exports.sendMiddayTapInReminders = exports.sendFinalTapInWarnings = exports.notificationModules = exports.markInboxEventRead = exports.emailModules = void 0;
 const https_1 = require("firebase-functions/v2/https");
 var emails_1 = require("./emails");
 Object.defineProperty(exports, "emailModules", { enumerable: true, get: function () { return emails_1.emailModules; } });
@@ -20,7 +20,8 @@ var circles_1 = require("./circles");
 Object.defineProperty(exports, "createCircle", { enumerable: true, get: function () { return circles_1.createCircle; } });
 Object.defineProperty(exports, "deleteCircle", { enumerable: true, get: function () { return circles_1.deleteCircle; } });
 Object.defineProperty(exports, "joinCircle", { enumerable: true, get: function () { return circles_1.joinCircle; } });
-Object.defineProperty(exports, "pokeCircleMembers", { enumerable: true, get: function () { return circles_1.pokeCircleMembers; } });
+Object.defineProperty(exports, "leaveCircle", { enumerable: true, get: function () { return circles_1.leaveCircle; } });
+Object.defineProperty(exports, "nudgeCircleMembers", { enumerable: true, get: function () { return circles_1.nudgeCircleMembers; } });
 Object.defineProperty(exports, "reviewJoinRequest", { enumerable: true, get: function () { return circles_1.reviewJoinRequest; } });
 Object.defineProperty(exports, "updateCircle", { enumerable: true, get: function () { return circles_1.updateCircle; } });
 var homeGreeting_1 = require("./homeGreeting");

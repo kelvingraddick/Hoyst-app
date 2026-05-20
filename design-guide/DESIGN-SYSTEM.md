@@ -252,7 +252,7 @@ Tabs:
 - progress  
 - member status  
 - chat  
-- poke actions  
+- nudge actions
 
 ### Insights
 - activity heatmap  
@@ -340,4 +340,3 @@ Notes for developers (Codex)
 	•	Prefer composition over duplication
 	•	Keep UI consistent across screens
 	•	Prioritize shared code over platform-specific unless required
-

@@ -118,7 +118,7 @@
 - `circles/{circleId}/invites/{inviteId}` and `joinRequests/{uid}`: invite and approval flows.
 - `circles/{circleId}/days/{dateKey}` and `checkIns/{uid}`: canonical day model and one-check-in-per-user-per-day enforcement.
 - `messages/{messageId}` and `reactions/{uid}`: text chat and emoji reactions.
-- `pokeEvents/{eventId}`: immutable poke audit trail.
+- `nudgeEvents/{eventId}`: immutable nudge audit trail.
 - Storage:
   - `users/{uid}/avatar/{fileId}`
   - `circles/{circleId}/check-ins/{dateKey}/{uid}/{fileId}`
@@ -130,8 +130,8 @@
 - Invite generation, redemption, request-to-join, approval, rejection.
 - Role-sensitive membership actions for owner/admin/member flows.
 - Check-in validation, grace evaluation, streak updates, and day-summary updates.
-- Poke validation and server-side rate limiting.
-- Notification fan-out for messages, mentions, pokes, reminders, day summaries, weekly summaries.
+- Nudge validation and server-side rate limiting.
+- Notification fan-out for messages, mentions, nudges, reminders, day summaries, weekly summaries.
 - Resend email delivery and public-circle index syncing.
 - Repair utilities for derived streak and summary state.
 
@@ -152,9 +152,9 @@
 - Auth and profile: email/Apple/Google auth, immutable handle onboarding, timezone capture, avatar upload.
 - Circles and discovery: create circle, public Explore, invite/request-to-join flows, owner/admin/member controls.
 - Home and check-ins: Home hero Tap-In CTA, today summary, note/photo check-ins, grace and streak surfaces.
-- Chat, pokes, inbox, notifications: text chat, reactions, mentions, pokes, inbox center, push and email hooks.
+- Chat, nudges, inbox, notifications: text chat, reactions, mentions, nudges, inbox center, push and email hooks.
 - Polish and release prep: accessibility, dark/light QA, crash monitoring, release assets, app icon pipeline.
-- Core acceptance tests: duplicate handle rejection, join-mode flows, timezone cutoffs, rolling 7-day grace use, duplicate check-in rejection, poke cooldowns, message mentions, photo upload access control, dark/light brand rendering.
+- Core acceptance tests: duplicate handle rejection, join-mode flows, timezone cutoffs, rolling 7-day grace use, duplicate check-in rejection, nudge cooldowns, message mentions, photo upload access control, dark/light brand rendering.
 
 ## 9. Local/dev setup checklist
 - Bootstrap the app as `Hoyst` with `com.wavelinkllc.hoyst`.

@@ -88,10 +88,16 @@ export async function reviewJoinRequest({
   return result.data as {status: 'approved' | 'declined'};
 }
 
-export async function pokeCircleMembers(circleId: string) {
-  const callable = firebaseFunctions().httpsCallable('pokeCircleMembers');
+export async function nudgeCircleMembers(circleId: string) {
+  const callable = firebaseFunctions().httpsCallable('nudgeCircleMembers');
   const result = await callable({circleId});
-  return result.data as {poked: number};
+  return result.data as {nudged: number};
+}
+
+export async function leaveCircle(circleId: string) {
+  const callable = firebaseFunctions().httpsCallable('leaveCircle');
+  const result = await callable({circleId});
+  return result.data as {status: 'left' | 'cancelled'};
 }
 
 export async function deleteCircle(circleId: string) {

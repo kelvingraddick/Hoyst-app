@@ -18,6 +18,7 @@ import {
   Clock3,
   Flame,
   Globe2,
+  LogOut,
   Lock,
   Pencil,
   Send,
@@ -49,7 +50,8 @@ import {getCircleDetail} from '../mockData';
 import {
   deleteCircle,
   joinCircle,
-  pokeCircleMembers,
+  leaveCircle,
+  nudgeCircleMembers,
   reviewJoinRequest,
 } from '../services/circle-service';
 import {subscribeToPublicCircle} from '../services/public-circle-service';
@@ -488,8 +490,8 @@ export function CircleDetailScreen({
 
     navigation.replace('MainTabs', {screen: returnTab});
   }, [navigation, returnTab]);
-  const [poked, setPoked] = useState(false);
-  const [isPoking, setIsPoking] = useState(false);
+  const [nudged, setNudged] = useState(false);
+  const [isNudging, setIsNudging] = useState(false);
   const [reviewingRequestId, setReviewingRequestId] = useState<string>();
   const [joinRequested, setJoinRequested] = useState(false);
   const [isJoining, setIsJoining] = useState(false);
@@ -498,6 +500,8 @@ export function CircleDetailScreen({
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [isDeletingCircle, setIsDeletingCircle] = useState(false);
   const [isOwnerToolsExpanded, setIsOwnerToolsExpanded] = useState(false);
+  const [isMemberToolsExpanded, setIsMemberToolsExpanded] = useState(false);
+  const [isLeavingCircle, setIsLeavingCircle] = useState(false);
   const [publicCircle, setPublicCircle] = useState<CircleSummary | undefined>();
   const [memberCircle, setMemberCircle] = useState<
     CircleDetailModel | undefined
@@ -655,6 +659,14 @@ export function CircleDetailScreen({
     (detail.viewerTodayStatus === 'done' ||
       detail.viewerTodayStatus === 'skip');
   const canDeleteCircle = isMemberCircle && detail.viewerRole === 'owner';
+  const canLeaveCircle =
+    Boolean(detail.viewerRole) && detail.viewerRole !== 'owner';
+  const leaveActionLabel = isPendingMembership
+    ? 'Cancel Request'
+    : 'Leave Circle';
+  const leaveActionSupportingText = isPendingMembership
+    ? 'Pending approval'
+    : 'Remove membership';
   const canConfirmDeleteCircle =
     deleteConfirmText.trim().toLowerCase() ===
     detail.title.trim().toLowerCase();
@@ -742,6 +754,57 @@ export function CircleDetailScreen({
     } finally {
       setIsDeletingCircle(false);
     }
+  };
+
+  const handleLeaveCircle = async () => {
+    if (!canLeaveCircle || isLeavingCircle) {
+      return;
+    }
+
+    setIsLeavingCircle(true);
+    try {
+      const result = await leaveCircle(detail.id);
+      setIsMemberToolsExpanded(false);
+
+      if (navigation.canGoBack()) {
+        navigation.goBack();
+      } else {
+        navigation.replace('MainTabs', {screen: 'Home'});
+      }
+
+      Alert.alert(
+        result.status === 'cancelled' ? 'Request cancelled' : 'Left circle',
+        result.status === 'cancelled'
+          ? `Your request to join ${detail.title} has been cancelled.`
+          : `You left ${detail.title}.`,
+      );
+    } catch (error) {
+      const message =
+        (error as {message?: string}).message ??
+        'Could not update your membership. Try again.';
+      Alert.alert('Leave failed', message);
+    } finally {
+      setIsLeavingCircle(false);
+    }
+  };
+
+  const confirmLeaveCircle = () => {
+    Alert.alert(
+      isPendingMembership ? 'Cancel request?' : 'Leave circle?',
+      isPendingMembership
+        ? 'The circle owner will no longer see your request.'
+        : 'Your membership, Tap Ins, and check-in media for this circle will be removed.',
+      [
+        {style: 'cancel', text: 'Keep'},
+        {
+          onPress: () => {
+            handleLeaveCircle().catch(() => undefined);
+          },
+          style: 'destructive',
+          text: isPendingMembership ? 'Cancel Request' : 'Leave',
+        },
+      ],
+    );
   };
 
   const handleReviewJoinRequest = async (
@@ -958,11 +1021,11 @@ export function CircleDetailScreen({
             ) : null}
             <View style={styles.quickActionRow}>
               <DashboardQuickAction
-                emphasized={needsTapInMembers.length > 0 && !poked}
+                emphasized={needsTapInMembers.length > 0 && !nudged}
                 icon={
                   <BellRing
                     color={
-                      poked
+                      nudged
                         ? theme.successForeground
                         : needsTapInMembers.length > 0
                         ? theme.accentSecondaryForeground
@@ -973,38 +1036,38 @@ export function CircleDetailScreen({
                   />
                 }
                 label={
-                  isPoking
-                    ? 'Poking...'
-                    : poked
-                    ? 'Poked'
-                    : `Poke ${needsTapInMembers.length || 'All'}`
+                  isNudging
+                    ? 'Nudging...'
+                    : nudged
+                    ? 'Nudged'
+                    : `Nudge ${needsTapInMembers.length || 'All'}`
                 }
                 onPress={() => {
-                  if (isPoking) {
+                  if (isNudging) {
                     return;
                   }
 
-                  setIsPoking(true);
-                  pokeCircleMembers(detail.id)
+                  setIsNudging(true);
+                  nudgeCircleMembers(detail.id)
                     .then(result => {
-                      setPoked(true);
+                      setNudged(true);
                       Alert.alert(
-                        'Poke sent',
-                        result.poked > 0
-                          ? `${result.poked} member${
-                              result.poked === 1 ? '' : 's'
+                        'Nudge sent',
+                        result.nudged > 0
+                          ? `${result.nudged} member${
+                              result.nudged === 1 ? '' : 's'
                             } nudged.`
                           : 'Everyone is already covered today.',
                       );
                     })
                     .catch(error => {
                       Alert.alert(
-                        'Poke failed',
+                        'Nudge failed',
                         (error as {message?: string}).message ??
-                          'Could not send a poke.',
+                          'Could not send a nudge.',
                       );
                     })
-                    .finally(() => setIsPoking(false));
+                    .finally(() => setIsNudging(false));
                 }}
                 supportingText={
                   needsTapInMembers.length > 0 ? needsTapInCopy : 'Warm nudge'
@@ -1133,6 +1196,55 @@ export function CircleDetailScreen({
                   </View>
                 ) : null}
               </View>
+            ) : canLeaveCircle ? (
+              <View style={styles.circleToolsGroup}>
+                <HoystText
+                  style={styles.circleToolsHeader}
+                  tone="muted"
+                  variant="label">
+                  Member tools
+                </HoystText>
+                <DashboardUtilityAction
+                  icon={
+                    <Settings2
+                      color={
+                        isMemberToolsExpanded
+                          ? theme.accentSecondaryForeground
+                          : theme.text
+                      }
+                      size={16}
+                      strokeWidth={2.2}
+                    />
+                  }
+                  label={isMemberToolsExpanded ? 'Hide tools' : 'Manage'}
+                  onPress={() =>
+                    setIsMemberToolsExpanded(currentValue => !currentValue)
+                  }
+                  supportingText="Member settings"
+                />
+                {isMemberToolsExpanded ? (
+                  <View style={styles.ownerToolsActions}>
+                    <DashboardUtilityAction
+                      icon={
+                        <LogOut
+                          color={theme.dangerForeground}
+                          size={17}
+                          strokeWidth={2.2}
+                        />
+                      }
+                      label={
+                        isLeavingCircle ? 'Working...' : leaveActionLabel
+                      }
+                      labelColor={theme.dangerForeground}
+                      onPress={
+                        isLeavingCircle ? undefined : confirmLeaveCircle
+                      }
+                      showChevron={false}
+                      supportingText={leaveActionSupportingText}
+                    />
+                  </View>
+                ) : null}
+              </View>
             ) : (
               <DashboardUtilityAction
                 icon={
@@ -1146,6 +1258,69 @@ export function CircleDetailScreen({
                 }
               />
             )}
+          </View>
+        ) : isPendingMembership && canLeaveCircle ? (
+          <View style={styles.dashboardGrid}>
+            <View style={styles.publicActionStack}>
+              <HoystButton
+                icon={
+                  <UserPlus
+                    color={theme.actionForeground}
+                    size={18}
+                    strokeWidth={2.4}
+                  />
+                }
+                disabled
+                label="Pending approval"
+              />
+              <HoystText tone="muted" variant="caption">
+                The circle owner will review your request.
+              </HoystText>
+            </View>
+            <View style={styles.circleToolsGroup}>
+              <HoystText
+                style={styles.circleToolsHeader}
+                tone="muted"
+                variant="label">
+                Member tools
+              </HoystText>
+              <DashboardUtilityAction
+                icon={
+                  <Settings2
+                    color={
+                      isMemberToolsExpanded
+                        ? theme.accentSecondaryForeground
+                        : theme.text
+                    }
+                    size={16}
+                    strokeWidth={2.2}
+                  />
+                }
+                label={isMemberToolsExpanded ? 'Hide tools' : 'Manage'}
+                onPress={() =>
+                  setIsMemberToolsExpanded(currentValue => !currentValue)
+                }
+                supportingText="Member settings"
+              />
+              {isMemberToolsExpanded ? (
+                <View style={styles.ownerToolsActions}>
+                  <DashboardUtilityAction
+                    icon={
+                      <LogOut
+                        color={theme.dangerForeground}
+                        size={17}
+                        strokeWidth={2.2}
+                      />
+                    }
+                    label={isLeavingCircle ? 'Working...' : leaveActionLabel}
+                    labelColor={theme.dangerForeground}
+                    onPress={isLeavingCircle ? undefined : confirmLeaveCircle}
+                    showChevron={false}
+                    supportingText={leaveActionSupportingText}
+                  />
+                </View>
+              ) : null}
+            </View>
           </View>
         ) : (
           <View style={styles.publicActionStack}>

@@ -1,5 +1,5 @@
 import React, {useEffect, useState} from 'react';
-import {Pressable, Share, StyleSheet, View} from 'react-native';
+import {Alert, Pressable, Share, StyleSheet, View} from 'react-native';
 import {
   ArrowRight,
   BellRing,
@@ -32,6 +32,7 @@ import {
   subscribeToHomeData,
   type HomeData,
 } from '../../home/services/home-data-service';
+import {nudgeCircleMembers} from '../../circles/services/circle-service';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'TapInPicker'>;
 
@@ -80,6 +81,12 @@ export function TapInPickerScreen({navigation}: Props): React.JSX.Element {
   );
   const [isLoadingHomeData, setIsLoadingHomeData] = useState(false);
   const [hasHomeDataError, setHasHomeDataError] = useState(false);
+  const [nudgedCircleIds, setNudgedCircleIds] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
+  const [nudgingCircleIds, setNudgingCircleIds] = useState<
+    ReadonlySet<string>
+  >(() => new Set());
   const profile = useUserProfileStore(state => state.profile);
   const status = useSessionStore(state => state.status);
   const user = useSessionStore(state => state.user);
@@ -159,6 +166,58 @@ export function TapInPickerScreen({navigation}: Props): React.JSX.Element {
       message: `Join ${circle.title} on Hoyst: ${circle.inviteUrl}`,
       url: circle.inviteUrl,
     }).catch(() => undefined);
+  };
+
+  const nudgeCircle = (circle: CircleManagementCard) => {
+    if (circle.remainingCheckIns <= 0) {
+      openCircle(circle.id);
+      return;
+    }
+
+    if (nudgedCircleIds.has(circle.id) || nudgingCircleIds.has(circle.id)) {
+      return;
+    }
+
+    setNudgingCircleIds(currentNudgingCircleIds => {
+      const nextNudgingCircleIds = new Set(currentNudgingCircleIds);
+      nextNudgingCircleIds.add(circle.id);
+      return nextNudgingCircleIds;
+    });
+
+    nudgeCircleMembers(circle.id)
+      .then(result => {
+        setNudgedCircleIds(currentNudgedCircleIds => {
+          const nextNudgedCircleIds = new Set(currentNudgedCircleIds);
+          nextNudgedCircleIds.add(circle.id);
+          return nextNudgedCircleIds;
+        });
+
+        Alert.alert(
+          'Nudge sent',
+          result.nudged > 0
+            ? `${result.nudged} member${
+                result.nudged === 1 ? '' : 's'
+              } nudged.`
+            : 'Everyone is already covered today.',
+        );
+      })
+      .catch(error => {
+        Alert.alert(
+          'Nudge failed',
+          (error as {message?: string}).message ?? 'Could not send a nudge.',
+        );
+      })
+      .finally(() => {
+        setNudgingCircleIds(currentNudgingCircleIds => {
+          if (!currentNudgingCircleIds.has(circle.id)) {
+            return currentNudgingCircleIds;
+          }
+
+          const nextNudgingCircleIds = new Set(currentNudgingCircleIds);
+          nextNudgingCircleIds.delete(circle.id);
+          return nextNudgingCircleIds;
+        });
+      });
   };
 
   return (
@@ -436,24 +495,30 @@ export function TapInPickerScreen({navigation}: Props): React.JSX.Element {
 
         {secondaryCircles.length > 0 ? (
           secondaryCircles.map(circle => {
-            const canPoke = circle.remainingCheckIns > 0;
-            const canShare = !canPoke && Boolean(circle.inviteUrl);
-            const actionLabel = canPoke
-              ? `Poke ${circle.remainingCheckIns}`
+            const canNudge = circle.remainingCheckIns > 0;
+            const canShare = !canNudge && Boolean(circle.inviteUrl);
+            const isNudged = nudgedCircleIds.has(circle.id);
+            const isNudging = nudgingCircleIds.has(circle.id);
+            const actionLabel = canNudge
+              ? isNudging
+                ? 'Nudging...'
+                : isNudged
+                ? 'Nudged'
+                : `Nudge ${circle.remainingCheckIns}`
               : canShare
               ? 'Share'
               : 'View';
-            const statusTone = canPoke
+            const statusTone = canNudge
               ? theme.accentSecondaryForeground
               : circle.viewerTodayStatus === 'skip'
               ? theme.warningForeground
               : theme.successForeground;
-            const statusLabel = canPoke
+            const statusLabel = canNudge
               ? `${circle.remainingCheckIns} pending today`
               : circle.viewerTodayStatus === 'skip'
               ? 'Grace skip used today'
               : 'Daily Tap In complete';
-            const ActionIcon = canPoke
+            const ActionIcon = canNudge
               ? BellRing
               : canShare
               ? Send
@@ -480,9 +545,19 @@ export function TapInPickerScreen({navigation}: Props): React.JSX.Element {
                     </HoystText>
                   </View>
                   <Pressable
-                    onPress={() =>
-                      canShare ? shareInvite(circle) : openCircle(circle.id)
-                    }
+                    onPress={() => {
+                      if (canNudge) {
+                        nudgeCircle(circle);
+                        return;
+                      }
+
+                      if (canShare) {
+                        shareInvite(circle);
+                        return;
+                      }
+
+                      openCircle(circle.id);
+                    }}
                     style={({pressed}) => [
                       styles.secondaryAction,
                       {

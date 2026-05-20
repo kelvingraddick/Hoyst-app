@@ -22,10 +22,9 @@ import {exploreCircles} from '../../circles/mockData';
 import {subscribeToPublicCircles} from '../../circles/services/public-circle-service';
 
 type Props = BottomTabScreenProps<AppTabsParamList, 'Explore'>;
+type ChipTone = NonNullable<React.ComponentProps<typeof HoystChip>['tone']>;
 
-function getCategoryTone(
-  category: string,
-): React.ComponentProps<typeof HoystChip>['tone'] {
+function getCategoryTone(category: string): ChipTone {
   if (category === 'Fitness') {
     return 'green';
   }
@@ -38,7 +37,44 @@ function getCategoryTone(
     return 'purple';
   }
 
+  if (category === 'Wellness') {
+    return 'blue';
+  }
+
   return 'neutral';
+}
+
+function getFilterBorderColor(
+  theme: ReturnType<typeof useHoystTheme>,
+  tone: ChipTone,
+) {
+  if (tone === 'green') {
+    return theme.successForeground;
+  }
+
+  if (tone === 'orange') {
+    return theme.warningForeground;
+  }
+
+  if (tone === 'purple') {
+    return theme.accentSecondaryForeground;
+  }
+
+  if (tone === 'blue') {
+    return theme.accentTertiaryForeground;
+  }
+
+  return theme.borderStrong;
+}
+
+function getFilterChipStateStyle(
+  theme: ReturnType<typeof useHoystTheme>,
+  tone: ChipTone,
+  isActive: boolean,
+) {
+  return {
+    borderColor: isActive ? getFilterBorderColor(theme, tone) : 'transparent',
+  };
 }
 
 function getSearchableText(circle: ExploreCircle) {
@@ -162,7 +198,12 @@ function ExploreCircleCard({
                   borderColor: theme.borderStrong,
                 },
               ]}>
-              <HoystText style={styles.previewButtonLabel} variant="button">
+              <HoystText
+                style={[
+                  styles.previewButtonLabel,
+                  {color: theme.actionForeground},
+                ]}
+                variant="button">
                 Preview
               </HoystText>
             </View>
@@ -242,7 +283,7 @@ export function ExploreScreen({navigation}: Props): React.JSX.Element {
       <View style={styles.chips}>
         {categories.map(category => {
           const isActive = activeCategory === category;
-          const chipTone = isActive ? getCategoryTone(category) : 'neutral';
+          const chipTone = getCategoryTone(category);
 
           return (
             <Pressable
@@ -259,11 +300,7 @@ export function ExploreScreen({navigation}: Props): React.JSX.Element {
                 label={category}
                 style={[
                   styles.filterChip,
-                  isActive
-                    ? {
-                        borderColor: theme.borderStrong,
-                      }
-                    : undefined,
+                  getFilterChipStateStyle(theme, chipTone, isActive),
                 ]}
                 tone={chipTone}
               />
@@ -423,7 +460,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
   },
   previewButtonLabel: {
-    color: '#FFFFFF',
     fontSize: 14,
     lineHeight: 18,
   },

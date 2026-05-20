@@ -11,7 +11,8 @@ import {HoystText} from './HoystText';
 
 type TodayCircleCardProps = {
   card: CircleManagementCard;
-  isPoked?: boolean;
+  isNudged?: boolean;
+  isNudging?: boolean;
   onActionPress: () => void;
   onCardPress: () => void;
 };
@@ -36,7 +37,8 @@ function getCategoryTone(
 
 export function TodayCircleCard({
   card,
-  isPoked = false,
+  isNudged = false,
+  isNudging = false,
   onActionPress,
   onCardPress,
 }: TodayCircleCardProps): React.JSX.Element {
@@ -90,17 +92,19 @@ export function TodayCircleCard({
     : !card.viewerHasCheckedIn
     ? 'check_in'
     : card.remainingCheckIns > 0
-    ? 'poke'
+    ? 'nudge'
     : canShareInvite
     ? 'share'
     : 'view';
   const actionLabel =
     actionVariant === 'check_in'
       ? 'Tap In'
-      : actionVariant === 'poke'
-      ? isPoked
-        ? 'Poked'
-        : `Poke ${card.remainingCheckIns}`
+      : actionVariant === 'nudge'
+      ? isNudging
+        ? 'Nudging...'
+        : isNudged
+        ? 'Nudged'
+        : `Nudge ${card.remainingCheckIns}`
       : actionVariant === 'share'
       ? 'Share'
       : 'View';
@@ -204,7 +208,12 @@ export function TodayCircleCard({
                   borderColor: theme.borderStrong,
                 },
               ]}>
-              <HoystText style={styles.previewButtonLabel} variant="button">
+              <HoystText
+                style={[
+                  styles.previewButtonLabel,
+                  {color: theme.actionForeground},
+                ]}
+                variant="button">
                 {actionLabel}
               </HoystText>
             </View>
@@ -294,7 +303,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
   },
   previewButtonLabel: {
-    color: '#FFFFFF',
     fontSize: 14,
     lineHeight: 18,
   },

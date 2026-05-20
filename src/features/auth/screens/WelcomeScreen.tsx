@@ -1238,7 +1238,7 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
             />
             <PreviewRow
               accent="purple"
-              detail="Only important updates like requests, joins, pokes, and circles at risk."
+              detail="Only important updates like requests, joins, nudges, and circles at risk."
               icon={Shield}
               label="Circle alerts"
             />
@@ -1464,7 +1464,7 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
       : isCircleSetupStep
       ? () => {
           setFirstCircleSkipped(true);
-          setCurrentStep('auth');
+          setCurrentStep('notifications');
         }
       : undefined;
   return (

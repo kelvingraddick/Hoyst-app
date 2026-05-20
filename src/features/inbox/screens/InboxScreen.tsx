@@ -59,8 +59,8 @@ function getActionLabel(event: InboxEvent) {
   if (event.type === 'join_request') {
     return 'Review';
   }
-  if (event.type === 'poke') {
-    return 'Poke';
+  if (event.type === 'nudge') {
+    return 'Nudge';
   }
   if (event.type === 'circle_at_risk') {
     return 'At risk';
@@ -165,7 +165,7 @@ export function InboxScreen({navigation}: Props): React.JSX.Element {
           <View style={styles.emptyState}>
             <HoystText variant="title">No updates yet</HoystText>
             <HoystText tone="muted">
-              Circle requests, reminders, pokes, and streak alerts will show up
+              Circle requests, reminders, nudges, and streak alerts will show up
               here.
             </HoystText>
           </View>

@@ -14,7 +14,8 @@ export {
   createCircle,
   deleteCircle,
   joinCircle,
-  pokeCircleMembers,
+  leaveCircle,
+  nudgeCircleMembers,
   reviewJoinRequest,
   updateCircle,
 } from './circles';

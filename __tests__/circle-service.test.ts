@@ -26,7 +26,8 @@ jest.mock('../src/lib/firebase/app', () => ({
 
 import {
   deleteCircle,
-  pokeCircleMembers,
+  leaveCircle,
+  nudgeCircleMembers,
   reviewJoinRequest,
   updateCircle,
 } from '../src/features/circles/services/circle-service';
@@ -45,6 +46,15 @@ describe('circle service', () => {
     await expect(deleteCircle('circle-1')).resolves.toEqual({deleted: true});
 
     expect(mockHttpsCallable).toHaveBeenCalledWith('deleteCircle');
+    expect(mockCallable).toHaveBeenCalledWith({circleId: 'circle-1'});
+  });
+
+  it('calls the leaveCircle callable with the circle id', async () => {
+    mockCallable.mockResolvedValueOnce({data: {status: 'left'}});
+
+    await expect(leaveCircle('circle-1')).resolves.toEqual({status: 'left'});
+
+    expect(mockHttpsCallable).toHaveBeenCalledWith('leaveCircle');
     expect(mockCallable).toHaveBeenCalledWith({circleId: 'circle-1'});
   });
 
@@ -110,12 +120,12 @@ describe('circle service', () => {
     });
   });
 
-  it('calls the pokeCircleMembers callable with the circle id', async () => {
-    mockCallable.mockResolvedValueOnce({data: {poked: 2}});
+  it('calls the nudgeCircleMembers callable with the circle id', async () => {
+    mockCallable.mockResolvedValueOnce({data: {nudged: 2}});
 
-    await expect(pokeCircleMembers('circle-1')).resolves.toEqual({poked: 2});
+    await expect(nudgeCircleMembers('circle-1')).resolves.toEqual({nudged: 2});
 
-    expect(mockHttpsCallable).toHaveBeenCalledWith('pokeCircleMembers');
+    expect(mockHttpsCallable).toHaveBeenCalledWith('nudgeCircleMembers');
     expect(mockCallable).toHaveBeenCalledWith({circleId: 'circle-1'});
   });
 });

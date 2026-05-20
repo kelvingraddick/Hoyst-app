@@ -1,7 +1,11 @@
 import {randomUUID} from 'node:crypto';
 
 import {getAuth} from 'firebase-admin/auth';
-import {FieldValue, type DocumentData} from 'firebase-admin/firestore';
+import {
+  FieldValue,
+  type DocumentData,
+  type DocumentReference,
+} from 'firebase-admin/firestore';
 import {getStorage} from 'firebase-admin/storage';
 import {HttpsError, onCall} from 'firebase-functions/v2/https';
 import {z} from 'zod';
@@ -11,7 +15,7 @@ import {
   notifyJoinRequestReview,
   notifyOwnerJoinRequest,
   notifyOwnerNewJoin,
-  notifyPoke,
+  notifyNudge,
   oneSignalRestApiKey,
 } from '../notifications';
 
@@ -42,7 +46,10 @@ const reviewJoinRequestSchema = z.object({
   circleId: z.string().trim().min(1),
   requesterId: z.string().trim().min(1),
 });
-const pokeCircleMembersSchema = z.object({
+const nudgeCircleMembersSchema = z.object({
+  circleId: z.string().trim().min(1),
+});
+const leaveCircleSchema = z.object({
   circleId: z.string().trim().min(1),
 });
 const deleteCircleSchema = z.object({
@@ -135,13 +142,91 @@ async function deleteCircleServerMetadata(circleId: string) {
 
   await Promise.all([
     publicIndexRef.delete(),
-    getStorage()
-      .bucket()
-      .deleteFiles({
-        force: true,
-        prefix: `circles/${circleId}/`,
-      }),
+    deleteStoragePrefix(`circles/${circleId}/`),
   ]);
+}
+
+function getParentDocument(
+  ref: DocumentReference<DocumentData>,
+  label: string,
+) {
+  const parent = ref.parent.parent;
+
+  if (!parent) {
+    throw new Error(`Could not resolve parent document for ${label}.`);
+  }
+
+  return parent;
+}
+
+function getCircleRefFromCheckInRef(ref: DocumentReference<DocumentData>) {
+  const dayRef = getParentDocument(ref, 'check-in');
+  const circleRef = getParentDocument(dayRef, 'check-in day');
+
+  return {circleRef, dayRef};
+}
+
+function isCoveredCheckInStatus(value: unknown) {
+  return value === 'done' || value === 'skip';
+}
+
+function withoutPublicMemberPreview(members: unknown, uid: string) {
+  return Array.isArray(members)
+    ? members.filter(
+        memberPreview =>
+          !(
+            typeof memberPreview === 'object' &&
+            memberPreview !== null &&
+            'uid' in memberPreview &&
+            memberPreview.uid === uid
+          ),
+      )
+    : undefined;
+}
+
+async function deleteStoragePrefix(prefix: string) {
+  await getStorage().bucket().deleteFiles({
+    force: true,
+    prefix,
+  });
+}
+
+async function deleteCircleCheckInsForMember(circleId: string, uid: string) {
+  const checkInSnapshots = await db
+    .collectionGroup('checkIns')
+    .where('uid', '==', uid)
+    .get();
+
+  for (const checkInSnapshot of checkInSnapshots.docs) {
+    const {circleRef, dayRef} = getCircleRefFromCheckInRef(
+      checkInSnapshot.ref,
+    );
+
+    if (circleRef.id !== circleId) {
+      continue;
+    }
+
+    const status = checkInSnapshot.data().status;
+    const batch = db.batch();
+
+    batch.delete(checkInSnapshot.ref);
+
+    if (isCoveredCheckInStatus(status)) {
+      batch.set(
+        dayRef,
+        {
+          checkInCount: FieldValue.increment(-1),
+          updatedAt: FieldValue.serverTimestamp(),
+        },
+        {merge: true},
+      );
+    }
+
+    await batch.commit();
+    await deleteStoragePrefix(
+      `circles/${circleRef.id}/check-ins/${dayRef.id}/${uid}/`,
+    );
+  }
 }
 
 export const createCircle = onCall(async request => {
@@ -541,11 +626,11 @@ export const reviewJoinRequest = onCall(
   },
 );
 
-export const pokeCircleMembers = onCall(
+export const nudgeCircleMembers = onCall(
   {secrets: [oneSignalRestApiKey]},
   async request => {
     const {profile, uid} = await requireCompletedProfile(request.auth?.uid);
-    const input = pokeCircleMembersSchema.parse(request.data);
+    const input = nudgeCircleMembersSchema.parse(request.data);
     const circleRef = db.collection('circles').doc(input.circleId);
     const memberRef = circleRef.collection('members').doc(uid);
     const now = new Date();
@@ -590,7 +675,7 @@ export const pokeCircleMembers = onCall(
 
     await Promise.all(
       targets.map(memberData =>
-        notifyPoke({
+        notifyNudge({
           actor: {
             avatarUrl: profile.avatarUrl ?? null,
             displayName: profile.displayName,
@@ -605,9 +690,98 @@ export const pokeCircleMembers = onCall(
       ),
     );
 
-    return {poked: targets.length};
+    return {nudged: targets.length};
   },
 );
+
+export const leaveCircle = onCall(async request => {
+  const {uid} = await requireCompletedProfile(request.auth?.uid);
+  const input = leaveCircleSchema.parse(request.data);
+  const circleRef = db.collection('circles').doc(input.circleId);
+  const memberRef = circleRef.collection('members').doc(uid);
+  const joinRequestRef = circleRef.collection('joinRequests').doc(uid);
+  const publicIndexRef = db.collection('publicCircleIndex').doc(input.circleId);
+  const now = FieldValue.serverTimestamp();
+
+  const status = await db.runTransaction(async transaction => {
+    const [
+      circleSnapshot,
+      memberSnapshot,
+      joinRequestSnapshot,
+      publicIndexSnapshot,
+    ] = await Promise.all([
+      transaction.get(circleRef),
+      transaction.get(memberRef),
+      transaction.get(joinRequestRef),
+      transaction.get(publicIndexRef),
+    ]);
+
+    if (!circleSnapshot.exists) {
+      throw new HttpsError('not-found', 'Circle not found.');
+    }
+
+    const circle = circleSnapshot.data();
+    const member = memberSnapshot.data();
+    const joinRequest = joinRequestSnapshot.data();
+
+    if (circle?.ownerId === uid || member?.role === 'owner') {
+      throw new HttpsError(
+        'failed-precondition',
+        'Circle owners cannot leave their own circle yet. Delete the circle instead.',
+      );
+    }
+
+    const isActiveMember = member?.status === 'active';
+    const isPendingMember =
+      member?.status === 'pending' || joinRequest?.status === 'pending';
+    const leaveStatus = isActiveMember
+      ? ('left' as const)
+      : ('cancelled' as const);
+    const filteredMembers = withoutPublicMemberPreview(
+      publicIndexSnapshot.data()?.members,
+      uid,
+    );
+
+    if (!isActiveMember && !isPendingMember) {
+      return 'cancelled' as const;
+    }
+
+    if (memberSnapshot.exists) {
+      transaction.delete(memberRef);
+    }
+
+    if (joinRequestSnapshot.exists) {
+      transaction.delete(joinRequestRef);
+    }
+
+    if (isActiveMember) {
+      transaction.update(circleRef, {
+        memberCount: FieldValue.increment(-1),
+        updatedAt: now,
+      });
+    }
+
+    if (publicIndexSnapshot.exists) {
+      transaction.set(
+        publicIndexRef,
+        {
+          ...(isActiveMember
+            ? {memberCount: FieldValue.increment(-1)}
+            : {}),
+          ...(filteredMembers ? {members: filteredMembers} : {}),
+          updatedAt: now,
+        },
+        {merge: true},
+      );
+    }
+
+    return leaveStatus;
+  });
+
+  await deleteCircleCheckInsForMember(input.circleId, uid);
+
+  return {status};
+});
 
 export const updateCircle = onCall(async request => {
   const input = updateCircleSchema.parse(request.data);

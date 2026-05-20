@@ -8,7 +8,7 @@ import {HoystText} from './HoystText';
 type HoystChipProps = {
   label: string;
   style?: StyleProp<ViewStyle>;
-  tone?: 'green' | 'orange' | 'purple' | 'neutral';
+  tone?: 'blue' | 'green' | 'orange' | 'purple' | 'neutral';
 };
 
 export function HoystChip({
@@ -22,6 +22,11 @@ export function HoystChip({
       ? {
           backgroundColor: 'rgba(68,216,92,0.14)',
           color: theme.successForeground,
+        }
+      : tone === 'blue'
+      ? {
+          backgroundColor: 'rgba(104,184,232,0.14)',
+          color: theme.accentTertiaryForeground,
         }
       : tone === 'orange'
       ? {

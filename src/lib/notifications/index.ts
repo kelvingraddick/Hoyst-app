@@ -12,6 +12,7 @@ type NotificationClickEvent = {
 
 let initialized = false;
 let navigationRef: NavigationContainerRef<RootStackParamList> | undefined;
+let pushUserId: string | undefined;
 let warnedMissingAppId = false;
 
 function asString(value: unknown) {
@@ -36,7 +37,7 @@ function handleNotificationClick(event: NotificationClickEvent) {
     circleId &&
     (type === 'tap_in_midday_reminder' ||
       type === 'tap_in_final_warning' ||
-      type === 'poke')
+      type === 'nudge')
   ) {
     navigationRef.navigate('TapInComposer', {
       circleId,
@@ -93,10 +94,21 @@ export function initializePushNotifications(): void {
 
   OneSignal.initialize(appId);
   OneSignal.Notifications.addEventListener('click', handleNotificationClick);
+
+  if (pushUserId) {
+    OneSignal.login(pushUserId);
+  }
 }
 
 export async function identifyPushUser(uid: string): Promise<void> {
-  if (!initialized || !uid) {
+  if (!uid) {
+    return;
+  }
+
+  pushUserId = uid;
+  initializePushNotifications();
+
+  if (!initialized) {
     return;
   }
 
@@ -104,6 +116,8 @@ export async function identifyPushUser(uid: string): Promise<void> {
 }
 
 export async function clearPushUser(): Promise<void> {
+  pushUserId = undefined;
+
   if (!initialized) {
     return;
   }
@@ -118,5 +132,19 @@ export async function requestPushNotificationPermission(): Promise<boolean> {
     return false;
   }
 
-  return OneSignal.Notifications.requestPermission(true);
+  const existingPermission =
+    await OneSignal.Notifications.getPermissionAsync().catch(() => false);
+
+  if (existingPermission) {
+    OneSignal.User.pushSubscription.optIn();
+    return true;
+  }
+
+  const granted = await OneSignal.Notifications.requestPermission(true);
+
+  if (granted) {
+    OneSignal.User.pushSubscription.optIn();
+  }
+
+  return granted;
 }

@@ -20,7 +20,7 @@ export type NotificationType =
   | 'join_declined'
   | 'join_request'
   | 'member_joined'
-  | 'poke'
+  | 'nudge'
   | 'tap_in_final_warning'
   | 'tap_in_midday_reminder';
 
@@ -429,7 +429,7 @@ export async function notifyJoinRequestReview({
   });
 }
 
-export async function notifyPoke({
+export async function notifyNudge({
   actor,
   circleId,
   circleTitle,
@@ -449,11 +449,11 @@ export async function notifyPoke({
     actor: notificationActor,
     body: `${actorName} nudged you in ${circleTitle}.`,
     circleId,
-    dedupeKey: `poke_${circleId}_${dateKey}_${targetUid}`,
+    dedupeKey: `nudge_${circleId}_${dateKey}_${targetUid}`,
     deeplink: {circleId, screen: 'TapInComposer', source: 'notification'},
     preferenceKey: 'circleActivity',
     title: 'Tap In nudge',
-    type: 'poke',
+    type: 'nudge',
     uid: targetUid,
   });
 }

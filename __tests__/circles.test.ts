@@ -55,11 +55,40 @@ describe('public circle discovery mapping', () => {
           id: 'user-1',
           initials: 'KN',
           name: 'Kelvin North',
+          state: 'done',
         }),
       ],
       privacy: 'public',
       title: 'Maker Mornings',
     });
+  });
+
+  it('maps zero-percent public previews as still needing Tap In', () => {
+    const snapshot = {
+      data: () => ({
+        category: 'Fitness',
+        completionRate: 0,
+        dailyTask: 'Drink water',
+        memberCount: 2,
+        members: [
+          {
+            displayName: 'Ava Stone',
+            uid: 'user-2',
+          },
+        ],
+        title: 'Hydration Circle',
+      }),
+      exists: true,
+      id: 'hydration-circle',
+    };
+
+    expect(mapPublicCircleIndexSnapshot(snapshot as never)?.members).toEqual([
+      expect.objectContaining({
+        id: 'user-2',
+        initials: 'AS',
+        state: 'pending',
+      }),
+    ]);
   });
 
   it('ignores incomplete publicCircleIndex documents', () => {
