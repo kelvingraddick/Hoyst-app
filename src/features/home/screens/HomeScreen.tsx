@@ -23,6 +23,7 @@ import {
   getHomeFilterCounts,
   getHomeGreetingContext,
   getHomeGreetingFallback,
+  getHomePersonalProgressState,
   matchesHomeCircleFilter,
   shouldShowAuthenticatedHomeEmptyState,
   shouldShowHomeCreateCircleButton,
@@ -332,10 +333,11 @@ export function HomeScreen(): React.JSX.Element {
     isAuthenticatedHome && homeData.hasRealProgress
       ? `${homeData.progressPercent}%`
       : 'Start';
-  const streakLabel =
-    homeData.personalStreakDays > 0
-      ? `${homeData.personalStreakDays}-day streak`
-      : 'Start your streak';
+  const personalProgressState = getHomePersonalProgressState({
+    homeData,
+    isAuthenticatedHome,
+    isIncompleteProfile,
+  });
   const showAccountPrompt = !isAuthenticatedHome;
   const showAuthenticatedEmptyState = shouldShowAuthenticatedHomeEmptyState({
     circleCount: homeData.circles.length,
@@ -358,7 +360,7 @@ export function HomeScreen(): React.JSX.Element {
   });
 
   useEffect(() => {
-    void clearExpiredHomeGreetingCacheEntries();
+    clearExpiredHomeGreetingCacheEntries().catch(() => undefined);
   }, []);
 
   useEffect(() => {
@@ -424,7 +426,7 @@ export function HomeScreen(): React.JSX.Element {
       }
     };
 
-    void loadHomeGreeting();
+    loadHomeGreeting().catch(() => undefined);
 
     return () => {
       isActive = false;
@@ -553,6 +555,51 @@ export function HomeScreen(): React.JSX.Element {
     );
   };
 
+  const handlePersonalProgressPress = () => {
+    if (personalProgressState.action === 'auth') {
+      openAccountAuth();
+      return;
+    }
+
+    if (personalProgressState.action === 'finishProfile') {
+      setOnboardingStep('finishProfile');
+      navigateToAuthWelcome(rootNavigation);
+      return;
+    }
+
+    if (personalProgressState.action === 'chooseProgressStart') {
+      Alert.alert(
+        'Start progress',
+        'Choose how you want to make your first Tap In count.',
+        [
+          {
+            text: 'Explore circles',
+            onPress: () => navigation.navigate('Explore'),
+          },
+          {
+            text: 'Create Circle',
+            onPress: openCreateCircle,
+          },
+          {
+            style: 'cancel',
+            text: 'Cancel',
+          },
+        ],
+      );
+      return;
+    }
+
+    if (personalProgressState.action === 'shareProgress') {
+      Share.share({
+        message: "I finished today's Hoyst Tap Ins. Your move.",
+        title: 'Hoyst progress',
+      }).catch(() => undefined);
+      return;
+    }
+
+    navigation.navigate('Profile');
+  };
+
   return (
     <HoystScreen contentContainerStyle={styles.content}>
       <View style={styles.topBar}>
@@ -674,25 +721,43 @@ export function HomeScreen(): React.JSX.Element {
         </View>
       </GlassPanel>
 
-      <View
-        style={[
-          styles.streakSummary,
+      <Pressable
+        accessibilityLabel={`${personalProgressState.label}. ${personalProgressState.detail}`}
+        accessibilityRole="button"
+        onPress={handlePersonalProgressPress}
+        style={({pressed}) => [
+          styles.streakSummaryPressable,
           {
-            backgroundColor: theme.surfaceStrong,
-            borderColor: theme.border,
+            opacity: pressed ? actionMotion.pressedOpacity : 1,
+            transform: [{scale: pressed ? actionMotion.pressedScale : 1}],
           },
         ]}>
-        <View style={[styles.streakIconWrap, styles.streakIconTint]}>
-          <Medal color={theme.warningForeground} size={20} strokeWidth={2.1} />
+        <View
+          style={[
+            styles.streakSummary,
+            {
+              backgroundColor: theme.surfaceStrong,
+              borderColor: theme.border,
+            },
+          ]}>
+          <View style={[styles.streakIconWrap, styles.streakIconTint]}>
+            <Medal
+              color={theme.warningForeground}
+              size={20}
+              strokeWidth={2.1}
+            />
+          </View>
+          <View style={styles.streakCopy}>
+            <HoystText style={styles.streakEyebrow} tone="muted" variant="tiny">
+              Personal Progress
+            </HoystText>
+            <HoystText style={styles.streakValue}>
+              {personalProgressState.label}
+            </HoystText>
+          </View>
+          <ChevronRight color={theme.textSubtle} size={20} strokeWidth={2.2} />
         </View>
-        <View style={styles.streakCopy}>
-          <HoystText style={styles.streakEyebrow} tone="muted" variant="tiny">
-            Personal Progress
-          </HoystText>
-          <HoystText style={styles.streakValue}>{streakLabel}</HoystText>
-        </View>
-        <ChevronRight color={theme.textSubtle} size={20} strokeWidth={2.2} />
-      </View>
+      </Pressable>
 
       {showAccountPrompt ? (
         <GlassPanel style={styles.emptyPanel}>
@@ -945,6 +1010,11 @@ const styles = StyleSheet.create({
     gap: 12,
     minHeight: 84,
     paddingHorizontal: 16,
+  },
+  streakSummaryPressable: {
+    alignSelf: 'stretch',
+    borderRadius: radius.lg,
+    width: '100%',
   },
   streakIconWrap: {
     alignItems: 'center',

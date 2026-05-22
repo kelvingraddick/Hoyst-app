@@ -19,6 +19,9 @@ type Props = NativeStackScreenProps<RootStackParamList, 'Auth'>;
 export function AuthStackNavigator({navigation}: Props): React.JSX.Element {
   const status = useSessionStore(state => state.status);
   const currentStep = useOnboardingStore(state => state.currentStep);
+  const hasPendingProfileCompletion = useOnboardingStore(
+    state => state.hasPendingProfileCompletion,
+  );
   const hasPendingStarterCircleSetup = useOnboardingStore(
     state => state.hasPendingStarterCircleSetup,
   );
@@ -35,6 +38,7 @@ export function AuthStackNavigator({navigation}: Props): React.JSX.Element {
     if (
       !shouldDismissAuthModal({
         currentStep,
+        hasPendingProfileCompletion,
         hasPendingStarterCircleSetup,
         hasSeenOnboarding,
         status,
@@ -51,6 +55,7 @@ export function AuthStackNavigator({navigation}: Props): React.JSX.Element {
     );
   }, [
     currentStep,
+    hasPendingProfileCompletion,
     hasPendingStarterCircleSetup,
     hasSeenOnboarding,
     navigation,

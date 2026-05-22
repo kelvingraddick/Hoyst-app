@@ -34,6 +34,7 @@ export function AuthStateProvider({
   const setAuthenticatedReady = useSessionStore(
     state => state.setAuthenticatedReady,
   );
+  const setAuthenticating = useSessionStore(state => state.setAuthenticating);
   const setGuest = useSessionStore(state => state.setGuest);
   const setInitializing = useSessionStore(state => state.setInitializing);
   const setProfile = useUserProfileStore(state => state.setProfile);
@@ -57,7 +58,7 @@ export function AuthStateProvider({
 
       const sessionUser = mapAuthUser(user);
       identifyPushUser(user.uid).catch(() => undefined);
-      setInitializing();
+      setAuthenticating();
 
       unsubscribeProfile = subscribeToUserProfile(
         user.uid,
@@ -89,6 +90,7 @@ export function AuthStateProvider({
   }, [
     setAuthenticatedIncompleteProfile,
     setAuthenticatedReady,
+    setAuthenticating,
     setGuest,
     setInitializing,
     setProfile,

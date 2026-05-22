@@ -1,5 +1,6 @@
 import React from 'react';
 import {Pressable, StyleSheet, View} from 'react-native';
+import {Check} from 'lucide-react-native';
 
 import type {CircleManagementCard} from '../../types/models';
 import {useHoystTheme} from '../theme/useHoystTheme';
@@ -48,6 +49,7 @@ export function TodayCircleCard({
       (card.viewerRole === 'owner' || card.viewerRole === 'admin'),
   );
   const isPendingMembership = card.viewerMembershipStatus === 'pending';
+  const isAlreadyTappedInLabel = card.streakLabel === 'Already tapped in';
   const completionRate = card.completionRate ?? card.progressPercent;
   const progressTone =
     completionRate >= 85
@@ -62,8 +64,12 @@ export function TodayCircleCard({
     : !card.viewerHasCheckedIn
     ? 'Needs You'
     : card.remainingCheckIns > 0
-    ? 'Pending'
+    ? 'Others Needed'
     : 'Complete';
+  const othersNeededTodayLabel =
+    card.remainingCheckIns === 1
+      ? '1 other needed today'
+      : `${card.remainingCheckIns} others needed today`;
   const statusTone: React.ComponentProps<typeof HoystChip>['tone'] =
     statusLabel === 'Complete'
       ? 'green'
@@ -77,7 +83,7 @@ export function TodayCircleCard({
     : !card.viewerHasCheckedIn
     ? 'Needs your Tap In'
     : card.remainingCheckIns > 0
-    ? `${card.remainingCheckIns} pending today`
+    ? othersNeededTodayLabel
     : 'Daily Tap In complete';
   const contextLabel = card.matchCopy ?? fallbackContextLabel;
   const statsLabel = isPendingMembership
@@ -85,7 +91,7 @@ export function TodayCircleCard({
     : card.viewerTodayStatus === 'skip'
     ? 'Grace skip used today'
     : card.remainingCheckIns > 0
-    ? `${card.remainingCheckIns} pending today`
+    ? othersNeededTodayLabel
     : `${completionRate}% tapped in`;
   const actionVariant = isPendingMembership
     ? 'view'
@@ -123,11 +129,26 @@ export function TodayCircleCard({
               label={card.category.toUpperCase()}
               tone={getCategoryTone(card.category)}
             />
-            <HoystText
-              style={{color: theme.warningForeground}}
-              variant="caption">
-              {card.streakLabel}
-            </HoystText>
+            {isAlreadyTappedInLabel ? (
+              <View style={styles.streakStatus}>
+                <Check
+                  color={theme.successForeground}
+                  size={14}
+                  strokeWidth={2.8}
+                />
+                <HoystText
+                  style={{color: theme.successForeground}}
+                  variant="caption">
+                  {card.streakLabel}
+                </HoystText>
+              </View>
+            ) : (
+              <HoystText
+                style={{color: theme.warningForeground}}
+                variant="caption">
+                {card.streakLabel}
+              </HoystText>
+            )}
           </View>
           <View
             style={[
@@ -242,6 +263,11 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 10,
     maxWidth: '72%',
+  },
+  streakStatus: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 4,
   },
   completionBadge: {
     alignItems: 'center',

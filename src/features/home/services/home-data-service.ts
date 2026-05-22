@@ -56,6 +56,33 @@ export type HomeData = {
   todayLabel: string;
 };
 
+export type HomePersonalProgressAction =
+  | 'auth'
+  | 'chooseProgressStart'
+  | 'finishProfile'
+  | 'profile'
+  | 'shareProgress';
+
+export type HomePersonalProgressIcon =
+  | 'profile'
+  | 'progress'
+  | 'share'
+  | 'start';
+
+export type HomePersonalProgressTone =
+  | 'accent'
+  | 'neutral'
+  | 'success'
+  | 'warning';
+
+export type HomePersonalProgressState = {
+  action: HomePersonalProgressAction;
+  detail: string;
+  icon: HomePersonalProgressIcon;
+  label: string;
+  tone: HomePersonalProgressTone;
+};
+
 type PlainData = Record<string, unknown>;
 
 export type HomeCircleMappingInput = {
@@ -549,6 +576,79 @@ export function buildHomeDataFromCircles({
   } satisfies HomeData;
 }
 
+export function getHomePersonalProgressState({
+  homeData,
+  isAuthenticatedHome,
+  isIncompleteProfile,
+}: {
+  homeData: Pick<
+    HomeData,
+    'circles' | 'hasRealProgress' | 'personalStreakDays' | 'progressPercent'
+  >;
+  isAuthenticatedHome: boolean;
+  isIncompleteProfile: boolean;
+}): HomePersonalProgressState {
+  if (isIncompleteProfile) {
+    return {
+      action: 'finishProfile',
+      detail: 'Finish your handle before Tap Ins and progress unlock.',
+      icon: 'profile',
+      label: 'Complete your profile',
+      tone: 'warning',
+    };
+  }
+
+  if (!isAuthenticatedHome) {
+    return {
+      action: 'auth',
+      detail: 'Create an account to save streaks, circles, and Tap Ins.',
+      icon: 'start',
+      label: 'Start making progress',
+      tone: 'accent',
+    };
+  }
+
+  if (!homeData.hasRealProgress) {
+    return {
+      action: 'chooseProgressStart',
+      detail: 'Explore circles or create one to start your first Tap In streak.',
+      icon: 'start',
+      label: 'No progress yet',
+      tone: 'accent',
+    };
+  }
+
+  const activeCircles = homeData.circles.filter(
+    circle => circle.viewerMembershipStatus !== 'pending',
+  );
+  const dueCircleCount = activeCircles.filter(
+    circle => !circle.viewerHasCheckedIn,
+  ).length;
+
+  if (activeCircles.length > 0 && dueCircleCount === 0) {
+    return {
+      action: 'shareProgress',
+      detail: 'Share that today is handled.',
+      icon: 'share',
+      label: 'All tapped in today',
+      tone: 'success',
+    };
+  }
+
+  const label =
+    homeData.personalStreakDays > 0
+      ? `${homeData.personalStreakDays}-day streak`
+      : `${homeData.progressPercent}% this week`;
+
+  return {
+    action: 'profile',
+    detail: 'Open Profile to review your progress.',
+    icon: 'progress',
+    label,
+    tone: 'neutral',
+  };
+}
+
 export function mapHomeCircleFromData({
   circleData,
   circleId,
@@ -636,6 +736,8 @@ export function mapHomeCircleFromData({
       ? 'Pending approval'
       : streakDays > 0
       ? `${streakDays}d streak`
+      : viewerHasCheckedIn
+      ? 'Already tapped in'
       : 'Start today',
     title,
     timezone: asString(circleData.timezone, 'UTC'),

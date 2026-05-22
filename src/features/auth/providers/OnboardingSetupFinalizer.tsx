@@ -28,6 +28,9 @@ export function OnboardingSetupFinalizer(): null {
   const hasPendingStarterCircleSetup = useOnboardingStore(
     state => state.hasPendingStarterCircleSetup,
   );
+  const hasPendingProfileCompletion = useOnboardingStore(
+    state => state.hasPendingProfileCompletion,
+  );
   const hasSeenOnboarding = useOnboardingStore(
     state => state.hasSeenOnboarding,
   );
@@ -58,6 +61,7 @@ export function OnboardingSetupFinalizer(): null {
       !hasSeenOnboarding &&
       (currentStep === 'notifications' ||
         currentStep === 'auth' ||
+        hasPendingProfileCompletion ||
         (currentStep === 'finishProfile' && hasPendingStarterCircleSetup))
     ) {
       return;
@@ -131,6 +135,7 @@ export function OnboardingSetupFinalizer(): null {
     firstCircleSkipped,
     getOnboardingPreferences,
     hasPendingStarterCircleSetup,
+    hasPendingProfileCompletion,
     hasSeenOnboarding,
     markSeen,
     profile,

@@ -105,7 +105,7 @@ function getDetailStatusPill(
   }
 
   if (detail.remainingCheckIns && detail.remainingCheckIns > 0) {
-    return {label: 'Pending', tone: 'purple'};
+    return {label: 'Others Needed', tone: 'purple'};
   }
 
   return {label: 'Complete', tone: 'green'};
@@ -272,7 +272,13 @@ function DashboardUtilityAction({
   );
 }
 
-function TapInPrimaryAction({onPress}: {onPress: () => void}) {
+function TapInPrimaryAction({
+  label,
+  onPress,
+}: {
+  label: string;
+  onPress: () => void;
+}) {
   const theme = useHoystTheme();
 
   return (
@@ -301,7 +307,7 @@ function TapInPrimaryAction({onPress}: {onPress: () => void}) {
         <HoystText
           style={[styles.tapInLabel, {color: theme.actionForeground}]}
           variant="button">
-          Tap In
+          {label}
         </HoystText>
       </View>
     </Pressable>
@@ -646,6 +652,7 @@ export function CircleDetailScreen({
   const streakValue =
     detail.streakDays ?? Number.parseInt(detail.streakLabel, 10);
   const showFlameIcon = Number.isFinite(streakValue) && streakValue > 7;
+  const isAlreadyTappedInLabel = detail.streakLabel === 'Already tapped in';
   const privacyLabel = detail.privacy === 'private' ? 'Private' : 'Public';
   const joinActionLabel = joinRequested
     ? detail.joinLabel === 'Open seats'
@@ -658,6 +665,7 @@ export function CircleDetailScreen({
     isMemberCircle &&
     (detail.viewerTodayStatus === 'done' ||
       detail.viewerTodayStatus === 'skip');
+  const tapInPrimaryActionLabel = canRemoveTodayCheckIn ? 'View Today' : 'Tap In';
   const canDeleteCircle = isMemberCircle && detail.viewerRole === 'owner';
   const canLeaveCircle =
     Boolean(detail.viewerRole) && detail.viewerRole !== 'owner';
@@ -868,7 +876,13 @@ export function CircleDetailScreen({
               tone={getCategoryTone(detail.category)}
             />
             <View style={styles.streakRow}>
-              {showFlameIcon ? (
+              {isAlreadyTappedInLabel ? (
+                <Check
+                  color={theme.successForeground}
+                  size={15}
+                  strokeWidth={2.8}
+                />
+              ) : showFlameIcon ? (
                 <Flame
                   color={theme.warningForeground}
                   size={15}
@@ -985,6 +999,7 @@ export function CircleDetailScreen({
           <View style={styles.dashboardGrid}>
             <View style={styles.primaryActionWrap}>
               <TapInPrimaryAction
+                label={tapInPrimaryActionLabel}
                 onPress={() =>
                   requireAccount(
                     {

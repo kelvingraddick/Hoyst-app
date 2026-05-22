@@ -22,6 +22,7 @@ type AccountRouteRegistrationInput = {
 
 type ReadyOnboardingInput = {
   currentStep?: OnboardingStep;
+  hasPendingProfileCompletion?: boolean;
   hasPendingStarterCircleSetup?: boolean;
   hasSeenOnboarding: boolean;
   status: AuthSessionStatus;
@@ -34,6 +35,7 @@ type AuthModalRegistrationInput = ReadyOnboardingInput & {
 type RootAuthPresentationInput = {
   currentStep?: OnboardingStep;
   hasHydratedOnboarding: boolean;
+  hasPendingProfileCompletion?: boolean;
   hasSeenOnboarding: boolean;
   pendingAction?: PendingProtectedAction;
   status: AuthSessionStatus;
@@ -52,6 +54,7 @@ export function getRootNavigatorMode({
 
 export function hasActiveReadyOnboarding({
   currentStep,
+  hasPendingProfileCompletion,
   hasPendingStarterCircleSetup,
   hasSeenOnboarding,
   status,
@@ -59,10 +62,10 @@ export function hasActiveReadyOnboarding({
   return (
     status === 'authenticatedReady' &&
     !hasSeenOnboarding &&
-    (hasPendingStarterCircleSetup ||
+    (hasPendingProfileCompletion ||
+      hasPendingStarterCircleSetup ||
       currentStep === 'notifications' ||
-      currentStep === 'auth' ||
-      currentStep === 'finishProfile')
+      currentStep === 'auth')
   );
 }
 
@@ -85,7 +88,9 @@ export function shouldDismissAuthModal({
 }
 
 export function getRootAuthPresentation({
+  currentStep,
   hasHydratedOnboarding,
+  hasPendingProfileCompletion,
   hasSeenOnboarding,
   pendingAction,
   status,
@@ -95,6 +100,15 @@ export function getRootAuthPresentation({
   }
 
   if (status === 'authenticatedIncompleteProfile') {
+    return 'finishProfile';
+  }
+
+  if (
+    status === 'authenticatedReady' &&
+    !hasSeenOnboarding &&
+    hasPendingProfileCompletion &&
+    currentStep === 'finishProfile'
+  ) {
     return 'finishProfile';
   }
 

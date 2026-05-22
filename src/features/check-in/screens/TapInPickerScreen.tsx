@@ -287,7 +287,9 @@ export function TapInPickerScreen({navigation}: Props): React.JSX.Element {
             const statusCopy =
               circle.state === 'risk'
                 ? 'Group streak at risk'
-                : `${circle.remainingCheckIns} pending today`;
+                : circle.remainingCheckIns === 1
+                ? '1 other needed today'
+                : `${circle.remainingCheckIns} others needed today`;
 
             return (
               <GlassPanel key={circle.id} style={styles.dueCard}>
@@ -514,7 +516,9 @@ export function TapInPickerScreen({navigation}: Props): React.JSX.Element {
               ? theme.warningForeground
               : theme.successForeground;
             const statusLabel = canNudge
-              ? `${circle.remainingCheckIns} pending today`
+              ? circle.remainingCheckIns === 1
+                ? '1 other needed today'
+                : `${circle.remainingCheckIns} others needed today`
               : circle.viewerTodayStatus === 'skip'
               ? 'Grace skip used today'
               : 'Daily Tap In complete';

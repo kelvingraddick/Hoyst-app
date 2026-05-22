@@ -36,6 +36,7 @@ import {
 } from '../services/auth-service';
 import {continueAsGuestFromAuth} from '../services/auth-dismiss';
 import {resolveSignInRouteIntent} from '../services/auth-route-intent';
+import {formatPhoneNumberForDisplay} from '../services/phone-number';
 
 type Props = NativeStackScreenProps<AuthStackParamList, 'SignIn'>;
 
@@ -188,6 +189,10 @@ export function SignInScreen({navigation, route}: Props): React.JSX.Element {
       .finally(() => setIsBusy(false));
   };
 
+  const handlePhoneNumberChange = (nextPhoneNumber: string) => {
+    setPhoneNumber(formatPhoneNumberForDisplay(nextPhoneNumber));
+  };
+
   const handlePhoneConfirm = () => {
     if (!confirmation) {
       return;
@@ -287,6 +292,7 @@ export function SignInScreen({navigation, route}: Props): React.JSX.Element {
               onChangeText={setPassword}
               placeholder="Password"
               secureTextEntry
+              showSecureTextToggle
               value={password}
             />
             <HoystButton
@@ -312,7 +318,7 @@ export function SignInScreen({navigation, route}: Props): React.JSX.Element {
             <HoystText variant="title">Phone</HoystText>
             <HoystInput
               keyboardType="phone-pad"
-              onChangeText={setPhoneNumber}
+              onChangeText={handlePhoneNumberChange}
               placeholder="+1 555 000 0000"
               value={phoneNumber}
             />

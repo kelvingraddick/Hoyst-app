@@ -317,6 +317,19 @@ describe('root navigator mode policy', () => {
     ).toBe('main');
   });
 
+  it('keeps the root mounted while an authenticated user profile loads', () => {
+    useSessionStore.getState().setAuthenticating();
+
+    expect(useSessionStore.getState().status).toBe('authenticating');
+    expect(
+      getRootNavigatorMode({
+        hasHydratedOnboarding: true,
+        hasSeenOnboarding: false,
+        status: useSessionStore.getState().status,
+      }),
+    ).toBe('main');
+  });
+
   it('starts with main tabs for ready authenticated users', () => {
     expect(
       getRootNavigatorMode({
@@ -457,6 +470,18 @@ describe('root auth modal policy', () => {
     ).toBe('finishProfile');
   });
 
+  it('re-presents active profile completion if ready auth briefly closes', () => {
+    expect(
+      getRootAuthPresentation({
+        currentStep: 'finishProfile',
+        hasHydratedOnboarding: true,
+        hasPendingProfileCompletion: true,
+        hasSeenOnboarding: false,
+        status: 'authenticatedReady',
+      }),
+    ).toBe('finishProfile');
+  });
+
   it('registers auth modal for active ready onboarding work', () => {
     expect(
       shouldRegisterAuthModal({
@@ -504,6 +529,27 @@ describe('root auth modal policy', () => {
         currentStep: 'welcome',
         hasPendingStarterCircleSetup: false,
         hasSeenOnboarding: true,
+        status: 'authenticatedReady',
+      }),
+    ).toBe(true);
+  });
+
+  it('keeps active profile completion open during registration handoff', () => {
+    expect(
+      shouldDismissAuthModal({
+        currentStep: 'finishProfile',
+        hasPendingProfileCompletion: true,
+        hasPendingStarterCircleSetup: false,
+        hasSeenOnboarding: false,
+        status: 'authenticatedReady',
+      }),
+    ).toBe(false);
+    expect(
+      shouldDismissAuthModal({
+        currentStep: 'finishProfile',
+        hasPendingProfileCompletion: false,
+        hasPendingStarterCircleSetup: false,
+        hasSeenOnboarding: false,
         status: 'authenticatedReady',
       }),
     ).toBe(true);
@@ -844,6 +890,26 @@ describe('onboarding store', () => {
     useOnboardingStore.getState().startOnboardingWizard();
 
     expect(useOnboardingStore.getState().currentStep).toBe('welcome');
+    expect(useOnboardingStore.getState().hasSeenOnboarding).toBe(false);
+  });
+
+  it('tracks profile completion handoff as active onboarding again', () => {
+    useOnboardingStore.getState().markSeen();
+    useOnboardingStore.getState().prepareProfileCompletion();
+    useOnboardingStore.getState().setCurrentStep('finishProfile');
+
+    expect(useOnboardingStore.getState()).toMatchObject({
+      currentStep: 'finishProfile',
+      hasPendingProfileCompletion: true,
+      hasSeenOnboarding: false,
+    });
+
+    useOnboardingStore.getState().markSeen();
+
+    expect(useOnboardingStore.getState()).toMatchObject({
+      hasPendingProfileCompletion: false,
+      hasSeenOnboarding: true,
+    });
   });
 });
 

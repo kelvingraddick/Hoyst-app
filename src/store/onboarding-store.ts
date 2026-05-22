@@ -30,6 +30,7 @@ export type OnboardingStoreState = OnboardingIntentDraft & {
   displayName: string;
   firstCircleSkipped: boolean;
   handle: string;
+  hasPendingProfileCompletion: boolean;
   hasPendingStarterCircleSetup: boolean;
   hasHydrated: boolean;
   hasSeenOnboarding: boolean;
@@ -37,10 +38,12 @@ export type OnboardingStoreState = OnboardingIntentDraft & {
   starterCircleSetupId?: string;
   timezone: string;
   clearStarterCircleSetup: () => void;
+  clearProfileCompletion: () => void;
   getPreferences: () => OnboardingPreferences | undefined;
   markSeen: () => void;
   nextStep: () => void;
   prepareStarterCircleSetup: () => string;
+  prepareProfileCompletion: () => void;
   previousStep: () => void;
   reset: () => void;
   setCurrentStep: (step: OnboardingStep) => void;
@@ -68,6 +71,7 @@ const initialState = {
   firstCircleSkipped: false,
   goal: undefined,
   handle: '',
+  hasPendingProfileCompletion: false,
   hasPendingStarterCircleSetup: false,
   hasHydrated: false,
   hasSeenOnboarding: false,
@@ -122,12 +126,17 @@ export const useOnboardingStore = create<OnboardingStoreState>()(
           hasPendingStarterCircleSetup: false,
           starterCircleSetupId: undefined,
         }),
+      clearProfileCompletion: () =>
+        set({
+          hasPendingProfileCompletion: false,
+        }),
       getPreferences: () =>
         buildOnboardingPreferences({
           goal: get().goal,
         }),
       markSeen: () =>
         set({
+          hasPendingProfileCompletion: false,
           hasSeenOnboarding: true,
         }),
       nextStep: () =>
@@ -149,6 +158,11 @@ export const useOnboardingStore = create<OnboardingStoreState>()(
 
         return setupId;
       },
+      prepareProfileCompletion: () =>
+        set({
+          hasPendingProfileCompletion: true,
+          hasSeenOnboarding: false,
+        }),
       previousStep: () =>
         set(state => ({
           currentStep: getNextStep(state.currentStep, -1),
@@ -157,6 +171,7 @@ export const useOnboardingStore = create<OnboardingStoreState>()(
         set({
           ...initialState,
           hasHydrated: get().hasHydrated,
+          hasPendingProfileCompletion: false,
           hasPendingStarterCircleSetup: false,
           starterCircleDraft: createInitialStarterCircleDraft(),
           starterCircleSetupId: undefined,
@@ -221,7 +236,9 @@ export const useOnboardingStore = create<OnboardingStoreState>()(
         set({
           currentStep: 'welcome',
           firstCircleSkipped: false,
+          hasPendingProfileCompletion: false,
           hasPendingStarterCircleSetup: false,
+          hasSeenOnboarding: false,
           starterCircleSetupId: undefined,
         }),
     }),
@@ -262,6 +279,7 @@ export const useOnboardingStore = create<OnboardingStoreState>()(
         goal: state.goal,
         handle: state.handle,
         hasPendingStarterCircleSetup: state.hasPendingStarterCircleSetup,
+        hasPendingProfileCompletion: state.hasPendingProfileCompletion,
         hasSeenOnboarding: state.hasSeenOnboarding,
         starterCircleDraft: state.starterCircleDraft,
         starterCircleSetupId: state.starterCircleSetupId,

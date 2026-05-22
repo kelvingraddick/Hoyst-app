@@ -88,6 +88,7 @@ import {
   completeOnboardingSetup,
   shouldCreateStarterCircle,
 } from '../services/onboarding-completion';
+import {formatPhoneNumberForDisplay} from '../services/phone-number';
 
 type Props = NativeStackScreenProps<AuthStackParamList, 'Welcome'>;
 
@@ -545,10 +546,16 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
   const clearStarterCircleSetup = useOnboardingStore(
     state => state.clearStarterCircleSetup,
   );
+  const clearProfileCompletion = useOnboardingStore(
+    state => state.clearProfileCompletion,
+  );
   const markSeen = useOnboardingStore(state => state.markSeen);
   const nextStep = useOnboardingStore(state => state.nextStep);
   const prepareStarterCircleSetup = useOnboardingStore(
     state => state.prepareStarterCircleSetup,
+  );
+  const prepareProfileCompletion = useOnboardingStore(
+    state => state.prepareProfileCompletion,
   );
   const previousStep = useOnboardingStore(state => state.previousStep);
   const setCurrentStep = useOnboardingStore(state => state.setCurrentStep);
@@ -673,6 +680,10 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
     setRegistrationSmsCode('');
   };
 
+  const handleRegistrationPhoneNumberChange = (nextPhoneNumber: string) => {
+    setRegistrationPhoneNumber(formatPhoneNumberForDisplay(nextPhoneNumber));
+  };
+
   const registerWithEmailFromOnboarding = async () => {
     if (!registrationEmail.trim() || !registrationPassword) {
       Alert.alert(
@@ -683,10 +694,13 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
     }
 
     setIsBusy(true);
+    prepareProfileCompletion();
+    setCurrentStep('finishProfile');
     try {
       await registerWithEmail(registrationEmail, registrationPassword);
-      setCurrentStep('finishProfile');
     } catch (error) {
+      clearProfileCompletion();
+      setCurrentStep('auth');
       Alert.alert('Registration failed', getErrorMessage(error));
     } finally {
       setIsBusy(false);
@@ -718,10 +732,13 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
     }
 
     setIsBusy(true);
+    prepareProfileCompletion();
+    setCurrentStep('finishProfile');
     try {
       await confirmPhoneSignIn(phoneConfirmation, registrationSmsCode);
-      setCurrentStep('finishProfile');
     } catch (error) {
+      clearProfileCompletion();
+      setCurrentStep('auth');
       Alert.alert('Registration failed', getErrorMessage(error));
     } finally {
       setIsBusy(false);
@@ -738,9 +755,18 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
         (status === 'authenticatedReady' && hasPendingStarterCircleSetup)) &&
       currentStep === 'auth'
     ) {
+      if (status === 'authenticatedIncompleteProfile') {
+        prepareProfileCompletion();
+      }
       setCurrentStep('finishProfile');
     }
-  }, [currentStep, hasPendingStarterCircleSetup, setCurrentStep, status]);
+  }, [
+    currentStep,
+    hasPendingStarterCircleSetup,
+    prepareProfileCompletion,
+    setCurrentStep,
+    status,
+  ]);
 
   useEffect(() => {
     if (
@@ -1302,6 +1328,7 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
                     onChangeText={setRegistrationPassword}
                     placeholder="Password"
                     secureTextEntry
+                    showSecureTextToggle
                     value={registrationPassword}
                   />
                 </View>
@@ -1349,7 +1376,7 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
                   </HoystText>
                   <HoystInput
                     keyboardType="phone-pad"
-                    onChangeText={setRegistrationPhoneNumber}
+                    onChangeText={handleRegistrationPhoneNumberChange}
                     placeholder="+1 555 000 0000"
                     value={registrationPhoneNumber}
                   />

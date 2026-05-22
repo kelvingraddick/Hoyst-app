@@ -2799,6 +2799,27 @@ PODS:
     - ReactCommon/turbomodule/bridging
     - ReactCommon/turbomodule/core
     - Yoga
+  - react-native-view-shot (5.1.0):
+    - DoubleConversion
+    - glog
+    - hermes-engine
+    - RCT-Folly (= 2024.11.18.00)
+    - RCTRequired
+    - RCTTypeSafety
+    - React-Core
+    - React-debug
+    - React-Fabric
+    - React-featureflags
+    - React-graphics
+    - React-ImageManager
+    - React-NativeModulesApple
+    - React-RCTFabric
+    - React-rendererdebug
+    - React-utils
+    - ReactCodegen
+    - ReactCommon/turbomodule/bridging
+    - ReactCommon/turbomodule/core
+    - Yoga
   - React-NativeModulesApple (0.78.3):
     - glog
     - hermes-engine
@@ -3455,6 +3476,27 @@ PODS:
     - ReactCommon/turbomodule/core
     - Sentry/HybridSDK (= 8.49.2)
     - Yoga
+  - RNShare (12.3.1):
+    - DoubleConversion
+    - glog
+    - hermes-engine
+    - RCT-Folly (= 2024.11.18.00)
+    - RCTRequired
+    - RCTTypeSafety
+    - React-Core
+    - React-debug
+    - React-Fabric
+    - React-featureflags
+    - React-graphics
+    - React-ImageManager
+    - React-NativeModulesApple
+    - React-RCTFabric
+    - React-rendererdebug
+    - React-utils
+    - ReactCodegen
+    - ReactCommon/turbomodule/bridging
+    - ReactCommon/turbomodule/core
+    - Yoga
   - RNSVG (15.11.2):
     - DoubleConversion
     - glog
@@ -3548,6 +3590,7 @@ DEPENDENCIES:
   - react-native-image-picker (from `../node_modules/react-native-image-picker`)
   - react-native-onesignal (from `../node_modules/react-native-onesignal`)
   - react-native-safe-area-context (from `../node_modules/react-native-safe-area-context`)
+  - react-native-view-shot (from `../node_modules/react-native-view-shot`)
   - React-NativeModulesApple (from `../node_modules/react-native/ReactCommon/react/nativemodule/core/platform/ios`)
   - React-perflogger (from `../node_modules/react-native/ReactCommon/reactperflogger`)
   - React-performancetimeline (from `../node_modules/react-native/ReactCommon/react/performance/timeline`)
@@ -3588,6 +3631,7 @@ DEPENDENCIES:
   - RNReanimated (from `../node_modules/react-native-reanimated`)
   - RNScreens (from `../node_modules/react-native-screens`)
   - "RNSentry (from `../node_modules/@sentry/react-native`)"
+  - RNShare (from `../node_modules/react-native-share`)
   - RNSVG (from `../node_modules/react-native-svg`)
   - Yoga (from `../node_modules/react-native/ReactCommon/yoga`)
 
@@ -3710,6 +3754,8 @@ EXTERNAL SOURCES:
     :path: "../node_modules/react-native-onesignal"
   react-native-safe-area-context:
     :path: "../node_modules/react-native-safe-area-context"
+  react-native-view-shot:
+    :path: "../node_modules/react-native-view-shot"
   React-NativeModulesApple:
     :path: "../node_modules/react-native/ReactCommon/react/nativemodule/core/platform/ios"
   React-perflogger:
@@ -3790,6 +3836,8 @@ EXTERNAL SOURCES:
     :path: "../node_modules/react-native-screens"
   RNSentry:
     :path: "../node_modules/@sentry/react-native"
+  RNShare:
+    :path: "../node_modules/react-native-share"
   RNSVG:
     :path: "../node_modules/react-native-svg"
   Yoga:
@@ -3864,6 +3912,7 @@ SPEC CHECKSUMS:
   react-native-image-picker: 5f9867b6a223594dbfdb456428638daef42e6e6c
   react-native-onesignal: a8e7e5c9fc9a973befdbd38aa23f1e54fd364a8b
   react-native-safe-area-context: 0257d12123e63462a95dda636010156d03806233
+  react-native-view-shot: 25f46c66ab1da1e5366326e12f5201589cee6b6d
   React-NativeModulesApple: 7a9ec626a1852d444d0e699b016dc55a064b7569
   React-perflogger: d06f0fd0727356651a5535f6d717130187aeb667
   React-performancetimeline: c397114f2c025aa73412a9f21e021b08127fe820
@@ -3905,6 +3954,7 @@ SPEC CHECKSUMS:
   RNReanimated: 4826ef20aad94d8ece55cb84db3c356ed7989af9
   RNScreens: 04304337930029a5d0db297b22eb0f07adc31a2c
   RNSentry: 6092028c8588b03eccfbf84bbb9c1ca1be17b5af
+  RNShare: 59594766a79b2a33f74aa7657201f1f4f41dbd29
   RNSVG: 71e35e78add645b84b52b0c6f203f91028e1ab5e
   Sentry: 47021097466aa130802420d485a34da445963d99
   SocketRocket: d4aabe649be1e368d1318fdf28a022d714d65748

@@ -1,6 +1,7 @@
-import React, {useEffect, useRef, useState} from 'react';
+import React, {useEffect, useMemo, useRef, useState} from 'react';
 import {
   AccessibilityInfo,
+  Alert,
   Animated,
   Easing,
   Image,
@@ -8,7 +9,7 @@ import {
   StyleSheet,
   View,
 } from 'react-native';
-import {Sparkles} from 'lucide-react-native';
+import {Share2, Sparkles} from 'lucide-react-native';
 import type {NativeStackScreenProps} from '@react-navigation/native-stack';
 
 import {GlassPanel} from '../../../design/components/GlassPanel';
@@ -23,6 +24,15 @@ import type {CircleDetailModel} from '../../../types/models';
 import {useUserProfileStore} from '../../../store/profile-store';
 import {useSessionStore} from '../../../store/session-store';
 import {subscribeToMemberCircleDetail} from '../../home/services/home-data-service';
+import {
+  TapInStoryShareCard,
+  tapInStoryShareCardSize,
+} from '../components/TapInStoryShareCard';
+import {
+  buildTapInStoryShareData,
+  canShareTapInStory,
+  shareTapInStoryImage,
+} from '../services/tap-in-story-share';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'TapInComplete'>;
 
@@ -66,6 +76,7 @@ export function TapInCompleteScreen({
   const ringBreathProgress = useRef(new Animated.Value(0)).current;
   const ringSpinProgress = useRef(new Animated.Value(0)).current;
   const contentProgress = useRef(new Animated.Value(0)).current;
+  const storyCardRef = useRef<View>(null);
   const sparkleProgresses = useRef(
     sparkleConfigs.map(() => new Animated.Value(0)),
   ).current;
@@ -73,6 +84,8 @@ export function TapInCompleteScreen({
   const [hasLaidOut, setHasLaidOut] = useState(false);
   const [hasSettledNavigation, setHasSettledNavigation] = useState(false);
   const [hasResolvedDetail, setHasResolvedDetail] = useState(false);
+  const [isSharingStory, setIsSharingStory] = useState(false);
+  const [isStoryPhotoSettled, setIsStoryPhotoSettled] = useState(false);
   const profile = useUserProfileStore(state => state.profile);
   const status = useSessionStore(state => state.status);
   const user = useSessionStore(state => state.user);
@@ -83,6 +96,22 @@ export function TapInCompleteScreen({
   const isSkip = route.params.status === 'skip';
   const isReadyForCelebration =
     hasLaidOut && hasSettledNavigation && hasResolvedDetail;
+  const canShowStoryShare = canShareTapInStory(route.params.status);
+  const storyData = useMemo(
+    () =>
+      buildTapInStoryShareData({
+        detail,
+        note,
+        photoUri: route.params.photoUri,
+      }),
+    [detail, note, route.params.photoUri],
+  );
+  const canGenerateStory =
+    isReadyForCelebration && (!storyData.photoUri || isStoryPhotoSettled);
+
+  useEffect(() => {
+    setIsStoryPhotoSettled(!storyData.photoUri);
+  }, [storyData.photoUri]);
 
   useEffect(() => {
     setHasResolvedDetail(false);
@@ -251,6 +280,27 @@ export function TapInCompleteScreen({
 
     navigation.replace('MainTabs', {screen: 'Home'});
   };
+  const shareStory = async () => {
+    if (!storyCardRef.current || !canGenerateStory) {
+      Alert.alert(
+        'Story is getting ready',
+        'Give the image one more moment, then try sharing again.',
+      );
+      return;
+    }
+
+    setIsSharingStory(true);
+    try {
+      await shareTapInStoryImage(storyCardRef, storyData.shareMessage);
+    } catch (error) {
+      const message =
+        (error as {message?: string}).message ??
+        'The story image could not be shared. Try again in a moment.';
+      Alert.alert('Could not share story', message);
+    } finally {
+      setIsSharingStory(false);
+    }
+  };
   const dailyTask = hasResolvedDetail
     ? detail?.dailyTask ?? "Today's Tap In"
     : 'Loading Tap In details';
@@ -339,6 +389,22 @@ export function TapInCompleteScreen({
           setHasLaidOut(true);
         }}
         style={styles.screenFrame}>
+        {canShowStoryShare ? (
+          <View pointerEvents="none" style={styles.captureLayer}>
+            <View
+              collapsable={false}
+              ref={storyCardRef}
+              style={styles.captureCard}>
+              <TapInStoryShareCard
+                onPhotoSettled={() => {
+                  setIsStoryPhotoSettled(true);
+                }}
+                story={storyData}
+              />
+            </View>
+          </View>
+        ) : null}
+
         <View pointerEvents="none" style={styles.screenSparkleLayer}>
           {sparkleConfigs.map((sparkle, index) => {
             const progress = sparkleProgresses[index];
@@ -490,7 +556,30 @@ export function TapInCompleteScreen({
               ) : null}
             </View>
 
-            <HoystButton label="Done" onPress={finish} />
+            <View style={styles.actionStack}>
+              {canShowStoryShare ? (
+                <HoystButton
+                  disabled={!canGenerateStory || isSharingStory}
+                  icon={
+                    <Share2
+                      color={
+                        canGenerateStory && !isSharingStory
+                          ? theme.text
+                          : theme.textMuted
+                      }
+                      size={18}
+                      strokeWidth={2.3}
+                    />
+                  }
+                  label={isSharingStory ? 'Preparing Story...' : 'Share Story'}
+                  onPress={() => {
+                    shareStory().catch(() => undefined);
+                  }}
+                  variant="outline"
+                />
+              ) : null}
+              <HoystButton label="Done" onPress={finish} />
+            </View>
           </Animated.View>
         </GlassPanel>
       </View>
@@ -532,6 +621,20 @@ const styles = StyleSheet.create({
   },
   celebrationStack: {
     gap: 14,
+  },
+  actionStack: {
+    gap: 10,
+  },
+  captureCard: {
+    height: tapInStoryShareCardSize.height,
+    width: tapInStoryShareCardSize.width,
+  },
+  captureLayer: {
+    height: tapInStoryShareCardSize.height,
+    left: -1200,
+    position: 'absolute',
+    top: 0,
+    width: tapInStoryShareCardSize.width,
   },
   screenSparkleLayer: {
     bottom: -24,

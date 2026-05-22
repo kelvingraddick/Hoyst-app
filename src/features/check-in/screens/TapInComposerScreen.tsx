@@ -205,7 +205,9 @@ export function TapInComposerScreen({
       ? 'Skipped today'
       : detail.viewerHasCheckedIn
       ? 'Already tapped in'
-      : `${detail.remainingCheckIns ?? 0} pending today`;
+      : detail.remainingCheckIns === 1
+      ? '1 other needed today'
+      : `${detail.remainingCheckIns ?? 0} others needed today`;
   const skipGraceRule = detail.graceRules?.skip;
   const canSkip =
     !detail.viewerHasCheckedIn &&

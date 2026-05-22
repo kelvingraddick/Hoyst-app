@@ -41,7 +41,9 @@
     "react-native-reanimated": "3.17.4",
     "react-native-safe-area-context": "5.4.0",
     "react-native-screens": "4.10.0",
+    "react-native-share": "^12.3.1",
     "react-native-svg": "15.11.2",
+    "react-native-view-shot": "^5.1.0",
     "zod": "^3.24.2",
     "zustand": "^5.0.3"
   },

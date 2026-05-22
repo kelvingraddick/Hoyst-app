@@ -33,6 +33,7 @@ type SessionState = {
   consumePendingAction: () => PendingProtectedAction | undefined;
   setAuthenticatedIncompleteProfile: (user: AuthSessionUser) => void;
   setAuthenticatedReady: (user: AuthSessionUser) => void;
+  setAuthenticating: () => void;
   setGuest: () => void;
   setInitializing: () => void;
   setPendingAction: (pendingAction?: PendingProtectedAction) => void;
@@ -56,6 +57,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   setAuthenticatedIncompleteProfile: user =>
     set({status: 'authenticatedIncompleteProfile', user}),
   setAuthenticatedReady: user => set({status: 'authenticatedReady', user}),
+  setAuthenticating: () => set({status: 'authenticating', user: undefined}),
   setGuest: () => set({status: 'guest', user: undefined}),
   setInitializing: () => set({status: 'initializing', user: undefined}),
   setPendingAction: pendingAction => set({pendingAction}),

@@ -53,6 +53,9 @@ export function AppTabsNavigator({
   const hasSeenOnboarding = useOnboardingStore(
     state => state.hasSeenOnboarding,
   );
+  const hasPendingProfileCompletion = useOnboardingStore(
+    state => state.hasPendingProfileCompletion,
+  );
   const hasPendingStarterCircleSetup = useOnboardingStore(
     state => state.hasPendingStarterCircleSetup,
   );
@@ -104,6 +107,7 @@ export function AppTabsNavigator({
     const presentation = getRootAuthPresentation({
       currentStep,
       hasHydratedOnboarding,
+      hasPendingProfileCompletion,
       hasSeenOnboarding,
       pendingAction,
       status,
@@ -136,6 +140,7 @@ export function AppTabsNavigator({
   }, [
     currentStep,
     hasHydratedOnboarding,
+    hasPendingProfileCompletion,
     hasSeenOnboarding,
     pendingAction,
     rootNavigation,
