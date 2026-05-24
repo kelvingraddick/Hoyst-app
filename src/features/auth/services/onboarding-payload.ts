@@ -1,15 +1,15 @@
-import type {OnboardingGoal, OnboardingPreferences} from './onboarding-options';
+import type {OnboardingFocusArea, OnboardingPreferences} from './onboarding-options';
 
 export type OnboardingIntentDraft = {
-  goal?: OnboardingGoal;
+  focusArea?: OnboardingFocusArea;
 };
 
 export function buildOnboardingPreferences(
   draft: OnboardingIntentDraft,
 ): OnboardingPreferences | undefined {
   const preferences: OnboardingPreferences = {
-    goal: draft.goal,
+    focusArea: draft.focusArea,
   };
 
-  return preferences.goal ? preferences : undefined;
+  return preferences.focusArea ? preferences : undefined;
 }

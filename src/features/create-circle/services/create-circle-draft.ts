@@ -3,13 +3,15 @@ import type {
   CirclePrivacy,
   CirclePrivacyMode,
   CircleSummary,
+  CommitmentFrequency,
   CreateCircleDraft,
   GraceRule,
 } from '../../../types/models';
 
 export type CreateCirclePayload = {
   category: string;
-  dailyTask: string;
+  commitment: string;
+  commitmentFrequency: CommitmentFrequency;
   graceRules: {
     skip: GraceRule;
   };
@@ -25,6 +27,9 @@ export const defaultSkipGraceRule: GraceRule = {
   windowDays: 7,
 };
 export const defaultCircleMaxSize = 10;
+export const defaultCommitmentFrequency: CommitmentFrequency = {
+  tapInsPerWeek: 7,
+};
 
 export function getLocalTimezone() {
   return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
@@ -33,7 +38,8 @@ export function getLocalTimezone() {
 export function createInitialCircleDraft(timezone?: string): CreateCircleDraft {
   return {
     category: 'Fitness',
-    dailyTask: '',
+    commitment: '',
+    commitmentFrequency: defaultCommitmentFrequency,
     graceRules: {
       skip: defaultSkipGraceRule,
     },
@@ -90,7 +96,8 @@ export function buildCircleEditDraft(
   circle: Pick<
     CircleSummary,
     | 'category'
-    | 'dailyTask'
+    | 'commitment'
+    | 'commitmentFrequency'
     | 'graceRules'
     | 'joinMode'
     | 'maxSize'
@@ -105,7 +112,10 @@ export function buildCircleEditDraft(
   return {
     ...initialDraft,
     category: circle.category,
-    dailyTask: circle.dailyTask,
+    commitment: circle.commitment,
+    commitmentFrequency: normalizeCommitmentFrequency(
+      circle.commitmentFrequency ?? initialDraft.commitmentFrequency,
+    ),
     graceRules: {
       skip: normalizeSkipGraceRule(
         circle.graceRules?.skip ?? initialDraft.graceRules.skip,
@@ -142,12 +152,26 @@ export function normalizeSkipGraceRule(rule: GraceRule): GraceRule {
   };
 }
 
+export function normalizeCommitmentFrequency(
+  frequency: CommitmentFrequency,
+): CommitmentFrequency {
+  return {
+    tapInsPerWeek: Math.min(
+      7,
+      Math.max(1, Math.round(frequency.tapInsPerWeek)),
+    ),
+  };
+}
+
 export function buildCreateCirclePayload(
   draft: CreateCircleDraft,
 ): CreateCirclePayload {
   return {
     category: draft.category.trim(),
-    dailyTask: draft.dailyTask.trim(),
+    commitment: draft.commitment.trim(),
+    commitmentFrequency: normalizeCommitmentFrequency(
+      draft.commitmentFrequency,
+    ),
     graceRules: {
       skip: normalizeSkipGraceRule(draft.graceRules.skip),
     },

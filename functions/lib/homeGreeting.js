@@ -88,7 +88,7 @@ function buildHomeGreetingFallback(input, reason) {
         headline = withName(firstName, 'all checked in. Try not to act surprised.', 'All checked in. Try not to act surprised.');
     }
     else if (timeWindow === 'morning') {
-        headline = withName(firstName, 'morning. New day, same goals, fewer excuses.', 'Morning. New day, same goals, fewer excuses.');
+        headline = withName(firstName, 'morning. New day, same Commitment, fewer excuses.', 'Morning. New day, same Commitment, fewer excuses.');
     }
     else if (timeWindow === 'midday') {
         headline = withName(firstName, 'midday check. Winning, or just looking busy?', 'Midday check. Winning, or just looking busy?');

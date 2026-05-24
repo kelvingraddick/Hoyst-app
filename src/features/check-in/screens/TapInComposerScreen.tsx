@@ -187,7 +187,7 @@ export function TapInComposerScreen({
         <GlassPanel style={styles.contextPanel}>
           <HoystText variant="title">Circle unavailable</HoystText>
           <HoystText tone="muted">
-            This Tap In needs a real active circle before you can submit.
+            This Tap In needs a real active Circle before you can submit.
           </HoystText>
         </GlassPanel>
       </HoystScreen>
@@ -206,8 +206,8 @@ export function TapInComposerScreen({
       : detail.viewerHasCheckedIn
       ? 'Already tapped in'
       : detail.remainingCheckIns === 1
-      ? '1 other needed today'
-      : `${detail.remainingCheckIns ?? 0} others needed today`;
+      ? '1 Tap In left this week'
+      : `${detail.remainingCheckIns ?? 0} Tap Ins left this week`;
   const skipGraceRule = detail.graceRules?.skip;
   const canSkip =
     !detail.viewerHasCheckedIn &&
@@ -218,8 +218,10 @@ export function TapInComposerScreen({
     detail.viewerTodayStatus === 'skip' ? 'Remove Skip' : 'Remove Tap In';
   const checkedInStatusCopy =
     detail.viewerTodayStatus === 'skip'
-      ? 'Your grace skip is covering today for this circle.'
-      : 'Your Tap In is counted for today.';
+      ? 'Your grace skip is covering today for this Circle.'
+      : detail.viewerHasCheckedIn
+      ? 'Your Commitment Frequency is complete for this Circle.'
+      : 'Your Tap In is counted for today. Keep going this week.';
 
   const handleChoosePhoto = async () => {
     const response = await launchImageLibrary({
@@ -296,7 +298,7 @@ export function TapInComposerScreen({
   const confirmRemoveTapIn = () => {
     Alert.alert(
       'Remove today?',
-      "This will undo today's progress for this circle.",
+      "This will undo today's Progression for this Circle.",
       [
         {style: 'cancel', text: 'Keep'},
         {
@@ -335,7 +337,7 @@ export function TapInComposerScreen({
               Tap In
             </HoystText>
             <HoystText style={styles.centerText} tone="muted">
-              Share today's proof, context, or momentum with your circle.
+              Share today's proof, context, or momentum with your Circle.
             </HoystText>
           </View>
           <View style={styles.summaryChips}>
@@ -349,7 +351,7 @@ export function TapInComposerScreen({
       <GlassPanel style={styles.contextPanel}>
         <View style={styles.sectionHeader}>
           <HoystText tone="muted" variant="label">
-            Today's Circle
+            Circle Commitment
           </HoystText>
           <HoystText style={{color: theme.successForeground}} variant="caption">
             {detail.streakDays ?? 0}d streak
@@ -357,7 +359,7 @@ export function TapInComposerScreen({
         </View>
         <View style={styles.contextCopy}>
           <HoystText style={styles.contextTitle}>{detail.title}</HoystText>
-          <HoystText tone="muted">{detail.dailyTask}</HoystText>
+          <HoystText tone="muted">{detail.commitment}</HoystText>
         </View>
       </GlassPanel>
 
@@ -384,7 +386,7 @@ export function TapInComposerScreen({
                 </View>
               </View>
               <HoystText tone="muted">
-                Removing it will undo today's progress for this circle.
+                Removing it will undo today's Progression for this Circle.
               </HoystText>
             </View>
             <View style={styles.actionStack}>
@@ -426,7 +428,7 @@ export function TapInComposerScreen({
                   onChangeText={value =>
                     setDraft(current => ({...current, note: value}))
                   }
-                  placeholder="Share what you did, how it went, or what your circle should know."
+                  placeholder="Share what you did, how it went, or what your Circle should know."
                   style={styles.noteInput}
                   textAlignVertical="top"
                   value={draft.note}
@@ -545,7 +547,7 @@ export function TapInComposerScreen({
                           {detail.title}
                         </HoystText>
                         <HoystText tone="muted" variant="caption">
-                          {detail.dailyTask}
+                          {detail.commitment}
                         </HoystText>
                       </View>
                     </View>

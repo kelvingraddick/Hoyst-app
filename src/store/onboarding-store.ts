@@ -8,14 +8,14 @@ import {
 } from '../features/auth/services/onboarding-payload';
 import {
   onboardingSteps,
-  type OnboardingGoal,
+  type OnboardingFocusArea,
   type OnboardingPreferences,
   type OnboardingStep,
 } from '../features/auth/services/onboarding-options';
 import {
   applyStarterCircleHiddenDefaults,
   createInitialStarterCircleDraft,
-  updateStarterCircleGoal,
+  updateStarterCircleFocusArea,
   updateStarterCirclePrivacyMode,
   updateStarterCirclePublicJoinMode,
 } from '../features/auth/services/onboarding-circle';
@@ -49,7 +49,7 @@ export type OnboardingStoreState = OnboardingIntentDraft & {
   setCurrentStep: (step: OnboardingStep) => void;
   setDisplayName: (displayName: string) => void;
   setFirstCircleSkipped: (firstCircleSkipped: boolean) => void;
-  setGoal: (goal: OnboardingGoal) => void;
+  setFocusArea: (focusArea: OnboardingFocusArea) => void;
   setHandle: (handle: string) => void;
   setHasHydrated: (hasHydrated: boolean) => void;
   setStarterCircleDraft: (draft: CreateCircleDraft) => void;
@@ -69,7 +69,7 @@ const initialState = {
   currentStep: 'welcome' as OnboardingStep,
   displayName: '',
   firstCircleSkipped: false,
-  goal: undefined,
+  focusArea: undefined,
   handle: '',
   hasPendingProfileCompletion: false,
   hasPendingStarterCircleSetup: false,
@@ -83,6 +83,8 @@ const initialState = {
 const legacyStepFallbacks: Record<string, OnboardingStep> = {
   categories: 'circleTitle',
   comfort: 'circleTitle',
+  circleDailyTask: 'circleCommitment',
+  goal: 'focusArea',
   pace: 'circleTitle',
   profile: 'circleTitle',
   preview: 'circleReview',
@@ -132,7 +134,7 @@ export const useOnboardingStore = create<OnboardingStoreState>()(
         }),
       getPreferences: () =>
         buildOnboardingPreferences({
-          goal: get().goal,
+          focusArea: get().focusArea,
         }),
       markSeen: () =>
         set({
@@ -188,13 +190,13 @@ export const useOnboardingStore = create<OnboardingStoreState>()(
               }
             : {}),
         }),
-      setGoal: goal =>
+      setFocusArea: focusArea =>
         set(state => ({
           firstCircleSkipped: false,
-          goal,
-          starterCircleDraft: updateStarterCircleGoal(
+          focusArea,
+          starterCircleDraft: updateStarterCircleFocusArea(
             state.starterCircleDraft,
-            goal,
+            focusArea,
           ),
         })),
       setHandle: handle => set({handle}),
@@ -233,14 +235,18 @@ export const useOnboardingStore = create<OnboardingStoreState>()(
           timezone,
         })),
       startOnboardingWizard: () =>
-        set({
+        set(state => ({
           currentStep: 'welcome',
           firstCircleSkipped: false,
           hasPendingProfileCompletion: false,
           hasPendingStarterCircleSetup: false,
           hasSeenOnboarding: false,
+          starterCircleDraft: createInitialStarterCircleDraft({
+            focusArea: state.focusArea,
+            timezone: state.timezone,
+          }),
           starterCircleSetupId: undefined,
-        }),
+        })),
     }),
     {
       name: 'hoyst-onboarding-v1',
@@ -254,11 +260,11 @@ export const useOnboardingStore = create<OnboardingStoreState>()(
           applyStarterCircleHiddenDefaults(
             state.starterCircleDraft ??
               createInitialStarterCircleDraft({
-                goal: state.goal,
+                focusArea: state.focusArea,
                 timezone: state.timezone,
               }),
             {
-              goal: state.goal,
+              focusArea: state.focusArea,
               timezone: state.timezone,
             },
           ),
@@ -276,7 +282,7 @@ export const useOnboardingStore = create<OnboardingStoreState>()(
         currentStep: state.currentStep,
         displayName: state.displayName,
         firstCircleSkipped: state.firstCircleSkipped,
-        goal: state.goal,
+        focusArea: state.focusArea,
         handle: state.handle,
         hasPendingStarterCircleSetup: state.hasPendingStarterCircleSetup,
         hasPendingProfileCompletion: state.hasPendingProfileCompletion,

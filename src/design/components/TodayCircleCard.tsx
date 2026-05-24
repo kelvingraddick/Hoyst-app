@@ -51,6 +51,7 @@ export function TodayCircleCard({
   const isPendingMembership = card.viewerMembershipStatus === 'pending';
   const isAlreadyTappedInLabel = card.streakLabel === 'Already tapped in';
   const completionRate = card.completionRate ?? card.progressPercent;
+  const nudgeTargetCount = card.nudgeTargetCount ?? 0;
   const progressTone =
     completionRate >= 85
       ? theme.successForeground
@@ -62,14 +63,20 @@ export function TodayCircleCard({
     : card.viewerTodayStatus === 'skip'
     ? 'Skipped'
     : !card.viewerHasCheckedIn
-    ? 'Needs You'
+    ? card.viewerHasTappedInToday
+      ? 'Tapped Today'
+      : 'Needs You'
     : card.remainingCheckIns > 0
     ? 'Others Needed'
     : 'Complete';
-  const othersNeededTodayLabel =
+  const othersNeededLabel =
     card.remainingCheckIns === 1
-      ? '1 other needed today'
-      : `${card.remainingCheckIns} others needed today`;
+      ? '1 Tap In left this week'
+      : `${card.remainingCheckIns} Tap Ins left this week`;
+  const viewerNeededLabel =
+    card.viewerRemainingTapIns === 1
+      ? '1 Tap In left this week'
+      : `${card.viewerRemainingTapIns ?? 0} Tap Ins left this week`;
   const statusTone: React.ComponentProps<typeof HoystChip>['tone'] =
     statusLabel === 'Complete'
       ? 'green'
@@ -81,23 +88,25 @@ export function TodayCircleCard({
   const fallbackContextLabel = isPendingMembership
     ? 'Pending approval before Tap In unlocks.'
     : !card.viewerHasCheckedIn
-    ? 'Needs your Tap In'
+    ? card.viewerHasTappedInToday
+      ? viewerNeededLabel
+      : 'Needs your Tap In'
     : card.remainingCheckIns > 0
-    ? othersNeededTodayLabel
-    : 'Daily Tap In complete';
+    ? othersNeededLabel
+    : 'Commitment complete';
   const contextLabel = card.matchCopy ?? fallbackContextLabel;
   const statsLabel = isPendingMembership
     ? 'Awaiting approval'
     : card.viewerTodayStatus === 'skip'
     ? 'Grace skip used today'
     : card.remainingCheckIns > 0
-    ? othersNeededTodayLabel
+    ? othersNeededLabel
     : `${completionRate}% tapped in`;
   const actionVariant = isPendingMembership
     ? 'view'
-    : !card.viewerHasCheckedIn
+    : !card.viewerHasCheckedIn && !card.viewerHasTappedInToday
     ? 'check_in'
-    : card.remainingCheckIns > 0
+    : nudgeTargetCount > 0
     ? 'nudge'
     : canShareInvite
     ? 'share'
@@ -110,7 +119,7 @@ export function TodayCircleCard({
         ? 'Nudging...'
         : isNudged
         ? 'Nudged'
-        : `Nudge ${card.remainingCheckIns}`
+        : `Nudge ${nudgeTargetCount}`
       : actionVariant === 'share'
       ? 'Share'
       : 'View';
@@ -166,7 +175,7 @@ export function TodayCircleCard({
 
         <View style={styles.cardCopy}>
           <HoystText style={styles.cardTitle}>{card.title}</HoystText>
-          <HoystText tone="muted">{card.dailyTask}</HoystText>
+          <HoystText tone="muted">{card.commitment}</HoystText>
           <HoystText tone="muted" variant="caption">
             {contextLabel}
           </HoystText>

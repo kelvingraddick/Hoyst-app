@@ -62,7 +62,8 @@ describe('circle service', () => {
     const input = {
       category: 'Fitness',
       circleId: 'circle-1',
-      dailyTask: 'Move for 30 minutes',
+      commitment: 'Move for 30 minutes',
+      commitmentFrequency: {tapInsPerWeek: 4},
       graceRules: {
         skip: {
           allowance: 2,

@@ -9,6 +9,22 @@ We break the traditional grid through **intentional layering and depth transitio
 
 ---
 
+## 1.1 Language System
+
+Hoyst product language uses these terms consistently:
+
+- **User:** Hoyst account owner.
+- **Member:** User participating in a Circle.
+- **Companion:** Mutual relationship. Use only when the product is describing a true mutual relationship.
+- **Circle:** Shared commitment space.
+- **Commitment:** Shared objective of the Circle. It must be specific and actionable.
+- **Commitment Frequency:** Required Tap Ins per period. Current v1 support is `1` to `7` Tap Ins per Monday-to-Sunday week.
+- **Progression:** Member and Circle advancement toward the Commitment.
+
+Implementation rule: product data and public contracts use `commitment`, `commitmentFrequency.tapInsPerWeek`, `focusArea`, and Progression wording. The migration script `scripts/migrate-circle-language-system.mjs` must run before deploying the hard rename so existing Firestore Circles have `commitment` and `commitmentFrequency`.
+
+---
+
 ## 2. Colors & Surface Logic
 
 Our palette is anchored in a deep, nocturnal foundation (`#0e0e0e`) to allow our primary vibrant purple (`#ba9eff`) and secondary neon green (`#6bff8f`) to radiate.

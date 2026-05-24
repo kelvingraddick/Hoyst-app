@@ -44,17 +44,56 @@ async function requireCompletedProfile(uid, idToken) {
     return { profile, uid: authenticatedUid };
 }
 function getDateKey(timezone) {
+    return getDateKeyForDate(timezone, new Date());
+}
+function getDateKeyForDate(timezone, date) {
     const formatter = new Intl.DateTimeFormat('en-US', {
         day: '2-digit',
         month: '2-digit',
         timeZone: timezone,
         year: 'numeric',
     });
-    const parts = formatter.formatToParts(new Date());
+    const parts = formatter.formatToParts(date);
     const year = parts.find(part => part.type === 'year')?.value ?? '1970';
     const month = parts.find(part => part.type === 'month')?.value ?? '01';
     const day = parts.find(part => part.type === 'day')?.value ?? '01';
     return `${year}-${month}-${day}`;
+}
+function getCommitmentWeekDateKeys(timezone, now = new Date()) {
+    const local = new Intl.DateTimeFormat('en-US', {
+        day: '2-digit',
+        month: '2-digit',
+        timeZone: timezone,
+        weekday: 'short',
+        year: 'numeric',
+    }).formatToParts(now);
+    const weekday = local.find(part => part.type === 'weekday')?.value ?? 'Mon';
+    const dayOffsetByWeekday = {
+        Fri: 4,
+        Mon: 0,
+        Sat: 5,
+        Sun: 6,
+        Thu: 3,
+        Tue: 1,
+        Wed: 2,
+    };
+    const localDate = new Date(Number(local.find(part => part.type === 'year')?.value ?? '1970'), Number(local.find(part => part.type === 'month')?.value ?? '1') - 1, Number(local.find(part => part.type === 'day')?.value ?? '1'));
+    const monday = new Date(localDate);
+    monday.setDate(localDate.getDate() - (dayOffsetByWeekday[weekday] ?? 0));
+    return Array.from({ length: 7 }, (_, index) => {
+        const date = new Date(monday);
+        date.setDate(monday.getDate() + index);
+        const year = String(date.getFullYear());
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    });
+}
+function getTapInsPerWeek(circle) {
+    const value = circle?.commitmentFrequency?.tapInsPerWeek;
+    return typeof value === 'number' && Number.isFinite(value)
+        ? Math.min(7, Math.max(1, Math.round(value)))
+        : 7;
 }
 exports.submitTapIn = (0, https_1.onCall)(async (request) => {
     const { profile, uid } = await requireCompletedProfile(request.auth?.uid);
@@ -118,33 +157,43 @@ exports.submitTapIn = (0, https_1.onCall)(async (request) => {
         }, { merge: true });
         return { checkInId: uid, dateKey };
     });
-    const [circleSnapshot, memberSnapshots, checkInSnapshots] = await Promise.all([
+    const [circleSnapshot, memberSnapshots] = await Promise.all([
         circleRef.get(),
         circleRef.collection('members').where('status', '==', 'active').get(),
-        circleRef
-            .collection('days')
-            .doc(result.dateKey)
-            .collection('checkIns')
-            .get(),
     ]);
     const circle = circleSnapshot.data();
-    const coveredUids = new Set(checkInSnapshots.docs
-        .filter(snapshot => ['done', 'skip'].includes(snapshot.data().status))
-        .map(snapshot => snapshot.id));
+    const timezone = circle?.timezone ?? profile.timezone ?? 'UTC';
+    const tapInsPerWeek = getTapInsPerWeek(circle);
+    const weekDateKeys = getCommitmentWeekDateKeys(timezone);
+    const weeklyCheckInSnapshots = await Promise.all(weekDateKeys.map(dateKey => circleRef.collection('days').doc(dateKey).collection('checkIns').get()));
+    const coveredCounts = new Map();
+    weeklyCheckInSnapshots.forEach(snapshot => {
+        snapshot.docs.forEach(doc => {
+            if (['done', 'skip'].includes(doc.data().status)) {
+                coveredCounts.set(doc.id, (coveredCounts.get(doc.id) ?? 0) + 1);
+            }
+        });
+    });
     const pendingMembers = memberSnapshots.docs
         .map(snapshot => snapshot.data())
         .filter(memberData => {
         const memberUid = memberData.uid;
         return (typeof memberUid === 'string' &&
             memberUid !== uid &&
-            !coveredUids.has(memberUid));
+            (coveredCounts.get(memberUid) ?? 0) < tapInsPerWeek);
     });
-    const remainingCount = pendingMembers.length;
+    const remainingCount = pendingMembers.reduce((total, memberData) => {
+        const memberUid = memberData.uid;
+        return typeof memberUid === 'string'
+            ? total + Math.max(tapInsPerWeek - (coveredCounts.get(memberUid) ?? 0), 0)
+            : total;
+    }, 0);
     if (remainingCount > 0 && remainingCount <= 2) {
+        const weekPeriodKey = weekDateKeys[0] ?? result.dateKey;
         await Promise.all(pendingMembers.map(memberData => (0, notifications_1.notifyCircleAtRisk)({
             circleId: input.circleId,
             circleTitle: typeof circle?.title === 'string' ? circle.title : 'Your circle',
-            dateKey: result.dateKey,
+            periodKey: weekPeriodKey,
             remainingCount,
             targetUid: memberData.uid,
         }))).catch(error => console.error('notify_circle_at_risk_failed', error));

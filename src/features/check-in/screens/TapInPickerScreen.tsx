@@ -169,7 +169,7 @@ export function TapInPickerScreen({navigation}: Props): React.JSX.Element {
   };
 
   const nudgeCircle = (circle: CircleManagementCard) => {
-    if (circle.remainingCheckIns <= 0) {
+    if ((circle.nudgeTargetCount ?? 0) <= 0) {
       openCircle(circle.id);
       return;
     }
@@ -198,7 +198,7 @@ export function TapInPickerScreen({navigation}: Props): React.JSX.Element {
             ? `${result.nudged} member${
                 result.nudged === 1 ? '' : 's'
               } nudged.`
-            : 'Everyone is already covered today.',
+            : 'Everyone has completed their Commitment Frequency.',
         );
       })
       .catch(error => {
@@ -249,7 +249,8 @@ export function TapInPickerScreen({navigation}: Props): React.JSX.Element {
             Tap In
           </HoystText>
           <HoystText style={styles.centerText} tone="muted">
-            Handle the circles that need you today, then keep the rest moving.
+            Handle the Circles that need your Tap In, then keep the rest
+            moving.
           </HoystText>
         </View>
         <View style={styles.summaryChips}>
@@ -288,8 +289,10 @@ export function TapInPickerScreen({navigation}: Props): React.JSX.Element {
               circle.state === 'risk'
                 ? 'Group streak at risk'
                 : circle.remainingCheckIns === 1
-                ? '1 other needed today'
-                : `${circle.remainingCheckIns} others needed today`;
+                ? '1 Tap In left this week'
+                : `${circle.remainingCheckIns} Tap Ins left this week`;
+            const canTapInNow = !circle.viewerHasTappedInToday;
+            const actionLabel = canTapInNow ? 'Tap In' : 'View Circle';
 
             return (
               <GlassPanel key={circle.id} style={styles.dueCard}>
@@ -344,7 +347,7 @@ export function TapInPickerScreen({navigation}: Props): React.JSX.Element {
                   <HoystText style={styles.cardTitle}>{circle.title}</HoystText>
                   <View style={styles.taskRow}>
                     {privacyIcon}
-                    <HoystText tone="muted">{circle.dailyTask}</HoystText>
+                    <HoystText tone="muted">{circle.commitment}</HoystText>
                   </View>
                 </View>
 
@@ -399,7 +402,9 @@ export function TapInPickerScreen({navigation}: Props): React.JSX.Element {
                   </View>
 
                   <Pressable
-                    onPress={() => openTapIn(circle.id)}
+                    onPress={() =>
+                      canTapInNow ? openTapIn(circle.id) : openCircle(circle.id)
+                    }
                     style={({pressed}) => [
                       styles.primaryActionWrap,
                       {
@@ -424,7 +429,7 @@ export function TapInPickerScreen({navigation}: Props): React.JSX.Element {
                           {color: theme.actionForeground},
                         ]}
                         variant="button">
-                        Tap In
+                        {actionLabel}
                       </HoystText>
                     </View>
                   </Pressable>
@@ -475,11 +480,11 @@ export function TapInPickerScreen({navigation}: Props): React.JSX.Element {
           <View style={styles.emptyState}>
             <TapInRingMark innerSize={34} outerSize={62} />
             <HoystText style={styles.centerText} variant="title">
-              You are tapped in for today
+              Your Commitments are complete
             </HoystText>
             <HoystText style={styles.centerText} tone="muted">
-              Every active circle has what it needs from you. You can still keep
-              the group moving below.
+              Every active Circle has what it needs from you for this week. You
+              can still keep Members moving below.
             </HoystText>
           </View>
         </GlassPanel>
@@ -497,7 +502,8 @@ export function TapInPickerScreen({navigation}: Props): React.JSX.Element {
 
         {secondaryCircles.length > 0 ? (
           secondaryCircles.map(circle => {
-            const canNudge = circle.remainingCheckIns > 0;
+            const nudgeTargetCount = circle.nudgeTargetCount ?? 0;
+            const canNudge = nudgeTargetCount > 0;
             const canShare = !canNudge && Boolean(circle.inviteUrl);
             const isNudged = nudgedCircleIds.has(circle.id);
             const isNudging = nudgingCircleIds.has(circle.id);
@@ -506,7 +512,7 @@ export function TapInPickerScreen({navigation}: Props): React.JSX.Element {
                 ? 'Nudging...'
                 : isNudged
                 ? 'Nudged'
-                : `Nudge ${circle.remainingCheckIns}`
+                : `Nudge ${nudgeTargetCount}`
               : canShare
               ? 'Share'
               : 'View';
@@ -517,11 +523,11 @@ export function TapInPickerScreen({navigation}: Props): React.JSX.Element {
               : theme.successForeground;
             const statusLabel = canNudge
               ? circle.remainingCheckIns === 1
-                ? '1 other needed today'
-                : `${circle.remainingCheckIns} others needed today`
+                ? '1 Tap In left this week'
+                : `${circle.remainingCheckIns} Tap Ins left this week`
               : circle.viewerTodayStatus === 'skip'
               ? 'Grace skip used today'
-              : 'Daily Tap In complete';
+              : 'Commitment complete';
             const ActionIcon = canNudge
               ? BellRing
               : canShare

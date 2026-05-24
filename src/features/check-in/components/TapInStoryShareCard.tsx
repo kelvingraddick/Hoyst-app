@@ -87,7 +87,7 @@ export function TapInStoryShareCard({
               {story.circleTitle}
             </HoystText>
             <HoystText numberOfLines={2} style={styles.subtitle}>
-              {story.dailyTask}
+              {story.commitment}
             </HoystText>
           </View>
         </View>
@@ -108,7 +108,7 @@ export function TapInStoryShareCard({
                 {story.progressLabel}
               </HoystText>
               <HoystText style={styles.statLabel} variant="caption">
-                Circle progress
+                Circle Progression
               </HoystText>
             </View>
             <View style={styles.stat}>

@@ -17,7 +17,8 @@ import {
 
 const circleData = {
   category: 'Fitness',
-  dailyTask: '30min workout',
+  commitment: '30min workout',
+  commitmentFrequency: {tapInsPerWeek: 1},
   joinMode: 'invite_only',
   maxSize: 4,
   memberCount: 2,
@@ -60,6 +61,7 @@ describe('home data mapping', () => {
 
     expect(card).toMatchObject({
       id: 'circle-1',
+      nudgeTargetCount: 1,
       progressPercent: 50,
       remainingCheckIns: 1,
       state: 'active',
@@ -202,6 +204,102 @@ describe('home data mapping', () => {
       viewerTodayStatus: undefined,
     });
     expect(matchesHomeCircleFilter(card!, 'needsYou')).toBe(true);
+  });
+
+  it('tracks weekly Commitment Frequency separately from today status', () => {
+    const card = mapHomeCircleFromData({
+      circleData: {
+        ...circleData,
+        commitmentFrequency: {tapInsPerWeek: 4},
+      },
+      circleId: 'circle-weekly',
+      membersData: [
+        {
+          displayName: 'Kelvin North',
+          role: 'owner',
+          status: 'active',
+          uid: 'user-1',
+        },
+        {
+          displayName: 'Ava Stone',
+          role: 'member',
+          status: 'active',
+          uid: 'user-2',
+        },
+      ],
+      membershipData: {
+        displayName: 'Kelvin North',
+        role: 'owner',
+        status: 'active',
+        uid: 'user-1',
+      },
+      periodCheckInStatuses: new Map([
+        [
+          '2026-05-18',
+          new Map([
+            ['user-1', 'done'],
+            ['user-2', 'done'],
+          ]),
+        ],
+        ['2026-05-19', new Map([['user-1', 'done']])],
+      ]),
+      todayCheckInStatuses: new Map([['user-1', 'done']]),
+    });
+
+    expect(card).toMatchObject({
+      progressPercent: 38,
+      nudgeTargetCount: 1,
+      remainingCheckIns: 5,
+      state: 'risk',
+      streakLabel: 'Tapped today',
+      viewerHasCheckedIn: false,
+      viewerHasTappedInToday: true,
+      viewerRemainingTapIns: 2,
+      viewerTodayStatus: 'done',
+    });
+    expect(card?.members).toEqual([
+      expect.objectContaining({id: 'user-1', state: 'pending'}),
+      expect.objectContaining({id: 'user-2', state: 'pending'}),
+    ]);
+  });
+
+  it('does not create a nudge target for the viewer after their daily Tap In', () => {
+    const card = mapHomeCircleFromData({
+      circleData: {
+        ...circleData,
+        commitmentFrequency: {tapInsPerWeek: 4},
+        memberCount: 1,
+      },
+      circleId: 'circle-weekly-solo',
+      membersData: [
+        {
+          displayName: 'Kelvin North',
+          role: 'owner',
+          status: 'active',
+          uid: 'user-1',
+        },
+      ],
+      membershipData: {
+        displayName: 'Kelvin North',
+        role: 'owner',
+        status: 'active',
+        uid: 'user-1',
+      },
+      periodCheckInStatuses: new Map([
+        ['2026-05-19', new Map([['user-1', 'done']])],
+      ]),
+      todayCheckInStatuses: new Map([['user-1', 'done']]),
+    });
+
+    expect(card).toMatchObject({
+      nudgeTargetCount: 0,
+      progressPercent: 25,
+      remainingCheckIns: 3,
+      streakLabel: 'Tapped today',
+      viewerHasCheckedIn: false,
+      viewerHasTappedInToday: true,
+      viewerRemainingTapIns: 3,
+    });
   });
 
   it('keeps positive streak labels unchanged', () => {
@@ -601,7 +699,7 @@ describe('Home greeting fallback', () => {
         now: new Date('2026-05-07T09:00:00.000Z'),
         timezone: 'UTC',
       }),
-    ).toBe('Aaron, morning. New day, same goals, fewer excuses.');
+    ).toBe('Aaron, morning. New day, same Commitment, fewer excuses.');
     expect(
       getHomeGreetingFallback({
         circles,

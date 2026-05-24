@@ -27,8 +27,8 @@ const detail = {
   activity: [],
   category: 'Wellness',
   completionRate: 82,
-  dailyGoal: 'Daily goal: Move for 20 minutes',
-  dailyTask: 'Move for 20 minutes',
+  commitmentLabel: 'Commitment: Move for 20 minutes',
+  commitment: 'Move for 20 minutes',
   id: 'circle-1',
   inviteUrl: 'https://hoyst.app/invite/circle-1',
   maxSize: 12,
@@ -73,8 +73,8 @@ describe('Tap In story sharing', () => {
 
     expect(story).toEqual({
       circleTitle: 'Morning Movers',
-      ctaLabel: 'Join this circle on Hoyst',
-      dailyTask: 'Move for 20 minutes',
+      ctaLabel: 'Join this Circle on Hoyst',
+      commitment: 'Move for 20 minutes',
       hasInviteUrl: true,
       inviteUrl: 'https://hoyst.app/invite/circle-1',
       note: 'Finished the set before breakfast.',

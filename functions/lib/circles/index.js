@@ -13,9 +13,13 @@ const graceRuleSchema = zod_1.z.object({
     allowance: zod_1.z.number().int().min(0).max(30),
     windowDays: zod_1.z.number().int().min(1).max(365),
 });
+const commitmentFrequencySchema = zod_1.z.object({
+    tapInsPerWeek: zod_1.z.number().int().min(1).max(7),
+});
 const createCircleSchema = zod_1.z.object({
     category: zod_1.z.string().trim().min(1).max(40),
-    dailyTask: zod_1.z.string().trim().min(1).max(160),
+    commitment: zod_1.z.string().trim().min(1).max(160),
+    commitmentFrequency: commitmentFrequencySchema,
     graceRules: zod_1.z
         .object({
         skip: graceRuleSchema,
@@ -93,6 +97,43 @@ function getDateKeyForTimezone(timezone, now = new Date()) {
     const month = parts.find(part => part.type === 'month')?.value ?? '01';
     const day = parts.find(part => part.type === 'day')?.value ?? '01';
     return `${year}-${month}-${day}`;
+}
+function getCommitmentWeekDateKeys(timezone, now = new Date()) {
+    const parts = new Intl.DateTimeFormat('en-US', {
+        day: '2-digit',
+        month: '2-digit',
+        timeZone: timezone,
+        weekday: 'short',
+        year: 'numeric',
+    }).formatToParts(now);
+    const weekday = parts.find(part => part.type === 'weekday')?.value ?? 'Mon';
+    const dayOffsetByWeekday = {
+        Fri: 4,
+        Mon: 0,
+        Sat: 5,
+        Sun: 6,
+        Thu: 3,
+        Tue: 1,
+        Wed: 2,
+    };
+    const localDate = new Date(Number(parts.find(part => part.type === 'year')?.value ?? '1970'), Number(parts.find(part => part.type === 'month')?.value ?? '1') - 1, Number(parts.find(part => part.type === 'day')?.value ?? '1'));
+    const monday = new Date(localDate);
+    monday.setDate(localDate.getDate() - (dayOffsetByWeekday[weekday] ?? 0));
+    return Array.from({ length: 7 }, (_, index) => {
+        const date = new Date(monday);
+        date.setDate(monday.getDate() + index);
+        return [
+            String(date.getFullYear()),
+            String(date.getMonth() + 1).padStart(2, '0'),
+            String(date.getDate()).padStart(2, '0'),
+        ].join('-');
+    });
+}
+function getTapInsPerWeek(circle) {
+    const value = circle?.commitmentFrequency?.tapInsPerWeek;
+    return typeof value === 'number' && Number.isFinite(value)
+        ? Math.min(7, Math.max(1, Math.round(value)))
+        : 7;
 }
 function buildMemberPublicPreview(profile, uid) {
     return {
@@ -183,7 +224,8 @@ exports.createCircle = (0, https_1.onCall)(async (request) => {
     const circle = {
         category: input.category,
         createdAt: now,
-        dailyTask: input.dailyTask,
+        commitment: input.commitment,
+        commitmentFrequency: input.commitmentFrequency,
         graceRules: input.graceRules ?? {
             skip: {
                 allowance: 2,
@@ -214,7 +256,8 @@ exports.createCircle = (0, https_1.onCall)(async (request) => {
     if (input.privacy === 'public') {
         batch.set(publicIndexRef, {
             category: input.category,
-            dailyTask: input.dailyTask,
+            commitment: input.commitment,
+            commitmentFrequency: input.commitmentFrequency,
             joinMode: input.joinMode,
             maxSize: input.maxSize,
             memberCount: 1,
@@ -481,19 +524,33 @@ exports.nudgeCircleMembers = (0, https_1.onCall)({ secrets: [notifications_1.one
         throw new https_1.HttpsError('permission-denied', 'Join this circle first.');
     }
     const circle = circleSnapshot.data();
-    const dateKey = getDateKeyForTimezone(asOptionalString(circle?.timezone) ?? 'UTC', now);
-    const [activeMemberSnapshots, checkInSnapshots] = await Promise.all([
+    const timezone = asOptionalString(circle?.timezone) ?? 'UTC';
+    const dateKey = getDateKeyForTimezone(timezone, now);
+    const weekDateKeys = getCommitmentWeekDateKeys(timezone, now);
+    const tapInsPerWeek = getTapInsPerWeek(circle);
+    const [activeMemberSnapshots, ...weeklyCheckInSnapshots] = await Promise.all([
         circleRef.collection('members').where('status', '==', 'active').get(),
-        circleRef.collection('days').doc(dateKey).collection('checkIns').get(),
+        ...weekDateKeys.map(weekDateKey => circleRef
+            .collection('days')
+            .doc(weekDateKey)
+            .collection('checkIns')
+            .get()),
     ]);
-    const coveredUids = new Set(checkInSnapshots.docs
-        .filter(snapshot => ['done', 'skip'].includes(snapshot.data().status))
-        .map(snapshot => snapshot.id));
+    const coveredCounts = new Map();
+    weeklyCheckInSnapshots.forEach(snapshot => {
+        snapshot.docs.forEach(doc => {
+            if (['done', 'skip'].includes(doc.data().status)) {
+                coveredCounts.set(doc.id, (coveredCounts.get(doc.id) ?? 0) + 1);
+            }
+        });
+    });
     const targets = activeMemberSnapshots.docs
         .map(snapshot => snapshot.data())
         .filter(memberData => {
         const targetUid = asOptionalString(memberData.uid);
-        return Boolean(targetUid && targetUid !== uid && !coveredUids.has(targetUid));
+        return Boolean(targetUid &&
+            targetUid !== uid &&
+            (coveredCounts.get(targetUid) ?? 0) < tapInsPerWeek);
     });
     await Promise.all(targets.map(memberData => (0, notifications_1.notifyNudge)({
         actor: {
@@ -599,7 +656,8 @@ exports.updateCircle = (0, https_1.onCall)(async (request) => {
     const now = firestore_1.FieldValue.serverTimestamp();
     const circleUpdate = {
         category: input.category,
-        dailyTask: input.dailyTask,
+        commitment: input.commitment,
+        commitmentFrequency: input.commitmentFrequency,
         graceRules: input.graceRules ?? {
             skip: {
                 allowance: 2,
@@ -618,7 +676,8 @@ exports.updateCircle = (0, https_1.onCall)(async (request) => {
     if (input.privacy === 'public') {
         batch.set(publicIndexRef, {
             category: input.category,
-            dailyTask: input.dailyTask,
+            commitment: input.commitment,
+            commitmentFrequency: input.commitmentFrequency,
             joinMode: input.joinMode,
             maxSize: input.maxSize,
             memberCount,

@@ -4,16 +4,16 @@
 
 ### Core concept
 Hoyst is about:
-- consistency over perfection  
-- momentum through small daily actions  
-- social accountability with low friction  
+- consistency over perfection
+- momentum through small Commitments
+- social accountability with low friction
 
 The UI should feel:
-- premium  
-- calm but energized  
-- minimal but expressive  
-- modern iOS-inspired  
-- tactile and slightly playful  
+- premium
+- calm but energized
+- minimal but expressive
+- modern iOS-inspired
+- tactile and slightly playful
 
 ---
 

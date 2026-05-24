@@ -23,9 +23,13 @@ const graceRuleSchema = z.object({
   allowance: z.number().int().min(0).max(30),
   windowDays: z.number().int().min(1).max(365),
 });
+const commitmentFrequencySchema = z.object({
+  tapInsPerWeek: z.number().int().min(1).max(7),
+});
 const createCircleSchema = z.object({
   category: z.string().trim().min(1).max(40),
-  dailyTask: z.string().trim().min(1).max(160),
+  commitment: z.string().trim().min(1).max(160),
+  commitmentFrequency: commitmentFrequencySchema,
   graceRules: z
     .object({
       skip: graceRuleSchema,
@@ -113,6 +117,54 @@ function getDateKeyForTimezone(timezone: string, now = new Date()) {
   const day = parts.find(part => part.type === 'day')?.value ?? '01';
 
   return `${year}-${month}-${day}`;
+}
+
+function getCommitmentWeekDateKeys(timezone: string, now = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    day: '2-digit',
+    month: '2-digit',
+    timeZone: timezone,
+    weekday: 'short',
+    year: 'numeric',
+  }).formatToParts(now);
+  const weekday = parts.find(part => part.type === 'weekday')?.value ?? 'Mon';
+  const dayOffsetByWeekday: Record<string, number> = {
+    Fri: 4,
+    Mon: 0,
+    Sat: 5,
+    Sun: 6,
+    Thu: 3,
+    Tue: 1,
+    Wed: 2,
+  };
+  const localDate = new Date(
+    Number(parts.find(part => part.type === 'year')?.value ?? '1970'),
+    Number(parts.find(part => part.type === 'month')?.value ?? '1') - 1,
+    Number(parts.find(part => part.type === 'day')?.value ?? '1'),
+  );
+  const monday = new Date(localDate);
+  monday.setDate(localDate.getDate() - (dayOffsetByWeekday[weekday] ?? 0));
+
+  return Array.from({length: 7}, (_, index) => {
+    const date = new Date(monday);
+    date.setDate(monday.getDate() + index);
+
+    return [
+      String(date.getFullYear()),
+      String(date.getMonth() + 1).padStart(2, '0'),
+      String(date.getDate()).padStart(2, '0'),
+    ].join('-');
+  });
+}
+
+function getTapInsPerWeek(
+  circle: {commitmentFrequency?: {tapInsPerWeek?: unknown}} | undefined,
+) {
+  const value = circle?.commitmentFrequency?.tapInsPerWeek;
+
+  return typeof value === 'number' && Number.isFinite(value)
+    ? Math.min(7, Math.max(1, Math.round(value)))
+    : 7;
 }
 
 function buildMemberPublicPreview(profile: DocumentData, uid: string) {
@@ -240,7 +292,8 @@ export const createCircle = onCall(async request => {
   const circle = {
     category: input.category,
     createdAt: now,
-    dailyTask: input.dailyTask,
+    commitment: input.commitment,
+    commitmentFrequency: input.commitmentFrequency,
     graceRules: input.graceRules ?? {
       skip: {
         allowance: 2,
@@ -273,7 +326,8 @@ export const createCircle = onCall(async request => {
   if (input.privacy === 'public') {
     batch.set(publicIndexRef, {
       category: input.category,
-      dailyTask: input.dailyTask,
+      commitment: input.commitment,
+      commitmentFrequency: input.commitmentFrequency,
       joinMode: input.joinMode,
       maxSize: input.maxSize,
       memberCount: 1,
@@ -651,25 +705,37 @@ export const nudgeCircleMembers = onCall(
     }
 
     const circle = circleSnapshot.data();
-    const dateKey = getDateKeyForTimezone(
-      asOptionalString(circle?.timezone) ?? 'UTC',
-      now,
-    );
-    const [activeMemberSnapshots, checkInSnapshots] = await Promise.all([
+    const timezone = asOptionalString(circle?.timezone) ?? 'UTC';
+    const dateKey = getDateKeyForTimezone(timezone, now);
+    const weekDateKeys = getCommitmentWeekDateKeys(timezone, now);
+    const tapInsPerWeek = getTapInsPerWeek(circle);
+    const [activeMemberSnapshots, ...weeklyCheckInSnapshots] = await Promise.all([
       circleRef.collection('members').where('status', '==', 'active').get(),
-      circleRef.collection('days').doc(dateKey).collection('checkIns').get(),
+      ...weekDateKeys.map(weekDateKey =>
+        circleRef
+          .collection('days')
+          .doc(weekDateKey)
+          .collection('checkIns')
+          .get(),
+      ),
     ]);
-    const coveredUids = new Set(
-      checkInSnapshots.docs
-        .filter(snapshot => ['done', 'skip'].includes(snapshot.data().status))
-        .map(snapshot => snapshot.id),
-    );
+    const coveredCounts = new Map<string, number>();
+
+    weeklyCheckInSnapshots.forEach(snapshot => {
+      snapshot.docs.forEach(doc => {
+        if (['done', 'skip'].includes(doc.data().status)) {
+          coveredCounts.set(doc.id, (coveredCounts.get(doc.id) ?? 0) + 1);
+        }
+      });
+    });
     const targets = activeMemberSnapshots.docs
       .map(snapshot => snapshot.data())
       .filter(memberData => {
         const targetUid = asOptionalString(memberData.uid);
         return Boolean(
-          targetUid && targetUid !== uid && !coveredUids.has(targetUid),
+          targetUid &&
+            targetUid !== uid &&
+            (coveredCounts.get(targetUid) ?? 0) < tapInsPerWeek,
         );
       });
 
@@ -831,7 +897,8 @@ export const updateCircle = onCall(async request => {
   const now = FieldValue.serverTimestamp();
   const circleUpdate = {
     category: input.category,
-    dailyTask: input.dailyTask,
+    commitment: input.commitment,
+    commitmentFrequency: input.commitmentFrequency,
     graceRules: input.graceRules ?? {
       skip: {
         allowance: 2,
@@ -852,7 +919,8 @@ export const updateCircle = onCall(async request => {
   if (input.privacy === 'public') {
     batch.set(publicIndexRef, {
       category: input.category,
-      dailyTask: input.dailyTask,
+      commitment: input.commitment,
+      commitmentFrequency: input.commitmentFrequency,
       joinMode: input.joinMode,
       maxSize: input.maxSize,
       memberCount,

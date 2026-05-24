@@ -7,6 +7,7 @@ jest.mock('@react-navigation/native', () => ({
   },
 }));
 
+import type {CreateCircleDraft} from '../src/types/models';
 import {useSessionStore} from '../src/store/session-store';
 import {useSettingsStore} from '../src/store/settings-store';
 import {resolveHoystThemeScheme} from '../src/design/theme/useHoystTheme';
@@ -16,6 +17,7 @@ import {
 } from '../src/store/onboarding-store';
 import {continueAsGuestFromAuth} from '../src/features/auth/services/auth-dismiss';
 import {finalizeReadyProfileOnboardingSetup} from '../src/features/auth/services/onboarding-finalizer';
+import {isStarterCircleDraftReady} from '../src/features/auth/services/onboarding-circle';
 import {buildOnboardingPreferences} from '../src/features/auth/services/onboarding-payload';
 import {
   completeOnboardingSetup,
@@ -318,9 +320,15 @@ describe('root navigator mode policy', () => {
   });
 
   it('keeps the root mounted while an authenticated user profile loads', () => {
-    useSessionStore.getState().setAuthenticating();
+    useSessionStore.getState().setAuthenticating({
+      displayName: 'Kelvin',
+      email: 'kelvin@example.com',
+      providerIds: ['password'],
+      uid: 'uid-1',
+    });
 
     expect(useSessionStore.getState().status).toBe('authenticating');
+    expect(useSessionStore.getState().user?.uid).toBe('uid-1');
     expect(
       getRootNavigatorMode({
         hasHydratedOnboarding: true,
@@ -702,12 +710,12 @@ describe('onboarding store', () => {
   it('moves through the Duolingo-style stepper', () => {
     const store = useOnboardingStore.getState();
 
-    store.setCurrentStep('goal');
+    store.setCurrentStep('focusArea');
     store.nextStep();
     expect(useOnboardingStore.getState().currentStep).toBe('circleTitle');
 
     useOnboardingStore.getState().previousStep();
-    expect(useOnboardingStore.getState().currentStep).toBe('goal');
+    expect(useOnboardingStore.getState().currentStep).toBe('focusArea');
   });
 
   it('routes circle review through notification opt-in before auth', () => {
@@ -721,27 +729,27 @@ describe('onboarding store', () => {
     expect(useOnboardingStore.getState().currentStep).toBe('auth');
   });
 
-  it('tracks the goal and builds onboarding preferences', () => {
+  it('tracks the focusArea and builds onboarding preferences', () => {
     const store = useOnboardingStore.getState();
 
-    store.setGoal('fitness');
+    store.setFocusArea('fitness');
 
     expect(useOnboardingStore.getState().getPreferences()).toEqual({
-      goal: 'fitness',
+      focusArea: 'fitness',
     });
   });
 
   it('persists starter circle fields and skip intent', () => {
     const store = useOnboardingStore.getState();
 
-    store.setGoal('focus');
+    store.setFocusArea('focus');
     store.setStarterCircleField('title', 'Maker Mornings');
-    store.setStarterCircleField('dailyTask', 'Ship one focused block');
+    store.setStarterCircleField('commitment', 'Ship one focused block');
     store.setFirstCircleSkipped(true);
 
     expect(useOnboardingStore.getState().starterCircleDraft).toMatchObject({
       category: 'Deep Work',
-      dailyTask: 'Ship one focused block',
+      commitment: 'Ship one focused block',
       title: 'Maker Mornings',
     });
     expect(useOnboardingStore.getState().firstCircleSkipped).toBe(true);
@@ -751,7 +759,7 @@ describe('onboarding store', () => {
     const store = useOnboardingStore.getState();
 
     store.setStarterCircleField('title', 'Maker Mornings');
-    store.setStarterCircleField('dailyTask', 'Ship one focused block');
+    store.setStarterCircleField('commitment', 'Ship one focused block');
 
     const setupId = store.prepareStarterCircleSetup();
 
@@ -778,7 +786,7 @@ describe('onboarding store', () => {
     const store = useOnboardingStore.getState();
 
     store.setFirstCircleSkipped(true);
-    store.setGoal('fitness');
+    store.setFocusArea('fitness');
 
     expect(useOnboardingStore.getState().firstCircleSkipped).toBe(false);
 
@@ -795,6 +803,21 @@ describe('onboarding store', () => {
     expect(useOnboardingStore.getState().starterCircleSetupId).not.toBe(
       setupId,
     );
+  });
+
+  it('resets stale starter circle draft fields when starting a new attempt', () => {
+    const store = useOnboardingStore.getState();
+
+    store.setFocusArea('focus');
+    store.setStarterCircleField('title', 'Stale Makers');
+    store.setStarterCircleField('commitment', 'Ship a stale block');
+    store.startOnboardingWizard();
+
+    expect(useOnboardingStore.getState().starterCircleDraft).toMatchObject({
+      category: 'Deep Work',
+      commitment: '',
+      title: '',
+    });
   });
 
   it('normalizes removed persisted steps to active onboarding steps', () => {
@@ -877,12 +900,12 @@ describe('onboarding store', () => {
   it('starts the onboarding wizard from the welcome step', () => {
     const store = useOnboardingStore.getState();
 
-    store.setGoal('focus');
+    store.setFocusArea('focus');
     store.setCurrentStep('auth');
     store.startOnboardingWizard();
 
     expect(useOnboardingStore.getState().currentStep).toBe('welcome');
-    expect(useOnboardingStore.getState().goal).toBe('focus');
+    expect(useOnboardingStore.getState().focusArea).toBe('focus');
   });
 
   it('sends returning protected-action guests back through onboarding', () => {
@@ -970,10 +993,10 @@ describe('onboarding complete profile payload', () => {
   it('includes onboarding preferences when present', () => {
     expect(
       buildOnboardingPreferences({
-        goal: 'wellness',
+        focusArea: 'wellness',
       }),
     ).toEqual({
-      goal: 'wellness',
+      focusArea: 'wellness',
     });
   });
 
@@ -997,7 +1020,7 @@ describe('onboarding completion finalizer', () => {
     });
     const starterCircleDraft = {
       ...useOnboardingStore.getState().starterCircleDraft,
-      dailyTask: 'Read 20 pages',
+      commitment: 'Read 20 pages',
       graceRules: {
         skip: {
           allowance: 1,
@@ -1026,7 +1049,7 @@ describe('onboarding completion finalizer', () => {
       expect.objectContaining({
         ...profile,
         starterCircle: expect.objectContaining({
-          dailyTask: 'Read 20 pages',
+          commitment: 'Read 20 pages',
           graceRules: {
             skip: {
               allowance: 2,
@@ -1048,7 +1071,7 @@ describe('onboarding completion finalizer', () => {
     });
     const starterCircleDraft = {
       ...useOnboardingStore.getState().starterCircleDraft,
-      dailyTask: 'Read 20 pages',
+      commitment: 'Read 20 pages',
       title: 'Readers',
     };
 
@@ -1068,7 +1091,7 @@ describe('onboarding completion finalizer', () => {
     const onProfileCompleted = jest.fn();
     const starterCircleDraft = {
       ...useOnboardingStore.getState().starterCircleDraft,
-      dailyTask: 'Read 20 pages',
+      commitment: 'Read 20 pages',
       title: 'Readers',
     };
 
@@ -1095,11 +1118,32 @@ describe('onboarding completion finalizer', () => {
     ).toBe(false);
   });
 
+  it('treats legacy starter drafts without commitments as incomplete', () => {
+    const legacyDraft = {
+      ...useOnboardingStore.getState().starterCircleDraft,
+      commitment: undefined,
+      title: 'Legacy Circle',
+    };
+
+    expect(() =>
+      isStarterCircleDraftReady(legacyDraft as unknown as CreateCircleDraft),
+    ).not.toThrow();
+    expect(
+      isStarterCircleDraftReady(legacyDraft as unknown as CreateCircleDraft),
+    ).toBe(false);
+    expect(
+      shouldCreateStarterCircle({
+        firstCircleSkipped: false,
+        starterCircleDraft: legacyDraft as unknown as CreateCircleDraft,
+      }),
+    ).toBe(false);
+  });
+
   it('requires a setup id before creating a starter circle', async () => {
     const completeProfile = jest.fn();
     const starterCircleDraft = {
       ...useOnboardingStore.getState().starterCircleDraft,
-      dailyTask: 'Read 20 pages',
+      commitment: 'Read 20 pages',
       title: 'Readers',
     };
 
@@ -1122,7 +1166,7 @@ describe('ready profile onboarding finalizer', () => {
     });
     const starterCircleDraft = {
       ...useOnboardingStore.getState().starterCircleDraft,
-      dailyTask: 'Read 20 pages',
+      commitment: 'Read 20 pages',
       title: 'Readers',
     };
 
@@ -1130,7 +1174,7 @@ describe('ready profile onboarding finalizer', () => {
       finalizeReadyProfileOnboardingSetup(
         {
           firstCircleSkipped: false,
-          onboardingPreferences: {goal: 'focus'},
+          onboardingPreferences: {focusArea: 'focus'},
           profile: {
             handle: 'kelvin_north',
             id: 'user-1',
@@ -1151,7 +1195,7 @@ describe('ready profile onboarding finalizer', () => {
       expect.objectContaining({
         displayName: 'Kelvin North',
         handle: 'kelvin_north',
-        onboardingPreferences: {goal: 'focus'},
+        onboardingPreferences: {focusArea: 'focus'},
         starterCircle: expect.objectContaining({
           setupId: 'setup-2',
         }),

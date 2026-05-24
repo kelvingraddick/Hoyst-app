@@ -7,25 +7,26 @@ import {
   buildCreateCirclePayload,
   createInitialCircleDraft,
   defaultCircleMaxSize,
+  defaultCommitmentFrequency,
   defaultSkipGraceRule,
   getPrivacyChoiceFields,
 } from '../../create-circle/services/create-circle-draft';
-import type {OnboardingGoal} from './onboarding-options';
+import type {OnboardingFocusArea} from './onboarding-options';
 
-export function getStarterCircleCategory(goal?: OnboardingGoal) {
-  if (goal === 'fitness') {
+export function getStarterCircleCategory(focusArea?: OnboardingFocusArea) {
+  if (focusArea === 'fitness') {
     return 'Fitness';
   }
 
-  if (goal === 'focus') {
+  if (focusArea === 'focus') {
     return 'Deep Work';
   }
 
-  if (goal === 'wellness') {
+  if (focusArea === 'wellness') {
     return 'Wellness';
   }
 
-  if (goal === 'sobriety') {
+  if (focusArea === 'sobriety') {
     return 'Sobriety';
   }
 
@@ -33,49 +34,66 @@ export function getStarterCircleCategory(goal?: OnboardingGoal) {
 }
 
 export function createInitialStarterCircleDraft({
-  goal,
+  focusArea,
   timezone,
 }: {
-  goal?: OnboardingGoal;
+  focusArea?: OnboardingFocusArea;
   timezone?: string;
 } = {}): CreateCircleDraft {
   const draft = createInitialCircleDraft(timezone);
 
   return applyStarterCircleHiddenDefaults({
     ...draft,
-    category: getStarterCircleCategory(goal),
+    category: getStarterCircleCategory(focusArea),
   });
 }
 
 export function applyStarterCircleHiddenDefaults(
   draft: CreateCircleDraft,
   {
-    goal,
+    focusArea,
     timezone,
   }: {
-    goal?: OnboardingGoal;
+    focusArea?: OnboardingFocusArea;
     timezone?: string;
   } = {},
 ): CreateCircleDraft {
+  const normalizedDraft = {
+    ...createInitialCircleDraft(timezone),
+    ...draft,
+    graceRules: {
+      skip: {
+        ...defaultSkipGraceRule,
+        ...draft.graceRules?.skip,
+      },
+    },
+    commitmentFrequency: {
+      ...defaultCommitmentFrequency,
+      ...draft.commitmentFrequency,
+    },
+  };
   const fallbackTimezone =
-    timezone?.trim() || draft.timezone.trim() || createInitialCircleDraft().timezone;
+    timezone?.trim() ||
+    normalizedDraft.timezone.trim() ||
+    createInitialCircleDraft().timezone;
 
   return {
-    ...draft,
-    ...(goal ? {category: getStarterCircleCategory(goal)} : {}),
+    ...normalizedDraft,
+    ...(focusArea ? {category: getStarterCircleCategory(focusArea)} : {}),
     graceRules: {
       skip: {...defaultSkipGraceRule},
     },
+    commitmentFrequency: {...defaultCommitmentFrequency},
     maxSize: defaultCircleMaxSize,
-    timezone: draft.timezone.trim() || fallbackTimezone,
+    timezone: normalizedDraft.timezone.trim() || fallbackTimezone,
   };
 }
 
-export function updateStarterCircleGoal(
+export function updateStarterCircleFocusArea(
   draft: CreateCircleDraft,
-  goal: OnboardingGoal,
+  focusArea: OnboardingFocusArea,
 ): CreateCircleDraft {
-  return applyStarterCircleHiddenDefaults(draft, {goal});
+  return applyStarterCircleHiddenDefaults(draft, {focusArea});
 }
 
 export function updateStarterCirclePrivacyMode(
@@ -108,11 +126,15 @@ export function updateStarterCirclePublicJoinMode(
 }
 
 export function isStarterCircleDraftReady(draft: CreateCircleDraft) {
+  const title = typeof draft.title === 'string' ? draft.title.trim() : '';
+  const commitment =
+    typeof draft.commitment === 'string' ? draft.commitment.trim() : '';
+
   return (
-    draft.title.trim().length > 0 &&
-    draft.title.trim().length <= 80 &&
-    draft.dailyTask.trim().length > 0 &&
-    draft.dailyTask.trim().length <= 160
+    title.length > 0 &&
+    title.length <= 80 &&
+    commitment.length > 0 &&
+    commitment.length <= 160
   );
 }
 

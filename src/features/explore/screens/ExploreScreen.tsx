@@ -81,7 +81,7 @@ function getSearchableText(circle: ExploreCircle) {
   return [
     circle.title,
     circle.category,
-    circle.dailyTask,
+    circle.commitment,
     circle.matchCopy,
   ].join(' ');
 }
@@ -135,7 +135,7 @@ function ExploreCircleCard({
 
         <View style={styles.cardCopy}>
           <HoystText style={styles.cardTitle}>{circle.title}</HoystText>
-          <HoystText tone="muted">{circle.dailyTask}</HoystText>
+          <HoystText tone="muted">{circle.commitment}</HoystText>
           <HoystText tone="muted" variant="caption">
             {circle.matchCopy}
           </HoystText>
@@ -260,7 +260,7 @@ export function ExploreScreen({navigation}: Props): React.JSX.Element {
       <View style={styles.header}>
         <HoystText variant="headline">Explore</HoystText>
         <HoystText tone="muted">
-          Find public circles with steady check-ins, open seats, and people who
+          Find public Circles with steady Tap Ins, open seats, and Members who
           match your pace.
         </HoystText>
       </View>
@@ -275,7 +275,7 @@ export function ExploreScreen({navigation}: Props): React.JSX.Element {
         <HoystInput
           containerStyle={styles.searchInput}
           onChangeText={setSearchTerm}
-          placeholder="Search circles, categories, or habits"
+          placeholder="Search Circles, categories, or Commitments"
           value={searchTerm}
         />
       </View>
@@ -329,7 +329,7 @@ export function ExploreScreen({navigation}: Props): React.JSX.Element {
         ))
       ) : (
         <GlassPanel style={styles.emptyState}>
-          <HoystText variant="title">No circles found</HoystText>
+          <HoystText variant="title">No Circles found</HoystText>
           <HoystText tone="muted">
             Try a different search or switch categories to keep browsing.
           </HoystText>

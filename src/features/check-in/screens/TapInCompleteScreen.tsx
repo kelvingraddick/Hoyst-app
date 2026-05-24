@@ -301,8 +301,8 @@ export function TapInCompleteScreen({
       setIsSharingStory(false);
     }
   };
-  const dailyTask = hasResolvedDetail
-    ? detail?.dailyTask ?? "Today's Tap In"
+  const commitment = hasResolvedDetail
+    ? detail?.commitment ?? "Today's Tap In"
     : 'Loading Tap In details';
   const headerTitle = isReadyForCelebration
     ? isSkip
@@ -531,9 +531,9 @@ export function TapInCompleteScreen({
               <View style={styles.summaryHeader}>
                 <View style={styles.summaryCopy}>
                   <HoystText tone="muted" variant="label">
-                    Today's Tap In
+                    Circle Commitment
                   </HoystText>
-                  <HoystText style={styles.summaryTitle}>{dailyTask}</HoystText>
+                  <HoystText style={styles.summaryTitle}>{commitment}</HoystText>
                 </View>
                 <HoystText
                   style={{color: theme.successForeground}}

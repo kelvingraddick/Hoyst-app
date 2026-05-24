@@ -474,7 +474,7 @@ export function HomeScreen(): React.JSX.Element {
   };
 
   const nudgeCircle = (circle: CircleManagementCard) => {
-    if (circle.remainingCheckIns <= 0) {
+    if ((circle.nudgeTargetCount ?? 0) <= 0) {
       openCircleDetail(circle.id);
       return;
     }
@@ -503,7 +503,7 @@ export function HomeScreen(): React.JSX.Element {
             ? `${result.nudged} member${
                 result.nudged === 1 ? '' : 's'
               } nudged.`
-            : 'Everyone is already covered today.',
+            : 'Everyone has completed their Commitment Frequency.',
         );
       })
       .catch(error => {
@@ -531,7 +531,7 @@ export function HomeScreen(): React.JSX.Element {
       return;
     }
 
-    if (!circle.viewerHasCheckedIn) {
+    if (!circle.viewerHasCheckedIn && !circle.viewerHasTappedInToday) {
       requireAccount({circleId: circle.id, source: 'home', type: 'tapIn'}, () =>
         rootNavigation?.navigate('TapInComposer', {
           circleId: circle.id,
@@ -541,7 +541,7 @@ export function HomeScreen(): React.JSX.Element {
       return;
     }
 
-    if (circle.remainingCheckIns > 0) {
+    if ((circle.nudgeTargetCount ?? 0) > 0) {
       nudgeCircle(circle);
       return;
     }
@@ -569,7 +569,7 @@ export function HomeScreen(): React.JSX.Element {
 
     if (personalProgressState.action === 'chooseProgressStart') {
       Alert.alert(
-        'Start progress',
+        'Start Progression',
         'Choose how you want to make your first Tap In count.',
         [
           {
@@ -592,7 +592,7 @@ export function HomeScreen(): React.JSX.Element {
     if (personalProgressState.action === 'shareProgress') {
       Share.share({
         message: "I finished today's Hoyst Tap Ins. Your move.",
-        title: 'Hoyst progress',
+        title: 'Hoyst Progression',
       }).catch(() => undefined);
       return;
     }
@@ -749,7 +749,7 @@ export function HomeScreen(): React.JSX.Element {
           </View>
           <View style={styles.streakCopy}>
             <HoystText style={styles.streakEyebrow} tone="muted" variant="tiny">
-              Personal Progress
+              Personal Progression
             </HoystText>
             <HoystText style={styles.streakValue}>
               {personalProgressState.label}
@@ -765,12 +765,12 @@ export function HomeScreen(): React.JSX.Element {
             <HoystText variant="title">
               {isIncompleteProfile
                 ? 'Complete your profile'
-                : 'Start making progress'}
+                : 'Start making Progression'}
             </HoystText>
             <HoystText tone="muted">
               {isIncompleteProfile
                 ? 'Finish your handle and profile before circles and Tap Ins unlock.'
-                : 'Get started to save progress, join circles, and build your Tap In streak.'}
+                : 'Get started to save Progression, join Circles, and build your Tap In streak.'}
             </HoystText>
           </View>
           <View style={styles.emptyActions}>
@@ -793,8 +793,8 @@ export function HomeScreen(): React.JSX.Element {
             <HoystText variant="title">Your circles</HoystText>
             <HoystText tone="muted">
               {showAuthenticatedEmptyState
-                ? 'Create a circle or find one in Explore to begin tracking real Tap Ins.'
-                : 'Manage your circles, invite your people, and handle what needs you today.'}
+                ? 'Create a Circle or find one in Explore to begin tracking real Tap Ins.'
+                : 'Manage your Circles, invite your people, and handle what needs you this week.'}
             </HoystText>
           </View>
 
@@ -834,7 +834,7 @@ export function HomeScreen(): React.JSX.Element {
         <GlassPanel style={styles.emptyPanel}>
           <HoystText variant="title">Loading your circles</HoystText>
           <HoystText tone="muted">
-            Pulling your live circle progress from Hoyst.
+            Pulling your live Circle Progression from Hoyst.
           </HoystText>
         </GlassPanel>
       ) : null}

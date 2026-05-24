@@ -176,8 +176,8 @@ export function buildHomeGreetingFallback(
   } else if (timeWindow === 'morning') {
     headline = withName(
       firstName,
-      'morning. New day, same goals, fewer excuses.',
-      'Morning. New day, same goals, fewer excuses.',
+      'morning. New day, same Commitment, fewer excuses.',
+      'Morning. New day, same Commitment, fewer excuses.',
     );
   } else if (timeWindow === 'midday') {
     headline = withName(

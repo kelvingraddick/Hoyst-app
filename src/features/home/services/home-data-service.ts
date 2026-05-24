@@ -13,6 +13,7 @@ import type {
   CircleProgressDay,
   CircleSummary,
   CheckInStatus,
+  CommitmentFrequency,
   GraceRule,
   MemberRole,
   ProgressDayState,
@@ -91,6 +92,7 @@ export type HomeCircleMappingInput = {
   memberProfilesByUid?: ReadonlyMap<string, PlainData>;
   membersData?: PlainData[];
   membershipData?: PlainData;
+  periodCheckInStatuses?: ReadonlyMap<string, ReadonlyMap<string, CheckInStatus>>;
   todayCheckInStatuses?: ReadonlyMap<string, CheckInStatus>;
   todayCheckInUids?: ReadonlySet<string>;
 };
@@ -100,6 +102,9 @@ type CircleSubscriptionState = {
   memberProfiles: Map<string, PlainData>;
   memberProfileUnsubscribes: Map<string, () => void>;
   membersData?: PlainData[];
+  periodCheckInStatuses: Map<string, Map<string, CheckInStatus>>;
+  periodCheckInKey?: string;
+  periodCheckInUnsubscribes: Array<() => void>;
   recentUserCheckIns: Map<string, boolean>;
   todayCheckInStatuses: Map<string, CheckInStatus>;
 };
@@ -129,6 +134,18 @@ function asString(value: unknown, fallback = '') {
 
 function asNumber(value: unknown, fallback: number) {
   return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
+}
+
+function clampTapInsPerWeek(value: number) {
+  return Math.min(7, Math.max(1, Math.round(value)));
+}
+
+function normalizeCommitmentFrequency(value: unknown): CommitmentFrequency {
+  const data = value && typeof value === 'object' ? (value as PlainData) : {};
+
+  return {
+    tapInsPerWeek: clampTapInsPerWeek(asNumber(data.tapInsPerWeek, 7)),
+  };
 }
 
 function getCleanFirstName(value?: string) {
@@ -251,7 +268,9 @@ function mergeMemberProfileData(
 
 function getMemberState(
   memberData: PlainData,
+  memberCoveredCounts: ReadonlyMap<string, number>,
   todayCheckInStatuses: ReadonlyMap<string, CheckInStatus>,
+  tapInsPerWeek: number,
 ): CircleMemberState {
   const status = normalizeMembershipStatus(memberData.status);
   const uid = asString(memberData.uid);
@@ -261,17 +280,24 @@ function getMemberState(
   }
 
   const checkInStatus = uid ? todayCheckInStatuses.get(uid) : undefined;
+  const coveredCount = uid ? memberCoveredCounts.get(uid) ?? 0 : 0;
 
   if (checkInStatus === 'skip') {
     return 'skipped';
   }
 
-  return checkInStatus === 'done' ? 'done' : 'pending';
+  if (coveredCount >= tapInsPerWeek) {
+    return 'done';
+  }
+
+  return 'pending';
 }
 
 function mapMemberStatus(
   memberData: PlainData,
+  memberCoveredCounts: ReadonlyMap<string, number>,
   todayCheckInStatuses: ReadonlyMap<string, CheckInStatus>,
+  tapInsPerWeek: number,
 ): CircleMemberStatus | undefined {
   const status = normalizeMembershipStatus(memberData.status);
   const uid = asString(memberData.uid, asString(memberData.id));
@@ -289,7 +315,12 @@ function mapMemberStatus(
     initials: getInitials(name),
     membershipStatus: status,
     name,
-    state: getMemberState(memberData, todayCheckInStatuses),
+    state: getMemberState(
+      memberData,
+      memberCoveredCounts,
+      todayCheckInStatuses,
+      tapInsPerWeek,
+    ),
   };
 }
 
@@ -318,6 +349,16 @@ function getRecentDates(timezone: string, now = new Date()) {
       label: date.toFormat('dd'),
     };
   });
+}
+
+function getCommitmentWeekDateKeys(timezone: string, now = new Date()) {
+  const startOfWeek = DateTime.fromJSDate(now, {zone: timezone})
+    .startOf('week')
+    .startOf('day');
+
+  return Array.from({length: 7}, (_, index) =>
+    startOfWeek.plus({days: index}).toFormat('yyyy-LL-dd'),
+  );
 }
 
 function buildProgressDays(
@@ -494,8 +535,8 @@ export function getHomeGreetingFallback({
   if (timeWindow === 'morning') {
     return buildGreetingWithName(
       context.firstName,
-      'morning. New day, same goals, fewer excuses.',
-      'Morning. New day, same goals, fewer excuses.',
+      'morning. New day, same Commitment, fewer excuses.',
+      'Morning. New day, same Commitment, fewer excuses.',
     );
   }
 
@@ -649,12 +690,75 @@ export function getHomePersonalProgressState({
   };
 }
 
+function getPeriodCoveredCounts(
+  periodCheckInStatuses: ReadonlyMap<
+    string,
+    ReadonlyMap<string, CheckInStatus>
+  >,
+) {
+  const counts = new Map<string, number>();
+
+  periodCheckInStatuses.forEach(dayStatuses => {
+    dayStatuses.forEach((status, uid) => {
+      if (isCoveredCheckInStatus(status)) {
+        counts.set(uid, (counts.get(uid) ?? 0) + 1);
+      }
+    });
+  });
+
+  return counts;
+}
+
+function getPeriodCoveredTotal(
+  memberRecords: PlainData[],
+  memberCoveredCounts: ReadonlyMap<string, number>,
+  tapInsPerWeek: number,
+) {
+  return memberRecords.reduce((total, memberData) => {
+    if (normalizeMembershipStatus(memberData.status) !== 'active') {
+      return total;
+    }
+
+    const uid = asString(memberData.uid, asString(memberData.id));
+    return total + Math.min(memberCoveredCounts.get(uid) ?? 0, tapInsPerWeek);
+  }, 0);
+}
+
+function getNudgeTargetCount({
+  memberCoveredCounts,
+  memberRecords,
+  tapInsPerWeek,
+  viewerUid,
+}: {
+  memberCoveredCounts: ReadonlyMap<string, number>;
+  memberRecords: PlainData[];
+  tapInsPerWeek: number;
+  viewerUid: string;
+}) {
+  return memberRecords.reduce((total, memberData) => {
+    if (normalizeMembershipStatus(memberData.status) !== 'active') {
+      return total;
+    }
+
+    const uid = asString(memberData.uid, asString(memberData.id));
+
+    if (!uid || uid === viewerUid) {
+      return total;
+    }
+
+    return (memberCoveredCounts.get(uid) ?? 0) >= tapInsPerWeek
+      ? total
+      : total + 1;
+  }, 0);
+}
+
 export function mapHomeCircleFromData({
   circleData,
   circleId,
   memberProfilesByUid,
   membersData = [],
   membershipData,
+  periodCheckInStatuses,
   todayCheckInStatuses,
   todayCheckInUids = new Set<string>(),
 }: HomeCircleMappingInput): CircleManagementCard | undefined {
@@ -665,9 +769,9 @@ export function mapHomeCircleFromData({
   }
 
   const title = asString(circleData.title);
-  const dailyTask = asString(circleData.dailyTask);
+  const commitment = asString(circleData.commitment);
 
-  if (!title || !dailyTask) {
+  if (!title || !commitment) {
     return undefined;
   }
 
@@ -680,6 +784,16 @@ export function mapHomeCircleFromData({
         'done' as CheckInStatus,
       ]),
     );
+  const periodStatuses =
+    periodCheckInStatuses ??
+    new Map<string, ReadonlyMap<string, CheckInStatus>>([
+      ['today', coveredCheckIns],
+    ]);
+  const commitmentFrequency = normalizeCommitmentFrequency(
+    circleData.commitmentFrequency,
+  );
+  const tapInsPerWeek = commitmentFrequency.tapInsPerWeek;
+  const memberCoveredCounts = getPeriodCoveredCounts(periodStatuses);
   const isPending = membershipStatus === 'pending';
   const memberRecords = membersData.length > 0 ? membersData : [membershipData];
   const activeMemberCount = memberRecords.filter(
@@ -687,21 +801,46 @@ export function mapHomeCircleFromData({
   ).length;
   const visibleMembers = memberRecords
     .map(memberData => mergeMemberProfileData(memberData, memberProfilesByUid))
-    .map(memberData => mapMemberStatus(memberData, coveredCheckIns))
+    .map(memberData =>
+      mapMemberStatus(
+        memberData,
+        memberCoveredCounts,
+        coveredCheckIns,
+        tapInsPerWeek,
+      ),
+    )
     .filter((member): member is CircleMemberStatus => Boolean(member));
   const memberCount = asNumber(
     circleData.memberCount,
     Math.max(memberRecords.length, visibleMembers.length),
   );
-  const progressBase = Math.max(activeMemberCount, isPending ? 0 : memberCount);
-  const todayCheckInCount = coveredCheckIns.size;
+  const progressBase =
+    Math.max(activeMemberCount, isPending ? 0 : memberCount) * tapInsPerWeek;
+  const periodCoveredCount = getPeriodCoveredTotal(
+    memberRecords,
+    memberCoveredCounts,
+    tapInsPerWeek,
+  );
   const progressPercent =
-    progressBase > 0 ? Math.round((todayCheckInCount / progressBase) * 100) : 0;
+    progressBase > 0
+      ? Math.round((periodCoveredCount / progressBase) * 100)
+      : 0;
+  const nudgeTargetCount = getNudgeTargetCount({
+    memberCoveredCounts,
+    memberRecords,
+    tapInsPerWeek,
+    viewerUid: uid,
+  });
   const viewerTodayStatus = uid ? coveredCheckIns.get(uid) : undefined;
-  const viewerHasCheckedIn = isPending ? true : Boolean(viewerTodayStatus);
+  const viewerCoveredCount = uid ? memberCoveredCounts.get(uid) ?? 0 : 0;
+  const viewerHasTappedInToday = Boolean(viewerTodayStatus);
+  const viewerRemainingTapIns = isPending
+    ? 0
+    : Math.max(tapInsPerWeek - viewerCoveredCount, 0);
+  const viewerHasCheckedIn = isPending ? true : viewerRemainingTapIns === 0;
   const remainingCheckIns = isPending
     ? 0
-    : Math.max(progressBase - todayCheckInCount, 0);
+    : Math.max(progressBase - periodCoveredCount, 0);
   const streakDays = asNumber(membershipData.streakDays, 0);
   const state = isPending
     ? 'active'
@@ -717,7 +856,8 @@ export function mapHomeCircleFromData({
   return {
     category: asString(circleData.category, 'General'),
     completionRate: progressPercent,
-    dailyTask,
+    commitment,
+    commitmentFrequency,
     graceRules: normalizeGraceRules(circleData.graceRules),
     id: circleId,
     inviteUrl: getInviteUrl(circleData),
@@ -726,6 +866,7 @@ export function mapHomeCircleFromData({
     maxSize: asNumber(circleData.maxSize, Math.max(memberCount, 1)),
     memberCount,
     members: visibleMembers,
+    nudgeTargetCount,
     privacy: normalizePrivacy(circleData.privacy),
     progressLabel: isPending ? 'Pending approval' : undefined,
     progressPercent,
@@ -738,11 +879,15 @@ export function mapHomeCircleFromData({
       ? `${streakDays}d streak`
       : viewerHasCheckedIn
       ? 'Already tapped in'
+      : viewerHasTappedInToday
+      ? 'Tapped today'
       : 'Start today',
     title,
     timezone: asString(circleData.timezone, 'UTC'),
     viewerHasCheckedIn,
+    viewerHasTappedInToday,
     viewerMembershipStatus: membershipStatus,
+    viewerRemainingTapIns,
     viewerRole: normalizeMemberRole(membershipData.role),
     viewerTodayStatus,
   };
@@ -915,6 +1060,7 @@ function buildCircleFromState(
     memberProfilesByUid: state?.memberProfiles,
     membersData: state?.membersData,
     membershipData,
+    periodCheckInStatuses: state?.periodCheckInStatuses,
     todayCheckInStatuses: state?.todayCheckInStatuses,
   });
 }
@@ -975,6 +1121,70 @@ function clearMemberProfileListeners(state: CircleSubscriptionState) {
   state.memberProfiles.clear();
 }
 
+function clearPeriodCheckInListeners(state: CircleSubscriptionState) {
+  state.periodCheckInUnsubscribes.forEach(unsubscribe => unsubscribe());
+  state.periodCheckInUnsubscribes = [];
+  state.periodCheckInKey = undefined;
+  state.periodCheckInStatuses.clear();
+  state.todayCheckInStatuses = new Map();
+}
+
+function syncPeriodCheckInListeners({
+  circleRef,
+  onError,
+  onUpdate,
+  state,
+  timezone,
+}: {
+  circleRef: FirebaseFirestoreTypes.DocumentReference;
+  onError: (error: Error) => void;
+  onUpdate: () => void;
+  state: CircleSubscriptionState;
+  timezone: string;
+}) {
+  const weekDateKeys = getCommitmentWeekDateKeys(timezone);
+  const todayDateKey = getDateKey(new Date(), timezone);
+  const periodCheckInKey = `${timezone}:${weekDateKeys.join('|')}`;
+
+  if (state.periodCheckInKey === periodCheckInKey) {
+    return;
+  }
+
+  clearPeriodCheckInListeners(state);
+  state.periodCheckInKey = periodCheckInKey;
+
+  weekDateKeys.forEach(dateKey => {
+    state.periodCheckInUnsubscribes.push(
+      circleRef
+        .collection('days')
+        .doc(dateKey)
+        .collection('checkIns')
+        .onSnapshot(snapshot => {
+          const dayStatuses = new Map(
+            snapshot.docs
+              .map(doc => {
+                const uidValue = asString(doc.data().uid, doc.id);
+                const status = normalizeCheckInStatus(doc.data().status) ?? 'done';
+
+                return uidValue && isCoveredCheckInStatus(status)
+                  ? ([uidValue, status] as const)
+                  : undefined;
+              })
+              .filter((entry): entry is readonly [string, CheckInStatus] =>
+                Boolean(entry),
+              ),
+          );
+
+          state.periodCheckInStatuses.set(dateKey, dayStatuses);
+          if (dateKey === todayDateKey) {
+            state.todayCheckInStatuses = dayStatuses;
+          }
+          onUpdate();
+        }, onError),
+    );
+  });
+}
+
 function recentCompletedDateKeys(
   states: Map<string, CircleSubscriptionState>,
   recentDateKeys: string[],
@@ -1023,7 +1233,10 @@ export function subscribeToHomeData({
   const stopCircleListeners = () => {
     circleUnsubscribes.forEach(unsubscribe => unsubscribe());
     circleUnsubscribes = [];
-    states.forEach(clearMemberProfileListeners);
+    states.forEach(state => {
+      clearMemberProfileListeners(state);
+      clearPeriodCheckInListeners(state);
+    });
     states.clear();
   };
 
@@ -1037,6 +1250,8 @@ export function subscribeToHomeData({
         memberProfiles: new Map(),
         memberProfileUnsubscribes: new Map(),
         membersData: [membershipData],
+        periodCheckInStatuses: new Map(),
+        periodCheckInUnsubscribes: [],
         recentUserCheckIns: new Map(),
         todayCheckInStatuses: new Map(),
       };
@@ -1052,6 +1267,15 @@ export function subscribeToHomeData({
       circleUnsubscribes.push(
         circleRef.onSnapshot(snapshot => {
           state.circleData = snapshotData(snapshot);
+          if (membershipStatus === 'active') {
+            syncPeriodCheckInListeners({
+              circleRef,
+              onError,
+              onUpdate: emit,
+              state,
+              timezone: asString(state.circleData?.timezone, 'UTC'),
+            });
+          }
           emit();
         }, onError),
       );
@@ -1079,33 +1303,14 @@ export function subscribeToHomeData({
         }, onError),
       );
 
-      const todayDateKey = recentDateKeys[recentDateKeys.length - 1];
-
-      if (todayDateKey) {
-        circleUnsubscribes.push(
-          circleRef
-            .collection('days')
-            .doc(todayDateKey)
-            .collection('checkIns')
-            .onSnapshot(snapshot => {
-              state.todayCheckInStatuses = new Map(
-                snapshot.docs
-                  .map(doc => {
-                    const uidValue = asString(doc.data().uid, doc.id);
-                    const status =
-                      normalizeCheckInStatus(doc.data().status) ?? 'done';
-
-                    return uidValue && isCoveredCheckInStatus(status)
-                      ? ([uidValue, status] as const)
-                      : undefined;
-                  })
-                  .filter((entry): entry is readonly [string, CheckInStatus] =>
-                    Boolean(entry),
-                  ),
-              );
-              emit();
-            }, onError),
-        );
+      if (state.circleData) {
+        syncPeriodCheckInListeners({
+          circleRef,
+          onError,
+          onUpdate: emit,
+          state,
+          timezone: asString(state.circleData.timezone, 'UTC'),
+        });
       }
 
       recentDateKeys.forEach(dateKey => {
@@ -1162,11 +1367,12 @@ export function subscribeToMemberCircleDetail({
 }: CircleDetailSubscriptionOptions) {
   const firestore = firebaseFirestore();
   const recentDateKeys = getRecentDates(timezone).map(day => day.dateKey);
-  const todayDateKey = recentDateKeys[recentDateKeys.length - 1];
   const circleRef = firestore.collection(collections.circles).doc(circleId);
   const state: CircleSubscriptionState = {
     memberProfiles: new Map(),
     memberProfileUnsubscribes: new Map(),
+    periodCheckInStatuses: new Map(),
+    periodCheckInUnsubscribes: [],
     recentUserCheckIns: new Map(),
     todayCheckInStatuses: new Map(),
   };
@@ -1185,6 +1391,7 @@ export function subscribeToMemberCircleDetail({
       memberProfilesByUid: state.memberProfiles,
       membersData: state.membersData,
       membershipData,
+      periodCheckInStatuses: state.periodCheckInStatuses,
       todayCheckInStatuses: state.todayCheckInStatuses,
     });
 
@@ -1202,6 +1409,7 @@ export function subscribeToMemberCircleDetail({
       state,
     });
     state.todayCheckInStatuses = new Map();
+    clearPeriodCheckInListeners(state);
     state.recentUserCheckIns.clear();
   };
 
@@ -1232,31 +1440,14 @@ export function subscribeToMemberCircleDetail({
       }, onError),
     );
 
-    if (todayDateKey) {
-      activeUnsubscribes.push(
-        circleRef
-          .collection('days')
-          .doc(todayDateKey)
-          .collection('checkIns')
-          .onSnapshot(snapshot => {
-            state.todayCheckInStatuses = new Map(
-              snapshot.docs
-                .map(doc => {
-                  const uidValue = asString(doc.data().uid, doc.id);
-                  const status =
-                    normalizeCheckInStatus(doc.data().status) ?? 'done';
-
-                  return uidValue && isCoveredCheckInStatus(status)
-                    ? ([uidValue, status] as const)
-                    : undefined;
-                })
-                .filter((entry): entry is readonly [string, CheckInStatus] =>
-                  Boolean(entry),
-                ),
-            );
-            emit();
-          }, onError),
-      );
+    if (state.circleData) {
+      syncPeriodCheckInListeners({
+        circleRef,
+        onError,
+        onUpdate: emit,
+        state,
+        timezone: asString(state.circleData.timezone, 'UTC'),
+      });
     }
 
     recentDateKeys.forEach(dateKey => {
@@ -1280,6 +1471,15 @@ export function subscribeToMemberCircleDetail({
 
   const unsubscribeCircle = circleRef.onSnapshot(snapshot => {
     state.circleData = snapshotData(snapshot);
+    if (normalizeMembershipStatus(membershipData?.status) === 'active') {
+      syncPeriodCheckInListeners({
+        circleRef,
+        onError,
+        onUpdate: emit,
+        state,
+        timezone: asString(state.circleData?.timezone, 'UTC'),
+      });
+    }
     emit();
   }, onError);
   const unsubscribeMembership = circleRef
@@ -1311,7 +1511,7 @@ export function buildCircleDetailFromHomeCircle(
     ...circle,
     activity: [],
     completionRate: circle.completionRate ?? circle.progressPercent,
-    dailyGoal: `Daily goal: ${circle.dailyTask}`,
+    commitmentLabel: `Commitment: ${circle.commitment}`,
     memberCount: circle.memberCount,
     monthProgress,
     maxSize: circle.maxSize,
@@ -1328,13 +1528,15 @@ export function buildPublicCircleDetail(
     ...summary,
     activity: [],
     completionRate: summary.completionRate ?? progressPercent,
-    dailyGoal: `Daily goal: ${summary.dailyTask}`,
+    commitmentFrequency: summary.commitmentFrequency ?? {tapInsPerWeek: 7},
+    commitmentLabel: `Commitment: ${summary.commitment}`,
     memberCount: summary.memberCount ?? summary.members.length,
     monthProgress: Array.from({length: 7}, (_, index) => ({
       day: index + 1,
       state: index === 6 ? 'today' : 'future',
     })),
     maxSize: summary.maxSize ?? Math.max(summary.members.length, 1),
+    nudgeTargetCount: summary.nudgeTargetCount ?? 0,
     progressPercent,
     remainingCheckIns: summary.remainingCheckIns ?? 0,
     state: summary.state ?? 'active',

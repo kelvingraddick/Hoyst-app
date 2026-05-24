@@ -404,7 +404,7 @@ export function EditCircleScreen({
       ? `Max size cannot be below ${detail.memberCount} current members.`
       : undefined;
   const titleLength = draft?.title.trim().length ?? 0;
-  const dailyTaskLength = draft?.dailyTask.trim().length ?? 0;
+  const commitmentLength = draft?.commitment.trim().length ?? 0;
   const timezoneLength = draft?.timezone.trim().length ?? 0;
   const canSave = Boolean(
     detail?.viewerRole === 'owner' &&
@@ -412,8 +412,8 @@ export function EditCircleScreen({
       payload &&
       titleLength > 0 &&
       titleLength <= 80 &&
-      dailyTaskLength > 0 &&
-      dailyTaskLength <= 160 &&
+      commitmentLength > 0 &&
+      commitmentLength <= 160 &&
       timezoneLength > 0 &&
       timezoneLength <= 80 &&
       !maxSizeError &&
@@ -606,24 +606,24 @@ export function EditCircleScreen({
         </View>
         <View style={styles.fieldBlock}>
           <HoystText tone="muted" variant="label">
-            Daily task description
+            Commitment description
           </HoystText>
           <HoystInput
             maxLength={160}
             multiline
             numberOfLines={4}
-            onChangeText={value => setField('dailyTask', value)}
+            onChangeText={value => setField('commitment', value)}
             placeholder="Read 20 pages, then Tap In with one takeaway."
             style={styles.textArea}
             textAlignVertical="top"
-            value={draft.dailyTask}
+            value={draft.commitment}
           />
           <HoystText
             tone={
-              dailyTaskLength > 0 && dailyTaskLength <= 160 ? 'muted' : 'danger'
+              commitmentLength > 0 && commitmentLength <= 160 ? 'muted' : 'danger'
             }
             variant="caption">
-            {dailyTaskLength}/160 characters
+            {commitmentLength}/160 characters
           </HoystText>
         </View>
       </GlassPanel>
@@ -672,6 +672,18 @@ export function EditCircleScreen({
           />
         </View>
         <NumericStepper
+          label="Tap Ins per week"
+          max={7}
+          min={1}
+          onChange={value =>
+            setField('commitmentFrequency', {tapInsPerWeek: value})
+          }
+          value={draft.commitmentFrequency.tapInsPerWeek}
+        />
+        <HoystText tone="muted">
+          Commitment Frequency runs Monday to Sunday in the Circle timezone.
+        </HoystText>
+        <NumericStepper
           label="Maximum members"
           max={100}
           min={2}
@@ -707,7 +719,7 @@ export function EditCircleScreen({
           </HoystText>
         ) : null}
         <TimezonePicker
-          helperText="This controls when each daily Tap In window resets."
+          helperText="This controls when each Tap In day resets."
           modalTitle="Circle timezone"
           onChange={value => setField('timezone', value)}
           value={draft.timezone}
@@ -743,10 +755,10 @@ export function EditCircleScreen({
           ]}>
           <View style={styles.optionCopy}>
             <HoystText variant="bodyStrong">
-              Optional skips protect streaks
+              Optional skips protect Progression
             </HoystText>
             <HoystText tone="muted">
-              Skips count as covered for circle progress.
+              Skips count as covered for Circle Progression.
             </HoystText>
           </View>
           <HoystChip

@@ -28,11 +28,16 @@ export type GraceRule = {
   windowDays: number;
 };
 
+export type CommitmentFrequency = {
+  tapInsPerWeek: number;
+};
+
 export type Circle = {
   id: string;
   title: string;
   category: string;
-  dailyTask: string;
+  commitment: string;
+  commitmentFrequency: CommitmentFrequency;
   timezone: string;
   maxSize: number;
   privacy: CirclePrivacy;
@@ -109,7 +114,8 @@ export type CircleSummary = {
   id: string;
   title: string;
   category: string;
-  dailyTask: string;
+  commitment: string;
+  commitmentFrequency?: CommitmentFrequency;
   streakLabel: string;
   members: CircleMemberStatus[];
   state?: TodayCircleState;
@@ -131,15 +137,19 @@ export type CircleSummary = {
   inviteUrl?: string;
   joinLabel?: CircleJoinLabel;
   matchCopy?: string;
+  nudgeTargetCount?: number;
   completionLabel?: string;
   progressLabel?: string;
   timezone?: string;
+  viewerHasTappedInToday?: boolean;
+  viewerRemainingTapIns?: number;
 };
 
 export type TodayCircleCard = CircleSummary & {
   state: TodayCircleState;
   progressPercent: number;
   viewerHasCheckedIn: boolean;
+  viewerHasTappedInToday?: boolean;
   remainingCheckIns: number;
   streakDays: number;
 };
@@ -164,7 +174,7 @@ export type ExploreCircle = CircleSummary & {
 };
 
 export type CircleDetailModel = CircleSummary & {
-  dailyGoal: string;
+  commitmentLabel: string;
   completionRate: number;
   memberCount: number;
   maxSize: number;
@@ -179,7 +189,8 @@ export type CreateCircleDraft = {
   };
   joinMode: CircleJoinMode;
   title: string;
-  dailyTask: string;
+  commitment: string;
+  commitmentFrequency: CommitmentFrequency;
   privacy: CirclePrivacy;
   privacyMode: CirclePrivacyMode;
   maxSize: number;

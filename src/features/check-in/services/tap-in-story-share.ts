@@ -8,7 +8,7 @@ export type TapInStoryShareStatus = 'done' | 'skip' | undefined;
 export type TapInStoryShareData = {
   circleTitle: string;
   ctaLabel: string;
-  dailyTask: string;
+  commitment: string;
   hasInviteUrl: boolean;
   inviteUrl?: string;
   note: string;
@@ -25,7 +25,7 @@ type BuildTapInStoryShareDataInput = {
 };
 
 const fallbackCircleTitle = 'Hoyst Circle';
-const fallbackDailyTask = "Today's Tap In";
+const fallbackCommitment = "Today's Tap In";
 const fallbackNote = 'No note added. Still counted.';
 const fallbackCtaLabel = 'Build your rhythm on Hoyst';
 const unavailableMessage =
@@ -62,7 +62,7 @@ export function buildTapInStoryShareData({
   photoUri,
 }: BuildTapInStoryShareDataInput): TapInStoryShareData {
   const circleTitle = cleanText(detail?.title, fallbackCircleTitle);
-  const dailyTask = cleanText(detail?.dailyTask, fallbackDailyTask);
+  const commitment = cleanText(detail?.commitment, fallbackCommitment);
   const cleanNote = cleanText(note, fallbackNote);
   const progressLabel =
     typeof detail?.completionRate === 'number'
@@ -73,7 +73,7 @@ export function buildTapInStoryShareData({
       ? `${detail.streakDays}d streak`
       : cleanText(detail?.streakLabel, 'Momentum saved');
   const inviteUrl = detail?.inviteUrl?.trim() || undefined;
-  const ctaLabel = inviteUrl ? 'Join this circle on Hoyst' : fallbackCtaLabel;
+  const ctaLabel = inviteUrl ? 'Join this Circle on Hoyst' : fallbackCtaLabel;
   const shareMessage = inviteUrl
     ? `I tapped in with ${circleTitle} on Hoyst. Join us: ${inviteUrl}`
     : `I tapped in with ${circleTitle} on Hoyst.`;
@@ -81,7 +81,7 @@ export function buildTapInStoryShareData({
   return {
     circleTitle,
     ctaLabel,
-    dailyTask,
+    commitment,
     hasInviteUrl: Boolean(inviteUrl),
     inviteUrl,
     note: cleanNote,

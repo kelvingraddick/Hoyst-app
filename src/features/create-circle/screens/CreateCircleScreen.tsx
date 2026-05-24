@@ -48,7 +48,8 @@ type Props = NativeStackScreenProps<RootStackParamList, 'CreateCircle'>;
 type WizardStep =
   | 'category'
   | 'title'
-  | 'dailyTask'
+  | 'commitment'
+  | 'commitmentFrequency'
   | 'grace'
   | 'privacy'
   | 'maxSize'
@@ -71,7 +72,8 @@ type Option<T extends string> = {
 const wizardSteps: WizardStep[] = [
   'category',
   'title',
-  'dailyTask',
+  'commitment',
+  'commitmentFrequency',
   'grace',
   'privacy',
   'maxSize',
@@ -165,12 +167,16 @@ const stepCopy: Record<WizardStep, {body: string; title: string}> = {
     body: 'Pick the lane that sets expectations before anyone joins.',
     title: 'What kind of circle is this?',
   },
-  dailyTask: {
-    body: 'Make the daily action specific enough that members know what counts.',
-    title: 'What will members do daily?',
+  commitment: {
+    body: 'Make the Commitment specific enough that members know what counts.',
+    title: 'What is the shared Commitment?',
+  },
+  commitmentFrequency: {
+    body: 'Set the number of Tap Ins each Member needs from Monday to Sunday.',
+    title: 'What is the Commitment Frequency?',
   },
   grace: {
-    body: 'Skips can keep streaks intact when life gets loud.',
+    body: 'Skips can keep Progression intact when life gets loud.',
     title: 'How forgiving should the streak be?',
   },
   maxSize: {
@@ -186,7 +192,7 @@ const stepCopy: Record<WizardStep, {body: string; title: string}> = {
     title: 'Ready to launch?',
   },
   timezone: {
-    body: 'This controls when each daily Tap In window resets.',
+    body: 'This controls when each Tap In day resets.',
     title: 'What timezone should it follow?',
   },
   title: {
@@ -468,10 +474,10 @@ export function CreateCircleScreen({navigation}: Props): React.JSX.Element {
       return title.length > 0 && title.length <= 80;
     }
 
-    if (currentStep === 'dailyTask') {
-      const dailyTask = draft.dailyTask.trim();
+    if (currentStep === 'commitment') {
+      const commitment = draft.commitment.trim();
 
-      return dailyTask.length > 0 && dailyTask.length <= 160;
+      return commitment.length > 0 && commitment.length <= 160;
     }
 
     if (currentStep === 'timezone') {
@@ -617,26 +623,46 @@ export function CreateCircleScreen({navigation}: Props): React.JSX.Element {
       );
     }
 
-    if (currentStep === 'dailyTask') {
+    if (currentStep === 'commitment') {
       return (
         <View style={styles.fieldBlock}>
           <HoystText tone="muted" variant="label">
-            Daily task description
+            Commitment description
           </HoystText>
           <HoystInput
             blurOnSubmit
             maxLength={160}
             multiline
             numberOfLines={4}
-            onChangeText={value => setField('dailyTask', value)}
+            onChangeText={value => setField('commitment', value)}
             placeholder="Read 20 pages, then Tap In with one takeaway."
             returnKeyType="done"
             style={styles.textArea}
             textAlignVertical="top"
-            value={draft.dailyTask}
+            value={draft.commitment}
           />
           <HoystText tone={canContinue ? 'muted' : 'danger'} variant="caption">
-            {draft.dailyTask.trim().length}/160 characters
+            {draft.commitment.trim().length}/160 characters
+          </HoystText>
+        </View>
+      );
+    }
+
+    if (currentStep === 'commitmentFrequency') {
+      return (
+        <View style={styles.stack}>
+          <NumericStepper
+            label="Tap Ins per week"
+            max={7}
+            min={1}
+            onChange={value =>
+              setField('commitmentFrequency', {tapInsPerWeek: value})
+            }
+            value={draft.commitmentFrequency.tapInsPerWeek}
+          />
+          <HoystText tone="muted">
+            Members build Progression by completing this many Tap Ins each
+            Monday to Sunday period.
           </HoystText>
         </View>
       );
@@ -663,10 +689,10 @@ export function CreateCircleScreen({navigation}: Props): React.JSX.Element {
             ]}>
             <View style={styles.optionCopy}>
               <HoystText variant="bodyStrong">
-                Optional skips protect streaks
+                Optional skips protect Progression
               </HoystText>
               <HoystText tone="muted">
-                Skips count as covered for circle progress.
+                Skips count as covered for Circle Progression.
               </HoystText>
             </View>
             <HoystChip
@@ -761,7 +787,7 @@ export function CreateCircleScreen({navigation}: Props): React.JSX.Element {
     if (currentStep === 'timezone') {
       return (
         <TimezonePicker
-          helperText="This controls when each daily Tap In window resets."
+          helperText="This controls when each Tap In day resets."
           modalTitle="Circle timezone"
           onChange={value => setField('timezone', value)}
           value={draft.timezone}
@@ -773,7 +799,11 @@ export function CreateCircleScreen({navigation}: Props): React.JSX.Element {
       <GlassPanel style={styles.summaryPanel}>
         <SummaryRow label="Category" value={draft.category} />
         <SummaryRow label="Title" value={draft.title.trim()} />
-        <SummaryRow label="Daily task" value={draft.dailyTask.trim()} />
+        <SummaryRow label="Commitment" value={draft.commitment.trim()} />
+        <SummaryRow
+          label="Commitment Frequency"
+          value={`${draft.commitmentFrequency.tapInsPerWeek} Tap Ins / week`}
+        />
         <SummaryRow
           label="Grace"
           value={

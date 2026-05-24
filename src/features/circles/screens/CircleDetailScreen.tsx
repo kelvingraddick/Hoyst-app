@@ -100,6 +100,10 @@ function getDetailStatusPill(
     return {label: 'Skipped', tone: 'orange'};
   }
 
+  if (detail.viewerHasTappedInToday) {
+    return {label: 'Tapped today', tone: 'green'};
+  }
+
   if (!detail.viewerHasCheckedIn) {
     return {label: 'Needs You', tone: 'orange'};
   }
@@ -131,8 +135,18 @@ function getJoinModeLabel(detail: CircleDetailModel) {
   return detail.joinLabel ?? 'Requests open';
 }
 
-function formatNeedsTapInCount(count: number) {
-  return count === 1 ? '1 needs Tap In' : `${count} need Tap In`;
+function formatTapInsLeftThisWeek(count: number) {
+  if (count <= 0) {
+    return 'Commitment complete';
+  }
+
+  return count === 1
+    ? '1 Tap In left this week'
+    : `${count} Tap Ins left this week`;
+}
+
+function formatNudgeTargetCount(count: number) {
+  return count === 1 ? '1 Member to nudge' : `${count} Members to nudge`;
 }
 
 function TopBarButton({
@@ -327,7 +341,7 @@ function DetailProgressPanel({
     <GlassPanel style={styles.progressPanel}>
       <View style={styles.progressHeader}>
         <HoystText style={styles.progressTitle} tone="muted" variant="label">
-          Last 7 Days
+          Last 7 Days Progression
         </HoystText>
         <HoystText style={styles.progressPercent} variant="bodyStrong">
           {completionLabel}
@@ -526,13 +540,15 @@ export function CircleDetailScreen({
       getCircleDetail(route.params.circleId),
     [memberCircle, publicCircle, route.params.circleId],
   );
-  const needsTapInMembers = useMemo(
+  const nudgeTargetMembers = useMemo(
     () =>
       detail?.members.filter(
         member =>
-          member.state === 'pending' && member.membershipStatus !== 'pending',
+          member.state === 'pending' &&
+          member.membershipStatus !== 'pending' &&
+          member.id !== user?.uid,
       ) ?? [],
-    [detail?.members],
+    [detail?.members, user?.uid],
   );
   const pendingJoinRequests = useMemo(
     () =>
@@ -646,7 +662,13 @@ export function CircleDetailScreen({
   const statusLabel =
     detail.state === 'done' ? 'Done' : `${detail.completionRate}%`;
   const detailStatusPill = getDetailStatusPill(detail);
-  const needsTapInCopy = formatNeedsTapInCount(needsTapInMembers.length);
+  const nudgeTargetCount =
+    detail.nudgeTargetCount ?? nudgeTargetMembers.length;
+  const canNudgeTargets = nudgeTargetCount > 0;
+  const weeklyRemainingCopy = formatTapInsLeftThisWeek(
+    detail.remainingCheckIns ?? 0,
+  );
+  const nudgeTargetCopy = formatNudgeTargetCount(nudgeTargetCount);
   const previewCopy =
     detail.matchCopy ?? 'Preview the circle before you jump in.';
   const streakValue =
@@ -710,7 +732,7 @@ export function CircleDetailScreen({
   const confirmRemoveTodayCheckIn = () => {
     Alert.alert(
       'Remove today?',
-      "This will undo today's progress for this circle.",
+      "This will undo today's Progression for this Circle.",
       [
         {style: 'cancel', text: 'Keep'},
         {
@@ -801,7 +823,7 @@ export function CircleDetailScreen({
       isPendingMembership ? 'Cancel request?' : 'Leave circle?',
       isPendingMembership
         ? 'The circle owner will no longer see your request.'
-        : 'Your membership, Tap Ins, and check-in media for this circle will be removed.',
+        : 'Your membership, Tap Ins, and check-in media for this Circle will be removed.',
       [
         {style: 'cancel', text: 'Keep'},
         {
@@ -833,7 +855,7 @@ export function CircleDetailScreen({
       Alert.alert(
         result.status === 'approved' ? 'Request approved' : 'Request declined',
         result.status === 'approved'
-          ? 'They can Tap In with the circle now.'
+          ? 'They can Tap In with the Circle now.'
           : 'The request has been declined.',
       );
     } catch (error) {
@@ -921,7 +943,7 @@ export function CircleDetailScreen({
 
         <View style={styles.heroCopy}>
           <HoystText style={styles.heroTitle}>{detail.title}</HoystText>
-          <HoystText tone="muted">{detail.dailyGoal}</HoystText>
+          <HoystText tone="muted">{detail.commitmentLabel}</HoystText>
           {detailStatusPill ? (
             <HoystChip
               label={detailStatusPill.label}
@@ -988,7 +1010,7 @@ export function CircleDetailScreen({
           </HoystText>
           <HoystText tone="muted" variant="caption">
             {isMemberCircle
-              ? `${needsTapInCopy}, ${missedMembers.length} missed`
+              ? `${weeklyRemainingCopy}, ${missedMembers.length} missed`
               : isPendingMembership
               ? 'Pending approval'
               : getJoinModeLabel(detail)}
@@ -1035,14 +1057,15 @@ export function CircleDetailScreen({
               />
             ) : null}
             <View style={styles.quickActionRow}>
+              {canNudgeTargets ? (
               <DashboardQuickAction
-                emphasized={needsTapInMembers.length > 0 && !nudged}
+                emphasized={canNudgeTargets && !nudged}
                 icon={
                   <BellRing
                     color={
                       nudged
                         ? theme.successForeground
-                        : needsTapInMembers.length > 0
+                        : canNudgeTargets
                         ? theme.accentSecondaryForeground
                         : theme.text
                     }
@@ -1055,7 +1078,7 @@ export function CircleDetailScreen({
                     ? 'Nudging...'
                     : nudged
                     ? 'Nudged'
-                    : `Nudge ${needsTapInMembers.length || 'All'}`
+                    : `Nudge ${nudgeTargetCount}`
                 }
                 onPress={() => {
                   if (isNudging) {
@@ -1072,7 +1095,7 @@ export function CircleDetailScreen({
                           ? `${result.nudged} member${
                               result.nudged === 1 ? '' : 's'
                             } nudged.`
-                          : 'Everyone is already covered today.',
+                          : 'Everyone has completed their Commitment Frequency.',
                       );
                     })
                     .catch(error => {
@@ -1084,10 +1107,9 @@ export function CircleDetailScreen({
                     })
                     .finally(() => setIsNudging(false));
                 }}
-                supportingText={
-                  needsTapInMembers.length > 0 ? needsTapInCopy : 'Warm nudge'
-                }
+                supportingText={nudgeTargetCopy}
               />
+              ) : null}
               {canInvite ? (
                 <DashboardQuickAction
                   icon={<Send color={theme.text} size={17} strokeWidth={2.2} />}

@@ -1,16 +1,16 @@
 export type OnboardingStep =
   | 'welcome'
   | 'coach'
-  | 'goal'
+  | 'focusArea'
   | 'circleTitle'
-  | 'circleDailyTask'
+  | 'circleCommitment'
   | 'circlePrivacy'
   | 'circleReview'
   | 'notifications'
   | 'auth'
   | 'finishProfile';
 
-export type OnboardingGoal =
+export type OnboardingFocusArea =
   | 'fitness'
   | 'focus'
   | 'wellness'
@@ -26,15 +26,15 @@ export type OnboardingOption<T extends string> = {
 };
 
 export type OnboardingPreferences = {
-  goal?: OnboardingGoal;
+  focusArea?: OnboardingFocusArea;
 };
 
 export const onboardingSteps: OnboardingStep[] = [
   'welcome',
   'coach',
-  'goal',
+  'focusArea',
   'circleTitle',
-  'circleDailyTask',
+  'circleCommitment',
   'circlePrivacy',
   'circleReview',
   'notifications',
@@ -46,7 +46,7 @@ export const onboardingProgressSteps = onboardingSteps.filter(
   step => step !== 'welcome',
 );
 
-export const goalOptions: OnboardingOption<OnboardingGoal>[] = [
+export const focusAreaOptions: OnboardingOption<OnboardingFocusArea>[] = [
   {
     accent: 'green',
     description: 'Movement, training, recovery, and everyday strength.',

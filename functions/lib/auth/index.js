@@ -10,7 +10,7 @@ const firebase_1 = require("../firebase");
 const starter_circle_plan_1 = require("./starter-circle-plan");
 const onboardingPreferencesSchema = zod_1.z.object({
     categories: zod_1.z.array(zod_1.z.string().trim().min(1).max(40)).max(8).default([]),
-    goal: zod_1.z.string().trim().min(1).max(80).optional(),
+    focusArea: zod_1.z.string().trim().min(1).max(80).optional(),
     pace: zod_1.z.string().trim().min(1).max(80).optional(),
     reminderPreference: zod_1.z.string().trim().min(1).max(80).optional(),
     socialComfort: zod_1.z.string().trim().min(1).max(80).optional(),
@@ -19,9 +19,13 @@ const graceRuleSchema = zod_1.z.object({
     allowance: zod_1.z.number().int().min(0).max(30),
     windowDays: zod_1.z.number().int().min(1).max(365),
 });
+const commitmentFrequencySchema = zod_1.z.object({
+    tapInsPerWeek: zod_1.z.number().int().min(1).max(7),
+});
 const starterCircleSchema = zod_1.z.object({
     category: zod_1.z.string().trim().min(1).max(40),
-    dailyTask: zod_1.z.string().trim().min(1).max(160),
+    commitment: zod_1.z.string().trim().min(1).max(160),
+    commitmentFrequency: commitmentFrequencySchema,
     graceRules: zod_1.z
         .object({
         skip: graceRuleSchema,
@@ -35,6 +39,9 @@ const starterCircleSchema = zod_1.z.object({
     title: zod_1.z.string().trim().min(1).max(80),
 });
 const starterCircleHiddenDefaults = {
+    commitmentFrequency: {
+        tapInsPerWeek: 7,
+    },
     graceRules: {
         skip: {
             allowance: 2,
@@ -291,7 +298,8 @@ exports.completeProfile = (0, https_1.onCall)(async (request) => {
             const circle = {
                 category: input.starterCircle.category,
                 createdAt: now,
-                dailyTask: input.starterCircle.dailyTask,
+                commitment: input.starterCircle.commitment,
+                commitmentFrequency: starterCircleHiddenDefaults.commitmentFrequency,
                 graceRules: starterCircleHiddenDefaults.graceRules,
                 inviteCode,
                 joinMode: input.starterCircle.joinMode,
@@ -316,7 +324,8 @@ exports.completeProfile = (0, https_1.onCall)(async (request) => {
             if (input.starterCircle.privacy === 'public') {
                 transaction.set(publicIndexRef, {
                     category: input.starterCircle.category,
-                    dailyTask: input.starterCircle.dailyTask,
+                    commitment: input.starterCircle.commitment,
+                    commitmentFrequency: starterCircleHiddenDefaults.commitmentFrequency,
                     joinMode: input.starterCircle.joinMode,
                     maxSize: starterCircleHiddenDefaults.maxSize,
                     memberCount: 1,

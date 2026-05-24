@@ -59,7 +59,7 @@ import {useSessionStore} from '../../../store/session-store';
 import {useUserProfileStore} from '../../../store/profile-store';
 import {
   getOptionLabel,
-  goalOptions,
+  focusAreaOptions,
   onboardingProgressSteps,
   type OnboardingOption,
   type OnboardingStep,
@@ -110,14 +110,14 @@ const stepCopy: Record<Exclude<OnboardingStep, 'welcome'>, StepCopy> = {
       'A circle works best when the promise is small, visible, and repeatable.',
     title: "Let's get started",
   },
-  goal: {
+  focusArea: {
     body: 'This helps Hoyst shape the first circle around the kind of accountability you want.',
     prompt: 'What are you trying to stay consistent with?',
     title: 'Start with the why',
   },
-  circleDailyTask: {
-    body: 'Make the daily action specific enough that members know what counts.',
-    prompt: 'What will members do daily?',
+  circleCommitment: {
+    body: 'Make the Commitment specific enough that members know what counts.',
+    prompt: 'What is the shared Commitment?',
     title: 'Define the promise',
   },
   circlePrivacy: {
@@ -131,9 +131,9 @@ const stepCopy: Record<Exclude<OnboardingStep, 'welcome'>, StepCopy> = {
     title: 'Review your first circle',
   },
   notifications: {
-    body: 'Hoyst can nudge you before a streak slips and warn you when today is almost closed.',
-    prompt: 'Keep your first circle alive with timely reminders.',
-    title: 'Protect your streak',
+    body: 'Hoyst can nudge you before Progression slips and warn you when today is almost closed.',
+    prompt: 'Keep your first Circle moving with timely reminders.',
+    title: 'Protect your Progression',
   },
   circleTitle: {
     body: 'Give the circle a name people can recognize and rally around.',
@@ -149,13 +149,13 @@ const stepCopy: Record<Exclude<OnboardingStep, 'welcome'>, StepCopy> = {
 
 const stepIcons: Record<Exclude<OnboardingStep, 'welcome'>, LucideIcon> = {
   auth: UserRound,
-  circleDailyTask: Target,
+  circleCommitment: Target,
   circlePrivacy: Globe2,
   circleReview: Sparkles,
   circleTitle: UsersRound,
   coach: Sparkles,
   finishProfile: UserRound,
-  goal: Target,
+  focusArea: Target,
   notifications: BellRing,
 };
 
@@ -534,7 +534,7 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
   const getOnboardingPreferences = useOnboardingStore(
     state => state.getPreferences,
   );
-  const goal = useOnboardingStore(state => state.goal);
+  const focusArea = useOnboardingStore(state => state.focusArea);
   const handle = useOnboardingStore(state => state.handle);
   const starterCircleDraft = useOnboardingStore(
     state => state.starterCircleDraft,
@@ -563,7 +563,7 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
   const setFirstCircleSkipped = useOnboardingStore(
     state => state.setFirstCircleSkipped,
   );
-  const setGoal = useOnboardingStore(state => state.setGoal);
+  const setFocusArea = useOnboardingStore(state => state.setFocusArea);
   const setHandle = useOnboardingStore(state => state.setHandle);
   const setStarterCircleField = useOnboardingStore(
     state => state.setStarterCircleField,
@@ -597,19 +597,25 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
     starterCircleDraft.joinMode === 'request_to_join'
       ? starterCircleDraft.joinMode
       : 'request_to_join';
+  const starterCircleTitle =
+    typeof starterCircleDraft.title === 'string' ? starterCircleDraft.title : '';
+  const starterCircleCommitment =
+    typeof starterCircleDraft.commitment === 'string'
+      ? starterCircleDraft.commitment
+      : '';
   const canContinue =
-    currentStep === 'goal'
-      ? Boolean(goal)
+    currentStep === 'focusArea'
+      ? Boolean(focusArea)
       : currentStep === 'finishProfile'
       ? displayName.trim().length > 0 &&
         handleValidation.isValid &&
         timezone.trim().length > 0
       : currentStep === 'circleTitle'
-      ? starterCircleDraft.title.trim().length > 0 &&
-        starterCircleDraft.title.trim().length <= 80
-      : currentStep === 'circleDailyTask'
-      ? starterCircleDraft.dailyTask.trim().length > 0 &&
-        starterCircleDraft.dailyTask.trim().length <= 160
+      ? starterCircleTitle.trim().length > 0 &&
+        starterCircleTitle.trim().length <= 80
+      : currentStep === 'circleCommitment'
+      ? starterCircleCommitment.trim().length > 0 &&
+        starterCircleCommitment.trim().length <= 160
       : currentStep === 'circleReview'
       ? firstCircleSkipped || isStarterCircleDraftReady(starterCircleDraft)
       : true;
@@ -1022,8 +1028,8 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
             />
           </View>
         ) : null}
-        {currentStep === 'goal'
-          ? renderOptions(goalOptions, goal, setGoal, Target)
+        {currentStep === 'focusArea'
+          ? renderOptions(focusAreaOptions, focusArea, setFocusArea, Target)
           : null}
         {currentStep === 'finishProfile' ? (
           <View style={styles.profileFields}>
@@ -1114,8 +1120,8 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
                   First circle
                 </HoystText>
                 <HoystText>
-                  {starterCircleDraft.title.trim()} -{' '}
-                  {starterCircleDraft.dailyTask.trim()}
+                  {starterCircleTitle.trim()} -{' '}
+                  {starterCircleCommitment.trim()}
                 </HoystText>
               </View>
             ) : null}
@@ -1152,34 +1158,34 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
               maxLength={80}
               onChangeText={value => setStarterCircleField('title', value)}
               placeholder="The 5AM Vanguard"
-              value={starterCircleDraft.title}
+              value={starterCircleTitle}
             />
             <HoystText
               tone={canContinue ? 'muted' : 'danger'}
               variant="caption">
-              {starterCircleDraft.title.trim().length}/80 characters
+              {starterCircleTitle.trim().length}/80 characters
             </HoystText>
           </View>
         ) : null}
-        {currentStep === 'circleDailyTask' ? (
+        {currentStep === 'circleCommitment' ? (
           <View style={styles.fieldBlock}>
             <HoystText tone="muted" variant="label">
-              Daily task description
+              Commitment description
             </HoystText>
             <HoystInput
               maxLength={160}
               multiline
               numberOfLines={4}
-              onChangeText={value => setStarterCircleField('dailyTask', value)}
+              onChangeText={value => setStarterCircleField('commitment', value)}
               placeholder="Read 20 pages, then Tap In with one takeaway."
               style={styles.textArea}
               textAlignVertical="top"
-              value={starterCircleDraft.dailyTask}
+              value={starterCircleCommitment}
             />
             <HoystText
               tone={canContinue ? 'muted' : 'danger'}
               variant="caption">
-              {starterCircleDraft.dailyTask.trim().length}/160 characters
+              {starterCircleCommitment.trim().length}/160 characters
             </HoystText>
           </View>
         ) : null}
@@ -1211,24 +1217,24 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
             <PreviewRow
               accent="green"
               detail={getOptionLabel(
-                goalOptions,
-                goal,
+                focusAreaOptions,
+                focusArea,
                 'Explore momentum circles',
               )}
               icon={Target}
-              label="Primary goal"
+              label="Primary focus area"
             />
             <PreviewRow
               accent="blue"
-              detail={starterCircleDraft.title.trim()}
+              detail={starterCircleTitle.trim()}
               icon={UsersRound}
               label="Circle name"
             />
             <PreviewRow
               accent="orange"
-              detail={starterCircleDraft.dailyTask.trim()}
+              detail={starterCircleCommitment.trim()}
               icon={Target}
-              label="Daily task"
+              label="Commitment"
             />
             <PreviewRow
               accent="purple"
@@ -1252,7 +1258,7 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
           <View style={styles.coachPreview}>
             <PreviewRow
               accent="green"
-              detail="A helpful nudge before your daily promise slips away."
+              detail="A helpful nudge before your Commitment slips away."
               icon={BellRing}
               label="Tap In reminders"
             />
@@ -1456,7 +1462,7 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
       : 'Continue';
   const isCircleSetupStep =
     currentStep === 'circleTitle' ||
-    currentStep === 'circleDailyTask' ||
+    currentStep === 'circleCommitment' ||
     currentStep === 'circlePrivacy' ||
     currentStep === 'circleReview';
   const secondaryLabel =

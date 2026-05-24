@@ -23,7 +23,8 @@ describe('public circle discovery mapping', () => {
       data: () => ({
         category: 'Deep Work',
         completionRate: 84,
-        dailyTask: 'Ship one focused block',
+        commitment: 'Ship one focused block',
+        commitmentFrequency: {tapInsPerWeek: 4},
         joinMode: 'open',
         maxSize: 8,
         memberCount: 5,
@@ -43,7 +44,8 @@ describe('public circle discovery mapping', () => {
     expect(mapPublicCircleIndexSnapshot(snapshot as never)).toMatchObject({
       category: 'Deep Work',
       completionRate: 84,
-      dailyTask: 'Ship one focused block',
+      commitment: 'Ship one focused block',
+      commitmentFrequency: {tapInsPerWeek: 4},
       id: 'maker-mornings',
       joinLabel: 'Open seats',
       joinMode: 'open',
@@ -68,7 +70,8 @@ describe('public circle discovery mapping', () => {
       data: () => ({
         category: 'Fitness',
         completionRate: 0,
-        dailyTask: 'Drink water',
+        commitment: 'Drink water',
+        commitmentFrequency: {tapInsPerWeek: 7},
         memberCount: 2,
         members: [
           {
@@ -93,7 +96,7 @@ describe('public circle discovery mapping', () => {
 
   it('ignores incomplete publicCircleIndex documents', () => {
     const snapshot = {
-      data: () => ({title: 'Missing daily task'}),
+      data: () => ({title: 'Missing commitment'}),
       exists: true,
       id: 'incomplete',
     };
@@ -143,7 +146,7 @@ describe('create circle payload mapping', () => {
     const draft = {
       ...createInitialCircleDraft('America/New_York'),
       category: ' Fitness ',
-      dailyTask: ' Move for 30 minutes ',
+      commitment: ' Move for 30 minutes ',
       graceRules: {
         skip: {
           allowance: 45,
@@ -156,7 +159,7 @@ describe('create circle payload mapping', () => {
 
     expect(buildCreateCirclePayload(draft)).toMatchObject({
       category: 'Fitness',
-      dailyTask: 'Move for 30 minutes',
+      commitment: 'Move for 30 minutes',
       graceRules: {
         skip: {
           allowance: 30,
@@ -175,7 +178,7 @@ describe('create circle payload mapping', () => {
     const draft = buildCircleEditDraft(
       {
         category: 'Deep Work',
-        dailyTask: 'Ship one focused block',
+        commitment: 'Ship one focused block',
         graceRules: {
           skip: {
             allowance: 4,
@@ -193,7 +196,7 @@ describe('create circle payload mapping', () => {
 
     expect(draft).toMatchObject({
       category: 'Deep Work',
-      dailyTask: 'Ship one focused block',
+      commitment: 'Ship one focused block',
       graceRules: {
         skip: {
           allowance: 4,
@@ -220,7 +223,7 @@ describe('create circle payload mapping', () => {
     expect(isCircleMaxSizeBelowMemberCount(5, 5)).toBe(false);
   });
 
-  it('derives starter circle defaults from onboarding goals', () => {
+  it('derives starter circle defaults from onboarding focus areas', () => {
     expect(getStarterCircleCategory('fitness')).toBe('Fitness');
     expect(getStarterCircleCategory('focus')).toBe('Deep Work');
     expect(getStarterCircleCategory('wellness')).toBe('Wellness');
@@ -230,7 +233,7 @@ describe('create circle payload mapping', () => {
 
     expect(
       createInitialStarterCircleDraft({
-        goal: 'focus',
+        focusArea: 'focus',
         timezone: 'America/New_York',
       }),
     ).toMatchObject({
@@ -248,8 +251,8 @@ describe('create circle payload mapping', () => {
 
   it('builds starter circle payloads with create-circle defaults', () => {
     const draft = {
-      ...createInitialStarterCircleDraft({goal: 'wellness'}),
-      dailyTask: ' Meditate for ten minutes ',
+      ...createInitialStarterCircleDraft({focusArea: 'wellness'}),
+      commitment: ' Meditate for ten minutes ',
       graceRules: {
         skip: {
           allowance: 1,
@@ -262,7 +265,7 @@ describe('create circle payload mapping', () => {
 
     expect(buildStarterCirclePayload(draft)).toMatchObject({
       category: 'Wellness',
-      dailyTask: 'Meditate for ten minutes',
+      commitment: 'Meditate for ten minutes',
       graceRules: {
         skip: {
           allowance: 2,

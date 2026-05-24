@@ -83,6 +83,43 @@ function getLocalDateTimeParts(now, timezone) {
         minute: Number(getPart('minute', '00')),
     };
 }
+function getCommitmentWeekDateKeys(timezone, now = new Date()) {
+    const parts = new Intl.DateTimeFormat('en-US', {
+        day: '2-digit',
+        month: '2-digit',
+        timeZone: timezone,
+        weekday: 'short',
+        year: 'numeric',
+    }).formatToParts(now);
+    const weekday = parts.find(part => part.type === 'weekday')?.value ?? 'Mon';
+    const dayOffsetByWeekday = {
+        Fri: 4,
+        Mon: 0,
+        Sat: 5,
+        Sun: 6,
+        Thu: 3,
+        Tue: 1,
+        Wed: 2,
+    };
+    const localDate = new Date(Number(parts.find(part => part.type === 'year')?.value ?? '1970'), Number(parts.find(part => part.type === 'month')?.value ?? '1') - 1, Number(parts.find(part => part.type === 'day')?.value ?? '1'));
+    const monday = new Date(localDate);
+    monday.setDate(localDate.getDate() - (dayOffsetByWeekday[weekday] ?? 0));
+    return Array.from({ length: 7 }, (_, index) => {
+        const date = new Date(monday);
+        date.setDate(monday.getDate() + index);
+        return [
+            String(date.getFullYear()),
+            String(date.getMonth() + 1).padStart(2, '0'),
+            String(date.getDate()).padStart(2, '0'),
+        ].join('-');
+    });
+}
+function getTapInsPerWeek(circle) {
+    const value = circle?.commitmentFrequency?.tapInsPerWeek;
+    return typeof value === 'number' && Number.isFinite(value)
+        ? Math.min(7, Math.max(1, Math.round(value)))
+        : 7;
+}
 function buildActor(data) {
     if (!data) {
         return undefined;
@@ -265,19 +302,19 @@ async function notifyNudge({ actor, circleId, circleTitle, dateKey, targetUid, }
         uid: targetUid,
     });
 }
-async function notifyCircleAtRisk({ circleId, circleTitle, dateKey, remainingCount, targetUid, }) {
+async function notifyCircleAtRisk({ circleId, circleTitle, periodKey, remainingCount, targetUid, }) {
     return createInboxEvent({
-        body: `${circleTitle} needs ${remainingCount} more Tap In${remainingCount === 1 ? '' : 's'} today.`,
+        body: `${circleTitle} needs ${remainingCount} more Tap In${remainingCount === 1 ? '' : 's'} this week.`,
         circleId,
-        dedupeKey: `circle_at_risk_${circleId}_${dateKey}_${targetUid}`,
+        dedupeKey: `circle_at_risk_${circleId}_${periodKey}_${targetUid}`,
         deeplink: { circleId, screen: 'CircleDetail' },
         preferenceKey: 'circleActivity',
-        title: 'Circle at risk',
+        title: 'Circle Progression at risk',
         type: 'circle_at_risk',
         uid: targetUid,
     });
 }
-function getReminderEligibility({ circleId, dateKey, kind, memberStatus, notificationSettings, todayStatus, uid, }) {
+function getReminderEligibility({ circleId, dateKey, kind, memberStatus, notificationSettings, remainingTapIns, todayStatus, uid, }) {
     if (!uid || !circleId || !dateKey) {
         return { eligible: false, reason: 'missing-input' };
     }
@@ -286,6 +323,9 @@ function getReminderEligibility({ circleId, dateKey, kind, memberStatus, notific
     }
     if (todayStatus === 'done' || todayStatus === 'skip') {
         return { eligible: false, reason: 'already-covered' };
+    }
+    if (typeof remainingTapIns === 'number' && remainingTapIns <= 0) {
+        return { eligible: false, reason: 'frequency-complete' };
     }
     if (!isPreferenceEnabled(notificationSettings, 'tapInReminders')) {
         return { eligible: false, reason: 'preference-disabled' };
@@ -305,10 +345,12 @@ async function sendTapInReminders(kind) {
         const circle = circleSnapshot.data();
         const timezone = asString(circle.timezone, 'UTC');
         const local = getLocalDateTimeParts(now, timezone);
+        const weekDateKeys = getCommitmentWeekDateKeys(timezone, now);
+        const tapInsPerWeek = getTapInsPerWeek(circle);
         if (local.hour !== targetHour) {
             continue;
         }
-        const [memberSnapshots, checkInSnapshots] = await Promise.all([
+        const [memberSnapshots, todayCheckInSnapshots, ...weeklyCheckInSnapshots] = await Promise.all([
             circleSnapshot.ref
                 .collection('members')
                 .where('status', '==', 'active')
@@ -318,11 +360,24 @@ async function sendTapInReminders(kind) {
                 .doc(local.dateKey)
                 .collection('checkIns')
                 .get(),
+            ...weekDateKeys.map(dateKey => circleSnapshot.ref
+                .collection('days')
+                .doc(dateKey)
+                .collection('checkIns')
+                .get()),
         ]);
-        const checkInStatuses = new Map(checkInSnapshots.docs.map(snapshot => [
+        const checkInStatuses = new Map(todayCheckInSnapshots.docs.map(snapshot => [
             snapshot.id,
             snapshot.data().status,
         ]));
+        const coveredCounts = new Map();
+        weeklyCheckInSnapshots.forEach(snapshot => {
+            snapshot.docs.forEach(doc => {
+                if (doc.data().status === 'done' || doc.data().status === 'skip') {
+                    coveredCounts.set(doc.id, (coveredCounts.get(doc.id) ?? 0) + 1);
+                }
+            });
+        });
         const circleTitle = asString(circle.title, 'Your circle');
         for (const memberSnapshot of memberSnapshots.docs) {
             const uid = asString(memberSnapshot.data().uid, memberSnapshot.id);
@@ -337,6 +392,7 @@ async function sendTapInReminders(kind) {
                 kind,
                 memberStatus: memberSnapshot.data().status,
                 notificationSettings: userPrivate?.notificationSettings,
+                remainingTapIns: Math.max(tapInsPerWeek - (coveredCounts.get(uid) ?? 0), 0),
                 todayStatus: checkInStatuses.get(uid),
                 uid,
             });
@@ -345,7 +401,7 @@ async function sendTapInReminders(kind) {
             }
             sendPromises.push(createInboxEvent({
                 body: kind === 'midday'
-                    ? `Tap In to keep your ${circleTitle} streak moving.`
+                    ? `Tap In to keep ${circleTitle} Progression moving.`
                     : `2 hours left to Tap In for ${circleTitle}.`,
                 circleId: circleSnapshot.id,
                 dedupeKey: eligibility.dedupeKey,
@@ -355,7 +411,9 @@ async function sendTapInReminders(kind) {
                     source: 'notification',
                 },
                 preferenceKey: 'tapInReminders',
-                title: kind === 'midday' ? 'Keep your streak alive' : '2 hours left',
+                title: kind === 'midday'
+                    ? 'Keep your Commitment moving'
+                    : '2 hours left',
                 type: kind === 'midday'
                     ? 'tap_in_midday_reminder'
                     : 'tap_in_final_warning',

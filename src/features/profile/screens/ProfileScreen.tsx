@@ -861,7 +861,7 @@ export function ProfileScreen({navigation}: Props): React.JSX.Element {
 
         <SettingsSection title="Notifications">
           <SettingsRow
-            detail="Daily nudge to keep your streak moving."
+            detail="Nudge before your Commitment window closes."
             icon={Bell}
             iconTone="orange"
             title="Tap In reminders"

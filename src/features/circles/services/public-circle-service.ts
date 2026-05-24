@@ -221,9 +221,10 @@ export function mapPublicCircleIndexSnapshot(
   }
 
   const title = asString(data.title);
-  const dailyTask = asString(data.dailyTask);
+  const commitment = asString(data.commitment);
+  const tapInsPerWeek = asNumber(data.commitmentFrequency?.tapInsPerWeek, 0);
 
-  if (!title || !dailyTask) {
+  if (!title || !commitment || tapInsPerWeek < 1 || tapInsPerWeek > 7) {
     return undefined;
   }
 
@@ -242,7 +243,8 @@ export function mapPublicCircleIndexSnapshot(
   return {
     category: asString(data.category, 'General'),
     completionRate: asNumber(data.completionRate, 0),
-    dailyTask,
+    commitment,
+    commitmentFrequency: {tapInsPerWeek},
     id: snapshot.id,
     joinLabel:
       data.joinMode === 'open' ? 'Open seats' : 'Request to join',

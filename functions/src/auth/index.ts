@@ -13,7 +13,7 @@ import {resolveStarterCircleDecision} from './starter-circle-plan';
 
 const onboardingPreferencesSchema = z.object({
   categories: z.array(z.string().trim().min(1).max(40)).max(8).default([]),
-  goal: z.string().trim().min(1).max(80).optional(),
+  focusArea: z.string().trim().min(1).max(80).optional(),
   pace: z.string().trim().min(1).max(80).optional(),
   reminderPreference: z.string().trim().min(1).max(80).optional(),
   socialComfort: z.string().trim().min(1).max(80).optional(),
@@ -22,9 +22,13 @@ const graceRuleSchema = z.object({
   allowance: z.number().int().min(0).max(30),
   windowDays: z.number().int().min(1).max(365),
 });
+const commitmentFrequencySchema = z.object({
+  tapInsPerWeek: z.number().int().min(1).max(7),
+});
 const starterCircleSchema = z.object({
   category: z.string().trim().min(1).max(40),
-  dailyTask: z.string().trim().min(1).max(160),
+  commitment: z.string().trim().min(1).max(160),
+  commitmentFrequency: commitmentFrequencySchema,
   graceRules: z
     .object({
       skip: graceRuleSchema,
@@ -38,6 +42,9 @@ const starterCircleSchema = z.object({
   title: z.string().trim().min(1).max(80),
 });
 const starterCircleHiddenDefaults = {
+  commitmentFrequency: {
+    tapInsPerWeek: 7,
+  },
   graceRules: {
     skip: {
       allowance: 2,
@@ -383,7 +390,8 @@ export const completeProfile = onCall(async request => {
       const circle = {
         category: input.starterCircle.category,
         createdAt: now,
-        dailyTask: input.starterCircle.dailyTask,
+        commitment: input.starterCircle.commitment,
+        commitmentFrequency: starterCircleHiddenDefaults.commitmentFrequency,
         graceRules: starterCircleHiddenDefaults.graceRules,
         inviteCode,
         joinMode: input.starterCircle.joinMode,
@@ -410,7 +418,8 @@ export const completeProfile = onCall(async request => {
       if (input.starterCircle.privacy === 'public') {
         transaction.set(publicIndexRef, {
           category: input.starterCircle.category,
-          dailyTask: input.starterCircle.dailyTask,
+          commitment: input.starterCircle.commitment,
+          commitmentFrequency: starterCircleHiddenDefaults.commitmentFrequency,
           joinMode: input.starterCircle.joinMode,
           maxSize: starterCircleHiddenDefaults.maxSize,
           memberCount: 1,
