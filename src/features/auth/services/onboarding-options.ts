@@ -4,6 +4,7 @@ export type OnboardingStep =
   | 'focusArea'
   | 'circleTitle'
   | 'circleCommitment'
+  | 'circleCadence'
   | 'circlePrivacy'
   | 'circleReview'
   | 'notifications'
@@ -35,6 +36,7 @@ export const onboardingSteps: OnboardingStep[] = [
   'focusArea',
   'circleTitle',
   'circleCommitment',
+  'circleCadence',
   'circlePrivacy',
   'circleReview',
   'notifications',

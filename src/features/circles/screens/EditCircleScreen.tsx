@@ -3,6 +3,8 @@ import {Alert, Pressable, StyleSheet, View} from 'react-native';
 import {
   ArrowLeft,
   BookOpen,
+  CalendarDays,
+  CalendarRange,
   Check,
   Dumbbell,
   Flame,
@@ -35,6 +37,7 @@ import {
   buildCircleEditDraft,
   buildCreateCirclePayload,
   clampCircleMaxSize,
+  defaultWeeklyCommitmentFrequency,
   getPrivacyChoiceFields,
   isCircleMaxSizeBelowMemberCount,
   normalizeSkipGraceRule,
@@ -45,6 +48,7 @@ import type {
   CircleDetailModel,
   CircleJoinMode,
   CirclePrivacyMode,
+  CommitmentCadence,
   CreateCircleDraft,
 } from '../../../types/models';
 
@@ -135,6 +139,23 @@ const publicJoinOptions: Array<
     id: 'request_to_join',
     label: 'Request approval',
     tone: 'orange',
+  },
+];
+
+const commitmentCadenceOptions: Array<Option<CommitmentCadence>> = [
+  {
+    description: 'Every member covers the Commitment once each day.',
+    icon: CalendarDays,
+    id: 'daily',
+    label: 'Daily',
+    tone: 'green',
+  },
+  {
+    description: 'Each member covers a set number of days each week.',
+    icon: CalendarRange,
+    id: 'weekly',
+    label: 'Weekly',
+    tone: 'blue',
   },
 ];
 
@@ -479,6 +500,23 @@ export function EditCircleScreen({
     );
   };
 
+  const selectCommitmentCadence = (commitmentCadence: CommitmentCadence) => {
+    setDraft(current =>
+      current
+        ? {
+            ...current,
+            commitmentCadence,
+            commitmentFrequency:
+              commitmentCadence === 'daily'
+                ? {tapInsPerWeek: 7}
+                : current.commitmentFrequency.tapInsPerWeek >= 7
+                ? defaultWeeklyCommitmentFrequency
+                : current.commitmentFrequency,
+          }
+        : current,
+    );
+  };
+
   const handleSave = async () => {
     if (!canSave || !payload) {
       return;
@@ -671,18 +709,43 @@ export function EditCircleScreen({
             tone={maxSizeError ? 'orange' : 'neutral'}
           />
         </View>
-        <NumericStepper
-          label="Tap Ins per week"
-          max={7}
-          min={1}
-          onChange={value =>
-            setField('commitmentFrequency', {tapInsPerWeek: value})
-          }
-          value={draft.commitmentFrequency.tapInsPerWeek}
-        />
-        <HoystText tone="muted">
-          Commitment Frequency runs Monday to Sunday in the Circle timezone.
-        </HoystText>
+        <View style={styles.sectionHeader}>
+          <HoystText variant="bodyStrong">Commitment rhythm</HoystText>
+          <HoystChip
+            label={
+              draft.commitmentCadence === 'daily'
+                ? 'Daily'
+                : `${draft.commitmentFrequency.tapInsPerWeek}/week`
+            }
+            tone={draft.commitmentCadence === 'daily' ? 'green' : 'neutral'}
+          />
+        </View>
+        {renderOptions(
+          commitmentCadenceOptions,
+          draft.commitmentCadence,
+          selectCommitmentCadence,
+        )}
+        {draft.commitmentCadence === 'weekly' ? (
+          <>
+            <NumericStepper
+              label="Tap Ins per week"
+              max={7}
+              min={1}
+              onChange={value =>
+                setField('commitmentFrequency', {tapInsPerWeek: value})
+              }
+              value={draft.commitmentFrequency.tapInsPerWeek}
+            />
+            <HoystText tone="muted">
+              Weekly Commitment Frequency runs Monday to Sunday in the Circle
+              timezone.
+            </HoystText>
+          </>
+        ) : (
+          <HoystText tone="muted">
+            Daily circles need one Tap In or skip from each member every day.
+          </HoystText>
+        )}
         <NumericStepper
           label="Maximum members"
           max={100}

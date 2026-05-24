@@ -83,7 +83,9 @@ const initialState = {
 const legacyStepFallbacks: Record<string, OnboardingStep> = {
   categories: 'circleTitle',
   comfort: 'circleTitle',
+  circleFrequency: 'circleCadence',
   circleDailyTask: 'circleCommitment',
+  commitmentFrequency: 'circleCadence',
   goal: 'focusArea',
   pace: 'circleTitle',
   profile: 'circleTitle',

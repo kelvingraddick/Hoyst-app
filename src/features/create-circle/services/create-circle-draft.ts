@@ -3,6 +3,7 @@ import type {
   CirclePrivacy,
   CirclePrivacyMode,
   CircleSummary,
+  CommitmentCadence,
   CommitmentFrequency,
   CreateCircleDraft,
   GraceRule,
@@ -11,6 +12,7 @@ import type {
 export type CreateCirclePayload = {
   category: string;
   commitment: string;
+  commitmentCadence: CommitmentCadence;
   commitmentFrequency: CommitmentFrequency;
   graceRules: {
     skip: GraceRule;
@@ -30,6 +32,10 @@ export const defaultCircleMaxSize = 10;
 export const defaultCommitmentFrequency: CommitmentFrequency = {
   tapInsPerWeek: 7,
 };
+export const defaultWeeklyCommitmentFrequency: CommitmentFrequency = {
+  tapInsPerWeek: 4,
+};
+export const defaultCommitmentCadence: CommitmentCadence = 'daily';
 
 export function getLocalTimezone() {
   return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
@@ -39,6 +45,7 @@ export function createInitialCircleDraft(timezone?: string): CreateCircleDraft {
   return {
     category: 'Fitness',
     commitment: '',
+    commitmentCadence: defaultCommitmentCadence,
     commitmentFrequency: defaultCommitmentFrequency,
     graceRules: {
       skip: defaultSkipGraceRule,
@@ -97,6 +104,7 @@ export function buildCircleEditDraft(
     CircleSummary,
     | 'category'
     | 'commitment'
+    | 'commitmentCadence'
     | 'commitmentFrequency'
     | 'graceRules'
     | 'joinMode'
@@ -108,13 +116,19 @@ export function buildCircleEditDraft(
 ): CreateCircleDraft {
   const initialDraft = createInitialCircleDraft(fallbackTimezone);
   const privacyMode = getCirclePrivacyMode(circle);
+  const commitmentCadence = normalizeCommitmentCadence(
+    circle.commitmentCadence,
+    circle.commitmentFrequency,
+  );
 
   return {
     ...initialDraft,
     category: circle.category,
     commitment: circle.commitment,
+    commitmentCadence,
     commitmentFrequency: normalizeCommitmentFrequency(
       circle.commitmentFrequency ?? initialDraft.commitmentFrequency,
+      commitmentCadence,
     ),
     graceRules: {
       skip: normalizeSkipGraceRule(
@@ -154,7 +168,12 @@ export function normalizeSkipGraceRule(rule: GraceRule): GraceRule {
 
 export function normalizeCommitmentFrequency(
   frequency: CommitmentFrequency,
+  cadence: CommitmentCadence = 'weekly',
 ): CommitmentFrequency {
+  if (cadence === 'daily') {
+    return {...defaultCommitmentFrequency};
+  }
+
   return {
     tapInsPerWeek: Math.min(
       7,
@@ -163,14 +182,37 @@ export function normalizeCommitmentFrequency(
   };
 }
 
+export function normalizeCommitmentCadence(
+  cadence: unknown,
+  frequency?: CommitmentFrequency,
+): CommitmentCadence {
+  if (cadence === 'daily' || cadence === 'weekly') {
+    return cadence;
+  }
+
+  return normalizeCommitmentFrequency(
+    frequency ?? defaultCommitmentFrequency,
+    'weekly',
+  ).tapInsPerWeek >= 7
+    ? 'daily'
+    : 'weekly';
+}
+
 export function buildCreateCirclePayload(
   draft: CreateCircleDraft,
 ): CreateCirclePayload {
+  const commitmentCadence = normalizeCommitmentCadence(
+    draft.commitmentCadence,
+    draft.commitmentFrequency,
+  );
+
   return {
     category: draft.category.trim(),
     commitment: draft.commitment.trim(),
+    commitmentCadence,
     commitmentFrequency: normalizeCommitmentFrequency(
       draft.commitmentFrequency,
+      commitmentCadence,
     ),
     graceRules: {
       skip: normalizeSkipGraceRule(draft.graceRules.skip),

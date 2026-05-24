@@ -198,6 +198,10 @@ export function TapInComposerScreen({
   const hasPreviewNote = trimmedNote.length > 0;
   const hasPreviewPhoto = Boolean(draft.photoUri);
   const shouldShowPreview = hasPreviewNote || hasPreviewPhoto;
+  const progressLabel =
+    detail.progressLabel ?? `${detail.completionRate}% in`;
+  const remainingPeriodCopy =
+    detail.commitmentCadence === 'daily' ? 'today' : 'this week';
   const statusLabel =
     detail.state === 'risk'
       ? 'Group streak at risk'
@@ -205,12 +209,14 @@ export function TapInComposerScreen({
       ? 'Skipped today'
       : detail.viewerHasCheckedIn
       ? 'Already tapped in'
-      : detail.remainingCheckIns === 1
-      ? '1 Tap In left this week'
-      : `${detail.remainingCheckIns ?? 0} Tap Ins left this week`;
+    : detail.remainingCheckIns === 1
+    ? `1 Tap In left ${remainingPeriodCopy}`
+    : `${detail.remainingCheckIns ?? 0} Tap Ins left ${remainingPeriodCopy}`;
   const skipGraceRule = detail.graceRules?.skip;
+  const canSubmitTapIn = !detail.viewerHasTappedInToday;
   const canSkip =
     !detail.viewerHasCheckedIn &&
+    canSubmitTapIn &&
     Boolean(skipGraceRule && skipGraceRule.allowance > 0);
   const canRemoveTodayCheckIn =
     detail.viewerTodayStatus === 'done' || detail.viewerTodayStatus === 'skip';
@@ -219,8 +225,10 @@ export function TapInComposerScreen({
   const checkedInStatusCopy =
     detail.viewerTodayStatus === 'skip'
       ? 'Your grace skip is covering today for this Circle.'
-      : detail.viewerHasCheckedIn
-      ? 'Your Commitment Frequency is complete for this Circle.'
+    : detail.viewerHasCheckedIn
+      ? 'You are covered right now for this Circle.'
+      : detail.commitmentCadence === 'daily'
+      ? 'Your Tap In is counted for today.'
       : 'Your Tap In is counted for today. Keep going this week.';
 
   const handleChoosePhoto = async () => {
@@ -342,7 +350,7 @@ export function TapInComposerScreen({
           </View>
           <View style={styles.summaryChips}>
             <HoystChip label={detail.category.toUpperCase()} tone="neutral" />
-            <HoystChip label={`${detail.completionRate}% in`} tone="green" />
+            <HoystChip label={progressLabel} tone="green" />
             <HoystChip label={statusLabel} tone="orange" />
           </View>
         </View>
@@ -586,10 +594,16 @@ export function TapInComposerScreen({
 
             <View style={styles.actionStack}>
               <ComposerPrimaryAction
-                disabled={isSubmitting}
-                label={isSubmitting ? 'Submitting...' : 'Confirm Tap In'}
-                onPress={
+                disabled={isSubmitting || !canSubmitTapIn}
+                label={
                   isSubmitting
+                    ? 'Submitting...'
+                    : canSubmitTapIn
+                    ? 'Confirm Tap In'
+                    : 'Today already covered'
+                }
+                onPress={
+                  isSubmitting || !canSubmitTapIn
                     ? undefined
                     : () => {
                         handleConfirm().catch(() => undefined);

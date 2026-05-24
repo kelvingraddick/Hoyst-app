@@ -5,6 +5,7 @@ import {collections} from '../../../types/firestore';
 import type {
   CircleMemberState,
   CircleMemberStatus,
+  CommitmentCadence,
   ExploreCircle,
 } from '../../../types/models';
 
@@ -18,6 +19,21 @@ function asString(value: unknown, fallback = '') {
 
 function asNumber(value: unknown, fallback: number) {
   return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
+}
+
+function clampTapInsPerWeek(value: number) {
+  return Math.min(7, Math.max(1, Math.round(value)));
+}
+
+function normalizeCommitmentCadence(
+  value: unknown,
+  tapInsPerWeek: number,
+): CommitmentCadence {
+  if (value === 'daily' || value === 'weekly') {
+    return value;
+  }
+
+  return tapInsPerWeek >= 7 ? 'daily' : 'weekly';
 }
 
 function getInitials(name: string) {
@@ -222,9 +238,20 @@ export function mapPublicCircleIndexSnapshot(
 
   const title = asString(data.title);
   const commitment = asString(data.commitment);
-  const tapInsPerWeek = asNumber(data.commitmentFrequency?.tapInsPerWeek, 0);
+  const tapInsPerWeek = clampTapInsPerWeek(
+    asNumber(data.commitmentFrequency?.tapInsPerWeek, 7),
+  );
+  const commitmentCadence = normalizeCommitmentCadence(
+    data.commitmentCadence,
+    tapInsPerWeek,
+  );
+  const completionRate = asNumber(data.completionRate, 0);
+  const progressLabel = asString(
+    data.progressLabel,
+    `${commitmentCadence === 'daily' ? 'Today' : 'Week'} · ${completionRate}%`,
+  );
 
-  if (!title || !commitment || tapInsPerWeek < 1 || tapInsPerWeek > 7) {
+  if (!title || !commitment) {
     return undefined;
   }
 
@@ -234,7 +261,7 @@ export function mapPublicCircleIndexSnapshot(
           mapPublicMemberPreview(
             member,
             index,
-            asNumber(data.completionRate, 0) > 0 ? 'done' : 'pending',
+            completionRate > 0 ? 'done' : 'pending',
           ),
         )
         .filter((member): member is CircleMemberStatus => Boolean(member))
@@ -242,8 +269,10 @@ export function mapPublicCircleIndexSnapshot(
 
   return {
     category: asString(data.category, 'General'),
-    completionRate: asNumber(data.completionRate, 0),
+    completionLabel: progressLabel,
+    completionRate,
     commitment,
+    commitmentCadence,
     commitmentFrequency: {tapInsPerWeek},
     id: snapshot.id,
     joinLabel:
@@ -262,6 +291,7 @@ export function mapPublicCircleIndexSnapshot(
     memberCount: asNumber(data.memberCount, 0),
     members,
     privacy: 'public',
+    progressLabel,
     streakLabel: asString(data.streakLabel, 'New circle'),
     title,
   };

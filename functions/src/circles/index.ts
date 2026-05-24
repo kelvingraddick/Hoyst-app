@@ -18,6 +18,12 @@ import {
   notifyNudge,
   oneSignalRestApiKey,
 } from '../notifications';
+import {
+  getCommitmentCadence,
+  getInputCommitmentCadence,
+  getRequiredTapIns,
+  getStoredCommitmentFrequency,
+} from '../shared/commitments';
 
 const graceRuleSchema = z.object({
   allowance: z.number().int().min(0).max(30),
@@ -29,6 +35,7 @@ const commitmentFrequencySchema = z.object({
 const createCircleSchema = z.object({
   category: z.string().trim().min(1).max(40),
   commitment: z.string().trim().min(1).max(160),
+  commitmentCadence: z.enum(['daily', 'weekly']).optional(),
   commitmentFrequency: commitmentFrequencySchema,
   graceRules: z
     .object({
@@ -157,16 +164,6 @@ function getCommitmentWeekDateKeys(timezone: string, now = new Date()) {
   });
 }
 
-function getTapInsPerWeek(
-  circle: {commitmentFrequency?: {tapInsPerWeek?: unknown}} | undefined,
-) {
-  const value = circle?.commitmentFrequency?.tapInsPerWeek;
-
-  return typeof value === 'number' && Number.isFinite(value)
-    ? Math.min(7, Math.max(1, Math.round(value)))
-    : 7;
-}
-
 function buildMemberPublicPreview(profile: DocumentData, uid: string) {
   return {
     avatarUrl: profile.avatarUrl ?? null,
@@ -289,11 +286,20 @@ export const createCircle = onCall(async request => {
   const publicIndexRef = db.collection('publicCircleIndex').doc(circleRef.id);
   const now = FieldValue.serverTimestamp();
   const inviteCode = createInviteCode();
+  const commitmentCadence = getInputCommitmentCadence(
+    input.commitmentCadence,
+    input.commitmentFrequency,
+  );
+  const commitmentFrequency = getStoredCommitmentFrequency(
+    commitmentCadence,
+    input.commitmentFrequency,
+  );
   const circle = {
     category: input.category,
     createdAt: now,
     commitment: input.commitment,
-    commitmentFrequency: input.commitmentFrequency,
+    commitmentCadence,
+    commitmentFrequency,
     graceRules: input.graceRules ?? {
       skip: {
         allowance: 2,
@@ -327,7 +333,8 @@ export const createCircle = onCall(async request => {
     batch.set(publicIndexRef, {
       category: input.category,
       commitment: input.commitment,
-      commitmentFrequency: input.commitmentFrequency,
+      commitmentCadence,
+      commitmentFrequency,
       joinMode: input.joinMode,
       maxSize: input.maxSize,
       memberCount: 1,
@@ -708,9 +715,15 @@ export const nudgeCircleMembers = onCall(
     const timezone = asOptionalString(circle?.timezone) ?? 'UTC';
     const dateKey = getDateKeyForTimezone(timezone, now);
     const weekDateKeys = getCommitmentWeekDateKeys(timezone, now);
-    const tapInsPerWeek = getTapInsPerWeek(circle);
-    const [activeMemberSnapshots, ...weeklyCheckInSnapshots] = await Promise.all([
+    const commitmentCadence = getCommitmentCadence(circle);
+    const requiredTapIns = getRequiredTapIns(circle);
+    const [
+      activeMemberSnapshots,
+      todayCheckInSnapshots,
+      ...weeklyCheckInSnapshots
+    ] = await Promise.all([
       circleRef.collection('members').where('status', '==', 'active').get(),
+      circleRef.collection('days').doc(dateKey).collection('checkIns').get(),
       ...weekDateKeys.map(weekDateKey =>
         circleRef
           .collection('days')
@@ -720,11 +733,24 @@ export const nudgeCircleMembers = onCall(
       ),
     ]);
     const coveredCounts = new Map<string, number>();
+    const todayCoveredUids = new Set<string>();
 
-    weeklyCheckInSnapshots.forEach(snapshot => {
+    todayCheckInSnapshots.docs.forEach(doc => {
+      if (['done', 'skip'].includes(doc.data().status)) {
+        todayCoveredUids.add(asOptionalString(doc.data().uid) ?? doc.id);
+      }
+    });
+
+    const scoringSnapshots =
+      commitmentCadence === 'daily'
+        ? [todayCheckInSnapshots]
+        : weeklyCheckInSnapshots;
+
+    scoringSnapshots.forEach(snapshot => {
       snapshot.docs.forEach(doc => {
         if (['done', 'skip'].includes(doc.data().status)) {
-          coveredCounts.set(doc.id, (coveredCounts.get(doc.id) ?? 0) + 1);
+          const targetUid = asOptionalString(doc.data().uid) ?? doc.id;
+          coveredCounts.set(targetUid, (coveredCounts.get(targetUid) ?? 0) + 1);
         }
       });
     });
@@ -735,7 +761,8 @@ export const nudgeCircleMembers = onCall(
         return Boolean(
           targetUid &&
             targetUid !== uid &&
-            (coveredCounts.get(targetUid) ?? 0) < tapInsPerWeek,
+            !todayCoveredUids.has(targetUid) &&
+            (coveredCounts.get(targetUid) ?? 0) < requiredTapIns,
         );
       });
 
@@ -895,10 +922,19 @@ export const updateCircle = onCall(async request => {
   }
 
   const now = FieldValue.serverTimestamp();
+  const commitmentCadence = getInputCommitmentCadence(
+    input.commitmentCadence,
+    input.commitmentFrequency,
+  );
+  const commitmentFrequency = getStoredCommitmentFrequency(
+    commitmentCadence,
+    input.commitmentFrequency,
+  );
   const circleUpdate = {
     category: input.category,
     commitment: input.commitment,
-    commitmentFrequency: input.commitmentFrequency,
+    commitmentCadence,
+    commitmentFrequency,
     graceRules: input.graceRules ?? {
       skip: {
         allowance: 2,
@@ -920,7 +956,8 @@ export const updateCircle = onCall(async request => {
     batch.set(publicIndexRef, {
       category: input.category,
       commitment: input.commitment,
-      commitmentFrequency: input.commitmentFrequency,
+      commitmentCadence,
+      commitmentFrequency,
       joinMode: input.joinMode,
       maxSize: input.maxSize,
       memberCount,

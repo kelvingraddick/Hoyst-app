@@ -9,6 +9,10 @@ import {HttpsError, onCall} from 'firebase-functions/v2/https';
 import {z} from 'zod';
 
 import {db} from '../firebase';
+import {
+  getInputCommitmentCadence,
+  getStoredCommitmentFrequency,
+} from '../shared/commitments';
 import {resolveStarterCircleDecision} from './starter-circle-plan';
 
 const onboardingPreferencesSchema = z.object({
@@ -28,6 +32,7 @@ const commitmentFrequencySchema = z.object({
 const starterCircleSchema = z.object({
   category: z.string().trim().min(1).max(40),
   commitment: z.string().trim().min(1).max(160),
+  commitmentCadence: z.enum(['daily', 'weekly']).optional(),
   commitmentFrequency: commitmentFrequencySchema,
   graceRules: z
     .object({
@@ -42,9 +47,6 @@ const starterCircleSchema = z.object({
   title: z.string().trim().min(1).max(80),
 });
 const starterCircleHiddenDefaults = {
-  commitmentFrequency: {
-    tapInsPerWeek: 7,
-  },
   graceRules: {
     skip: {
       allowance: 2,
@@ -387,11 +389,20 @@ export const completeProfile = onCall(async request => {
       const memberRef = circleRef.collection('members').doc(uid);
       const publicIndexRef = db.collection('publicCircleIndex').doc(circleRef.id);
       const inviteCode = createInviteCode();
+      const commitmentCadence = getInputCommitmentCadence(
+        input.starterCircle.commitmentCadence,
+        input.starterCircle.commitmentFrequency,
+      );
+      const commitmentFrequency = getStoredCommitmentFrequency(
+        commitmentCadence,
+        input.starterCircle.commitmentFrequency,
+      );
       const circle = {
         category: input.starterCircle.category,
         createdAt: now,
         commitment: input.starterCircle.commitment,
-        commitmentFrequency: starterCircleHiddenDefaults.commitmentFrequency,
+        commitmentCadence,
+        commitmentFrequency,
         graceRules: starterCircleHiddenDefaults.graceRules,
         inviteCode,
         joinMode: input.starterCircle.joinMode,
@@ -419,7 +430,8 @@ export const completeProfile = onCall(async request => {
         transaction.set(publicIndexRef, {
           category: input.starterCircle.category,
           commitment: input.starterCircle.commitment,
-          commitmentFrequency: starterCircleHiddenDefaults.commitmentFrequency,
+          commitmentCadence,
+          commitmentFrequency,
           joinMode: input.starterCircle.joinMode,
           maxSize: starterCircleHiddenDefaults.maxSize,
           memberCount: 1,

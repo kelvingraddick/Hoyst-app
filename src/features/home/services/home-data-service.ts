@@ -13,6 +13,7 @@ import type {
   CircleProgressDay,
   CircleSummary,
   CheckInStatus,
+  CommitmentCadence,
   CommitmentFrequency,
   GraceRule,
   MemberRole,
@@ -140,12 +141,36 @@ function clampTapInsPerWeek(value: number) {
   return Math.min(7, Math.max(1, Math.round(value)));
 }
 
-function normalizeCommitmentFrequency(value: unknown): CommitmentFrequency {
+function normalizeCommitmentFrequency(
+  value: unknown,
+  cadence: CommitmentCadence = 'weekly',
+): CommitmentFrequency {
+  if (cadence === 'daily') {
+    return {tapInsPerWeek: 7};
+  }
+
   const data = value && typeof value === 'object' ? (value as PlainData) : {};
 
   return {
     tapInsPerWeek: clampTapInsPerWeek(asNumber(data.tapInsPerWeek, 7)),
   };
+}
+
+function normalizeCommitmentCadence(
+  value: unknown,
+  frequencyValue: unknown,
+): CommitmentCadence {
+  if (value === 'daily' || value === 'weekly') {
+    return value;
+  }
+
+  return normalizeCommitmentFrequency(frequencyValue, 'weekly').tapInsPerWeek >= 7
+    ? 'daily'
+    : 'weekly';
+}
+
+function getCommitmentPeriodLabel(cadence: CommitmentCadence) {
+  return cadence === 'daily' ? 'Today' : 'Week';
 }
 
 function getCleanFirstName(value?: string) {
@@ -270,7 +295,7 @@ function getMemberState(
   memberData: PlainData,
   memberCoveredCounts: ReadonlyMap<string, number>,
   todayCheckInStatuses: ReadonlyMap<string, CheckInStatus>,
-  tapInsPerWeek: number,
+  requiredTapIns: number,
 ): CircleMemberState {
   const status = normalizeMembershipStatus(memberData.status);
   const uid = asString(memberData.uid);
@@ -286,7 +311,7 @@ function getMemberState(
     return 'skipped';
   }
 
-  if (coveredCount >= tapInsPerWeek) {
+  if (coveredCount >= requiredTapIns) {
     return 'done';
   }
 
@@ -297,7 +322,7 @@ function mapMemberStatus(
   memberData: PlainData,
   memberCoveredCounts: ReadonlyMap<string, number>,
   todayCheckInStatuses: ReadonlyMap<string, CheckInStatus>,
-  tapInsPerWeek: number,
+  requiredTapIns: number,
 ): CircleMemberStatus | undefined {
   const status = normalizeMembershipStatus(memberData.status);
   const uid = asString(memberData.uid, asString(memberData.id));
@@ -319,7 +344,7 @@ function mapMemberStatus(
       memberData,
       memberCoveredCounts,
       todayCheckInStatuses,
-      tapInsPerWeek,
+      requiredTapIns,
     ),
   };
 }
@@ -669,9 +694,9 @@ export function getHomePersonalProgressState({
   if (activeCircles.length > 0 && dueCircleCount === 0) {
     return {
       action: 'shareProgress',
-      detail: 'Share that today is handled.',
+      detail: 'Share your current progress.',
       icon: 'share',
-      label: 'All tapped in today',
+      label: 'All covered right now',
       tone: 'success',
     };
   }
@@ -712,7 +737,7 @@ function getPeriodCoveredCounts(
 function getPeriodCoveredTotal(
   memberRecords: PlainData[],
   memberCoveredCounts: ReadonlyMap<string, number>,
-  tapInsPerWeek: number,
+  requiredTapIns: number,
 ) {
   return memberRecords.reduce((total, memberData) => {
     if (normalizeMembershipStatus(memberData.status) !== 'active') {
@@ -720,19 +745,21 @@ function getPeriodCoveredTotal(
     }
 
     const uid = asString(memberData.uid, asString(memberData.id));
-    return total + Math.min(memberCoveredCounts.get(uid) ?? 0, tapInsPerWeek);
+    return total + Math.min(memberCoveredCounts.get(uid) ?? 0, requiredTapIns);
   }, 0);
 }
 
 function getNudgeTargetCount({
   memberCoveredCounts,
   memberRecords,
-  tapInsPerWeek,
+  requiredTapIns,
+  todayCheckInStatuses,
   viewerUid,
 }: {
   memberCoveredCounts: ReadonlyMap<string, number>;
   memberRecords: PlainData[];
-  tapInsPerWeek: number;
+  requiredTapIns: number;
+  todayCheckInStatuses: ReadonlyMap<string, CheckInStatus>;
   viewerUid: string;
 }) {
   return memberRecords.reduce((total, memberData) => {
@@ -746,7 +773,11 @@ function getNudgeTargetCount({
       return total;
     }
 
-    return (memberCoveredCounts.get(uid) ?? 0) >= tapInsPerWeek
+    if (isCoveredCheckInStatus(todayCheckInStatuses.get(uid))) {
+      return total;
+    }
+
+    return (memberCoveredCounts.get(uid) ?? 0) >= requiredTapIns
       ? total
       : total + 1;
   }, 0);
@@ -789,11 +820,23 @@ export function mapHomeCircleFromData({
     new Map<string, ReadonlyMap<string, CheckInStatus>>([
       ['today', coveredCheckIns],
     ]);
-  const commitmentFrequency = normalizeCommitmentFrequency(
+  const commitmentCadence = normalizeCommitmentCadence(
+    circleData.commitmentCadence,
     circleData.commitmentFrequency,
   );
+  const commitmentFrequency = normalizeCommitmentFrequency(
+    circleData.commitmentFrequency,
+    commitmentCadence,
+  );
   const tapInsPerWeek = commitmentFrequency.tapInsPerWeek;
-  const memberCoveredCounts = getPeriodCoveredCounts(periodStatuses);
+  const requiredTapIns = commitmentCadence === 'daily' ? 1 : tapInsPerWeek;
+  const scoringStatuses =
+    commitmentCadence === 'daily'
+      ? new Map<string, ReadonlyMap<string, CheckInStatus>>([
+          ['today', coveredCheckIns],
+        ])
+      : periodStatuses;
+  const memberCoveredCounts = getPeriodCoveredCounts(scoringStatuses);
   const isPending = membershipStatus === 'pending';
   const memberRecords = membersData.length > 0 ? membersData : [membershipData];
   const activeMemberCount = memberRecords.filter(
@@ -806,7 +849,7 @@ export function mapHomeCircleFromData({
         memberData,
         memberCoveredCounts,
         coveredCheckIns,
-        tapInsPerWeek,
+        requiredTapIns,
       ),
     )
     .filter((member): member is CircleMemberStatus => Boolean(member));
@@ -815,20 +858,21 @@ export function mapHomeCircleFromData({
     Math.max(memberRecords.length, visibleMembers.length),
   );
   const progressBase =
-    Math.max(activeMemberCount, isPending ? 0 : memberCount) * tapInsPerWeek;
+    Math.max(activeMemberCount, isPending ? 0 : memberCount) * requiredTapIns;
   const periodCoveredCount = getPeriodCoveredTotal(
     memberRecords,
     memberCoveredCounts,
-    tapInsPerWeek,
+    requiredTapIns,
   );
   const progressPercent =
     progressBase > 0
-      ? Math.round((periodCoveredCount / progressBase) * 100)
+      ? Math.min(100, Math.round((periodCoveredCount / progressBase) * 100))
       : 0;
   const nudgeTargetCount = getNudgeTargetCount({
     memberCoveredCounts,
     memberRecords,
-    tapInsPerWeek,
+    requiredTapIns,
+    todayCheckInStatuses: coveredCheckIns,
     viewerUid: uid,
   });
   const viewerTodayStatus = uid ? coveredCheckIns.get(uid) : undefined;
@@ -836,7 +880,7 @@ export function mapHomeCircleFromData({
   const viewerHasTappedInToday = Boolean(viewerTodayStatus);
   const viewerRemainingTapIns = isPending
     ? 0
-    : Math.max(tapInsPerWeek - viewerCoveredCount, 0);
+    : Math.max(requiredTapIns - viewerCoveredCount, 0);
   const viewerHasCheckedIn = isPending ? true : viewerRemainingTapIns === 0;
   const remainingCheckIns = isPending
     ? 0
@@ -852,10 +896,13 @@ export function mapHomeCircleFromData({
   const matchCopy = isPending
     ? 'Pending approval before Tap In unlocks.'
     : asString(circleData.matchCopy);
+  const periodLabel = getCommitmentPeriodLabel(commitmentCadence);
+  const progressLabel = `${periodLabel} · ${progressPercent}%`;
 
   return {
     category: asString(circleData.category, 'General'),
     completionRate: progressPercent,
+    commitmentCadence,
     commitment,
     commitmentFrequency,
     graceRules: normalizeGraceRules(circleData.graceRules),
@@ -868,7 +915,8 @@ export function mapHomeCircleFromData({
     members: visibleMembers,
     nudgeTargetCount,
     privacy: normalizePrivacy(circleData.privacy),
-    progressLabel: isPending ? 'Pending approval' : undefined,
+    completionLabel: isPending ? 'Pending approval' : progressLabel,
+    progressLabel: isPending ? 'Pending approval' : progressLabel,
     progressPercent,
     remainingCheckIns,
     state,
@@ -1523,13 +1571,25 @@ export function buildPublicCircleDetail(
 ): CircleDetailModel {
   const progressPercent =
     summary.progressPercent ?? summary.completionRate ?? 0;
+  const commitmentCadence = normalizeCommitmentCadence(
+    summary.commitmentCadence,
+    summary.commitmentFrequency,
+  );
+  const progressLabel =
+    summary.progressLabel ??
+    `${getCommitmentPeriodLabel(commitmentCadence)} · ${progressPercent}%`;
 
   return {
     ...summary,
     activity: [],
     completionRate: summary.completionRate ?? progressPercent,
-    commitmentFrequency: summary.commitmentFrequency ?? {tapInsPerWeek: 7},
+    commitmentCadence,
+    commitmentFrequency: normalizeCommitmentFrequency(
+      summary.commitmentFrequency ?? {tapInsPerWeek: 7},
+      commitmentCadence,
+    ),
     commitmentLabel: `Commitment: ${summary.commitment}`,
+    completionLabel: summary.completionLabel ?? progressLabel,
     memberCount: summary.memberCount ?? summary.members.length,
     monthProgress: Array.from({length: 7}, (_, index) => ({
       day: index + 1,
@@ -1537,6 +1597,7 @@ export function buildPublicCircleDetail(
     })),
     maxSize: summary.maxSize ?? Math.max(summary.members.length, 1),
     nudgeTargetCount: summary.nudgeTargetCount ?? 0,
+    progressLabel,
     progressPercent,
     remainingCheckIns: summary.remainingCheckIns ?? 0,
     state: summary.state ?? 'active',

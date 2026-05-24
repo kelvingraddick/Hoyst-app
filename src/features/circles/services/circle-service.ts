@@ -4,6 +4,7 @@ import {firebaseFunctions} from '../../../lib/firebase/functions';
 import type {
   CircleJoinMode,
   CirclePrivacy,
+  CommitmentCadence,
   CommitmentFrequency,
   GraceRule,
 } from '../../../types/models';
@@ -11,6 +12,7 @@ import type {
 export type CreateCircleInput = {
   category: string;
   commitment: string;
+  commitmentCadence: CommitmentCadence;
   commitmentFrequency: CommitmentFrequency;
   graceRules: {
     skip: GraceRule;

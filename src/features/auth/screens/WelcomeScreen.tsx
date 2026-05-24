@@ -19,13 +19,17 @@ import {
   Apple,
   ArrowLeft,
   BellRing,
+  CalendarDays,
+  CalendarRange,
   Check,
   Chrome,
   Clock3,
   Globe2,
   ImagePlus,
   Mail,
+  Minus,
   Phone,
+  Plus,
   Shield,
   Share2,
   Sparkles,
@@ -64,10 +68,20 @@ import {
   type OnboardingOption,
   type OnboardingStep,
 } from '../services/onboarding-options';
-import type {CircleJoinMode, CirclePrivacyMode} from '../../../types/models';
+import type {
+  CircleJoinMode,
+  CirclePrivacyMode,
+  CommitmentCadence,
+  CreateCircleDraft,
+} from '../../../types/models';
 import {TimezonePicker} from '../components/TimezonePicker';
 import {normalizeHandle, validateHandle} from '../services/profile-validation';
 import {isStarterCircleDraftReady} from '../services/onboarding-circle';
+import {
+  defaultWeeklyCommitmentFrequency,
+  normalizeCommitmentCadence,
+  normalizeCommitmentFrequency,
+} from '../../create-circle/services/create-circle-draft';
 import {
   confirmPhoneSignIn,
   registerWithEmail,
@@ -120,6 +134,11 @@ const stepCopy: Record<Exclude<OnboardingStep, 'welcome'>, StepCopy> = {
     prompt: 'What is the shared Commitment?',
     title: 'Define the promise',
   },
+  circleCadence: {
+    body: 'Daily circles reset every day. Weekly circles work toward a set number of covered days each week.',
+    prompt: 'How often should members commit?',
+    title: 'Set the rhythm',
+  },
   circlePrivacy: {
     body: 'Choose who can discover it and how new members enter.',
     prompt: 'Who can find and join it?',
@@ -149,6 +168,7 @@ const stepCopy: Record<Exclude<OnboardingStep, 'welcome'>, StepCopy> = {
 
 const stepIcons: Record<Exclude<OnboardingStep, 'welcome'>, LucideIcon> = {
   auth: UserRound,
+  circleCadence: CalendarRange,
   circleCommitment: Target,
   circlePrivacy: Globe2,
   circleReview: Sparkles,
@@ -197,6 +217,26 @@ const publicJoinOptions: OnboardingOption<
   },
 ];
 
+const commitmentCadenceOptions: OnboardingOption<CommitmentCadence>[] = [
+  {
+    accent: 'green',
+    description: 'Every member covers the Commitment once each day.',
+    id: 'daily',
+    label: 'Daily',
+  },
+  {
+    accent: 'blue',
+    description: 'Each member covers a set number of days each week.',
+    id: 'weekly',
+    label: 'Weekly',
+  },
+];
+
+const commitmentCadenceIcons: Record<CommitmentCadence, LucideIcon> = {
+  daily: CalendarDays,
+  weekly: CalendarRange,
+};
+
 function getInitialsFromName(name: string) {
   const initials = name
     .split(' ')
@@ -214,6 +254,21 @@ function getErrorMessage(error: unknown) {
   return 'message' in serviceError
     ? serviceError.message
     : 'Authentication failed. Try again.';
+}
+
+function getStarterCircleCadenceLabel(draft: CreateCircleDraft) {
+  const commitmentCadence = normalizeCommitmentCadence(
+    draft.commitmentCadence,
+    draft.commitmentFrequency,
+  );
+  const commitmentFrequency = normalizeCommitmentFrequency(
+    draft.commitmentFrequency,
+    commitmentCadence,
+  );
+
+  return commitmentCadence === 'daily'
+    ? 'Daily'
+    : `Weekly: ${commitmentFrequency.tapInsPerWeek} Tap Ins / week`;
 }
 
 function useAccentColor(accent: OnboardingOption<string>['accent']) {
@@ -473,6 +528,55 @@ function PreviewRow({
   );
 }
 
+function NumericStepper({
+  label,
+  max,
+  min,
+  onChange,
+  value,
+}: {
+  label: string;
+  max: number;
+  min: number;
+  onChange: (value: number) => void;
+  value: number;
+}) {
+  const theme = useHoystTheme();
+  const decrementDisabled = value <= min;
+  const incrementDisabled = value >= max;
+
+  return (
+    <View
+      style={[
+        styles.stepper,
+        {backgroundColor: theme.surface, borderColor: theme.border},
+      ]}>
+      <View style={styles.stepperCopy}>
+        <HoystText tone="muted" variant="label">
+          {label}
+        </HoystText>
+        <HoystText style={styles.stepperValue} variant="title">
+          {value}
+        </HoystText>
+      </View>
+      <View style={styles.stepperControls}>
+        <IconButton
+          accessibilityLabel={`Decrease ${label}`}
+          disabled={decrementDisabled}
+          icon={Minus}
+          onPress={() => onChange(Math.max(min, value - 1))}
+        />
+        <IconButton
+          accessibilityLabel={`Increase ${label}`}
+          disabled={incrementDisabled}
+          icon={Plus}
+          onPress={() => onChange(Math.min(max, value + 1))}
+        />
+      </View>
+    </View>
+  );
+}
+
 function StickyCta({
   label,
   onPress,
@@ -603,6 +707,18 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
     typeof starterCircleDraft.commitment === 'string'
       ? starterCircleDraft.commitment
       : '';
+  const starterCircleCommitmentCadence = normalizeCommitmentCadence(
+    starterCircleDraft.commitmentCadence,
+    starterCircleDraft.commitmentFrequency,
+  );
+  const starterCircleCommitmentFrequency = normalizeCommitmentFrequency(
+    starterCircleDraft.commitmentFrequency,
+    starterCircleCommitmentCadence,
+  );
+  const starterCircleCadenceLabel =
+    getStarterCircleCadenceLabel(starterCircleDraft);
+  const StarterCircleCadenceIcon =
+    commitmentCadenceIcons[starterCircleCommitmentCadence];
   const canContinue =
     currentStep === 'focusArea'
       ? Boolean(focusArea)
@@ -918,6 +1034,28 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
     nextStep();
   };
 
+  const selectStarterCircleCadence = (
+    commitmentCadence: CommitmentCadence,
+  ) => {
+    setStarterCircleField('commitmentCadence', commitmentCadence);
+    setStarterCircleField(
+      'commitmentFrequency',
+      commitmentCadence === 'daily'
+        ? {tapInsPerWeek: 7}
+        : starterCircleCommitmentFrequency.tapInsPerWeek >= 7
+        ? defaultWeeklyCommitmentFrequency
+        : starterCircleCommitmentFrequency,
+    );
+  };
+
+  const setStarterCircleWeeklyTapIns = (tapInsPerWeek: number) => {
+    setStarterCircleField('commitmentCadence', 'weekly');
+    setStarterCircleField(
+      'commitmentFrequency',
+      normalizeCommitmentFrequency({tapInsPerWeek}, 'weekly'),
+    );
+  };
+
   const continueFromNotifications = async (
     shouldRequestPermission: boolean,
   ) => {
@@ -1119,10 +1257,13 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
                 <HoystText tone="muted" variant="label">
                   First circle
                 </HoystText>
-                <HoystText>
-                  {starterCircleTitle.trim()} -{' '}
+                <HoystText variant="bodyStrong">
+                  {starterCircleTitle.trim()}
+                </HoystText>
+                <HoystText tone="muted">
                   {starterCircleCommitment.trim()}
                 </HoystText>
+                <HoystText tone="muted">{starterCircleCadenceLabel}</HoystText>
               </View>
             ) : null}
             {circleSetupError ? (
@@ -1189,6 +1330,41 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
             </HoystText>
           </View>
         ) : null}
+        {currentStep === 'circleCadence' ? (
+          <View style={styles.stack}>
+            <View style={styles.optionStack}>
+              {commitmentCadenceOptions.map(option => (
+                <OptionCard
+                  icon={commitmentCadenceIcons[option.id]}
+                  isSelected={starterCircleCommitmentCadence === option.id}
+                  key={option.id}
+                  onPress={() => selectStarterCircleCadence(option.id)}
+                  option={option}
+                />
+              ))}
+            </View>
+            {starterCircleCommitmentCadence === 'weekly' ? (
+              <>
+                <NumericStepper
+                  label="Tap Ins per week"
+                  max={7}
+                  min={1}
+                  onChange={setStarterCircleWeeklyTapIns}
+                  value={starterCircleCommitmentFrequency.tapInsPerWeek}
+                />
+                <HoystText tone="muted">
+                  Members complete the Commitment this many days from Monday to
+                  Sunday in the Circle timezone.
+                </HoystText>
+              </>
+            ) : (
+              <HoystText tone="muted">
+                Members need one Tap In or skip each day. Circle Progression
+                resets at midnight in the Circle timezone.
+              </HoystText>
+            )}
+          </View>
+        ) : null}
         {currentStep === 'circlePrivacy' ? (
           <View style={styles.optionStack}>
             {renderOptions(
@@ -1235,6 +1411,14 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
               detail={starterCircleCommitment.trim()}
               icon={Target}
               label="Commitment"
+            />
+            <PreviewRow
+              accent={
+                starterCircleCommitmentCadence === 'daily' ? 'green' : 'blue'
+              }
+              detail={starterCircleCadenceLabel}
+              icon={StarterCircleCadenceIcon}
+              label="Rhythm"
             />
             <PreviewRow
               accent="purple"
@@ -1463,6 +1647,7 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
   const isCircleSetupStep =
     currentStep === 'circleTitle' ||
     currentStep === 'circleCommitment' ||
+    currentStep === 'circleCadence' ||
     currentStep === 'circlePrivacy' ||
     currentStep === 'circleReview';
   const secondaryLabel =
@@ -1633,6 +1818,9 @@ const styles = StyleSheet.create({
   optionStack: {
     gap: 8,
   },
+  stack: {
+    gap: 12,
+  },
   nestedOptionStack: {
     gap: 10,
     paddingTop: 6,
@@ -1705,6 +1893,24 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: 4,
     minWidth: 0,
+  },
+  stepper: {
+    alignItems: 'center',
+    borderRadius: radius.md,
+    borderWidth: 1,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    padding: 16,
+  },
+  stepperControls: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  stepperCopy: {
+    gap: 4,
+  },
+  stepperValue: {
+    fontSize: 22,
   },
   profileFields: {
     gap: 14,

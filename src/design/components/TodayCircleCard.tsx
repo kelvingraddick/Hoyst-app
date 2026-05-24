@@ -36,6 +36,18 @@ function getCategoryTone(
   return 'neutral';
 }
 
+function getPeriodCopy(card: CircleManagementCard) {
+  return card.commitmentCadence === 'daily' ? 'today' : 'this week';
+}
+
+function getRemainingTapInsLabel(count: number, card: CircleManagementCard) {
+  const periodCopy = getPeriodCopy(card);
+
+  return count === 1
+    ? `1 Tap In left ${periodCopy}`
+    : `${count} Tap Ins left ${periodCopy}`;
+}
+
 export function TodayCircleCard({
   card,
   isNudged = false,
@@ -70,13 +82,9 @@ export function TodayCircleCard({
     ? 'Others Needed'
     : 'Complete';
   const othersNeededLabel =
-    card.remainingCheckIns === 1
-      ? '1 Tap In left this week'
-      : `${card.remainingCheckIns} Tap Ins left this week`;
+    getRemainingTapInsLabel(card.remainingCheckIns, card);
   const viewerNeededLabel =
-    card.viewerRemainingTapIns === 1
-      ? '1 Tap In left this week'
-      : `${card.viewerRemainingTapIns ?? 0} Tap Ins left this week`;
+    getRemainingTapInsLabel(card.viewerRemainingTapIns ?? 0, card);
   const statusTone: React.ComponentProps<typeof HoystChip>['tone'] =
     statusLabel === 'Complete'
       ? 'green'
@@ -101,7 +109,7 @@ export function TodayCircleCard({
     ? 'Grace skip used today'
     : card.remainingCheckIns > 0
     ? othersNeededLabel
-    : `${completionRate}% tapped in`;
+    : card.progressLabel ?? `${completionRate}% tapped in`;
   const actionVariant = isPendingMembership
     ? 'view'
     : !card.viewerHasCheckedIn && !card.viewerHasTappedInToday
@@ -168,7 +176,7 @@ export function TodayCircleCard({
               },
             ]}>
             <HoystText style={{color: progressTone}} variant="caption">
-              {completionRate}%
+              {card.progressLabel ?? `${completionRate}%`}
             </HoystText>
           </View>
         </View>

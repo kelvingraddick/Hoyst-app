@@ -7,6 +7,7 @@ exports.notifyOwnerJoinRequest = notifyOwnerJoinRequest;
 exports.notifyOwnerNewJoin = notifyOwnerNewJoin;
 exports.notifyJoinRequestReview = notifyJoinRequestReview;
 exports.notifyNudge = notifyNudge;
+exports.getCircleAtRiskNotificationBody = getCircleAtRiskNotificationBody;
 exports.notifyCircleAtRisk = notifyCircleAtRisk;
 exports.getReminderEligibility = getReminderEligibility;
 const firestore_1 = require("firebase-admin/firestore");
@@ -15,6 +16,7 @@ const params_1 = require("firebase-functions/params");
 const scheduler_1 = require("firebase-functions/v2/scheduler");
 const zod_1 = require("zod");
 const firebase_1 = require("../firebase");
+const commitments_1 = require("../shared/commitments");
 exports.oneSignalRestApiKey = (0, params_1.defineSecret)('ONESIGNAL_REST_API_KEY');
 exports.oneSignalAppId = (0, params_1.defineString)('ONESIGNAL_APP_ID', { default: '' });
 function getJoinRequestNotificationDedupeKey({ circleId, requesterId, requestToken, }) {
@@ -113,12 +115,6 @@ function getCommitmentWeekDateKeys(timezone, now = new Date()) {
             String(date.getDate()).padStart(2, '0'),
         ].join('-');
     });
-}
-function getTapInsPerWeek(circle) {
-    const value = circle?.commitmentFrequency?.tapInsPerWeek;
-    return typeof value === 'number' && Number.isFinite(value)
-        ? Math.min(7, Math.max(1, Math.round(value)))
-        : 7;
 }
 function buildActor(data) {
     if (!data) {
@@ -302,9 +298,17 @@ async function notifyNudge({ actor, circleId, circleTitle, dateKey, targetUid, }
         uid: targetUid,
     });
 }
-async function notifyCircleAtRisk({ circleId, circleTitle, periodKey, remainingCount, targetUid, }) {
+function getCircleAtRiskNotificationBody({ circleTitle, commitmentCadence, remainingCount, }) {
+    const periodCopy = commitmentCadence === 'daily' ? 'today' : 'this week';
+    return `${circleTitle} needs ${remainingCount} more Tap In${remainingCount === 1 ? '' : 's'} ${periodCopy}.`;
+}
+async function notifyCircleAtRisk({ commitmentCadence, circleId, circleTitle, periodKey, remainingCount, targetUid, }) {
     return createInboxEvent({
-        body: `${circleTitle} needs ${remainingCount} more Tap In${remainingCount === 1 ? '' : 's'} this week.`,
+        body: getCircleAtRiskNotificationBody({
+            circleTitle,
+            commitmentCadence,
+            remainingCount,
+        }),
         circleId,
         dedupeKey: `circle_at_risk_${circleId}_${periodKey}_${targetUid}`,
         deeplink: { circleId, screen: 'CircleDetail' },
@@ -346,7 +350,8 @@ async function sendTapInReminders(kind) {
         const timezone = asString(circle.timezone, 'UTC');
         const local = getLocalDateTimeParts(now, timezone);
         const weekDateKeys = getCommitmentWeekDateKeys(timezone, now);
-        const tapInsPerWeek = getTapInsPerWeek(circle);
+        const commitmentCadence = (0, commitments_1.getCommitmentCadence)(circle);
+        const requiredTapIns = (0, commitments_1.getRequiredTapIns)(circle);
         if (local.hour !== targetHour) {
             continue;
         }
@@ -366,15 +371,19 @@ async function sendTapInReminders(kind) {
                 .collection('checkIns')
                 .get()),
         ]);
-        const checkInStatuses = new Map(todayCheckInSnapshots.docs.map(snapshot => [
-            snapshot.id,
-            snapshot.data().status,
-        ]));
+        const checkInStatuses = new Map(todayCheckInSnapshots.docs.map(snapshot => {
+            const data = snapshot.data();
+            return [asString(data.uid, snapshot.id), data.status];
+        }));
         const coveredCounts = new Map();
-        weeklyCheckInSnapshots.forEach(snapshot => {
+        const scoringSnapshots = commitmentCadence === 'daily'
+            ? [todayCheckInSnapshots]
+            : weeklyCheckInSnapshots;
+        scoringSnapshots.forEach(snapshot => {
             snapshot.docs.forEach(doc => {
                 if (doc.data().status === 'done' || doc.data().status === 'skip') {
-                    coveredCounts.set(doc.id, (coveredCounts.get(doc.id) ?? 0) + 1);
+                    const uid = asString(doc.data().uid, doc.id);
+                    coveredCounts.set(uid, (coveredCounts.get(uid) ?? 0) + 1);
                 }
             });
         });
@@ -392,7 +401,7 @@ async function sendTapInReminders(kind) {
                 kind,
                 memberStatus: memberSnapshot.data().status,
                 notificationSettings: userPrivate?.notificationSettings,
-                remainingTapIns: Math.max(tapInsPerWeek - (coveredCounts.get(uid) ?? 0), 0),
+                remainingTapIns: Math.max(requiredTapIns - (coveredCounts.get(uid) ?? 0), 0),
                 todayStatus: checkInStatuses.get(uid),
                 uid,
             });

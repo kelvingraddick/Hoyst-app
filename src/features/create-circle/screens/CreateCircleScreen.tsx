@@ -3,6 +3,8 @@ import {Alert, Pressable, Share, StyleSheet, View} from 'react-native';
 import {
   ArrowLeft,
   BookOpen,
+  CalendarDays,
+  CalendarRange,
   Check,
   Dumbbell,
   Flame,
@@ -34,12 +36,14 @@ import {
   buildCreateCirclePayload,
   clampCircleMaxSize,
   createInitialCircleDraft,
+  defaultWeeklyCommitmentFrequency,
   getPrivacyChoiceFields,
   normalizeSkipGraceRule,
 } from '../services/create-circle-draft';
 import type {
   CircleJoinMode,
   CirclePrivacyMode,
+  CommitmentCadence,
   CreateCircleDraft,
 } from '../../../types/models';
 import type {RootStackParamList} from '../../../navigation/types';
@@ -162,6 +166,23 @@ const publicJoinOptions: Array<
   },
 ];
 
+const commitmentCadenceOptions: Array<Option<CommitmentCadence>> = [
+  {
+    description: 'Every member covers the Commitment once each day.',
+    icon: CalendarDays,
+    id: 'daily',
+    label: 'Daily',
+    tone: 'green',
+  },
+  {
+    description: 'Each member covers a set number of days each week.',
+    icon: CalendarRange,
+    id: 'weekly',
+    label: 'Weekly',
+    tone: 'blue',
+  },
+];
+
 const stepCopy: Record<WizardStep, {body: string; title: string}> = {
   category: {
     body: 'Pick the lane that sets expectations before anyone joins.',
@@ -172,8 +193,8 @@ const stepCopy: Record<WizardStep, {body: string; title: string}> = {
     title: 'What is the shared Commitment?',
   },
   commitmentFrequency: {
-    body: 'Set the number of Tap Ins each Member needs from Monday to Sunday.',
-    title: 'What is the Commitment Frequency?',
+    body: 'Choose whether the Circle resets daily or works toward a weekly target.',
+    title: 'How often should members commit?',
   },
   grace: {
     body: 'Skips can keep Progression intact when life gets loud.',
@@ -535,6 +556,19 @@ export function CreateCircleScreen({navigation}: Props): React.JSX.Element {
     }));
   };
 
+  const selectCommitmentCadence = (commitmentCadence: CommitmentCadence) => {
+    setDraft(current => ({
+      ...current,
+      commitmentCadence,
+      commitmentFrequency:
+        commitmentCadence === 'daily'
+          ? {tapInsPerWeek: 7}
+          : current.commitmentFrequency.tapInsPerWeek >= 7
+          ? defaultWeeklyCommitmentFrequency
+          : current.commitmentFrequency,
+    }));
+  };
+
   const goBack = () => {
     if (currentIndex > 0) {
       setCurrentStep(wizardSteps[currentIndex - 1]);
@@ -651,19 +685,33 @@ export function CreateCircleScreen({navigation}: Props): React.JSX.Element {
     if (currentStep === 'commitmentFrequency') {
       return (
         <View style={styles.stack}>
-          <NumericStepper
-            label="Tap Ins per week"
-            max={7}
-            min={1}
-            onChange={value =>
-              setField('commitmentFrequency', {tapInsPerWeek: value})
-            }
-            value={draft.commitmentFrequency.tapInsPerWeek}
-          />
-          <HoystText tone="muted">
-            Members build Progression by completing this many Tap Ins each
-            Monday to Sunday period.
-          </HoystText>
+          {renderOptions(
+            commitmentCadenceOptions,
+            draft.commitmentCadence,
+            selectCommitmentCadence,
+          )}
+          {draft.commitmentCadence === 'weekly' ? (
+            <>
+              <NumericStepper
+                label="Tap Ins per week"
+                max={7}
+                min={1}
+                onChange={value =>
+                  setField('commitmentFrequency', {tapInsPerWeek: value})
+                }
+                value={draft.commitmentFrequency.tapInsPerWeek}
+              />
+              <HoystText tone="muted">
+                Members complete the Commitment this many days from Monday to
+                Sunday in the Circle timezone.
+              </HoystText>
+            </>
+          ) : (
+            <HoystText tone="muted">
+              Members need one Tap In or skip each day. Circle Progression resets
+              at midnight in the Circle timezone.
+            </HoystText>
+          )}
         </View>
       );
     }
@@ -802,7 +850,11 @@ export function CreateCircleScreen({navigation}: Props): React.JSX.Element {
         <SummaryRow label="Commitment" value={draft.commitment.trim()} />
         <SummaryRow
           label="Commitment Frequency"
-          value={`${draft.commitmentFrequency.tapInsPerWeek} Tap Ins / week`}
+          value={
+            draft.commitmentCadence === 'daily'
+              ? 'Daily'
+              : `Weekly: ${draft.commitmentFrequency.tapInsPerWeek} Tap Ins / week`
+          }
         />
         <SummaryRow
           label="Grace"

@@ -503,7 +503,7 @@ export function HomeScreen(): React.JSX.Element {
             ? `${result.nudged} member${
                 result.nudged === 1 ? '' : 's'
               } nudged.`
-            : 'Everyone has completed their Commitment Frequency.',
+            : 'Everyone is covered right now.',
         );
       })
       .catch(error => {
@@ -794,7 +794,7 @@ export function HomeScreen(): React.JSX.Element {
             <HoystText tone="muted">
               {showAuthenticatedEmptyState
                 ? 'Create a Circle or find one in Explore to begin tracking real Tap Ins.'
-                : 'Manage your Circles, invite your people, and handle what needs you this week.'}
+                : 'Manage your Circles, invite your people, and handle what needs you right now.'}
             </HoystText>
           </View>
 

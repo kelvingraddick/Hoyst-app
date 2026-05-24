@@ -1,4 +1,5 @@
 import {
+  getCircleAtRiskNotificationBody,
   getJoinRequestNotificationDedupeKey,
   getReminderEligibility,
 } from '../functions/src/notifications';
@@ -60,6 +61,20 @@ describe('notification reminder eligibility', () => {
     ).toMatchObject({eligible: false, reason: 'already-covered'});
   });
 
+  it('skips weekly reminders after the quota is complete', () => {
+    expect(
+      getReminderEligibility({
+        circleId: 'circle-1',
+        dateKey: '2026-05-13',
+        kind: 'midday',
+        memberStatus: 'active',
+        notificationSettings: {tapInReminders: true},
+        remainingTapIns: 0,
+        uid: 'user-1',
+      }),
+    ).toMatchObject({eligible: false, reason: 'frequency-complete'});
+  });
+
   it('respects disabled reminder preferences', () => {
     expect(
       getReminderEligibility({
@@ -71,6 +86,25 @@ describe('notification reminder eligibility', () => {
         uid: 'user-1',
       }),
     ).toMatchObject({eligible: false, reason: 'preference-disabled'});
+  });
+});
+
+describe('circle at-risk notification copy', () => {
+  it('labels daily and weekly risk periods clearly', () => {
+    expect(
+      getCircleAtRiskNotificationBody({
+        circleTitle: 'Hydration Circle',
+        commitmentCadence: 'daily',
+        remainingCount: 1,
+      }),
+    ).toBe('Hydration Circle needs 1 more Tap In today.');
+    expect(
+      getCircleAtRiskNotificationBody({
+        circleTitle: 'Maker Mornings',
+        commitmentCadence: 'weekly',
+        remainingCount: 2,
+      }),
+    ).toBe('Maker Mornings needs 2 more Tap Ins this week.');
   });
 });
 

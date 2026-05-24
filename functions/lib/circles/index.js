@@ -9,6 +9,7 @@ const https_1 = require("firebase-functions/v2/https");
 const zod_1 = require("zod");
 const firebase_1 = require("../firebase");
 const notifications_1 = require("../notifications");
+const commitments_1 = require("../shared/commitments");
 const graceRuleSchema = zod_1.z.object({
     allowance: zod_1.z.number().int().min(0).max(30),
     windowDays: zod_1.z.number().int().min(1).max(365),
@@ -19,6 +20,7 @@ const commitmentFrequencySchema = zod_1.z.object({
 const createCircleSchema = zod_1.z.object({
     category: zod_1.z.string().trim().min(1).max(40),
     commitment: zod_1.z.string().trim().min(1).max(160),
+    commitmentCadence: zod_1.z.enum(['daily', 'weekly']).optional(),
     commitmentFrequency: commitmentFrequencySchema,
     graceRules: zod_1.z
         .object({
@@ -129,12 +131,6 @@ function getCommitmentWeekDateKeys(timezone, now = new Date()) {
         ].join('-');
     });
 }
-function getTapInsPerWeek(circle) {
-    const value = circle?.commitmentFrequency?.tapInsPerWeek;
-    return typeof value === 'number' && Number.isFinite(value)
-        ? Math.min(7, Math.max(1, Math.round(value)))
-        : 7;
-}
 function buildMemberPublicPreview(profile, uid) {
     return {
         avatarUrl: profile.avatarUrl ?? null,
@@ -221,11 +217,14 @@ exports.createCircle = (0, https_1.onCall)(async (request) => {
     const publicIndexRef = firebase_1.db.collection('publicCircleIndex').doc(circleRef.id);
     const now = firestore_1.FieldValue.serverTimestamp();
     const inviteCode = createInviteCode();
+    const commitmentCadence = (0, commitments_1.getInputCommitmentCadence)(input.commitmentCadence, input.commitmentFrequency);
+    const commitmentFrequency = (0, commitments_1.getStoredCommitmentFrequency)(commitmentCadence, input.commitmentFrequency);
     const circle = {
         category: input.category,
         createdAt: now,
         commitment: input.commitment,
-        commitmentFrequency: input.commitmentFrequency,
+        commitmentCadence,
+        commitmentFrequency,
         graceRules: input.graceRules ?? {
             skip: {
                 allowance: 2,
@@ -257,7 +256,8 @@ exports.createCircle = (0, https_1.onCall)(async (request) => {
         batch.set(publicIndexRef, {
             category: input.category,
             commitment: input.commitment,
-            commitmentFrequency: input.commitmentFrequency,
+            commitmentCadence,
+            commitmentFrequency,
             joinMode: input.joinMode,
             maxSize: input.maxSize,
             memberCount: 1,
@@ -527,9 +527,11 @@ exports.nudgeCircleMembers = (0, https_1.onCall)({ secrets: [notifications_1.one
     const timezone = asOptionalString(circle?.timezone) ?? 'UTC';
     const dateKey = getDateKeyForTimezone(timezone, now);
     const weekDateKeys = getCommitmentWeekDateKeys(timezone, now);
-    const tapInsPerWeek = getTapInsPerWeek(circle);
-    const [activeMemberSnapshots, ...weeklyCheckInSnapshots] = await Promise.all([
+    const commitmentCadence = (0, commitments_1.getCommitmentCadence)(circle);
+    const requiredTapIns = (0, commitments_1.getRequiredTapIns)(circle);
+    const [activeMemberSnapshots, todayCheckInSnapshots, ...weeklyCheckInSnapshots] = await Promise.all([
         circleRef.collection('members').where('status', '==', 'active').get(),
+        circleRef.collection('days').doc(dateKey).collection('checkIns').get(),
         ...weekDateKeys.map(weekDateKey => circleRef
             .collection('days')
             .doc(weekDateKey)
@@ -537,10 +539,20 @@ exports.nudgeCircleMembers = (0, https_1.onCall)({ secrets: [notifications_1.one
             .get()),
     ]);
     const coveredCounts = new Map();
-    weeklyCheckInSnapshots.forEach(snapshot => {
+    const todayCoveredUids = new Set();
+    todayCheckInSnapshots.docs.forEach(doc => {
+        if (['done', 'skip'].includes(doc.data().status)) {
+            todayCoveredUids.add(asOptionalString(doc.data().uid) ?? doc.id);
+        }
+    });
+    const scoringSnapshots = commitmentCadence === 'daily'
+        ? [todayCheckInSnapshots]
+        : weeklyCheckInSnapshots;
+    scoringSnapshots.forEach(snapshot => {
         snapshot.docs.forEach(doc => {
             if (['done', 'skip'].includes(doc.data().status)) {
-                coveredCounts.set(doc.id, (coveredCounts.get(doc.id) ?? 0) + 1);
+                const targetUid = asOptionalString(doc.data().uid) ?? doc.id;
+                coveredCounts.set(targetUid, (coveredCounts.get(targetUid) ?? 0) + 1);
             }
         });
     });
@@ -550,7 +562,8 @@ exports.nudgeCircleMembers = (0, https_1.onCall)({ secrets: [notifications_1.one
         const targetUid = asOptionalString(memberData.uid);
         return Boolean(targetUid &&
             targetUid !== uid &&
-            (coveredCounts.get(targetUid) ?? 0) < tapInsPerWeek);
+            !todayCoveredUids.has(targetUid) &&
+            (coveredCounts.get(targetUid) ?? 0) < requiredTapIns);
     });
     await Promise.all(targets.map(memberData => (0, notifications_1.notifyNudge)({
         actor: {
@@ -654,10 +667,13 @@ exports.updateCircle = (0, https_1.onCall)(async (request) => {
         throw new https_1.HttpsError('failed-precondition', 'Max size cannot be below the current member count.');
     }
     const now = firestore_1.FieldValue.serverTimestamp();
+    const commitmentCadence = (0, commitments_1.getInputCommitmentCadence)(input.commitmentCadence, input.commitmentFrequency);
+    const commitmentFrequency = (0, commitments_1.getStoredCommitmentFrequency)(commitmentCadence, input.commitmentFrequency);
     const circleUpdate = {
         category: input.category,
         commitment: input.commitment,
-        commitmentFrequency: input.commitmentFrequency,
+        commitmentCadence,
+        commitmentFrequency,
         graceRules: input.graceRules ?? {
             skip: {
                 allowance: 2,
@@ -677,7 +693,8 @@ exports.updateCircle = (0, https_1.onCall)(async (request) => {
         batch.set(publicIndexRef, {
             category: input.category,
             commitment: input.commitment,
-            commitmentFrequency: input.commitmentFrequency,
+            commitmentCadence,
+            commitmentFrequency,
             joinMode: input.joinMode,
             maxSize: input.maxSize,
             memberCount,

@@ -74,6 +74,15 @@ function sortDueCircles(
   return left.title.localeCompare(right.title);
 }
 
+function getRemainingTapInsLabel(circle: CircleManagementCard) {
+  const count = circle.remainingCheckIns;
+  const periodCopy = circle.commitmentCadence === 'daily' ? 'today' : 'this week';
+
+  return count === 1
+    ? `1 Tap In left ${periodCopy}`
+    : `${count} Tap Ins left ${periodCopy}`;
+}
+
 export function TapInPickerScreen({navigation}: Props): React.JSX.Element {
   const theme = useHoystTheme();
   const [homeData, setHomeData] = useState<HomeData>(() =>
@@ -198,7 +207,7 @@ export function TapInPickerScreen({navigation}: Props): React.JSX.Element {
             ? `${result.nudged} member${
                 result.nudged === 1 ? '' : 's'
               } nudged.`
-            : 'Everyone has completed their Commitment Frequency.',
+            : 'Everyone is covered right now.',
         );
       })
       .catch(error => {
@@ -288,9 +297,7 @@ export function TapInPickerScreen({navigation}: Props): React.JSX.Element {
             const statusCopy =
               circle.state === 'risk'
                 ? 'Group streak at risk'
-                : circle.remainingCheckIns === 1
-                ? '1 Tap In left this week'
-                : `${circle.remainingCheckIns} Tap Ins left this week`;
+                : getRemainingTapInsLabel(circle);
             const canTapInNow = !circle.viewerHasTappedInToday;
             const actionLabel = canTapInNow ? 'Tap In' : 'View Circle';
 
@@ -338,7 +345,7 @@ export function TapInPickerScreen({navigation}: Props): React.JSX.Element {
                       />
                     ) : null}
                     <HoystText style={{color: progressTone}} variant="caption">
-                      {circle.progressPercent}%
+                      {circle.progressLabel ?? `${circle.progressPercent}%`}
                     </HoystText>
                   </View>
                 </View>
@@ -483,7 +490,7 @@ export function TapInPickerScreen({navigation}: Props): React.JSX.Element {
               Your Commitments are complete
             </HoystText>
             <HoystText style={styles.centerText} tone="muted">
-              Every active Circle has what it needs from you for this week. You
+              Every active Circle has what it needs from you right now. You
               can still keep Members moving below.
             </HoystText>
           </View>
@@ -522,9 +529,7 @@ export function TapInPickerScreen({navigation}: Props): React.JSX.Element {
               ? theme.warningForeground
               : theme.successForeground;
             const statusLabel = canNudge
-              ? circle.remainingCheckIns === 1
-                ? '1 Tap In left this week'
-                : `${circle.remainingCheckIns} Tap Ins left this week`
+              ? getRemainingTapInsLabel(circle)
               : circle.viewerTodayStatus === 'skip'
               ? 'Grace skip used today'
               : 'Commitment complete';

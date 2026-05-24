@@ -135,14 +135,17 @@ function getJoinModeLabel(detail: CircleDetailModel) {
   return detail.joinLabel ?? 'Requests open';
 }
 
-function formatTapInsLeftThisWeek(count: number) {
+function formatTapInsLeft(count: number, detail: CircleDetailModel) {
   if (count <= 0) {
     return 'Commitment complete';
   }
 
+  const periodCopy =
+    detail.commitmentCadence === 'daily' ? 'today' : 'this week';
+
   return count === 1
-    ? '1 Tap In left this week'
-    : `${count} Tap Ins left this week`;
+    ? `1 Tap In left ${periodCopy}`
+    : `${count} Tap Ins left ${periodCopy}`;
 }
 
 function formatNudgeTargetCount(count: number) {
@@ -331,9 +334,11 @@ function TapInPrimaryAction({
 function DetailProgressPanel({
   completionLabel,
   days,
+  title,
 }: {
   completionLabel: string;
   days: CircleDetailModel['monthProgress'];
+  title: string;
 }) {
   const theme = useHoystTheme();
 
@@ -341,7 +346,7 @@ function DetailProgressPanel({
     <GlassPanel style={styles.progressPanel}>
       <View style={styles.progressHeader}>
         <HoystText style={styles.progressTitle} tone="muted" variant="label">
-          Last 7 Days Progression
+          {title}
         </HoystText>
         <HoystText style={styles.progressPercent} variant="bodyStrong">
           {completionLabel}
@@ -659,14 +664,18 @@ export function CircleDetailScreen({
       : detail.completionRate >= 50
       ? theme.warningForeground
       : theme.dangerForeground;
-  const statusLabel =
-    detail.state === 'done' ? 'Done' : `${detail.completionRate}%`;
+  const statusLabel = detail.progressLabel ?? `${detail.completionRate}%`;
+  const progressPanelTitle =
+    detail.commitmentCadence === 'daily'
+      ? 'Today Progression'
+      : 'Week Progression';
   const detailStatusPill = getDetailStatusPill(detail);
   const nudgeTargetCount =
     detail.nudgeTargetCount ?? nudgeTargetMembers.length;
   const canNudgeTargets = nudgeTargetCount > 0;
-  const weeklyRemainingCopy = formatTapInsLeftThisWeek(
+  const periodRemainingCopy = formatTapInsLeft(
     detail.remainingCheckIns ?? 0,
+    detail,
   );
   const nudgeTargetCopy = formatNudgeTargetCount(nudgeTargetCount);
   const previewCopy =
@@ -1010,7 +1019,7 @@ export function CircleDetailScreen({
           </HoystText>
           <HoystText tone="muted" variant="caption">
             {isMemberCircle
-              ? `${weeklyRemainingCopy}, ${missedMembers.length} missed`
+              ? `${periodRemainingCopy}, ${missedMembers.length} missed`
               : isPendingMembership
               ? 'Pending approval'
               : getJoinModeLabel(detail)}
@@ -1095,7 +1104,7 @@ export function CircleDetailScreen({
                           ? `${result.nudged} member${
                               result.nudged === 1 ? '' : 's'
                             } nudged.`
-                          : 'Everyone has completed their Commitment Frequency.',
+                          : 'Everyone is covered right now.',
                       );
                     })
                     .catch(error => {
@@ -1401,8 +1410,9 @@ export function CircleDetailScreen({
       </GlassPanel>
 
       <DetailProgressPanel
-        completionLabel={`${detail.completionRate}%`}
+        completionLabel={detail.progressLabel ?? `${detail.completionRate}%`}
         days={detail.monthProgress}
+        title={progressPanelTitle}
       />
 
       <View style={styles.activitySection}>

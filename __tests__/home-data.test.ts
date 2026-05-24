@@ -60,8 +60,10 @@ describe('home data mapping', () => {
     });
 
     expect(card).toMatchObject({
+      commitmentCadence: 'weekly',
       id: 'circle-1',
       nudgeTargetCount: 1,
+      progressLabel: 'Week · 50%',
       progressPercent: 50,
       remainingCheckIns: 1,
       state: 'active',
@@ -149,12 +151,14 @@ describe('home data mapping', () => {
     });
 
     expect(card).toMatchObject({
+      commitmentCadence: 'weekly',
       graceRules: {
         skip: {
           allowance: 1,
           windowDays: 7,
         },
       },
+      progressLabel: 'Week · 100%',
       progressPercent: 100,
       remainingCheckIns: 0,
       state: 'done',
@@ -165,6 +169,62 @@ describe('home data mapping', () => {
     expect(card?.members).toEqual([
       expect.objectContaining({id: 'user-1', state: 'skipped'}),
       expect.objectContaining({id: 'user-2', state: 'done'}),
+    ]);
+  });
+
+  it('maps daily commitments from today coverage only', () => {
+    const card = mapHomeCircleFromData({
+      circleData: {
+        ...circleData,
+        commitmentCadence: 'daily',
+        commitmentFrequency: {tapInsPerWeek: 7},
+      },
+      circleId: 'circle-daily',
+      membersData: [
+        {
+          displayName: 'Kelvin North',
+          role: 'owner',
+          status: 'active',
+          uid: 'user-1',
+        },
+        {
+          displayName: 'Ava Stone',
+          role: 'member',
+          status: 'active',
+          uid: 'user-2',
+        },
+      ],
+      membershipData: {
+        displayName: 'Kelvin North',
+        role: 'owner',
+        status: 'active',
+        uid: 'user-1',
+      },
+      periodCheckInStatuses: new Map([
+        [
+          '2026-05-18',
+          new Map([
+            ['user-1', 'done'],
+            ['user-2', 'done'],
+          ]),
+        ],
+      ]),
+      todayCheckInStatuses: new Map([['user-1', 'done']]),
+    });
+
+    expect(card).toMatchObject({
+      commitmentCadence: 'daily',
+      nudgeTargetCount: 1,
+      progressLabel: 'Today · 50%',
+      progressPercent: 50,
+      remainingCheckIns: 1,
+      state: 'active',
+      viewerHasCheckedIn: true,
+      viewerRemainingTapIns: 0,
+    });
+    expect(card?.members).toEqual([
+      expect.objectContaining({id: 'user-1', state: 'done'}),
+      expect.objectContaining({id: 'user-2', state: 'pending'}),
     ]);
   });
 
@@ -196,6 +256,8 @@ describe('home data mapping', () => {
     });
 
     expect(card).toMatchObject({
+      commitmentCadence: 'weekly',
+      progressLabel: 'Week · 50%',
       progressPercent: 50,
       remainingCheckIns: 1,
       state: 'active',
@@ -247,6 +309,8 @@ describe('home data mapping', () => {
     });
 
     expect(card).toMatchObject({
+      commitmentCadence: 'weekly',
+      progressLabel: 'Week · 38%',
       progressPercent: 38,
       nudgeTargetCount: 1,
       remainingCheckIns: 5,
@@ -293,6 +357,7 @@ describe('home data mapping', () => {
 
     expect(card).toMatchObject({
       nudgeTargetCount: 0,
+      progressLabel: 'Week · 25%',
       progressPercent: 25,
       remainingCheckIns: 3,
       streakLabel: 'Tapped today',
@@ -638,7 +703,7 @@ describe('home data mapping', () => {
     ).toMatchObject({
       action: 'shareProgress',
       icon: 'share',
-      label: 'All tapped in today',
+      label: 'All covered right now',
       tone: 'success',
     });
   });

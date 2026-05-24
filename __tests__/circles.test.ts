@@ -24,7 +24,9 @@ describe('public circle discovery mapping', () => {
         category: 'Deep Work',
         completionRate: 84,
         commitment: 'Ship one focused block',
+        commitmentCadence: 'weekly',
         commitmentFrequency: {tapInsPerWeek: 4},
+        progressLabel: 'Week · 84%',
         joinMode: 'open',
         maxSize: 8,
         memberCount: 5,
@@ -45,6 +47,7 @@ describe('public circle discovery mapping', () => {
       category: 'Deep Work',
       completionRate: 84,
       commitment: 'Ship one focused block',
+      commitmentCadence: 'weekly',
       commitmentFrequency: {tapInsPerWeek: 4},
       id: 'maker-mornings',
       joinLabel: 'Open seats',
@@ -61,6 +64,7 @@ describe('public circle discovery mapping', () => {
         }),
       ],
       privacy: 'public',
+      progressLabel: 'Week · 84%',
       title: 'Maker Mornings',
     });
   });
@@ -92,6 +96,31 @@ describe('public circle discovery mapping', () => {
         state: 'pending',
       }),
     ]);
+    expect(mapPublicCircleIndexSnapshot(snapshot as never)).toMatchObject({
+      commitmentCadence: 'daily',
+      progressLabel: 'Today · 0%',
+    });
+  });
+
+  it('defaults legacy public previews without frequency to daily', () => {
+    const snapshot = {
+      data: () => ({
+        category: 'Fitness',
+        completionRate: 12,
+        commitment: 'Stretch',
+        memberCount: 3,
+        members: [],
+        title: 'Stretch Circle',
+      }),
+      exists: true,
+      id: 'stretch-circle',
+    };
+
+    expect(mapPublicCircleIndexSnapshot(snapshot as never)).toMatchObject({
+      commitmentCadence: 'daily',
+      commitmentFrequency: {tapInsPerWeek: 7},
+      progressLabel: 'Today · 12%',
+    });
   });
 
   it('ignores incomplete publicCircleIndex documents', () => {
@@ -116,6 +145,8 @@ describe('create circle payload mapping', () => {
     const draft = createInitialCircleDraft('America/New_York');
 
     expect(draft).toMatchObject({
+      commitmentCadence: 'daily',
+      commitmentFrequency: {tapInsPerWeek: 7},
       graceRules: {
         skip: {
           allowance: 2,
@@ -160,6 +191,8 @@ describe('create circle payload mapping', () => {
     expect(buildCreateCirclePayload(draft)).toMatchObject({
       category: 'Fitness',
       commitment: 'Move for 30 minutes',
+      commitmentCadence: 'daily',
+      commitmentFrequency: {tapInsPerWeek: 7},
       graceRules: {
         skip: {
           allowance: 30,
@@ -179,6 +212,7 @@ describe('create circle payload mapping', () => {
       {
         category: 'Deep Work',
         commitment: 'Ship one focused block',
+        commitmentFrequency: {tapInsPerWeek: 4},
         graceRules: {
           skip: {
             allowance: 4,
@@ -197,6 +231,8 @@ describe('create circle payload mapping', () => {
     expect(draft).toMatchObject({
       category: 'Deep Work',
       commitment: 'Ship one focused block',
+      commitmentCadence: 'weekly',
+      commitmentFrequency: {tapInsPerWeek: 4},
       graceRules: {
         skip: {
           allowance: 4,
@@ -238,6 +274,8 @@ describe('create circle payload mapping', () => {
       }),
     ).toMatchObject({
       category: 'Deep Work',
+      commitmentCadence: 'daily',
+      commitmentFrequency: {tapInsPerWeek: 7},
       graceRules: {
         skip: {
           allowance: 2,
@@ -266,6 +304,8 @@ describe('create circle payload mapping', () => {
     expect(buildStarterCirclePayload(draft)).toMatchObject({
       category: 'Wellness',
       commitment: 'Meditate for ten minutes',
+      commitmentCadence: 'daily',
+      commitmentFrequency: {tapInsPerWeek: 7},
       graceRules: {
         skip: {
           allowance: 2,
@@ -274,6 +314,26 @@ describe('create circle payload mapping', () => {
       },
       maxSize: 10,
       title: 'Calm Crew',
+    });
+  });
+
+  it('preserves weekly cadence and quota in starter circle payloads', () => {
+    const draft = {
+      ...createInitialStarterCircleDraft({focusArea: 'focus'}),
+      commitment: ' Ship focused blocks ',
+      commitmentCadence: 'weekly' as const,
+      commitmentFrequency: {tapInsPerWeek: 4},
+      maxSize: 2,
+      title: ' Maker Mornings ',
+    };
+
+    expect(buildStarterCirclePayload(draft)).toMatchObject({
+      category: 'Deep Work',
+      commitment: 'Ship focused blocks',
+      commitmentCadence: 'weekly',
+      commitmentFrequency: {tapInsPerWeek: 4},
+      maxSize: 10,
+      title: 'Maker Mornings',
     });
   });
 });

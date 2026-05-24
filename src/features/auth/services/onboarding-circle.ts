@@ -7,9 +7,10 @@ import {
   buildCreateCirclePayload,
   createInitialCircleDraft,
   defaultCircleMaxSize,
-  defaultCommitmentFrequency,
   defaultSkipGraceRule,
   getPrivacyChoiceFields,
+  normalizeCommitmentCadence,
+  normalizeCommitmentFrequency,
 } from '../../create-circle/services/create-circle-draft';
 import type {OnboardingFocusArea} from './onboarding-options';
 
@@ -67,11 +68,11 @@ export function applyStarterCircleHiddenDefaults(
         ...draft.graceRules?.skip,
       },
     },
-    commitmentFrequency: {
-      ...defaultCommitmentFrequency,
-      ...draft.commitmentFrequency,
-    },
   };
+  const commitmentCadence = normalizeCommitmentCadence(
+    normalizedDraft.commitmentCadence,
+    normalizedDraft.commitmentFrequency,
+  );
   const fallbackTimezone =
     timezone?.trim() ||
     normalizedDraft.timezone.trim() ||
@@ -83,7 +84,11 @@ export function applyStarterCircleHiddenDefaults(
     graceRules: {
       skip: {...defaultSkipGraceRule},
     },
-    commitmentFrequency: {...defaultCommitmentFrequency},
+    commitmentCadence,
+    commitmentFrequency: normalizeCommitmentFrequency(
+      normalizedDraft.commitmentFrequency,
+      commitmentCadence,
+    ),
     maxSize: defaultCircleMaxSize,
     timezone: normalizedDraft.timezone.trim() || fallbackTimezone,
   };

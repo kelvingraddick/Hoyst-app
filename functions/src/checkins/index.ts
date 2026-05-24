@@ -7,6 +7,7 @@ import {db} from '../firebase';
 import {canUseSkipGrace, getRollingDateKeys} from './grace';
 import {getRemoveTapInDecision} from './remove';
 import {notifyCircleAtRisk} from '../notifications';
+import {getCommitmentCadence, getRequiredTapIns} from '../shared/commitments';
 
 const submitTapInSchema = z.object({
   circleId: z.string().trim().min(1),
@@ -106,13 +107,6 @@ function getCommitmentWeekDateKeys(timezone: string, now = new Date()) {
   });
 }
 
-function getTapInsPerWeek(circle: {commitmentFrequency?: {tapInsPerWeek?: unknown}} | undefined) {
-  const value = circle?.commitmentFrequency?.tapInsPerWeek;
-  return typeof value === 'number' && Number.isFinite(value)
-    ? Math.min(7, Math.max(1, Math.round(value)))
-    : 7;
-}
-
 export const submitTapIn = onCall(async request => {
   const {profile, uid} = await requireCompletedProfile(request.auth?.uid);
   const input = submitTapInSchema.parse(request.data);
@@ -210,7 +204,8 @@ export const submitTapIn = onCall(async request => {
   ]);
   const circle = circleSnapshot.data();
   const timezone = circle?.timezone ?? profile.timezone ?? 'UTC';
-  const tapInsPerWeek = getTapInsPerWeek(circle);
+  const commitmentCadence = getCommitmentCadence(circle);
+  const requiredTapIns = getRequiredTapIns(circle);
   const weekDateKeys = getCommitmentWeekDateKeys(timezone);
   const weeklyCheckInSnapshots = await Promise.all(
     weekDateKeys.map(dateKey =>
@@ -218,8 +213,15 @@ export const submitTapIn = onCall(async request => {
     ),
   );
   const coveredCounts = new Map<string, number>();
+  const todaySnapshotIndex = weekDateKeys.indexOf(result.dateKey);
+  const todayCheckInSnapshot =
+    weeklyCheckInSnapshots[todaySnapshotIndex >= 0 ? todaySnapshotIndex : 0];
+  const scoringSnapshots =
+    commitmentCadence === 'daily' && todayCheckInSnapshot
+      ? [todayCheckInSnapshot]
+      : weeklyCheckInSnapshots;
 
-  weeklyCheckInSnapshots.forEach(snapshot => {
+  scoringSnapshots.forEach(snapshot => {
     snapshot.docs.forEach(doc => {
       if (['done', 'skip'].includes(doc.data().status)) {
         coveredCounts.set(doc.id, (coveredCounts.get(doc.id) ?? 0) + 1);
@@ -230,30 +232,35 @@ export const submitTapIn = onCall(async request => {
     .map(snapshot => snapshot.data())
     .filter(memberData => {
       const memberUid = memberData.uid;
+
       return (
         typeof memberUid === 'string' &&
         memberUid !== uid &&
-        (coveredCounts.get(memberUid) ?? 0) < tapInsPerWeek
+        (coveredCounts.get(memberUid) ?? 0) < requiredTapIns
       );
     });
   const remainingCount = pendingMembers.reduce((total, memberData) => {
     const memberUid = memberData.uid;
 
     return typeof memberUid === 'string'
-      ? total + Math.max(tapInsPerWeek - (coveredCounts.get(memberUid) ?? 0), 0)
+      ? total + Math.max(requiredTapIns - (coveredCounts.get(memberUid) ?? 0), 0)
       : total;
   }, 0);
 
   if (remainingCount > 0 && remainingCount <= 2) {
-    const weekPeriodKey = weekDateKeys[0] ?? result.dateKey;
+    const periodKey =
+      commitmentCadence === 'daily'
+        ? result.dateKey
+        : weekDateKeys[0] ?? result.dateKey;
 
     await Promise.all(
       pendingMembers.map(memberData =>
         notifyCircleAtRisk({
+          commitmentCadence,
           circleId: input.circleId,
           circleTitle:
             typeof circle?.title === 'string' ? circle.title : 'Your circle',
-          periodKey: weekPeriodKey,
+          periodKey,
           remainingCount,
           targetUid: memberData.uid,
         }),

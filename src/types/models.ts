@@ -11,6 +11,7 @@ export type CircleMemberState = 'done' | 'pending' | 'missed' | 'skipped';
 export type CircleActivityTone = 'success' | 'pending' | 'alert';
 export type ProgressDayState = 'done' | 'missed' | 'today' | 'future';
 export type CircleJoinLabel = 'Open seats' | 'Request to join';
+export type CommitmentCadence = 'daily' | 'weekly';
 
 export type UserProfile = {
   id: string;
@@ -37,6 +38,7 @@ export type Circle = {
   title: string;
   category: string;
   commitment: string;
+  commitmentCadence: CommitmentCadence;
   commitmentFrequency: CommitmentFrequency;
   timezone: string;
   maxSize: number;
@@ -115,6 +117,7 @@ export type CircleSummary = {
   title: string;
   category: string;
   commitment: string;
+  commitmentCadence?: CommitmentCadence;
   commitmentFrequency?: CommitmentFrequency;
   streakLabel: string;
   members: CircleMemberStatus[];
@@ -184,6 +187,7 @@ export type CircleDetailModel = CircleSummary & {
 
 export type CreateCircleDraft = {
   category: string;
+  commitmentCadence: CommitmentCadence;
   graceRules: {
     skip: GraceRule;
   };

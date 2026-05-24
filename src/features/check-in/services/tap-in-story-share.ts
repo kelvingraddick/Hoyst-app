@@ -65,9 +65,10 @@ export function buildTapInStoryShareData({
   const commitment = cleanText(detail?.commitment, fallbackCommitment);
   const cleanNote = cleanText(note, fallbackNote);
   const progressLabel =
-    typeof detail?.completionRate === 'number'
+    cleanText(detail?.progressLabel, '') ||
+    (typeof detail?.completionRate === 'number'
       ? `${detail.completionRate}% tapped in`
-      : 'Tapped in today';
+      : 'Tapped in today');
   const streakLabel =
     typeof detail?.streakDays === 'number' && detail.streakDays > 0
       ? `${detail.streakDays}d streak`

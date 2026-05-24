@@ -17,7 +17,10 @@ import {
 } from '../src/store/onboarding-store';
 import {continueAsGuestFromAuth} from '../src/features/auth/services/auth-dismiss';
 import {finalizeReadyProfileOnboardingSetup} from '../src/features/auth/services/onboarding-finalizer';
-import {isStarterCircleDraftReady} from '../src/features/auth/services/onboarding-circle';
+import {
+  applyStarterCircleHiddenDefaults,
+  isStarterCircleDraftReady,
+} from '../src/features/auth/services/onboarding-circle';
 import {buildOnboardingPreferences} from '../src/features/auth/services/onboarding-payload';
 import {
   completeOnboardingSetup,
@@ -44,6 +47,10 @@ import {
   shouldRegisterAccountRoutes,
 } from '../src/navigation/root-mode';
 import {resolveStarterCircleDecision} from '../functions/src/auth/starter-circle-plan';
+import {
+  getInputCommitmentCadence,
+  getStoredCommitmentFrequency,
+} from '../functions/src/shared/commitments';
 
 describe('auth profile validation', () => {
   it('normalizes handles before reservation', () => {
@@ -718,6 +725,20 @@ describe('onboarding store', () => {
     expect(useOnboardingStore.getState().currentStep).toBe('focusArea');
   });
 
+  it('places starter cadence between commitment and privacy', () => {
+    const store = useOnboardingStore.getState();
+
+    store.setCurrentStep('circleCommitment');
+    store.nextStep();
+    expect(useOnboardingStore.getState().currentStep).toBe('circleCadence');
+
+    useOnboardingStore.getState().nextStep();
+    expect(useOnboardingStore.getState().currentStep).toBe('circlePrivacy');
+
+    useOnboardingStore.getState().previousStep();
+    expect(useOnboardingStore.getState().currentStep).toBe('circleCadence');
+  });
+
   it('routes circle review through notification opt-in before auth', () => {
     const store = useOnboardingStore.getState();
 
@@ -815,13 +836,32 @@ describe('onboarding store', () => {
 
     expect(useOnboardingStore.getState().starterCircleDraft).toMatchObject({
       category: 'Deep Work',
+      commitmentCadence: 'daily',
+      commitmentFrequency: {tapInsPerWeek: 7},
       commitment: '',
       title: '',
     });
   });
 
+  it('preserves weekly starter cadence drafts during normalization', () => {
+    const weeklyDraft = {
+      ...useOnboardingStore.getState().starterCircleDraft,
+      commitmentCadence: 'weekly' as const,
+      commitmentFrequency: {tapInsPerWeek: 4},
+    };
+
+    expect(applyStarterCircleHiddenDefaults(weeklyDraft)).toMatchObject({
+      commitmentCadence: 'weekly',
+      commitmentFrequency: {tapInsPerWeek: 4},
+    });
+  });
+
   it('normalizes removed persisted steps to active onboarding steps', () => {
     expect(normalizeOnboardingStep('categories')).toBe('circleTitle');
+    expect(normalizeOnboardingStep('circleFrequency')).toBe('circleCadence');
+    expect(normalizeOnboardingStep('commitmentFrequency')).toBe(
+      'circleCadence',
+    );
     expect(normalizeOnboardingStep('reminders')).toBe('circleTitle');
     expect(normalizeOnboardingStep('pace')).toBe('circleTitle');
     expect(normalizeOnboardingStep('profile')).toBe('circleTitle');
@@ -1020,6 +1060,8 @@ describe('onboarding completion finalizer', () => {
     });
     const starterCircleDraft = {
       ...useOnboardingStore.getState().starterCircleDraft,
+      commitmentCadence: 'weekly' as const,
+      commitmentFrequency: {tapInsPerWeek: 4},
       commitment: 'Read 20 pages',
       graceRules: {
         skip: {
@@ -1049,7 +1091,9 @@ describe('onboarding completion finalizer', () => {
       expect.objectContaining({
         ...profile,
         starterCircle: expect.objectContaining({
+          commitmentCadence: 'weekly',
           commitment: 'Read 20 pages',
+          commitmentFrequency: {tapInsPerWeek: 4},
           graceRules: {
             skip: {
               allowance: 2,
@@ -1205,6 +1249,25 @@ describe('ready profile onboarding finalizer', () => {
 });
 
 describe('starter circle callable decision', () => {
+  it('normalizes weekly starter cadence for callable storage', () => {
+    const weeklyCadence = getInputCommitmentCadence('weekly', {
+      tapInsPerWeek: 4,
+    });
+
+    expect(weeklyCadence).toBe('weekly');
+    expect(
+      getStoredCommitmentFrequency(weeklyCadence, {tapInsPerWeek: 4}),
+    ).toEqual({tapInsPerWeek: 4});
+
+    const dailyCadence = getInputCommitmentCadence('daily', {
+      tapInsPerWeek: 4,
+    });
+
+    expect(dailyCadence).toBe('daily');
+    expect(getStoredCommitmentFrequency(dailyCadence, {tapInsPerWeek: 4}))
+      .toEqual({tapInsPerWeek: 7});
+  });
+
   it('creates, reuses, and repairs starter circles per setup id', () => {
     expect(
       resolveStarterCircleDecision({
