@@ -711,6 +711,10 @@ export function CircleDetailScreen({
     detail.title.trim().toLowerCase();
   const removeActionLabel =
     detail.viewerTodayStatus === 'skip' ? 'Remove Skip' : 'Remove Tap In';
+  const removeProgressionCopy =
+    detail.commitmentCadence === 'daily'
+      ? "This will undo today's Progression for this Circle."
+      : "This will undo this week's Progression for this Circle.";
 
   const shareInvite = () => {
     if (!canInvite || !detail.inviteUrl) {
@@ -741,7 +745,7 @@ export function CircleDetailScreen({
   const confirmRemoveTodayCheckIn = () => {
     Alert.alert(
       'Remove today?',
-      "This will undo today's Progression for this Circle.",
+      removeProgressionCopy,
       [
         {style: 'cancel', text: 'Keep'},
         {

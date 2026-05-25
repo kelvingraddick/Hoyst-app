@@ -230,6 +230,10 @@ export function TapInComposerScreen({
       : detail.commitmentCadence === 'daily'
       ? 'Your Tap In is counted for today.'
       : 'Your Tap In is counted for today. Keep going this week.';
+  const removeProgressionCopy =
+    detail.commitmentCadence === 'daily'
+      ? "This will undo today's Progression for this Circle."
+      : "This will undo this week's Progression for this Circle.";
 
   const handleChoosePhoto = async () => {
     const response = await launchImageLibrary({
@@ -306,7 +310,7 @@ export function TapInComposerScreen({
   const confirmRemoveTapIn = () => {
     Alert.alert(
       'Remove today?',
-      "This will undo today's Progression for this Circle.",
+      removeProgressionCopy,
       [
         {style: 'cancel', text: 'Keep'},
         {
@@ -394,7 +398,7 @@ export function TapInComposerScreen({
                 </View>
               </View>
               <HoystText tone="muted">
-                Removing it will undo today's Progression for this Circle.
+                {removeProgressionCopy}
               </HoystText>
             </View>
             <View style={styles.actionStack}>
