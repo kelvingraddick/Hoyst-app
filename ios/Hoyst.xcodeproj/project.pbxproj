@@ -150,6 +150,7 @@
 				DFCC209711D7231671FFCBD8 /* OneSignalNotificationServiceExtension.entitlements */,
 			);
 			name = OneSignalNotificationServiceExtension;
+			path = OneSignalNotificationServiceExtension;
 			sourceTree = "<group>";
 		};
 		BBD78D7AC51CEA395F1C20DB /* Pods */ = {
