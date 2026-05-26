@@ -35,6 +35,10 @@ export const defaultCommitmentFrequency: CommitmentFrequency = {
 export const defaultWeeklyCommitmentFrequency: CommitmentFrequency = {
   tapInsPerWeek: 4,
 };
+export const defaultMonthlyCommitmentFrequency: CommitmentFrequency = {
+  opportunitiesPerPeriod: 4,
+  tapInsPerWeek: 4,
+};
 export const defaultCommitmentCadence: CommitmentCadence = 'daily';
 
 export function getLocalTimezone() {
@@ -174,6 +178,24 @@ export function normalizeCommitmentFrequency(
     return {...defaultCommitmentFrequency};
   }
 
+  if (cadence === 'monthly') {
+    return {
+      opportunitiesPerPeriod: Math.min(
+        31,
+        Math.max(
+          1,
+          Math.round(
+            frequency.opportunitiesPerPeriod ?? frequency.tapInsPerWeek ?? 4,
+          ),
+        ),
+      ),
+      tapInsPerWeek: Math.min(
+        7,
+        Math.max(1, Math.round(frequency.tapInsPerWeek ?? 4)),
+      ),
+    };
+  }
+
   return {
     tapInsPerWeek: Math.min(
       7,
@@ -186,7 +208,7 @@ export function normalizeCommitmentCadence(
   cadence: unknown,
   frequency?: CommitmentFrequency,
 ): CommitmentCadence {
-  if (cadence === 'daily' || cadence === 'weekly') {
+  if (cadence === 'daily' || cadence === 'weekly' || cadence === 'monthly') {
     return cadence;
   }
 

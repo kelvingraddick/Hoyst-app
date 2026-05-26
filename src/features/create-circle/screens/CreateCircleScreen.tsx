@@ -2,19 +2,16 @@ import React, {useMemo, useState} from 'react';
 import {Alert, Pressable, Share, StyleSheet, View} from 'react-native';
 import {
   ArrowLeft,
-  BookOpen,
+  CalendarCheck,
   CalendarDays,
   CalendarRange,
   Check,
-  Dumbbell,
-  Flame,
   Globe2,
   Lock,
   Minus,
   Plus,
   Share2,
   Shield,
-  Sparkles,
   UsersRound,
   X,
   type LucideIcon,
@@ -27,6 +24,11 @@ import {HoystChip} from '../../../design/components/HoystChip';
 import {HoystInput} from '../../../design/components/HoystInput';
 import {HoystScreen} from '../../../design/components/HoystScreen';
 import {HoystText} from '../../../design/components/HoystText';
+import {
+  CircleCategoryIcon,
+  CircleCategoryPill,
+  getCircleCategoryVisual,
+} from '../../../design/components/CircleCategoryIcon';
 import {radius} from '../../../design/tokens/radius';
 import {useHoystTheme} from '../../../design/theme/useHoystTheme';
 import {useUserProfileStore} from '../../../store/profile-store';
@@ -36,6 +38,7 @@ import {
   buildCreateCirclePayload,
   clampCircleMaxSize,
   createInitialCircleDraft,
+  defaultMonthlyCommitmentFrequency,
   defaultWeeklyCommitmentFrequency,
   getPrivacyChoiceFields,
   normalizeSkipGraceRule,
@@ -66,11 +69,12 @@ type CreatedCircle = {
 };
 
 type Option<T extends string> = {
+  category?: string;
   description: string;
-  icon: LucideIcon;
+  icon?: LucideIcon;
   id: T;
   label: string;
-  tone: 'blue' | 'green' | 'orange' | 'purple';
+  tone: 'blue' | 'green' | 'neutral' | 'orange' | 'purple';
 };
 
 const wizardSteps: WizardStep[] = [
@@ -87,59 +91,59 @@ const wizardSteps: WizardStep[] = [
 
 const categoryOptions: Array<Option<string>> = [
   {
+    category: 'Fitness',
     description: 'Training plans, walks, lifts, runs, and recovery.',
-    icon: Dumbbell,
     id: 'Fitness',
     label: 'Fitness',
-    tone: 'green',
+    tone: getCircleCategoryVisual('Fitness').tone,
   },
   {
+    category: 'Wellness',
     description: 'Sleep, mindfulness, nutrition, and care routines.',
-    icon: Flame,
     id: 'Wellness',
     label: 'Wellness',
-    tone: 'purple',
+    tone: getCircleCategoryVisual('Wellness').tone,
   },
   {
+    category: 'Deep Work',
     description: 'Focused sessions, study blocks, and maker momentum.',
-    icon: BookOpen,
     id: 'Deep Work',
     label: 'Deep work',
-    tone: 'blue',
+    tone: getCircleCategoryVisual('Deep Work').tone,
   },
   {
+    category: 'Sobriety',
     description: 'Private, steady check-ins for staying grounded.',
-    icon: Shield,
     id: 'Sobriety',
     label: 'Sobriety',
-    tone: 'orange',
+    tone: getCircleCategoryVisual('Sobriety').tone,
   },
   {
+    category: 'Custom',
     description: 'A flexible lane for anything specific to your people.',
-    icon: Sparkles,
     id: 'Custom',
     label: 'Custom',
-    tone: 'purple',
+    tone: getCircleCategoryVisual('Custom').tone,
   },
 ];
 
 const privacyOptions: Array<Option<CirclePrivacyMode>> = [
   {
-    description: 'Discoverable in Explore with your chosen join rule.',
+    description: 'Discoverable in Circles with your chosen join rule.',
     icon: Globe2,
     id: 'public',
     label: 'Public',
     tone: 'green',
   },
   {
-    description: 'Hidden from Explore and joinable only with your invite link.',
+    description: 'Hidden from Circles and joinable only with your invite link.',
     icon: Share2,
     id: 'link_only',
     label: 'Link-only',
     tone: 'blue',
   },
   {
-    description: 'Hidden from Explore with invite-only requests for approval.',
+    description: 'Hidden from Circles with invite-only requests for approval.',
     icon: Lock,
     id: 'private',
     label: 'Private',
@@ -180,6 +184,13 @@ const commitmentCadenceOptions: Array<Option<CommitmentCadence>> = [
     id: 'weekly',
     label: 'Weekly',
     tone: 'blue',
+  },
+  {
+    description: 'Members get scheduled chances across each month.',
+    icon: CalendarCheck,
+    id: 'monthly',
+    label: 'Monthly',
+    tone: 'purple',
   },
 ];
 
@@ -238,6 +249,10 @@ function getToneColor(
     return theme.accentTertiaryForeground;
   }
 
+  if (tone === 'neutral') {
+    return theme.textMuted;
+  }
+
   return theme.accentSecondaryForeground;
 }
 
@@ -286,6 +301,7 @@ function OptionCard<T extends string>({
   const theme = useHoystTheme();
   const accentColor = getToneColor(theme, option.tone);
   const Icon = option.icon;
+  const hasCategoryIcon = Boolean(option.category);
 
   return (
     <Pressable
@@ -307,14 +323,20 @@ function OptionCard<T extends string>({
         <View
           style={[
             styles.optionIcon,
-            {
-              backgroundColor: isSelected
-                ? `${accentColor}24`
-                : theme.surfaceSoft,
-              borderColor: isSelected ? accentColor : theme.border,
-            },
+            hasCategoryIcon
+              ? styles.optionCategoryIcon
+              : {
+                  backgroundColor: isSelected
+                    ? `${accentColor}24`
+                    : theme.surfaceSoft,
+                  borderColor: isSelected ? accentColor : theme.border,
+                },
           ]}>
-          <Icon color={accentColor} size={20} strokeWidth={2.3} />
+          {option.category ? (
+            <CircleCategoryIcon category={option.category} size={38} />
+          ) : Icon ? (
+            <Icon color={accentColor} size={20} strokeWidth={2.3} />
+          ) : null}
         </View>
         <View style={styles.optionCopy}>
           <HoystText numberOfLines={1} variant="bodyStrong">
@@ -444,6 +466,17 @@ function SummaryRow({label, value}: {label: string; value: string}) {
   );
 }
 
+function CategorySummaryRow({category}: {category: string}) {
+  return (
+    <View style={styles.summaryRow}>
+      <HoystText tone="muted" variant="label">
+        Category
+      </HoystText>
+      <CircleCategoryPill category={category} />
+    </View>
+  );
+}
+
 function getInviteLink(inviteCode?: string) {
   return inviteCode ? `https://hoyst.app/join/${inviteCode}` : 'Invite ready';
 }
@@ -563,6 +596,8 @@ export function CreateCircleScreen({navigation}: Props): React.JSX.Element {
       commitmentFrequency:
         commitmentCadence === 'daily'
           ? {tapInsPerWeek: 7}
+          : commitmentCadence === 'monthly'
+          ? defaultMonthlyCommitmentFrequency
           : current.commitmentFrequency.tapInsPerWeek >= 7
           ? defaultWeeklyCommitmentFrequency
           : current.commitmentFrequency,
@@ -706,6 +741,28 @@ export function CreateCircleScreen({navigation}: Props): React.JSX.Element {
                 Sunday in the Circle timezone.
               </HoystText>
             </>
+          ) : draft.commitmentCadence === 'monthly' ? (
+            <>
+              <NumericStepper
+                label="Opportunities per month"
+                max={31}
+                min={1}
+                onChange={value =>
+                  setField('commitmentFrequency', {
+                    opportunitiesPerPeriod: value,
+                    tapInsPerWeek: Math.min(7, value),
+                  })
+                }
+                value={
+                  draft.commitmentFrequency.opportunitiesPerPeriod ??
+                  draft.commitmentFrequency.tapInsPerWeek
+                }
+              />
+              <HoystText tone="muted">
+                Hoyst spreads these opportunities across the month so upcoming
+                slots do not count against Momentum early.
+              </HoystText>
+            </>
           ) : (
             <HoystText tone="muted">
               Members need one Tap In or skip each day. Circle Progression resets
@@ -845,7 +902,7 @@ export function CreateCircleScreen({navigation}: Props): React.JSX.Element {
 
     return (
       <GlassPanel style={styles.summaryPanel}>
-        <SummaryRow label="Category" value={draft.category} />
+        <CategorySummaryRow category={draft.category} />
         <SummaryRow label="Title" value={draft.title.trim()} />
         <SummaryRow label="Commitment" value={draft.commitment.trim()} />
         <SummaryRow
@@ -853,6 +910,11 @@ export function CreateCircleScreen({navigation}: Props): React.JSX.Element {
           value={
             draft.commitmentCadence === 'daily'
               ? 'Daily'
+              : draft.commitmentCadence === 'monthly'
+              ? `Monthly: ${
+                  draft.commitmentFrequency.opportunitiesPerPeriod ??
+                  draft.commitmentFrequency.tapInsPerWeek
+                } opportunities`
               : `Weekly: ${draft.commitmentFrequency.tapInsPerWeek} Tap Ins / week`
           }
         />
@@ -1028,6 +1090,10 @@ const styles = StyleSheet.create({
   optionCopy: {
     flex: 1,
     gap: 4,
+  },
+  optionCategoryIcon: {
+    backgroundColor: 'transparent',
+    borderColor: 'transparent',
   },
   optionIcon: {
     alignItems: 'center',

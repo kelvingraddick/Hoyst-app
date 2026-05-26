@@ -106,6 +106,8 @@ const markInboxEventReadSchema = z.object({
   eventId: z.string().trim().min(1),
 });
 
+const inboxReadBatchLimit = 500;
+
 const defaultNotificationSettings: Record<NotificationPreferenceKey, boolean> =
   {
     circleActivity: true,
@@ -205,6 +207,42 @@ function getCommitmentWeekDateKeys(timezone: string, now = new Date()) {
   });
 }
 
+function getCommitmentMonthDateKeys(timezone: string, now = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    day: '2-digit',
+    month: '2-digit',
+    timeZone: timezone,
+    year: 'numeric',
+  }).formatToParts(now);
+  const year = Number(parts.find(part => part.type === 'year')?.value ?? '1970');
+  const month = Number(parts.find(part => part.type === 'month')?.value ?? '1');
+  const dayCount = new Date(Date.UTC(year, month, 0)).getUTCDate();
+
+  return Array.from({length: dayCount}, (_, index) =>
+    [
+      String(year),
+      String(month).padStart(2, '0'),
+      String(index + 1).padStart(2, '0'),
+    ].join('-'),
+  );
+}
+
+function getCommitmentPeriodDateKeys(
+  commitmentCadence: CommitmentCadence,
+  timezone: string,
+  now = new Date(),
+) {
+  if (commitmentCadence === 'daily') {
+    return [getLocalDateTimeParts(now, timezone).dateKey];
+  }
+
+  if (commitmentCadence === 'monthly') {
+    return getCommitmentMonthDateKeys(timezone, now);
+  }
+
+  return getCommitmentWeekDateKeys(timezone, now);
+}
+
 function buildActor(data?: DocumentData): NotificationActor | undefined {
   if (!data) {
     return undefined;
@@ -242,6 +280,77 @@ async function isUserPreferenceEnabled(
   );
 }
 
+export function buildOneSignalPushPayload({
+  appId,
+  body,
+  circleId,
+  eventId,
+  title,
+  type,
+  uid,
+}: {
+  appId: string;
+  body: string;
+  circleId?: string;
+  eventId: string;
+  title: string;
+  type: NotificationType;
+  uid: string;
+}) {
+  return {
+    app_id: appId,
+    contents: {en: body},
+    data: {
+      ...(circleId ? {circleId} : {}),
+      eventId,
+      type,
+    },
+    headings: {en: title},
+    include_aliases: {
+      external_id: [uid],
+    },
+    ios_badgeCount: 1,
+    ios_badgeType: 'Increase' as const,
+    target_channel: 'push',
+  };
+}
+
+export async function markUnreadInboxEventsRead(uid: string) {
+  const snapshot = await db
+    .collection('userPrivate')
+    .doc(uid)
+    .collection('inbox')
+    .where('readAt', '==', null)
+    .get();
+
+  if (snapshot.empty) {
+    return 0;
+  }
+
+  let batch = db.batch();
+  let pendingWrites = 0;
+  let readCount = 0;
+  const readAt = FieldValue.serverTimestamp();
+
+  for (const doc of snapshot.docs) {
+    batch.set(doc.ref, {readAt}, {merge: true});
+    pendingWrites += 1;
+    readCount += 1;
+
+    if (pendingWrites === inboxReadBatchLimit) {
+      await batch.commit();
+      batch = db.batch();
+      pendingWrites = 0;
+    }
+  }
+
+  if (pendingWrites > 0) {
+    await batch.commit();
+  }
+
+  return readCount;
+}
+
 async function sendPushToUser({
   body,
   circleId,
@@ -264,20 +373,17 @@ async function sendPushToUser({
   }
 
   const response = await fetch('https://api.onesignal.com/notifications', {
-    body: JSON.stringify({
-      app_id: appId,
-      contents: {en: body},
-      data: {
-        ...(circleId ? {circleId} : {}),
+    body: JSON.stringify(
+      buildOneSignalPushPayload({
+        appId,
+        body,
+        circleId,
         eventId,
+        title,
         type,
-      },
-      headings: {en: title},
-      include_aliases: {
-        external_id: [uid],
-      },
-      target_channel: 'push',
-    }),
+        uid,
+      }),
+    ),
     headers: {
       Authorization: `Key ${restApiKey}`,
       'Content-Type': 'application/json',
@@ -511,7 +617,12 @@ export function getCircleAtRiskNotificationBody({
   commitmentCadence: CommitmentCadence;
   remainingCount: number;
 }) {
-  const periodCopy = commitmentCadence === 'daily' ? 'today' : 'this week';
+  const periodCopy =
+    commitmentCadence === 'daily'
+      ? 'today'
+      : commitmentCadence === 'monthly'
+      ? 'this month'
+      : 'this week';
 
   return `${circleTitle} needs ${remainingCount} more Tap In${
     remainingCount === 1 ? '' : 's'
@@ -596,15 +707,19 @@ async function sendTapInReminders(kind: 'final' | 'midday') {
     const circle = circleSnapshot.data();
     const timezone = asString(circle.timezone, 'UTC');
     const local = getLocalDateTimeParts(now, timezone);
-    const weekDateKeys = getCommitmentWeekDateKeys(timezone, now);
     const commitmentCadence = getCommitmentCadence(circle);
+    const periodDateKeys = getCommitmentPeriodDateKeys(
+      commitmentCadence,
+      timezone,
+      now,
+    );
     const requiredTapIns = getRequiredTapIns(circle);
 
     if (local.hour !== targetHour) {
       continue;
     }
 
-    const [memberSnapshots, todayCheckInSnapshots, ...weeklyCheckInSnapshots] =
+    const [memberSnapshots, todayCheckInSnapshots, ...periodCheckInSnapshots] =
       await Promise.all([
         circleSnapshot.ref
           .collection('members')
@@ -615,7 +730,7 @@ async function sendTapInReminders(kind: 'final' | 'midday') {
           .doc(local.dateKey)
           .collection('checkIns')
           .get(),
-        ...weekDateKeys.map(dateKey =>
+        ...periodDateKeys.map(dateKey =>
           circleSnapshot.ref
             .collection('days')
             .doc(dateKey)
@@ -634,7 +749,7 @@ async function sendTapInReminders(kind: 'final' | 'midday') {
     const scoringSnapshots =
       commitmentCadence === 'daily'
         ? [todayCheckInSnapshots]
-        : weeklyCheckInSnapshots;
+        : periodCheckInSnapshots;
 
     scoringSnapshots.forEach(snapshot => {
       snapshot.docs.forEach(doc => {
@@ -754,8 +869,19 @@ export const markInboxEventRead = onCall(async request => {
   return {read: true as const};
 });
 
+export const markInboxEventsRead = onCall(async request => {
+  if (!request.auth?.uid) {
+    throw new HttpsError('unauthenticated', 'Sign in is required.');
+  }
+
+  const read = await markUnreadInboxEventsRead(request.auth.uid);
+
+  return {read};
+});
+
 export const notificationModules = {
   createInboxEvent: 'active',
+  markInboxEventsRead: 'active',
   sendFinalTapInWarnings: 'active',
   sendMiddayTapInReminders: 'active',
 };

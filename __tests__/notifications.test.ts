@@ -1,7 +1,60 @@
+jest.mock('../functions/src/firebase', () => ({
+  db: {
+    batch: jest.fn(),
+    collection: jest.fn(),
+  },
+}));
+
+jest.mock('firebase-admin/app', () => ({
+  getApps: () => [{}],
+  initializeApp: jest.fn(),
+}), {virtual: true});
+
+jest.mock('firebase-admin/firestore', () => ({
+  FieldValue: {
+    serverTimestamp: jest.fn(),
+  },
+  getFirestore: () => ({
+    batch: jest.fn(),
+    collection: jest.fn(),
+  }),
+}), {virtual: true});
+
+jest.mock('firebase-functions/params', () => ({
+  defineSecret: () => ({
+    value: () => '',
+  }),
+  defineString: (_name: string, options?: {default?: string}) => ({
+    value: () => options?.default ?? '',
+  }),
+}), {virtual: true});
+
+jest.mock('firebase-functions/v2/https', () => {
+  class MockHttpsError extends Error {
+    code: string;
+
+    constructor(code: string, message: string) {
+      super(message);
+      this.code = code;
+    }
+  }
+
+  return {
+    HttpsError: MockHttpsError,
+    onCall: (handler: unknown) => handler,
+  };
+}, {virtual: true});
+
+jest.mock('firebase-functions/v2/scheduler', () => ({
+  onSchedule: (_options: unknown, handler: unknown) => handler,
+}), {virtual: true});
+
 import {
+  buildOneSignalPushPayload,
   getCircleAtRiskNotificationBody,
   getJoinRequestNotificationDedupeKey,
   getReminderEligibility,
+  markInboxEventsRead,
 } from '../functions/src/notifications';
 
 describe('notification reminder eligibility', () => {
@@ -132,5 +185,51 @@ describe('join request notification dedupe keys', () => {
     });
 
     expect(secondRequest).not.toBe(firstRequest);
+  });
+});
+
+describe('OneSignal push payload', () => {
+  it('increments the iOS app badge for delivered pushes', () => {
+    expect(
+      buildOneSignalPushPayload({
+        appId: 'app-1',
+        body: 'Ava nudged you.',
+        circleId: 'circle-1',
+        eventId: 'event-1',
+        title: 'Nudge',
+        type: 'nudge',
+        uid: 'user-1',
+      }),
+    ).toMatchObject({
+      app_id: 'app-1',
+      data: {
+        circleId: 'circle-1',
+        eventId: 'event-1',
+        type: 'nudge',
+      },
+      include_aliases: {
+        external_id: ['user-1'],
+      },
+      ios_badgeCount: 1,
+      ios_badgeType: 'Increase',
+      target_channel: 'push',
+    });
+  });
+});
+
+describe('mark inbox events read callable', () => {
+  const invokeMarkInboxEventsRead = markInboxEventsRead as unknown as (request: {
+    auth?: {uid: string};
+  }) => Promise<{read: number}>;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('requires an authenticated user', async () => {
+    await expect(invokeMarkInboxEventsRead({})).rejects.toMatchObject({
+      code: 'unauthenticated',
+      message: 'Sign in is required.',
+    });
   });
 });

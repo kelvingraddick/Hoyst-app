@@ -2,6 +2,7 @@ import {onRequest} from 'firebase-functions/v2/https';
 
 export {emailModules} from './emails';
 export {
+  markInboxEventsRead,
   markInboxEventRead,
   notificationModules,
   sendFinalTapInWarnings,
@@ -21,6 +22,10 @@ export {
 } from './circles';
 export {generateHomeGreeting} from './homeGreeting';
 export {getProfileSummary} from './profile';
+export {
+  backfillMomentumOpportunities,
+  materializeMomentumOpportunities,
+} from './momentum';
 
 export const healthcheck = onRequest((request, response) => {
   response.json({

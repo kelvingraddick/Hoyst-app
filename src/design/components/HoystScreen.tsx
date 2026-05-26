@@ -77,10 +77,10 @@ const styles = StyleSheet.create({
     paddingBottom: 48,
   },
   padded: {
-    paddingHorizontal: 18,
+    paddingHorizontal: 20,
     paddingTop: 8,
   },
   stack: {
-    gap: 16,
+    gap: 24,
   },
 });

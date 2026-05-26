@@ -15,12 +15,13 @@ const graceRuleSchema = zod_1.z.object({
     windowDays: zod_1.z.number().int().min(1).max(365),
 });
 const commitmentFrequencySchema = zod_1.z.object({
+    opportunitiesPerPeriod: zod_1.z.number().int().min(1).max(31).optional(),
     tapInsPerWeek: zod_1.z.number().int().min(1).max(7),
 });
 const createCircleSchema = zod_1.z.object({
     category: zod_1.z.string().trim().min(1).max(40),
     commitment: zod_1.z.string().trim().min(1).max(160),
-    commitmentCadence: zod_1.z.enum(['daily', 'weekly']).optional(),
+    commitmentCadence: zod_1.z.enum(['daily', 'weekly', 'monthly']).optional(),
     commitmentFrequency: commitmentFrequencySchema,
     graceRules: zod_1.z
         .object({
@@ -130,6 +131,31 @@ function getCommitmentWeekDateKeys(timezone, now = new Date()) {
             String(date.getDate()).padStart(2, '0'),
         ].join('-');
     });
+}
+function getCommitmentMonthDateKeys(timezone, now = new Date()) {
+    const parts = new Intl.DateTimeFormat('en-US', {
+        day: '2-digit',
+        month: '2-digit',
+        timeZone: timezone,
+        year: 'numeric',
+    }).formatToParts(now);
+    const year = Number(parts.find(part => part.type === 'year')?.value ?? '1970');
+    const month = Number(parts.find(part => part.type === 'month')?.value ?? '1');
+    const dayCount = new Date(Date.UTC(year, month, 0)).getUTCDate();
+    return Array.from({ length: dayCount }, (_, index) => [
+        String(year),
+        String(month).padStart(2, '0'),
+        String(index + 1).padStart(2, '0'),
+    ].join('-'));
+}
+function getCommitmentPeriodDateKeys(cadence, timezone, now = new Date()) {
+    if (cadence === 'daily') {
+        return [getDateKeyForTimezone(timezone, now)];
+    }
+    if (cadence === 'monthly') {
+        return getCommitmentMonthDateKeys(timezone, now);
+    }
+    return getCommitmentWeekDateKeys(timezone, now);
 }
 function buildMemberPublicPreview(profile, uid) {
     return {
@@ -526,15 +552,15 @@ exports.nudgeCircleMembers = (0, https_1.onCall)({ secrets: [notifications_1.one
     const circle = circleSnapshot.data();
     const timezone = asOptionalString(circle?.timezone) ?? 'UTC';
     const dateKey = getDateKeyForTimezone(timezone, now);
-    const weekDateKeys = getCommitmentWeekDateKeys(timezone, now);
     const commitmentCadence = (0, commitments_1.getCommitmentCadence)(circle);
+    const periodDateKeys = getCommitmentPeriodDateKeys(commitmentCadence, timezone, now);
     const requiredTapIns = (0, commitments_1.getRequiredTapIns)(circle);
-    const [activeMemberSnapshots, todayCheckInSnapshots, ...weeklyCheckInSnapshots] = await Promise.all([
+    const [activeMemberSnapshots, todayCheckInSnapshots, ...periodCheckInSnapshots] = await Promise.all([
         circleRef.collection('members').where('status', '==', 'active').get(),
         circleRef.collection('days').doc(dateKey).collection('checkIns').get(),
-        ...weekDateKeys.map(weekDateKey => circleRef
+        ...periodDateKeys.map(periodDateKey => circleRef
             .collection('days')
-            .doc(weekDateKey)
+            .doc(periodDateKey)
             .collection('checkIns')
             .get()),
     ]);
@@ -547,7 +573,7 @@ exports.nudgeCircleMembers = (0, https_1.onCall)({ secrets: [notifications_1.one
     });
     const scoringSnapshots = commitmentCadence === 'daily'
         ? [todayCheckInSnapshots]
-        : weeklyCheckInSnapshots;
+        : periodCheckInSnapshots;
     scoringSnapshots.forEach(snapshot => {
         snapshot.docs.forEach(doc => {
             if (['done', 'skip'].includes(doc.data().status)) {

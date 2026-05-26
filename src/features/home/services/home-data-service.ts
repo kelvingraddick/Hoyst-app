@@ -58,33 +58,6 @@ export type HomeData = {
   todayLabel: string;
 };
 
-export type HomePersonalProgressAction =
-  | 'auth'
-  | 'chooseProgressStart'
-  | 'finishProfile'
-  | 'profile'
-  | 'shareProgress';
-
-export type HomePersonalProgressIcon =
-  | 'profile'
-  | 'progress'
-  | 'share'
-  | 'start';
-
-export type HomePersonalProgressTone =
-  | 'accent'
-  | 'neutral'
-  | 'success'
-  | 'warning';
-
-export type HomePersonalProgressState = {
-  action: HomePersonalProgressAction;
-  detail: string;
-  icon: HomePersonalProgressIcon;
-  label: string;
-  tone: HomePersonalProgressTone;
-};
-
 type PlainData = Record<string, unknown>;
 
 export type HomeCircleMappingInput = {
@@ -111,6 +84,7 @@ type CircleSubscriptionState = {
 };
 
 type HomeSubscriptionOptions = {
+  lookbackDays?: number;
   onData: (data: HomeData) => void;
   onError: (error: Error) => void;
   timezone: string;
@@ -150,9 +124,20 @@ function normalizeCommitmentFrequency(
   }
 
   const data = value && typeof value === 'object' ? (value as PlainData) : {};
+  const tapInsPerWeek = clampTapInsPerWeek(asNumber(data.tapInsPerWeek, 7));
+
+  if (cadence === 'monthly') {
+    return {
+      opportunitiesPerPeriod: Math.min(
+        31,
+        Math.max(1, Math.round(asNumber(data.opportunitiesPerPeriod, 4))),
+      ),
+      tapInsPerWeek,
+    };
+  }
 
   return {
-    tapInsPerWeek: clampTapInsPerWeek(asNumber(data.tapInsPerWeek, 7)),
+    tapInsPerWeek,
   };
 }
 
@@ -160,7 +145,7 @@ function normalizeCommitmentCadence(
   value: unknown,
   frequencyValue: unknown,
 ): CommitmentCadence {
-  if (value === 'daily' || value === 'weekly') {
+  if (value === 'daily' || value === 'weekly' || value === 'monthly') {
     return value;
   }
 
@@ -170,7 +155,11 @@ function normalizeCommitmentCadence(
 }
 
 function getCommitmentPeriodLabel(cadence: CommitmentCadence) {
-  return cadence === 'daily' ? 'Today' : 'Week';
+  return cadence === 'daily'
+    ? 'Today'
+    : cadence === 'monthly'
+    ? 'Month'
+    : 'Week';
 }
 
 function getCleanFirstName(value?: string) {
@@ -364,11 +353,20 @@ export function getDateKey(date: Date, timezone: string) {
   return DateTime.fromJSDate(date, {zone: timezone}).toFormat('yyyy-LL-dd');
 }
 
-function getRecentDates(timezone: string, now = new Date()) {
-  const today = DateTime.fromJSDate(now, {zone: timezone}).startOf('day');
+function normalizeLookbackDays(lookbackDays = 7) {
+  return Number.isInteger(lookbackDays) && lookbackDays > 0 ? lookbackDays : 7;
+}
 
-  return Array.from({length: 7}, (_, index) => {
-    const date = today.minus({days: 6 - index});
+function getRecentDates(
+  timezone: string,
+  now = new Date(),
+  lookbackDays = 7,
+) {
+  const today = DateTime.fromJSDate(now, {zone: timezone}).startOf('day');
+  const dayCount = normalizeLookbackDays(lookbackDays);
+
+  return Array.from({length: dayCount}, (_, index) => {
+    const date = today.minus({days: dayCount - 1 - index});
     return {
       dateKey: date.toFormat('yyyy-LL-dd'),
       label: date.toFormat('dd'),
@@ -386,12 +384,40 @@ function getCommitmentWeekDateKeys(timezone: string, now = new Date()) {
   );
 }
 
+function getCommitmentMonthDateKeys(timezone: string, now = new Date()) {
+  const startOfMonth = DateTime.fromJSDate(now, {zone: timezone})
+    .startOf('month')
+    .startOf('day');
+  const dayCount = startOfMonth.daysInMonth ?? 31;
+
+  return Array.from({length: dayCount}, (_, index) =>
+    startOfMonth.plus({days: index}).toFormat('yyyy-LL-dd'),
+  );
+}
+
+function getCommitmentPeriodDateKeys(
+  cadence: CommitmentCadence,
+  timezone: string,
+  now = new Date(),
+) {
+  if (cadence === 'daily') {
+    return [getDateKey(now, timezone)];
+  }
+
+  if (cadence === 'monthly') {
+    return getCommitmentMonthDateKeys(timezone, now);
+  }
+
+  return getCommitmentWeekDateKeys(timezone, now);
+}
+
 function buildProgressDays(
   timezone: string,
   completedDateKeys: ReadonlySet<string>,
   now?: Date,
+  lookbackDays = 7,
 ): HomeProgressCell[] {
-  const recentDates = getRecentDates(timezone, now);
+  const recentDates = getRecentDates(timezone, now, lookbackDays);
   const todayDateKey = recentDates[recentDates.length - 1]?.dateKey ?? '';
 
   return recentDates.map(day => ({
@@ -588,9 +614,18 @@ export function getHomeGreetingFallback({
   );
 }
 
-export function createEmptyHomeData(timezone = 'UTC', now = new Date()) {
+export function createEmptyHomeData(
+  timezone = 'UTC',
+  now = new Date(),
+  lookbackDays = 7,
+) {
   const completedDateKeys = new Set<string>();
-  const progressDays = buildProgressDays(timezone, completedDateKeys, now);
+  const progressDays = buildProgressDays(
+    timezone,
+    completedDateKeys,
+    now,
+    lookbackDays,
+  );
   const today = DateTime.fromJSDate(now, {zone: timezone});
 
   return {
@@ -610,6 +645,7 @@ export function buildHomeDataFromCircles({
   circles,
   completedDateKeys,
   hasLoadedMemberships = true,
+  lookbackDays = 7,
   membershipCount = circles.length,
   timezone,
   now = new Date(),
@@ -617,11 +653,17 @@ export function buildHomeDataFromCircles({
   circles: CircleManagementCard[];
   completedDateKeys: ReadonlySet<string>;
   hasLoadedMemberships?: boolean;
+  lookbackDays?: number;
   membershipCount?: number;
   now?: Date;
   timezone: string;
 }) {
-  const progressDays = buildProgressDays(timezone, completedDateKeys, now);
+  const progressDays = buildProgressDays(
+    timezone,
+    completedDateKeys,
+    now,
+    lookbackDays,
+  );
   const completedDays = progressDays.filter(day => day.state === 'done').length;
   const today = DateTime.fromJSDate(now, {zone: timezone});
 
@@ -640,79 +682,6 @@ export function buildHomeDataFromCircles({
     todayDateKey: today.toFormat('yyyy-LL-dd'),
     todayLabel: today.toFormat('cccc, LLLL d'),
   } satisfies HomeData;
-}
-
-export function getHomePersonalProgressState({
-  homeData,
-  isAuthenticatedHome,
-  isIncompleteProfile,
-}: {
-  homeData: Pick<
-    HomeData,
-    'circles' | 'hasRealProgress' | 'personalStreakDays' | 'progressPercent'
-  >;
-  isAuthenticatedHome: boolean;
-  isIncompleteProfile: boolean;
-}): HomePersonalProgressState {
-  if (isIncompleteProfile) {
-    return {
-      action: 'finishProfile',
-      detail: 'Finish your handle before Tap Ins and progress unlock.',
-      icon: 'profile',
-      label: 'Complete your profile',
-      tone: 'warning',
-    };
-  }
-
-  if (!isAuthenticatedHome) {
-    return {
-      action: 'auth',
-      detail: 'Create an account to save streaks, circles, and Tap Ins.',
-      icon: 'start',
-      label: 'Start making progress',
-      tone: 'accent',
-    };
-  }
-
-  if (!homeData.hasRealProgress) {
-    return {
-      action: 'chooseProgressStart',
-      detail: 'Explore circles or create one to start your first Tap In streak.',
-      icon: 'start',
-      label: 'No progress yet',
-      tone: 'accent',
-    };
-  }
-
-  const activeCircles = homeData.circles.filter(
-    circle => circle.viewerMembershipStatus !== 'pending',
-  );
-  const dueCircleCount = activeCircles.filter(
-    circle => !circle.viewerHasCheckedIn,
-  ).length;
-
-  if (activeCircles.length > 0 && dueCircleCount === 0) {
-    return {
-      action: 'shareProgress',
-      detail: 'Share your current progress.',
-      icon: 'share',
-      label: 'All covered right now',
-      tone: 'success',
-    };
-  }
-
-  const label =
-    homeData.personalStreakDays > 0
-      ? `${homeData.personalStreakDays}-day streak`
-      : `${homeData.progressPercent}% this week`;
-
-  return {
-    action: 'profile',
-    detail: 'Open Profile to review your progress.',
-    icon: 'progress',
-    label,
-    tone: 'neutral',
-  };
 }
 
 function getPeriodCoveredCounts(
@@ -829,7 +798,12 @@ export function mapHomeCircleFromData({
     commitmentCadence,
   );
   const tapInsPerWeek = commitmentFrequency.tapInsPerWeek;
-  const requiredTapIns = commitmentCadence === 'daily' ? 1 : tapInsPerWeek;
+  const requiredTapIns =
+    commitmentCadence === 'daily'
+      ? 1
+      : commitmentCadence === 'monthly'
+      ? commitmentFrequency.opportunitiesPerPeriod ?? tapInsPerWeek
+      : tapInsPerWeek;
   const scoringStatuses =
     commitmentCadence === 'daily'
       ? new Map<string, ReadonlyMap<string, CheckInStatus>>([
@@ -1178,21 +1152,23 @@ function clearPeriodCheckInListeners(state: CircleSubscriptionState) {
 }
 
 function syncPeriodCheckInListeners({
+  cadence,
   circleRef,
   onError,
   onUpdate,
   state,
   timezone,
 }: {
+  cadence: CommitmentCadence;
   circleRef: FirebaseFirestoreTypes.DocumentReference;
   onError: (error: Error) => void;
   onUpdate: () => void;
   state: CircleSubscriptionState;
   timezone: string;
 }) {
-  const weekDateKeys = getCommitmentWeekDateKeys(timezone);
+  const periodDateKeys = getCommitmentPeriodDateKeys(cadence, timezone);
   const todayDateKey = getDateKey(new Date(), timezone);
-  const periodCheckInKey = `${timezone}:${weekDateKeys.join('|')}`;
+  const periodCheckInKey = `${timezone}:${cadence}:${periodDateKeys.join('|')}`;
 
   if (state.periodCheckInKey === periodCheckInKey) {
     return;
@@ -1201,7 +1177,7 @@ function syncPeriodCheckInListeners({
   clearPeriodCheckInListeners(state);
   state.periodCheckInKey = periodCheckInKey;
 
-  weekDateKeys.forEach(dateKey => {
+  periodDateKeys.forEach(dateKey => {
     state.periodCheckInUnsubscribes.push(
       circleRef
         .collection('days')
@@ -1247,13 +1223,16 @@ function recentCompletedDateKeys(
 }
 
 export function subscribeToHomeData({
+  lookbackDays = 7,
   onData,
   onError,
   timezone,
   uid,
 }: HomeSubscriptionOptions) {
   const firestore = firebaseFirestore();
-  const recentDateKeys = getRecentDates(timezone).map(day => day.dateKey);
+  const recentDateKeys = getRecentDates(timezone, new Date(), lookbackDays).map(
+    day => day.dateKey,
+  );
   const memberships = new Map<string, PlainData>();
   const states = new Map<string, CircleSubscriptionState>();
   let circleUnsubscribes: Array<() => void> = [];
@@ -1272,6 +1251,7 @@ export function subscribeToHomeData({
         circles,
         completedDateKeys: recentCompletedDateKeys(states, recentDateKeys),
         hasLoadedMemberships: true,
+        lookbackDays,
         membershipCount: memberships.size,
         timezone,
       }),
@@ -1317,6 +1297,10 @@ export function subscribeToHomeData({
           state.circleData = snapshotData(snapshot);
           if (membershipStatus === 'active') {
             syncPeriodCheckInListeners({
+              cadence: normalizeCommitmentCadence(
+                state.circleData?.commitmentCadence,
+                state.circleData?.commitmentFrequency,
+              ),
               circleRef,
               onError,
               onUpdate: emit,
@@ -1353,6 +1337,10 @@ export function subscribeToHomeData({
 
       if (state.circleData) {
         syncPeriodCheckInListeners({
+          cadence: normalizeCommitmentCadence(
+            state.circleData.commitmentCadence,
+            state.circleData.commitmentFrequency,
+          ),
           circleRef,
           onError,
           onUpdate: emit,
@@ -1490,6 +1478,10 @@ export function subscribeToMemberCircleDetail({
 
     if (state.circleData) {
       syncPeriodCheckInListeners({
+        cadence: normalizeCommitmentCadence(
+          state.circleData.commitmentCadence,
+          state.circleData.commitmentFrequency,
+        ),
         circleRef,
         onError,
         onUpdate: emit,
@@ -1521,6 +1513,10 @@ export function subscribeToMemberCircleDetail({
     state.circleData = snapshotData(snapshot);
     if (normalizeMembershipStatus(membershipData?.status) === 'active') {
       syncPeriodCheckInListeners({
+        cadence: normalizeCommitmentCadence(
+          state.circleData?.commitmentCadence,
+          state.circleData?.commitmentFrequency,
+        ),
         circleRef,
         onError,
         onUpdate: emit,

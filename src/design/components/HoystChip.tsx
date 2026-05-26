@@ -2,13 +2,14 @@ import React from 'react';
 import {StyleSheet, View, type StyleProp, type ViewStyle} from 'react-native';
 
 import {useHoystTheme} from '../theme/useHoystTheme';
+import {brandColors} from '../tokens/colors';
 import {radius} from '../tokens/radius';
 import {HoystText} from './HoystText';
 
 type HoystChipProps = {
   label: string;
   style?: StyleProp<ViewStyle>;
-  tone?: 'blue' | 'green' | 'orange' | 'purple' | 'neutral';
+  tone?: 'blue' | 'green' | 'neutral' | 'orange' | 'purple' | 'yellow';
 };
 
 export function HoystChip({
@@ -32,6 +33,11 @@ export function HoystChip({
       ? {
           backgroundColor: 'rgba(255,138,61,0.14)',
           color: theme.warningForeground,
+        }
+      : tone === 'yellow'
+      ? {
+          backgroundColor: 'rgba(255,196,0,0.18)',
+          color: theme.isDark ? brandColors.spectrumYellow : '#7A5C00',
         }
       : tone === 'purple'
       ? {

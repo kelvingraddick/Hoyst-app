@@ -6,6 +6,10 @@ import {z} from 'zod';
 import {db} from '../firebase';
 import {canUseSkipGrace, getRollingDateKeys} from './grace';
 import {getRemoveTapInDecision} from './remove';
+import {
+  recordTapInOpportunity,
+  removeTapInOpportunity,
+} from '../momentum';
 import {notifyCircleAtRisk} from '../notifications';
 import {getCommitmentCadence, getRequiredTapIns} from '../shared/commitments';
 
@@ -107,6 +111,42 @@ function getCommitmentWeekDateKeys(timezone: string, now = new Date()) {
   });
 }
 
+function getCommitmentMonthDateKeys(timezone: string, now = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    day: '2-digit',
+    month: '2-digit',
+    timeZone: timezone,
+    year: 'numeric',
+  }).formatToParts(now);
+  const year = Number(parts.find(part => part.type === 'year')?.value ?? '1970');
+  const month = Number(parts.find(part => part.type === 'month')?.value ?? '1');
+  const dayCount = new Date(Date.UTC(year, month, 0)).getUTCDate();
+
+  return Array.from({length: dayCount}, (_, index) =>
+    [
+      String(year),
+      String(month).padStart(2, '0'),
+      String(index + 1).padStart(2, '0'),
+    ].join('-'),
+  );
+}
+
+function getCommitmentPeriodDateKeys(
+  cadence: ReturnType<typeof getCommitmentCadence>,
+  timezone: string,
+  now = new Date(),
+) {
+  if (cadence === 'daily') {
+    return [getDateKeyForDate(timezone, now)];
+  }
+
+  if (cadence === 'monthly') {
+    return getCommitmentMonthDateKeys(timezone, now);
+  }
+
+  return getCommitmentWeekDateKeys(timezone, now);
+}
+
 export const submitTapIn = onCall(async request => {
   const {profile, uid} = await requireCompletedProfile(request.auth?.uid);
   const input = submitTapInSchema.parse(request.data);
@@ -195,6 +235,19 @@ export const submitTapIn = onCall(async request => {
       {merge: true},
     );
 
+    await recordTapInOpportunity({
+      checkInId: uid,
+      circle,
+      circleId: input.circleId,
+      dateKey,
+      memberCount:
+        typeof circle?.memberCount === 'number' ? circle.memberCount : undefined,
+      profile,
+      status: input.status,
+      transaction,
+      uid,
+    });
+
     return {checkInId: uid, dateKey};
   });
 
@@ -206,20 +259,23 @@ export const submitTapIn = onCall(async request => {
   const timezone = circle?.timezone ?? profile.timezone ?? 'UTC';
   const commitmentCadence = getCommitmentCadence(circle);
   const requiredTapIns = getRequiredTapIns(circle);
-  const weekDateKeys = getCommitmentWeekDateKeys(timezone);
-  const weeklyCheckInSnapshots = await Promise.all(
-    weekDateKeys.map(dateKey =>
+  const periodDateKeys = getCommitmentPeriodDateKeys(
+    commitmentCadence,
+    timezone,
+  );
+  const periodCheckInSnapshots = await Promise.all(
+    periodDateKeys.map(dateKey =>
       circleRef.collection('days').doc(dateKey).collection('checkIns').get(),
     ),
   );
   const coveredCounts = new Map<string, number>();
-  const todaySnapshotIndex = weekDateKeys.indexOf(result.dateKey);
+  const todaySnapshotIndex = periodDateKeys.indexOf(result.dateKey);
   const todayCheckInSnapshot =
-    weeklyCheckInSnapshots[todaySnapshotIndex >= 0 ? todaySnapshotIndex : 0];
+    periodCheckInSnapshots[todaySnapshotIndex >= 0 ? todaySnapshotIndex : 0];
   const scoringSnapshots =
     commitmentCadence === 'daily' && todayCheckInSnapshot
       ? [todayCheckInSnapshot]
-      : weeklyCheckInSnapshots;
+      : periodCheckInSnapshots;
 
   scoringSnapshots.forEach(snapshot => {
     snapshot.docs.forEach(doc => {
@@ -251,7 +307,7 @@ export const submitTapIn = onCall(async request => {
     const periodKey =
       commitmentCadence === 'daily'
         ? result.dateKey
-        : weekDateKeys[0] ?? result.dateKey;
+        : periodDateKeys[0] ?? result.dateKey;
 
     await Promise.all(
       pendingMembers.map(memberData =>
@@ -318,6 +374,14 @@ export const removeTapIn = onCall(async request => {
       },
       {merge: true},
     );
+
+    await removeTapInOpportunity({
+      circle,
+      circleId: input.circleId,
+      dateKey,
+      transaction,
+      uid,
+    });
 
     return {dateKey, removed: true};
   });

@@ -2,19 +2,20 @@ import React, {useEffect, useRef} from 'react';
 import {Platform, StyleSheet, View} from 'react-native';
 import {createBottomTabNavigator} from '@react-navigation/bottom-tabs';
 import type {NativeStackScreenProps} from '@react-navigation/native-stack';
-import {
-  Bell,
-  Compass,
-  Home,
-  type LucideIcon,
-  UserRound,
-} from 'lucide-react-native';
 
-import {ExploreScreen} from '../features/explore/screens/ExploreScreen';
-import {HomeScreen} from '../features/home/screens/HomeScreen';
-import {InboxScreen} from '../features/inbox/screens/InboxScreen';
-import {ProfileScreen} from '../features/profile/screens/ProfileScreen';
+import {
+  CirclesTabIcon,
+  HomeTabIcon,
+  MomentumTabIcon,
+  ProfileTabIcon,
+  type TabBarIconProps,
+} from '../design/components/TabBarIcons';
+
 import {TapInRingMark} from '../design/components/TapInRingMark';
+import {CirclesScreen} from '../features/circles/screens/CirclesScreen';
+import {HomeScreen} from '../features/home/screens/HomeScreen';
+import {MomentumScreen} from '../features/momentum/screens/MomentumScreen';
+import {ProfileScreen} from '../features/profile/screens/ProfileScreen';
 import {useHoystTheme} from '../design/theme/useHoystTheme';
 import {HoystTabBarBackground} from './components/HoystTabBarBackground';
 import {canResumePendingAction} from './pending-action-resume';
@@ -28,12 +29,13 @@ const Tab = createBottomTabNavigator<AppTabsParamList>();
 
 type Props = NativeStackScreenProps<RootStackParamList, 'MainTabs'>;
 type StandardTabName = Exclude<keyof AppTabsParamList, 'TapIn'>;
+type TabBarIconComponent = (props: TabBarIconProps) => React.JSX.Element;
 
-const routeIcons: Record<StandardTabName, LucideIcon> = {
-  Home,
-  Explore: Compass,
-  Inbox: Bell,
-  Profile: UserRound,
+const routeIcons: Record<StandardTabName, TabBarIconComponent> = {
+  Home: HomeTabIcon,
+  Circles: CirclesTabIcon,
+  Momentum: MomentumTabIcon,
+  Profile: ProfileTabIcon,
 };
 
 function TapInPlaceholder(): React.JSX.Element {
@@ -46,7 +48,9 @@ export function AppTabsNavigator({
   const theme = useHoystTheme();
   const status = useSessionStore(state => state.status);
   const beginAuthFlow = useSessionStore(state => state.beginAuthFlow);
-  const consumePendingAction = useSessionStore(state => state.consumePendingAction);
+  const consumePendingAction = useSessionStore(
+    state => state.consumePendingAction,
+  );
   const pendingAction = useSessionStore(state => state.pendingAction);
   const currentStep = useOnboardingStore(state => state.currentStep);
   const hasHydratedOnboarding = useOnboardingStore(state => state.hasHydrated);
@@ -75,25 +79,25 @@ export function AppTabsNavigator({
       return;
     }
 
-    const pendingAction = consumePendingAction();
+    const consumedPendingAction = consumePendingAction();
 
-    if (!pendingAction) {
+    if (!consumedPendingAction) {
       return;
     }
 
-    if (pendingAction.type === 'createCircle') {
+    if (consumedPendingAction.type === 'createCircle') {
       rootNavigation.navigate('CreateCircle');
-    } else if (pendingAction.type === 'joinCircle') {
+    } else if (consumedPendingAction.type === 'joinCircle') {
       rootNavigation.navigate('CircleDetail', {
-        circleId: pendingAction.circleId,
+        circleId: consumedPendingAction.circleId,
         resumeAction: 'join',
       });
-    } else if (pendingAction.type === 'tapIn') {
+    } else if (consumedPendingAction.type === 'tapIn') {
       rootNavigation.navigate('TapInComposer', {
-        circleId: pendingAction.circleId,
-        source: pendingAction.source,
+        circleId: consumedPendingAction.circleId,
+        source: consumedPendingAction.source,
       });
-    } else if (pendingAction.type === 'tapInPicker') {
+    } else if (consumedPendingAction.type === 'tapInPicker') {
       rootNavigation.navigate('TapInPicker');
     }
   }, [
@@ -113,10 +117,7 @@ export function AppTabsNavigator({
       status,
     });
 
-    if (
-      presentation === 'onboarding' &&
-      !didAutoPresentOnboardingRef.current
-    ) {
+    if (presentation === 'onboarding' && !didAutoPresentOnboardingRef.current) {
       startOnboardingWizard();
       didAutoPresentOnboardingRef.current =
         navigateToAuthWelcome(rootNavigation);
@@ -125,7 +126,9 @@ export function AppTabsNavigator({
 
     if (presentation === 'finishProfile') {
       const rootState = rootNavigation.getState();
-      const isAuthActive = rootState.routes.some(route => route.name === 'Auth');
+      const isAuthActive = rootState.routes.some(
+        route => route.name === 'Auth',
+      );
       const shouldForceFinishProfile =
         currentStep === 'welcome' || currentStep === 'auth';
 
@@ -159,10 +162,11 @@ export function AppTabsNavigator({
         tabBarActiveTintColor: theme.tabActiveForeground,
         tabBarBackground: HoystTabBarBackground,
         tabBarHideOnKeyboard: true,
-        tabBarIconStyle: styles.tabBarIcon,
-        tabBarInactiveTintColor: theme.textSubtle,
+        tabBarIconStyle:
+          route.name === 'TapIn' ? styles.tapInIconSlot : styles.tabBarIcon,
+        tabBarInactiveTintColor: theme.textMuted,
         tabBarItemStyle: styles.tabBarItem,
-        tabBarShowLabel: false,
+        tabBarLabelStyle: styles.tabBarLabel,
         tabBarStyle: [
           styles.tabBar,
           {
@@ -175,34 +179,32 @@ export function AppTabsNavigator({
         // React Navigation expects a render prop here, so the usual nested
         // component warning is noise for this specific API shape.
         // eslint-disable-next-line react/no-unstable-nested-components
-        tabBarIcon: ({color, focused, size}) => {
+        tabBarIcon: ({color, focused}) => {
           if (route.name === 'TapIn') {
-            return <TapInRingMark style={styles.tapInOffset} />;
+            return (
+              <TapInRingMark
+                innerSize={46}
+                outerSize={78}
+                style={styles.tapInOffset}
+              />
+            );
           }
 
           const Icon = routeIcons[route.name as StandardTabName];
+          const iconSize = 26;
+
           return (
-            <View
-              style={[
-                styles.iconWrap,
-                focused
-                  ? [
-                      styles.iconWrapFocused,
-                      {
-                        backgroundColor: theme.tabActiveBackground,
-                        shadowColor: theme.tabActiveShadowColor,
-                        shadowOpacity: theme.tabActiveShadowOpacity,
-                      },
-                    ]
-                  : undefined,
-              ]}>
-              <Icon color={color} size={size} strokeWidth={2.25} />
-            </View>
+            <Icon
+              color={color}
+              fill={focused && route.name === 'Home' ? color : 'none'}
+              size={iconSize}
+              strokeWidth={focused ? 2.65 : 2.35}
+            />
           );
         },
       })}>
       <Tab.Screen component={HomeScreen} name="Home" />
-      <Tab.Screen component={ExploreScreen} name="Explore" />
+      <Tab.Screen component={CirclesScreen} name="Circles" />
       <Tab.Screen
         component={TapInPlaceholder}
         listeners={() => ({
@@ -220,9 +222,12 @@ export function AppTabsNavigator({
           },
         })}
         name="TapIn"
-        options={{tabBarAccessibilityLabel: 'Tap In'}}
+        options={{
+          tabBarAccessibilityLabel: 'Tap In',
+          tabBarLabel: () => null,
+        }}
       />
-      <Tab.Screen component={InboxScreen} name="Inbox" />
+      <Tab.Screen component={MomentumScreen} name="Momentum" />
       <Tab.Screen component={ProfileScreen} name="Profile" />
     </Tab.Navigator>
   );
@@ -230,38 +235,46 @@ export function AppTabsNavigator({
 
 const styles = StyleSheet.create({
   tabBar: {
-    elevation: 0,
-    height: 66,
+    borderRadius: 34,
+    elevation: 12,
+    height: 72,
     left: 18,
-    paddingBottom: 8,
-    paddingTop: 8,
+    overflow: 'visible',
+    paddingBottom: 7,
+    paddingTop: 7,
     position: 'absolute',
     right: 18,
+    shadowOffset: {
+      height: 10,
+      width: 0,
+    },
+    shadowOpacity: 0.12,
+    shadowRadius: 22,
+  },
+  tabBarIcon: {
+    height: 28,
+    marginTop: 2,
+    width: 32,
   },
   tabBarItem: {
     alignItems: 'center',
     justifyContent: 'center',
+    paddingVertical: 0,
   },
-  tabBarIcon: {
-    height: 38,
-    width: 38,
+  tabBarLabel: {
+    fontSize: 11.2,
+    fontWeight: '800',
+    includeFontPadding: false,
+    letterSpacing: 0,
+    lineHeight: 13,
+    marginTop: 2,
   },
-  iconWrap: {
-    alignItems: 'center',
-    borderRadius: 999,
-    height: 38,
-    justifyContent: 'center',
-    width: 38,
-  },
-  iconWrapFocused: {
-    elevation: 8,
-    shadowOffset: {
-      height: 0,
-      width: 0,
-    },
-    shadowRadius: 12,
+  tapInIconSlot: {
+    height: 88,
+    marginTop: -32,
+    width: 88,
   },
   tapInOffset: {
-    marginTop: -24,
+    marginTop: 0,
   },
 });

@@ -35,8 +35,8 @@ describe('Hoyst design tokens', () => {
     expect(brandColors.orange).toBe('#FF8A3D');
   });
 
-  it('defines a four-stop primary ring gradient', () => {
-    expect(gradients.primaryRing).toHaveLength(4);
+  it('defines the six-stop spectrum ring gradient', () => {
+    expect(gradients.primaryRing).toHaveLength(6);
   });
 
   it('keeps light-mode foreground tokens readable on app surfaces', () => {
@@ -75,14 +75,18 @@ describe('Hoyst design tokens', () => {
       brandColors.green,
       brandColors.orangeStrong,
       brandColors.red,
-      brandColors.purple,
-      brandColors.purpleBright,
       brandColors.blue,
     ];
 
     brightFills.forEach(background => {
       expect(
         getContrastRatio(theme.onBrightAccent, background),
+      ).toBeGreaterThanOrEqual(4.5);
+    });
+
+    [brandColors.purple, brandColors.purpleBright].forEach(background => {
+      expect(
+        getContrastRatio(theme.onPurpleAccent, background),
       ).toBeGreaterThanOrEqual(4.5);
     });
   });

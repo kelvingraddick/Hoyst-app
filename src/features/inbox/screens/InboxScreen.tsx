@@ -1,16 +1,16 @@
-import React, {useEffect, useMemo, useState} from 'react';
+import React, {useCallback, useEffect, useMemo, useState} from 'react';
 import {Pressable, StyleSheet, View} from 'react-native';
-import type {BottomTabScreenProps} from '@react-navigation/bottom-tabs';
-import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
+import type {NativeStackScreenProps} from '@react-navigation/native-stack';
+import {useFocusEffect} from '@react-navigation/native';
+import {ArrowLeft} from 'lucide-react-native';
 
 import {ActivityFeedCard} from '../../../design/components/ActivityFeedCard';
 import {GlassPanel} from '../../../design/components/GlassPanel';
 import {HoystScreen} from '../../../design/components/HoystScreen';
 import {HoystText} from '../../../design/components/HoystText';
-import type {
-  AppTabsParamList,
-  RootStackParamList,
-} from '../../../navigation/types';
+import {useHoystTheme} from '../../../design/theme/useHoystTheme';
+import {clearDeliveredNotifications} from '../../../lib/notifications';
+import type {RootStackParamList} from '../../../navigation/types';
 import {useSessionStore} from '../../../store/session-store';
 import type {
   CircleActivityItem,
@@ -18,11 +18,12 @@ import type {
   InboxEvent,
 } from '../../../types/models';
 import {
+  markAllInboxEventsRead,
   markInboxEventRead,
   subscribeToInboxEvents,
 } from '../../settings/services/notification-settings-service';
 
-type Props = BottomTabScreenProps<AppTabsParamList, 'Inbox'>;
+type Props = NativeStackScreenProps<RootStackParamList, 'Inbox'>;
 
 function getInitials(name: string) {
   return name
@@ -86,12 +87,11 @@ function mapInboxEventToActivity(event: InboxEvent): CircleActivityItem {
 }
 
 export function InboxScreen({navigation}: Props): React.JSX.Element {
+  const theme = useHoystTheme();
   const user = useSessionStore(state => state.user);
   const status = useSessionStore(state => state.status);
   const [events, setEvents] = useState<InboxEvent[]>([]);
   const [hasInboxError, setHasInboxError] = useState(false);
-  const rootNavigation =
-    navigation.getParent<NativeStackNavigationProp<RootStackParamList>>();
   const activityItems = useMemo(
     () => events.map(mapInboxEventToActivity),
     [events],
@@ -118,11 +118,33 @@ export function InboxScreen({navigation}: Props): React.JSX.Element {
     });
   }, [status, user?.uid]);
 
+  useFocusEffect(
+    useCallback(() => {
+      if (status !== 'authenticatedReady' || !user?.uid) {
+        return undefined;
+      }
+
+      clearDeliveredNotifications().catch(() => undefined);
+      markAllInboxEventsRead().catch(() => undefined);
+
+      return undefined;
+    }, [status, user?.uid]),
+  );
+
+  const navigateBack = useCallback(() => {
+    if (navigation.canGoBack()) {
+      navigation.goBack();
+      return;
+    }
+
+    navigation.navigate('MainTabs', {screen: 'Home'});
+  }, [navigation]);
+
   const openEvent = (event: InboxEvent) => {
     markInboxEventRead(event.id).catch(() => undefined);
 
     if (event.deeplink.screen === 'TapInComposer') {
-      rootNavigation?.navigate('TapInComposer', {
+      navigation.navigate('TapInComposer', {
         circleId: event.deeplink.circleId,
         source: event.deeplink.source,
       });
@@ -130,7 +152,7 @@ export function InboxScreen({navigation}: Props): React.JSX.Element {
     }
 
     if (event.deeplink.screen === 'CircleDetail') {
-      rootNavigation?.navigate('CircleDetail', {
+      navigation.navigate('CircleDetail', {
         circleId: event.deeplink.circleId,
       });
     }
@@ -139,6 +161,21 @@ export function InboxScreen({navigation}: Props): React.JSX.Element {
   return (
     <HoystScreen contentContainerStyle={styles.content}>
       <View style={styles.header}>
+        <Pressable
+          accessibilityLabel="Back"
+          accessibilityRole="button"
+          hitSlop={8}
+          onPress={navigateBack}
+          style={({pressed}) => [
+            styles.backButton,
+            {
+              backgroundColor: theme.surfaceSoft,
+              borderColor: theme.border,
+              opacity: pressed ? 0.92 : 1,
+            },
+          ]}>
+          <ArrowLeft color={theme.text} size={22} strokeWidth={2.3} />
+        </Pressable>
         <HoystText variant="headline">Inbox</HoystText>
       </View>
       {hasInboxError && activityItems.length === 0 ? (
@@ -179,10 +216,20 @@ const styles = StyleSheet.create({
   content: {
     paddingBottom: 168,
   },
+  backButton: {
+    alignItems: 'center',
+    borderRadius: 16,
+    borderWidth: 1,
+    height: 44,
+    justifyContent: 'center',
+    width: 44,
+  },
   emptyState: {
     gap: 8,
   },
   header: {
-    gap: 8,
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 12,
   },
 });

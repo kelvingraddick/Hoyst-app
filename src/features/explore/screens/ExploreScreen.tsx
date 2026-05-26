@@ -1,6 +1,5 @@
 import React, {useEffect, useMemo, useState} from 'react';
 import {Pressable, StyleSheet, View} from 'react-native';
-import type {BottomTabScreenProps} from '@react-navigation/bottom-tabs';
 import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import {Search} from 'lucide-react-native';
 
@@ -11,69 +10,43 @@ import {HoystInput} from '../../../design/components/HoystInput';
 import {HoystScreen} from '../../../design/components/HoystScreen';
 import {HoystText} from '../../../design/components/HoystText';
 import {LayeredAvatar} from '../../../design/components/LayeredAvatar';
+import {
+  CircleCategoryPill,
+  getCircleCategoryVisual,
+} from '../../../design/components/CircleCategoryIcon';
 import {radius} from '../../../design/tokens/radius';
 import {useHoystTheme} from '../../../design/theme/useHoystTheme';
-import type {
-  AppTabsParamList,
-  RootStackParamList,
-} from '../../../navigation/types';
+import type {RootStackParamList} from '../../../navigation/types';
 import type {ExploreCircle} from '../../../types/models';
 import {exploreCircles} from '../../circles/mockData';
 import {subscribeToPublicCircles} from '../../circles/services/public-circle-service';
 
-type Props = BottomTabScreenProps<AppTabsParamList, 'Explore'>;
-type ChipTone = NonNullable<React.ComponentProps<typeof HoystChip>['tone']>;
-
-function getCategoryTone(category: string): ChipTone {
-  if (category === 'Fitness') {
-    return 'green';
-  }
-
-  if (category === 'Deep Work') {
-    return 'orange';
-  }
-
-  if (category === 'Sobriety') {
-    return 'purple';
-  }
-
-  if (category === 'Wellness') {
-    return 'blue';
-  }
-
-  return 'neutral';
-}
+type Props = {
+  navigation: {
+    getParent: <T>() => T | undefined;
+  };
+};
 
 function getFilterBorderColor(
   theme: ReturnType<typeof useHoystTheme>,
-  tone: ChipTone,
+  category: string,
 ) {
-  if (tone === 'green') {
-    return theme.successForeground;
+  if (category === 'All') {
+    return theme.borderStrong;
   }
 
-  if (tone === 'orange') {
-    return theme.warningForeground;
-  }
-
-  if (tone === 'purple') {
-    return theme.accentSecondaryForeground;
-  }
-
-  if (tone === 'blue') {
-    return theme.accentTertiaryForeground;
-  }
-
-  return theme.borderStrong;
+  return getCircleCategoryVisual(category).accentColor;
 }
 
 function getFilterChipStateStyle(
   theme: ReturnType<typeof useHoystTheme>,
-  tone: ChipTone,
+  category: string,
   isActive: boolean,
 ) {
   return {
-    borderColor: isActive ? getFilterBorderColor(theme, tone) : 'transparent',
+    borderColor: isActive
+      ? getFilterBorderColor(theme, category)
+      : 'transparent',
   };
 }
 
@@ -109,10 +82,7 @@ function ExploreCircleCard({
       <GlassPanel style={styles.card}>
         <View style={styles.cardHeader}>
           <View style={styles.cardMeta}>
-            <HoystChip
-              label={circle.category.toUpperCase()}
-              tone={getCategoryTone(circle.category)}
-            />
+            <CircleCategoryPill category={circle.category} uppercase />
             <HoystText
               style={{color: theme.warningForeground}}
               variant="caption">
@@ -258,7 +228,7 @@ export function ExploreScreen({navigation}: Props): React.JSX.Element {
   return (
     <HoystScreen contentContainerStyle={styles.content}>
       <View style={styles.header}>
-        <HoystText variant="headline">Explore</HoystText>
+        <HoystText variant="headline">Find Circles</HoystText>
         <HoystText tone="muted">
           Find public Circles with steady Tap Ins, open seats, and Members who
           match your pace.
@@ -283,7 +253,10 @@ export function ExploreScreen({navigation}: Props): React.JSX.Element {
       <View style={styles.chips}>
         {categories.map(category => {
           const isActive = activeCategory === category;
-          const chipTone = getCategoryTone(category);
+          const chipStyle = [
+            styles.filterChip,
+            getFilterChipStateStyle(theme, category, isActive),
+          ];
 
           return (
             <Pressable
@@ -296,14 +269,11 @@ export function ExploreScreen({navigation}: Props): React.JSX.Element {
                   transform: [{scale: pressed ? 0.98 : 1}],
                 },
               ]}>
-              <HoystChip
-                label={category}
-                style={[
-                  styles.filterChip,
-                  getFilterChipStateStyle(theme, chipTone, isActive),
-                ]}
-                tone={chipTone}
-              />
+              {category === 'All' ? (
+                <HoystChip label={category} style={chipStyle} tone="neutral" />
+              ) : (
+                <CircleCategoryPill category={category} style={chipStyle} />
+              )}
             </Pressable>
           );
         })}

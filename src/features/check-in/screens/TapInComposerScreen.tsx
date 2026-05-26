@@ -10,6 +10,7 @@ import {HoystChip} from '../../../design/components/HoystChip';
 import {HoystInput} from '../../../design/components/HoystInput';
 import {HoystScreen} from '../../../design/components/HoystScreen';
 import {HoystText} from '../../../design/components/HoystText';
+import {CircleCategoryPill} from '../../../design/components/CircleCategoryIcon';
 import {TapInRingMark} from '../../../design/components/TapInRingMark';
 import {actionMotion, actionShadow} from '../../../design/tokens/actions';
 import {radius} from '../../../design/tokens/radius';
@@ -353,7 +354,7 @@ export function TapInComposerScreen({
             </HoystText>
           </View>
           <View style={styles.summaryChips}>
-            <HoystChip label={detail.category.toUpperCase()} tone="neutral" />
+            <CircleCategoryPill category={detail.category} uppercase />
             <HoystChip label={progressLabel} tone="green" />
             <HoystChip label={statusLabel} tone="orange" />
           </View>

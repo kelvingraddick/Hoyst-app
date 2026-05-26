@@ -15,24 +15,36 @@ import {radius} from '../tokens/radius';
 import {shadows} from '../tokens/shadows';
 
 type GlassPanelProps = PropsWithChildren<{
+  padding?: 'compact' | 'none' | 'regular';
   style?: StyleProp<ViewStyle>;
+  variant?: 'card' | 'nav' | 'panel';
 }>;
 
 export function GlassPanel({
   children,
+  padding = 'regular',
   style,
+  variant = 'card',
 }: GlassPanelProps): React.JSX.Element {
   const theme = useHoystTheme();
+  const contentStyle =
+    padding === 'none'
+      ? styles.contentNone
+      : padding === 'compact'
+      ? styles.contentCompact
+      : styles.content;
 
   return (
     <View
       style={[
         styles.container,
-        shadows.soft,
+        variant === 'nav' ? shadows.floating : shadows.soft,
         {
           backgroundColor: theme.surface,
           borderColor: theme.border,
         },
+        variant === 'panel' ? styles.panel : undefined,
+        variant === 'nav' ? styles.nav : undefined,
         style,
       ]}>
       {Platform.OS === 'ios' ? (
@@ -63,7 +75,7 @@ export function GlassPanel({
           },
         ]}
       />
-      <View style={styles.content}>{children}</View>
+      <View style={contentStyle}>{children}</View>
     </View>
   );
 }
@@ -75,10 +87,24 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   content: {
-    padding: 18,
+    gap: 14,
+    padding: glass.cardPadding,
+  },
+  contentCompact: {
     gap: 12,
+    padding: glass.compactPadding,
+  },
+  contentNone: {
+    gap: 0,
+    padding: 0,
   },
   highlight: {
     borderRadius: radius.lg,
+  },
+  nav: {
+    borderRadius: radius.xl,
+  },
+  panel: {
+    borderRadius: 28,
   },
 });

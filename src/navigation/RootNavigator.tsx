@@ -10,6 +10,7 @@ import {EditProfileScreen} from '../features/settings/screens/EditProfileScreen'
 import {TapInCompleteScreen} from '../features/check-in/screens/TapInCompleteScreen';
 import {TapInComposerScreen} from '../features/check-in/screens/TapInComposerScreen';
 import {TapInPickerScreen} from '../features/check-in/screens/TapInPickerScreen';
+import {InboxScreen} from '../features/inbox/screens/InboxScreen';
 import {useOnboardingStore} from '../store/onboarding-store';
 import {useSessionStore} from '../store/session-store';
 import {AppTabsNavigator} from './AppTabsNavigator';
@@ -82,6 +83,14 @@ export function RootNavigator(): React.JSX.Element {
           animation: 'slide_from_bottom',
           headerShown: false,
           presentation: 'modal',
+        }}
+      />
+      <Stack.Screen
+        component={InboxScreen}
+        name="Inbox"
+        options={{
+          animation: 'slide_from_right',
+          headerShown: false,
         }}
       />
       <Stack.Screen

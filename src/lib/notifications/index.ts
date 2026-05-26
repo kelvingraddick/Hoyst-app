@@ -51,7 +51,7 @@ function handleNotificationClick(event: NotificationClickEvent) {
     return;
   }
 
-  navigationRef.navigate('MainTabs', {screen: 'Inbox'});
+  navigationRef.navigate('Inbox');
 }
 
 function getOneSignalAppId() {
@@ -123,6 +123,16 @@ export async function clearPushUser(): Promise<void> {
   }
 
   OneSignal.logout();
+}
+
+export async function clearDeliveredNotifications(): Promise<void> {
+  initializePushNotifications();
+
+  if (!initialized) {
+    return;
+  }
+
+  OneSignal.Notifications.clearAll();
 }
 
 export async function requestPushNotificationPermission(): Promise<boolean> {

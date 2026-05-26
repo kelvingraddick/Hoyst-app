@@ -2,12 +2,10 @@ import React, {useEffect, useMemo, useState} from 'react';
 import {Alert, Pressable, StyleSheet, View} from 'react-native';
 import {
   ArrowLeft,
-  BookOpen,
+  CalendarCheck,
   CalendarDays,
   CalendarRange,
   Check,
-  Dumbbell,
-  Flame,
   Globe2,
   Lock,
   Minus,
@@ -15,7 +13,6 @@ import {
   Save,
   Share2,
   Shield,
-  Sparkles,
   UsersRound,
   type LucideIcon,
 } from 'lucide-react-native';
@@ -27,6 +24,11 @@ import {HoystChip} from '../../../design/components/HoystChip';
 import {HoystInput} from '../../../design/components/HoystInput';
 import {HoystScreen} from '../../../design/components/HoystScreen';
 import {HoystText} from '../../../design/components/HoystText';
+import {
+  CircleCategoryIcon,
+  CircleCategoryPill,
+  getCircleCategoryVisual,
+} from '../../../design/components/CircleCategoryIcon';
 import {radius} from '../../../design/tokens/radius';
 import {useHoystTheme} from '../../../design/theme/useHoystTheme';
 import type {RootStackParamList} from '../../../navigation/types';
@@ -37,6 +39,7 @@ import {
   buildCircleEditDraft,
   buildCreateCirclePayload,
   clampCircleMaxSize,
+  defaultMonthlyCommitmentFrequency,
   defaultWeeklyCommitmentFrequency,
   getPrivacyChoiceFields,
   isCircleMaxSizeBelowMemberCount,
@@ -54,68 +57,69 @@ import type {
 
 type Props = NativeStackScreenProps<RootStackParamList, 'EditCircle'>;
 type Option<T extends string> = {
+  category?: string;
   description: string;
-  icon: LucideIcon;
+  icon?: LucideIcon;
   id: T;
   label: string;
-  tone: 'blue' | 'green' | 'orange' | 'purple';
+  tone: 'blue' | 'green' | 'neutral' | 'orange' | 'purple';
 };
 
 const categoryOptions: Array<Option<string>> = [
   {
+    category: 'Fitness',
     description: 'Training plans, walks, lifts, runs, and recovery.',
-    icon: Dumbbell,
     id: 'Fitness',
     label: 'Fitness',
-    tone: 'green',
+    tone: getCircleCategoryVisual('Fitness').tone,
   },
   {
+    category: 'Wellness',
     description: 'Sleep, mindfulness, nutrition, and care routines.',
-    icon: Flame,
     id: 'Wellness',
     label: 'Wellness',
-    tone: 'purple',
+    tone: getCircleCategoryVisual('Wellness').tone,
   },
   {
+    category: 'Deep Work',
     description: 'Focused sessions, study blocks, and maker momentum.',
-    icon: BookOpen,
     id: 'Deep Work',
     label: 'Deep work',
-    tone: 'blue',
+    tone: getCircleCategoryVisual('Deep Work').tone,
   },
   {
+    category: 'Sobriety',
     description: 'Private, steady check-ins for staying grounded.',
-    icon: Shield,
     id: 'Sobriety',
     label: 'Sobriety',
-    tone: 'orange',
+    tone: getCircleCategoryVisual('Sobriety').tone,
   },
   {
+    category: 'Custom',
     description: 'A flexible lane for anything specific to your people.',
-    icon: Sparkles,
     id: 'Custom',
     label: 'Custom',
-    tone: 'purple',
+    tone: getCircleCategoryVisual('Custom').tone,
   },
 ];
 
 const privacyOptions: Array<Option<CirclePrivacyMode>> = [
   {
-    description: 'Discoverable in Explore with your chosen join rule.',
+    description: 'Discoverable in Circles with your chosen join rule.',
     icon: Globe2,
     id: 'public',
     label: 'Public',
     tone: 'green',
   },
   {
-    description: 'Hidden from Explore and joinable only with your invite link.',
+    description: 'Hidden from Circles and joinable only with your invite link.',
     icon: Share2,
     id: 'link_only',
     label: 'Link-only',
     tone: 'blue',
   },
   {
-    description: 'Hidden from Explore with requests for approval.',
+    description: 'Hidden from Circles with requests for approval.',
     icon: Lock,
     id: 'private',
     label: 'Private',
@@ -157,6 +161,13 @@ const commitmentCadenceOptions: Array<Option<CommitmentCadence>> = [
     label: 'Weekly',
     tone: 'blue',
   },
+  {
+    description: 'Each member covers scheduled days across the month.',
+    icon: CalendarCheck,
+    id: 'monthly',
+    label: 'Monthly',
+    tone: 'orange',
+  },
 ];
 
 function getToneColor(
@@ -173,6 +184,10 @@ function getToneColor(
 
   if (tone === 'blue') {
     return theme.accentTertiaryForeground;
+  }
+
+  if (tone === 'neutral') {
+    return theme.textMuted;
   }
 
   return theme.accentSecondaryForeground;
@@ -246,6 +261,7 @@ function OptionCard<T extends string>({
   const theme = useHoystTheme();
   const accentColor = getToneColor(theme, option.tone);
   const Icon = option.icon;
+  const hasCategoryIcon = Boolean(option.category);
 
   return (
     <Pressable
@@ -267,14 +283,20 @@ function OptionCard<T extends string>({
         <View
           style={[
             styles.optionIcon,
-            {
-              backgroundColor: isSelected
-                ? `${accentColor}24`
-                : theme.surfaceSoft,
-              borderColor: isSelected ? accentColor : theme.border,
-            },
+            hasCategoryIcon
+              ? styles.optionCategoryIcon
+              : {
+                  backgroundColor: isSelected
+                    ? `${accentColor}24`
+                    : theme.surfaceSoft,
+                  borderColor: isSelected ? accentColor : theme.border,
+                },
           ]}>
-          <Icon color={accentColor} size={20} strokeWidth={2.3} />
+          {option.category ? (
+            <CircleCategoryIcon category={option.category} size={38} />
+          ) : Icon ? (
+            <Icon color={accentColor} size={20} strokeWidth={2.3} />
+          ) : null}
         </View>
         <View style={styles.optionCopy}>
           <HoystText numberOfLines={1} variant="bodyStrong">
@@ -509,6 +531,8 @@ export function EditCircleScreen({
             commitmentFrequency:
               commitmentCadence === 'daily'
                 ? {tapInsPerWeek: 7}
+                : commitmentCadence === 'monthly'
+                ? defaultMonthlyCommitmentFrequency
                 : current.commitmentFrequency.tapInsPerWeek >= 7
                 ? defaultWeeklyCommitmentFrequency
                 : current.commitmentFrequency,
@@ -620,7 +644,7 @@ export function EditCircleScreen({
       <GlassPanel>
         <View style={styles.sectionHeader}>
           <HoystText variant="title">Basics</HoystText>
-          <HoystChip label={draft.category} tone="neutral" />
+          <CircleCategoryPill category={draft.category} />
         </View>
         {renderOptions(categoryOptions, draft.category, value =>
           setField('category', value),
@@ -715,9 +739,20 @@ export function EditCircleScreen({
             label={
               draft.commitmentCadence === 'daily'
                 ? 'Daily'
+                : draft.commitmentCadence === 'monthly'
+                ? `${
+                    draft.commitmentFrequency.opportunitiesPerPeriod ??
+                    draft.commitmentFrequency.tapInsPerWeek
+                  }/month`
                 : `${draft.commitmentFrequency.tapInsPerWeek}/week`
             }
-            tone={draft.commitmentCadence === 'daily' ? 'green' : 'neutral'}
+            tone={
+              draft.commitmentCadence === 'daily'
+                ? 'green'
+                : draft.commitmentCadence === 'monthly'
+                ? 'orange'
+                : 'neutral'
+            }
           />
         </View>
         {renderOptions(
@@ -739,6 +774,27 @@ export function EditCircleScreen({
             <HoystText tone="muted">
               Weekly Commitment Frequency runs Monday to Sunday in the Circle
               timezone.
+            </HoystText>
+          </>
+        ) : draft.commitmentCadence === 'monthly' ? (
+          <>
+            <NumericStepper
+              label="Tap Ins per month"
+              max={31}
+              min={1}
+              onChange={value =>
+                setField('commitmentFrequency', {
+                  opportunitiesPerPeriod: value,
+                  tapInsPerWeek: Math.min(7, value),
+                })
+              }
+              value={
+                draft.commitmentFrequency.opportunitiesPerPeriod ??
+                draft.commitmentFrequency.tapInsPerWeek
+              }
+            />
+            <HoystText tone="muted">
+              Monthly opportunities are spaced across the Circle timezone.
             </HoystText>
           </>
         ) : (
@@ -909,6 +965,10 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: 4,
     minWidth: 0,
+  },
+  optionCategoryIcon: {
+    backgroundColor: 'transparent',
+    borderColor: 'transparent',
   },
   optionIcon: {
     alignItems: 'center',

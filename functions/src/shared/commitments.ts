@@ -1,11 +1,18 @@
-export type CommitmentCadence = 'daily' | 'weekly';
+export type CommitmentCadence = 'daily' | 'weekly' | 'monthly';
 
 type CommitmentInput = {
   commitmentCadence?: unknown;
   commitmentFrequency?: {
+    opportunitiesPerPeriod?: unknown;
     tapInsPerWeek?: unknown;
   };
 };
+
+export function clampOpportunitiesPerPeriod(value: unknown, fallback: number) {
+  return typeof value === 'number' && Number.isFinite(value)
+    ? Math.min(31, Math.max(1, Math.round(value)))
+    : fallback;
+}
 
 export function getTapInsPerWeek(circle: CommitmentInput | undefined) {
   const value = circle?.commitmentFrequency?.tapInsPerWeek;
@@ -20,7 +27,7 @@ export function getCommitmentCadence(
 ): CommitmentCadence {
   const value = circle?.commitmentCadence;
 
-  if (value === 'daily' || value === 'weekly') {
+  if (value === 'daily' || value === 'weekly' || value === 'monthly') {
     return value;
   }
 
@@ -28,7 +35,20 @@ export function getCommitmentCadence(
 }
 
 export function getRequiredTapIns(circle: CommitmentInput | undefined) {
-  return getCommitmentCadence(circle) === 'daily' ? 1 : getTapInsPerWeek(circle);
+  const cadence = getCommitmentCadence(circle);
+
+  if (cadence === 'daily') {
+    return 1;
+  }
+
+  if (cadence === 'monthly') {
+    return clampOpportunitiesPerPeriod(
+      circle?.commitmentFrequency?.opportunitiesPerPeriod,
+      getTapInsPerWeek(circle),
+    );
+  }
+
+  return getTapInsPerWeek(circle);
 }
 
 export function getStoredCommitmentFrequency(
@@ -40,8 +60,19 @@ export function getStoredCommitmentFrequency(
   }
 
   const value = frequency?.tapInsPerWeek;
+  const opportunitiesPerPeriod =
+    cadence === 'monthly'
+      ? clampOpportunitiesPerPeriod(
+          (frequency as {opportunitiesPerPeriod?: unknown} | undefined)
+            ?.opportunitiesPerPeriod,
+          typeof value === 'number' && Number.isFinite(value)
+            ? Math.min(7, Math.max(1, Math.round(value)))
+            : 4,
+        )
+      : undefined;
 
   return {
+    ...(opportunitiesPerPeriod ? {opportunitiesPerPeriod} : {}),
     tapInsPerWeek:
       typeof value === 'number' && Number.isFinite(value)
         ? Math.min(7, Math.max(1, Math.round(value)))
@@ -53,7 +84,7 @@ export function getInputCommitmentCadence(
   cadence: unknown,
   frequency: {tapInsPerWeek?: unknown} | undefined,
 ): CommitmentCadence {
-  if (cadence === 'daily' || cadence === 'weekly') {
+  if (cadence === 'daily' || cadence === 'weekly' || cadence === 'monthly') {
     return cadence;
   }
 

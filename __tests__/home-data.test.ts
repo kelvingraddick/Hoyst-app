@@ -7,7 +7,6 @@ import {
   getHomeGreetingContext,
   getHomeGreetingFallback,
   getHomeGreetingTimeWindow,
-  getHomePersonalProgressState,
   mapHomeCircleFromData,
   matchesHomeCircleFilter,
   shouldShowAuthenticatedHomeEmptyState,
@@ -416,7 +415,16 @@ describe('home data mapping', () => {
     expect(homeData.hasRealProgress).toBe(false);
     expect(homeData.membershipCount).toBe(0);
     expect(homeData.progressPercent).toBe(0);
+    expect(homeData.progressDays).toHaveLength(7);
     expect(homeData.progressDays.every(day => day.state !== 'done')).toBe(true);
+
+    expect(
+      createEmptyHomeData(
+        'UTC',
+        new Date('2026-05-07T12:00:00.000Z'),
+        28,
+      ).progressDays,
+    ).toHaveLength(28);
   });
 
   it('builds progress only from completed real date keys', () => {
@@ -430,6 +438,29 @@ describe('home data mapping', () => {
     expect(homeData.hasRealProgress).toBe(true);
     expect(homeData.personalStreakDays).toBe(2);
     expect(homeData.progressPercent).toBe(29);
+  });
+
+  it('supports a 28 day progress lookback without changing streak semantics', () => {
+    const homeData = buildHomeDataFromCircles({
+      circles: [],
+      completedDateKeys: new Set(['2026-05-07', '2026-05-06']),
+      lookbackDays: 28,
+      now: new Date('2026-05-07T12:00:00.000Z'),
+      timezone: 'UTC',
+    });
+
+    expect(homeData.progressDays).toHaveLength(28);
+    expect(homeData.progressDays[0]).toMatchObject({
+      dateKey: '2026-04-10',
+      label: '10',
+    });
+    expect(homeData.progressDays[27]).toMatchObject({
+      dateKey: '2026-05-07',
+      label: '07',
+      state: 'done',
+    });
+    expect(homeData.personalStreakDays).toBe(2);
+    expect(homeData.progressPercent).toBe(7);
   });
 
   it('counts pending memberships only in the all filter', () => {
@@ -578,135 +609,6 @@ describe('home data mapping', () => {
     ).toBe(false);
   });
 
-  it('builds signed-out and incomplete personal progress states', () => {
-    const homeData = createEmptyHomeData(
-      'UTC',
-      new Date('2026-05-07T12:00:00.000Z'),
-    );
-
-    expect(
-      getHomePersonalProgressState({
-        homeData,
-        isAuthenticatedHome: false,
-        isIncompleteProfile: false,
-      }),
-    ).toMatchObject({
-      action: 'auth',
-      icon: 'start',
-      label: 'Start making progress',
-      tone: 'accent',
-    });
-
-    expect(
-      getHomePersonalProgressState({
-        homeData,
-        isAuthenticatedHome: false,
-        isIncompleteProfile: true,
-      }),
-    ).toMatchObject({
-      action: 'finishProfile',
-      icon: 'profile',
-      label: 'Complete your profile',
-      tone: 'warning',
-    });
-  });
-
-  it('builds the no-progress personal progress state for authenticated Home', () => {
-    const homeData = createEmptyHomeData(
-      'UTC',
-      new Date('2026-05-07T12:00:00.000Z'),
-    );
-
-    expect(
-      getHomePersonalProgressState({
-        homeData,
-        isAuthenticatedHome: true,
-        isIncompleteProfile: false,
-      }),
-    ).toMatchObject({
-      action: 'chooseProgressStart',
-      icon: 'start',
-      label: 'No progress yet',
-      tone: 'accent',
-    });
-  });
-
-  it('builds the profile personal progress state when progress is active', () => {
-    const card = mapHomeCircleFromData({
-      circleData,
-      circleId: 'circle-needs-you',
-      membersData: [
-        {displayName: 'Kelvin North', status: 'active', uid: 'user-1'},
-        {displayName: 'Ava Stone', status: 'active', uid: 'user-2'},
-      ],
-      membershipData: {
-        displayName: 'Kelvin North',
-        role: 'member',
-        status: 'active',
-        uid: 'user-1',
-      },
-      todayCheckInStatuses: new Map([['user-2', 'done']]),
-    })!;
-    const homeData = buildHomeDataFromCircles({
-      circles: [card],
-      completedDateKeys: new Set(['2026-05-06']),
-      now: new Date('2026-05-07T12:00:00.000Z'),
-      timezone: 'UTC',
-    });
-
-    expect(
-      getHomePersonalProgressState({
-        homeData,
-        isAuthenticatedHome: true,
-        isIncompleteProfile: false,
-      }),
-    ).toMatchObject({
-      action: 'profile',
-      icon: 'progress',
-      label: '1-day streak',
-      tone: 'neutral',
-    });
-  });
-
-  it('builds the share personal progress state when today is complete', () => {
-    const card = mapHomeCircleFromData({
-      circleData,
-      circleId: 'circle-done',
-      membersData: [
-        {displayName: 'Kelvin North', status: 'active', uid: 'user-1'},
-        {displayName: 'Ava Stone', status: 'active', uid: 'user-2'},
-      ],
-      membershipData: {
-        displayName: 'Kelvin North',
-        role: 'member',
-        status: 'active',
-        uid: 'user-1',
-      },
-      todayCheckInStatuses: new Map([
-        ['user-1', 'done'],
-        ['user-2', 'done'],
-      ]),
-    })!;
-    const homeData = buildHomeDataFromCircles({
-      circles: [card],
-      completedDateKeys: new Set(['2026-05-07', '2026-05-06']),
-      now: new Date('2026-05-07T12:00:00.000Z'),
-      timezone: 'UTC',
-    });
-
-    expect(
-      getHomePersonalProgressState({
-        homeData,
-        isAuthenticatedHome: true,
-        isIncompleteProfile: false,
-      }),
-    ).toMatchObject({
-      action: 'shareProgress',
-      icon: 'share',
-      label: 'All covered right now',
-      tone: 'success',
-    });
-  });
 });
 
 describe('Home greeting fallback', () => {

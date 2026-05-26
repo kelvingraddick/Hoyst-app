@@ -21,12 +21,13 @@ const graceRuleSchema = zod_1.z.object({
     windowDays: zod_1.z.number().int().min(1).max(365),
 });
 const commitmentFrequencySchema = zod_1.z.object({
+    opportunitiesPerPeriod: zod_1.z.number().int().min(1).max(31).optional(),
     tapInsPerWeek: zod_1.z.number().int().min(1).max(7),
 });
 const starterCircleSchema = zod_1.z.object({
     category: zod_1.z.string().trim().min(1).max(40),
     commitment: zod_1.z.string().trim().min(1).max(160),
-    commitmentCadence: zod_1.z.enum(['daily', 'weekly']).optional(),
+    commitmentCadence: zod_1.z.enum(['daily', 'weekly', 'monthly']).optional(),
     commitmentFrequency: commitmentFrequencySchema,
     graceRules: zod_1.z
         .object({

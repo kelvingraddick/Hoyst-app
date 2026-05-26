@@ -29,7 +29,7 @@ function normalizeCommitmentCadence(
   value: unknown,
   tapInsPerWeek: number,
 ): CommitmentCadence {
-  if (value === 'daily' || value === 'weekly') {
+  if (value === 'daily' || value === 'weekly' || value === 'monthly') {
     return value;
   }
 
@@ -241,14 +241,32 @@ export function mapPublicCircleIndexSnapshot(
   const tapInsPerWeek = clampTapInsPerWeek(
     asNumber(data.commitmentFrequency?.tapInsPerWeek, 7),
   );
+  const opportunitiesPerPeriod = Math.min(
+    31,
+    Math.max(
+      1,
+      Math.round(
+        asNumber(
+          data.commitmentFrequency?.opportunitiesPerPeriod,
+          tapInsPerWeek,
+        ),
+      ),
+    ),
+  );
   const commitmentCadence = normalizeCommitmentCadence(
     data.commitmentCadence,
     tapInsPerWeek,
   );
   const completionRate = asNumber(data.completionRate, 0);
+  const periodLabel =
+    commitmentCadence === 'daily'
+      ? 'Today'
+      : commitmentCadence === 'monthly'
+      ? 'Month'
+      : 'Week';
   const progressLabel = asString(
     data.progressLabel,
-    `${commitmentCadence === 'daily' ? 'Today' : 'Week'} · ${completionRate}%`,
+    `${periodLabel} · ${completionRate}%`,
   );
 
   if (!title || !commitment) {
@@ -273,7 +291,10 @@ export function mapPublicCircleIndexSnapshot(
     completionRate,
     commitment,
     commitmentCadence,
-    commitmentFrequency: {tapInsPerWeek},
+    commitmentFrequency: {
+      ...(commitmentCadence === 'monthly' ? {opportunitiesPerPeriod} : {}),
+      tapInsPerWeek,
+    },
     id: snapshot.id,
     joinLabel:
       data.joinMode === 'open' ? 'Open seats' : 'Request to join',

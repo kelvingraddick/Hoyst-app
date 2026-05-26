@@ -1,7 +1,9 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.notificationModules = exports.markInboxEventRead = exports.updateNotificationSettings = exports.sendFinalTapInWarnings = exports.sendMiddayTapInReminders = exports.oneSignalAppId = exports.oneSignalRestApiKey = void 0;
+exports.notificationModules = exports.markInboxEventsRead = exports.markInboxEventRead = exports.updateNotificationSettings = exports.sendFinalTapInWarnings = exports.sendMiddayTapInReminders = exports.oneSignalAppId = exports.oneSignalRestApiKey = void 0;
 exports.getJoinRequestNotificationDedupeKey = getJoinRequestNotificationDedupeKey;
+exports.buildOneSignalPushPayload = buildOneSignalPushPayload;
+exports.markUnreadInboxEventsRead = markUnreadInboxEventsRead;
 exports.createInboxEvent = createInboxEvent;
 exports.notifyOwnerJoinRequest = notifyOwnerJoinRequest;
 exports.notifyOwnerNewJoin = notifyOwnerNewJoin;
@@ -39,6 +41,7 @@ const updateNotificationSettingsSchema = zod_1.z.object({
 const markInboxEventReadSchema = zod_1.z.object({
     eventId: zod_1.z.string().trim().min(1),
 });
+const inboxReadBatchLimit = 500;
 const defaultNotificationSettings = {
     circleActivity: true,
     productUpdates: true,
@@ -116,6 +119,31 @@ function getCommitmentWeekDateKeys(timezone, now = new Date()) {
         ].join('-');
     });
 }
+function getCommitmentMonthDateKeys(timezone, now = new Date()) {
+    const parts = new Intl.DateTimeFormat('en-US', {
+        day: '2-digit',
+        month: '2-digit',
+        timeZone: timezone,
+        year: 'numeric',
+    }).formatToParts(now);
+    const year = Number(parts.find(part => part.type === 'year')?.value ?? '1970');
+    const month = Number(parts.find(part => part.type === 'month')?.value ?? '1');
+    const dayCount = new Date(Date.UTC(year, month, 0)).getUTCDate();
+    return Array.from({ length: dayCount }, (_, index) => [
+        String(year),
+        String(month).padStart(2, '0'),
+        String(index + 1).padStart(2, '0'),
+    ].join('-'));
+}
+function getCommitmentPeriodDateKeys(commitmentCadence, timezone, now = new Date()) {
+    if (commitmentCadence === 'daily') {
+        return [getLocalDateTimeParts(now, timezone).dateKey];
+    }
+    if (commitmentCadence === 'monthly') {
+        return getCommitmentMonthDateKeys(timezone, now);
+    }
+    return getCommitmentWeekDateKeys(timezone, now);
+}
 function buildActor(data) {
     if (!data) {
         return undefined;
@@ -139,26 +167,68 @@ async function isUserPreferenceEnabled(uid, key) {
     const data = snapshot.data();
     return isPreferenceEnabled(data?.notificationSettings, key);
 }
+function buildOneSignalPushPayload({ appId, body, circleId, eventId, title, type, uid, }) {
+    return {
+        app_id: appId,
+        contents: { en: body },
+        data: {
+            ...(circleId ? { circleId } : {}),
+            eventId,
+            type,
+        },
+        headings: { en: title },
+        include_aliases: {
+            external_id: [uid],
+        },
+        ios_badgeCount: 1,
+        ios_badgeType: 'Increase',
+        target_channel: 'push',
+    };
+}
+async function markUnreadInboxEventsRead(uid) {
+    const snapshot = await firebase_1.db
+        .collection('userPrivate')
+        .doc(uid)
+        .collection('inbox')
+        .where('readAt', '==', null)
+        .get();
+    if (snapshot.empty) {
+        return 0;
+    }
+    let batch = firebase_1.db.batch();
+    let pendingWrites = 0;
+    let readCount = 0;
+    const readAt = firestore_1.FieldValue.serverTimestamp();
+    for (const doc of snapshot.docs) {
+        batch.set(doc.ref, { readAt }, { merge: true });
+        pendingWrites += 1;
+        readCount += 1;
+        if (pendingWrites === inboxReadBatchLimit) {
+            await batch.commit();
+            batch = firebase_1.db.batch();
+            pendingWrites = 0;
+        }
+    }
+    if (pendingWrites > 0) {
+        await batch.commit();
+    }
+    return readCount;
+}
 async function sendPushToUser({ body, circleId, eventId, title, type, uid, }) {
     const { appId, restApiKey } = getOneSignalConfig();
     if (!appId || !restApiKey) {
         return { status: 'skipped' };
     }
     const response = await fetch('https://api.onesignal.com/notifications', {
-        body: JSON.stringify({
-            app_id: appId,
-            contents: { en: body },
-            data: {
-                ...(circleId ? { circleId } : {}),
-                eventId,
-                type,
-            },
-            headings: { en: title },
-            include_aliases: {
-                external_id: [uid],
-            },
-            target_channel: 'push',
-        }),
+        body: JSON.stringify(buildOneSignalPushPayload({
+            appId,
+            body,
+            circleId,
+            eventId,
+            title,
+            type,
+            uid,
+        })),
         headers: {
             Authorization: `Key ${restApiKey}`,
             'Content-Type': 'application/json',
@@ -299,7 +369,11 @@ async function notifyNudge({ actor, circleId, circleTitle, dateKey, targetUid, }
     });
 }
 function getCircleAtRiskNotificationBody({ circleTitle, commitmentCadence, remainingCount, }) {
-    const periodCopy = commitmentCadence === 'daily' ? 'today' : 'this week';
+    const periodCopy = commitmentCadence === 'daily'
+        ? 'today'
+        : commitmentCadence === 'monthly'
+            ? 'this month'
+            : 'this week';
     return `${circleTitle} needs ${remainingCount} more Tap In${remainingCount === 1 ? '' : 's'} ${periodCopy}.`;
 }
 async function notifyCircleAtRisk({ commitmentCadence, circleId, circleTitle, periodKey, remainingCount, targetUid, }) {
@@ -349,13 +423,13 @@ async function sendTapInReminders(kind) {
         const circle = circleSnapshot.data();
         const timezone = asString(circle.timezone, 'UTC');
         const local = getLocalDateTimeParts(now, timezone);
-        const weekDateKeys = getCommitmentWeekDateKeys(timezone, now);
         const commitmentCadence = (0, commitments_1.getCommitmentCadence)(circle);
+        const periodDateKeys = getCommitmentPeriodDateKeys(commitmentCadence, timezone, now);
         const requiredTapIns = (0, commitments_1.getRequiredTapIns)(circle);
         if (local.hour !== targetHour) {
             continue;
         }
-        const [memberSnapshots, todayCheckInSnapshots, ...weeklyCheckInSnapshots] = await Promise.all([
+        const [memberSnapshots, todayCheckInSnapshots, ...periodCheckInSnapshots] = await Promise.all([
             circleSnapshot.ref
                 .collection('members')
                 .where('status', '==', 'active')
@@ -365,7 +439,7 @@ async function sendTapInReminders(kind) {
                 .doc(local.dateKey)
                 .collection('checkIns')
                 .get(),
-            ...weekDateKeys.map(dateKey => circleSnapshot.ref
+            ...periodDateKeys.map(dateKey => circleSnapshot.ref
                 .collection('days')
                 .doc(dateKey)
                 .collection('checkIns')
@@ -378,7 +452,7 @@ async function sendTapInReminders(kind) {
         const coveredCounts = new Map();
         const scoringSnapshots = commitmentCadence === 'daily'
             ? [todayCheckInSnapshots]
-            : weeklyCheckInSnapshots;
+            : periodCheckInSnapshots;
         scoringSnapshots.forEach(snapshot => {
             snapshot.docs.forEach(doc => {
                 if (doc.data().status === 'done' || doc.data().status === 'skip') {
@@ -464,8 +538,16 @@ exports.markInboxEventRead = (0, https_1.onCall)(async (request) => {
         .set({ readAt: firestore_1.FieldValue.serverTimestamp() }, { merge: true });
     return { read: true };
 });
+exports.markInboxEventsRead = (0, https_1.onCall)(async (request) => {
+    if (!request.auth?.uid) {
+        throw new https_1.HttpsError('unauthenticated', 'Sign in is required.');
+    }
+    const read = await markUnreadInboxEventsRead(request.auth.uid);
+    return { read };
+});
 exports.notificationModules = {
     createInboxEvent: 'active',
+    markInboxEventsRead: 'active',
     sendFinalTapInWarnings: 'active',
     sendMiddayTapInReminders: 'active',
 };

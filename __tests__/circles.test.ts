@@ -1,6 +1,10 @@
 jest.mock('@react-native-firebase/firestore', () => jest.fn());
 
 import {mapPublicCircleIndexSnapshot} from '../src/features/circles/services/public-circle-service';
+import {
+  filterPublicCircles,
+  getPublicCircleCategories,
+} from '../src/features/circles/services/circles-screen-selectors';
 import {getCircleDetail} from '../src/features/circles/mockData';
 import {
   buildCreateCirclePayload,
@@ -16,6 +20,26 @@ import {
   createInitialStarterCircleDraft,
   getStarterCircleCategory,
 } from '../src/features/auth/services/onboarding-circle';
+import type {ExploreCircle} from '../src/types/models';
+
+function publicCircle(overrides: Partial<ExploreCircle>): ExploreCircle {
+  return {
+    category: 'Fitness',
+    commitment: 'Move for 30 minutes',
+    commitmentCadence: 'daily',
+    commitmentFrequency: {tapInsPerWeek: 7},
+    completionRate: 86,
+    id: 'circle-1',
+    joinLabel: 'Open seats',
+    matchCopy: 'A steady group for showing up.',
+    maxSize: 8,
+    memberCount: 4,
+    members: [],
+    streakLabel: 'Daily rhythm',
+    title: 'Morning Movers',
+    ...overrides,
+  };
+}
 
 describe('public circle discovery mapping', () => {
   it('maps publicCircleIndex documents into explore circles', () => {
@@ -131,6 +155,42 @@ describe('public circle discovery mapping', () => {
     };
 
     expect(mapPublicCircleIndexSnapshot(snapshot as never)).toBeUndefined();
+  });
+});
+
+describe('Circles screen selectors', () => {
+  it('uses public categories as circle type filters', () => {
+    expect(
+      getPublicCircleCategories([
+        publicCircle({category: 'Fitness'}),
+        publicCircle({category: 'Deep Work', id: 'circle-2'}),
+        publicCircle({category: 'Fitness', id: 'circle-3'}),
+      ]),
+    ).toEqual(['All', 'Fitness', 'Deep Work']);
+  });
+
+  it('filters public circles by category and search text', () => {
+    const circles = [
+      publicCircle({category: 'Fitness', id: 'fitness', title: 'Morning Movers'}),
+      publicCircle({
+        category: 'Deep Work',
+        commitment: 'Ship one focus block',
+        id: 'focus',
+        matchCopy: 'Creators who protect the first hour.',
+        title: 'Maker Mornings',
+      }),
+      publicCircle({
+        category: 'Wellness',
+        id: 'wellness',
+        title: 'Evening Reset',
+      }),
+    ];
+
+    expect(filterPublicCircles(circles, 'Deep Work', '')).toEqual([circles[1]]);
+    expect(filterPublicCircles(circles, 'All', 'first hour')).toEqual([
+      circles[1],
+    ]);
+    expect(filterPublicCircles(circles, 'Fitness', 'maker')).toEqual([]);
   });
 });
 

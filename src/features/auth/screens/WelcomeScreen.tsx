@@ -19,6 +19,7 @@ import {
   Apple,
   ArrowLeft,
   BellRing,
+  CalendarCheck,
   CalendarDays,
   CalendarRange,
   Check,
@@ -78,6 +79,7 @@ import {TimezonePicker} from '../components/TimezonePicker';
 import {normalizeHandle, validateHandle} from '../services/profile-validation';
 import {isStarterCircleDraftReady} from '../services/onboarding-circle';
 import {
+  defaultMonthlyCommitmentFrequency,
   defaultWeeklyCommitmentFrequency,
   normalizeCommitmentCadence,
   normalizeCommitmentFrequency,
@@ -182,19 +184,19 @@ const stepIcons: Record<Exclude<OnboardingStep, 'welcome'>, LucideIcon> = {
 const circlePrivacyOptions: OnboardingOption<CirclePrivacyMode>[] = [
   {
     accent: 'green',
-    description: 'Discoverable in Explore with your chosen join rule.',
+    description: 'Discoverable in Circles with your chosen join rule.',
     id: 'public',
     label: 'Public',
   },
   {
     accent: 'blue',
-    description: 'Hidden from Explore and joinable only with your invite link.',
+    description: 'Hidden from Circles and joinable only with your invite link.',
     id: 'link_only',
     label: 'Link-only',
   },
   {
     accent: 'purple',
-    description: 'Hidden from Explore with invite-only requests for approval.',
+    description: 'Hidden from Circles with invite-only requests for approval.',
     id: 'private',
     label: 'Private',
   },
@@ -230,10 +232,17 @@ const commitmentCadenceOptions: OnboardingOption<CommitmentCadence>[] = [
     id: 'weekly',
     label: 'Weekly',
   },
+  {
+    accent: 'orange',
+    description: 'Each member covers a set number of scheduled days each month.',
+    id: 'monthly',
+    label: 'Monthly',
+  },
 ];
 
 const commitmentCadenceIcons: Record<CommitmentCadence, LucideIcon> = {
   daily: CalendarDays,
+  monthly: CalendarCheck,
   weekly: CalendarRange,
 };
 
@@ -266,9 +275,18 @@ function getStarterCircleCadenceLabel(draft: CreateCircleDraft) {
     commitmentCadence,
   );
 
-  return commitmentCadence === 'daily'
-    ? 'Daily'
-    : `Weekly: ${commitmentFrequency.tapInsPerWeek} Tap Ins / week`;
+  if (commitmentCadence === 'daily') {
+    return 'Daily';
+  }
+
+  if (commitmentCadence === 'monthly') {
+    return `Monthly: ${
+      commitmentFrequency.opportunitiesPerPeriod ??
+      commitmentFrequency.tapInsPerWeek
+    } Tap Ins / month`;
+  }
+
+  return `Weekly: ${commitmentFrequency.tapInsPerWeek} Tap Ins / week`;
 }
 
 function useAccentColor(accent: OnboardingOption<string>['accent']) {
@@ -1042,6 +1060,8 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
       'commitmentFrequency',
       commitmentCadence === 'daily'
         ? {tapInsPerWeek: 7}
+        : commitmentCadence === 'monthly'
+        ? defaultMonthlyCommitmentFrequency
         : starterCircleCommitmentFrequency.tapInsPerWeek >= 7
         ? defaultWeeklyCommitmentFrequency
         : starterCircleCommitmentFrequency,
@@ -1053,6 +1073,20 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
     setStarterCircleField(
       'commitmentFrequency',
       normalizeCommitmentFrequency({tapInsPerWeek}, 'weekly'),
+    );
+  };
+
+  const setStarterCircleMonthlyTapIns = (opportunitiesPerPeriod: number) => {
+    setStarterCircleField('commitmentCadence', 'monthly');
+    setStarterCircleField(
+      'commitmentFrequency',
+      normalizeCommitmentFrequency(
+        {
+          opportunitiesPerPeriod,
+          tapInsPerWeek: Math.min(7, opportunitiesPerPeriod),
+        },
+        'monthly',
+      ),
     );
   };
 
@@ -1357,6 +1391,23 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
                   Sunday in the Circle timezone.
                 </HoystText>
               </>
+            ) : starterCircleCommitmentCadence === 'monthly' ? (
+              <>
+                <NumericStepper
+                  label="Tap Ins per month"
+                  max={31}
+                  min={1}
+                  onChange={setStarterCircleMonthlyTapIns}
+                  value={
+                    starterCircleCommitmentFrequency.opportunitiesPerPeriod ??
+                    starterCircleCommitmentFrequency.tapInsPerWeek
+                  }
+                />
+                <HoystText tone="muted">
+                  Hoyst spaces these opportunities across the month so future
+                  slots stay upcoming.
+                </HoystText>
+              </>
             ) : (
               <HoystText tone="muted">
                 Members need one Tap In or skip each day. Circle Progression
@@ -1395,7 +1446,7 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
               detail={getOptionLabel(
                 focusAreaOptions,
                 focusArea,
-                'Explore momentum circles',
+                'Discover momentum circles',
               )}
               icon={Target}
               label="Primary focus area"
@@ -1414,7 +1465,11 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
             />
             <PreviewRow
               accent={
-                starterCircleCommitmentCadence === 'daily' ? 'green' : 'blue'
+                starterCircleCommitmentCadence === 'daily'
+                  ? 'green'
+                  : starterCircleCommitmentCadence === 'monthly'
+                  ? 'orange'
+                  : 'blue'
               }
               detail={starterCircleCadenceLabel}
               icon={StarterCircleCadenceIcon}

@@ -1,6 +1,15 @@
 import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
-import {Alert, Animated, Pressable, Share, StyleSheet, View} from 'react-native';
-import {Bell, ChevronRight, Medal} from 'lucide-react-native';
+import {
+  Alert,
+  Animated,
+  Pressable,
+  Share,
+  StyleSheet,
+  type StyleProp,
+  View,
+  type ViewStyle,
+} from 'react-native';
+import {Bell, ChevronRight} from 'lucide-react-native';
 import type {BottomTabNavigationProp} from '@react-navigation/bottom-tabs';
 import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import {useFocusEffect, useNavigation} from '@react-navigation/native';
@@ -12,8 +21,13 @@ import {HoystChip} from '../../../design/components/HoystChip';
 import {LayeredAvatar} from '../../../design/components/LayeredAvatar';
 import {HoystScreen} from '../../../design/components/HoystScreen';
 import {HoystText} from '../../../design/components/HoystText';
+import {MomentumStageIcon} from '../../../design/components/MomentumStageIcon';
 import {TapInRingMark} from '../../../design/components/TapInRingMark';
-import {TodayCircleCard} from '../../../design/components/TodayCircleCard';
+import {
+  TodayCircleCard,
+  getTodayCircleCardActionVariant,
+} from '../../../design/components/TodayCircleCard';
+import {brandColors} from '../../../design/tokens/colors';
 import {actionMotion, actionShadow} from '../../../design/tokens/actions';
 import {radius} from '../../../design/tokens/radius';
 import {useHoystTheme} from '../../../design/theme/useHoystTheme';
@@ -23,7 +37,6 @@ import {
   getHomeFilterCounts,
   getHomeGreetingContext,
   getHomeGreetingFallback,
-  getHomePersonalProgressState,
   matchesHomeCircleFilter,
   shouldShowAuthenticatedHomeEmptyState,
   shouldShowHomeCreateCircleButton,
@@ -31,6 +44,7 @@ import {
   sortHomeCircles,
   subscribeToHomeData,
   type HomeData,
+  type HomeProgressCell,
 } from '../services/home-data-service';
 import {
   buildHomeGreetingCacheKey,
@@ -51,11 +65,21 @@ import {navigateToAuthWelcome} from '../../../navigation/auth-modal-navigation';
 import type {
   CircleManagementCard,
   CircleManagementFilter,
+  MomentumSummary,
 } from '../../../types/models';
 import {useOnboardingStore} from '../../../store/onboarding-store';
 import {useUserProfileStore} from '../../../store/profile-store';
 import {useSessionStore} from '../../../store/session-store';
 import {nudgeCircleMembers} from '../../circles/services/circle-service';
+import {
+  buildMomentumSummaryFromHomeData,
+  formatOpportunityCount,
+  subscribeToMomentumSummary,
+} from '../../momentum/services/momentum-service';
+import {
+  markAllInboxEventsRead,
+  subscribeToInboxUnreadCount,
+} from '../../settings/services/notification-settings-service';
 
 const filterLabels: Record<CircleManagementFilter, string> = {
   all: 'All',
@@ -82,6 +106,120 @@ type HomeGreetingState = {
   source: 'fallback' | 'gemini';
 };
 
+function MomentumBars({percentage}: {percentage: number}) {
+  const theme = useHoystTheme();
+  const barHeights = [20, 27, 34, 41, 48, 55];
+  const clampedPercentage = Math.max(0, Math.min(100, percentage));
+  const activeBarCount =
+    clampedPercentage <= 0
+      ? 0
+      : Math.ceil((clampedPercentage / 100) * barHeights.length);
+
+  return (
+    <View accessibilityElementsHidden style={styles.momentumBars}>
+      {barHeights.map((height, index) => (
+        <View
+          key={height}
+          style={[
+            styles.momentumBar,
+            {
+              backgroundColor:
+                index < activeBarCount ? theme.success : theme.surfaceMuted,
+              height,
+            },
+          ]}
+        />
+      ))}
+    </View>
+  );
+}
+
+function getStreakCalendarDayStyle(
+  theme: ReturnType<typeof useHoystTheme>,
+  state: HomeProgressCell['state'],
+) {
+  if (state === 'done') {
+    return {
+      cell: {
+        backgroundColor: `${theme.success}14`,
+        borderColor: `${theme.successForeground}55`,
+      },
+      text: theme.successForeground,
+    };
+  }
+
+  if (state === 'missed') {
+    return {
+      cell: {
+        backgroundColor: `${theme.danger}14`,
+        borderColor: `${theme.dangerForeground}55`,
+      },
+      text: theme.dangerForeground,
+    };
+  }
+
+  if (state === 'today') {
+    return {
+      cell: {
+        backgroundColor: `${theme.accentSecondary}16`,
+        borderColor: `${theme.accentSecondaryForeground}80`,
+        borderStyle: 'dashed' as const,
+      },
+      text: theme.accentSecondaryForeground,
+    };
+  }
+
+  return {
+    cell: {
+      backgroundColor: theme.surfaceSoft,
+      borderColor: theme.border,
+    },
+    text: theme.textMuted,
+  };
+}
+
+function HomeStreakCalendar({
+  days,
+  streakDays,
+}: {
+  days: HomeProgressCell[];
+  streakDays: number;
+}) {
+  const theme = useHoystTheme();
+  const streakLabel = streakDays > 0 ? `${streakDays}d streak` : 'Start';
+
+  return (
+    <GlassPanel padding="compact" style={styles.streakCalendarPanel}>
+      <View style={styles.streakCalendarHeader}>
+        <HoystText tone="muted" variant="bodyStrong">
+          Last 7 days
+        </HoystText>
+        <HoystText style={styles.streakCalendarBadge} tone="muted">
+          {streakLabel}
+        </HoystText>
+      </View>
+      <View style={styles.streakCalendarGrid}>
+        {days.map(day => {
+          const stateStyle = getStreakCalendarDayStyle(theme, day.state);
+
+          return (
+            <View
+              accessibilityLabel={`${day.label}: ${day.state}`}
+              key={day.dateKey}
+              style={[styles.streakCalendarDay, stateStyle.cell]}>
+              <HoystText
+                style={[styles.streakCalendarDayText, {color: stateStyle.text}]}
+                variant="bodyStrong">
+                {day.label}
+              </HoystText>
+            </View>
+          );
+        })}
+      </View>
+    </GlassPanel>
+  );
+}
+
 function canInvite(circle: CircleManagementCard) {
   return Boolean(
     circle.inviteUrl &&
@@ -92,9 +230,11 @@ function canInvite(circle: CircleManagementCard) {
 function HeaderAction({
   children,
   onPress,
+  style,
 }: {
   children: React.ReactNode;
   onPress?: () => void;
+  style?: StyleProp<ViewStyle>;
 }) {
   const theme = useHoystTheme();
 
@@ -103,6 +243,7 @@ function HeaderAction({
       onPress={onPress}
       style={({pressed}) => [
         styles.headerAction,
+        style,
         {
           backgroundColor: theme.surfaceSoft,
           borderColor: theme.border,
@@ -110,6 +251,62 @@ function HeaderAction({
         },
       ]}>
       {children}
+    </Pressable>
+  );
+}
+
+function getInboxBadgeText(unreadCount: number) {
+  if (unreadCount <= 0) {
+    return undefined;
+  }
+
+  return String(Math.min(unreadCount, 9));
+}
+
+function getInboxAccessibilityLabel(unreadCount: number) {
+  if (unreadCount <= 0) {
+    return 'Open Inbox';
+  }
+
+  const countLabel = unreadCount > 9 ? '9 or more' : String(unreadCount);
+  const updateLabel = unreadCount === 1 ? 'update' : 'updates';
+
+  return `Open Inbox, ${countLabel} unread ${updateLabel}`;
+}
+
+function InboxHeaderAction({
+  onPress,
+  unreadCount,
+}: {
+  onPress: () => void;
+  unreadCount: number;
+}) {
+  const badgeText = getInboxBadgeText(unreadCount);
+
+  return (
+    <Pressable
+      accessibilityLabel={getInboxAccessibilityLabel(unreadCount)}
+      accessibilityRole="button"
+      hitSlop={8}
+      onPress={onPress}
+      style={({pressed}) => [
+        styles.inboxHeaderAction,
+        {
+          opacity: pressed ? actionMotion.pressedOpacity : 1,
+          transform: [{scale: pressed ? actionMotion.pressedScale : 1}],
+        },
+      ]}>
+      <Bell color={brandColors.charcoal} size={25} strokeWidth={2.2} />
+      {badgeText ? (
+        <View style={styles.inboxBadge}>
+          <HoystText
+            allowFontScaling={false}
+            numberOfLines={1}
+            style={styles.inboxBadgeText}>
+            {badgeText}
+          </HoystText>
+        </View>
+      ) : null}
     </Pressable>
   );
 }
@@ -191,14 +388,17 @@ export function HomeScreen(): React.JSX.Element {
   );
   const [isLoadingHomeData, setIsLoadingHomeData] = useState(false);
   const [hasHomeDataError, setHasHomeDataError] = useState(false);
+  const [unreadInboxCount, setUnreadInboxCount] = useState(0);
   const [nudgedCircleIds, setNudgedCircleIds] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
-  const [nudgingCircleIds, setNudgingCircleIds] = useState<
-    ReadonlySet<string>
-  >(() => new Set());
+  const [nudgingCircleIds, setNudgingCircleIds] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
   const [homeGreetingState, setHomeGreetingState] =
     useState<HomeGreetingState>();
+  const [remoteMomentumSummary, setRemoteMomentumSummary] =
+    useState<MomentumSummary>();
   const profile = useUserProfileStore(state => state.profile);
   const status = useSessionStore(state => state.status);
   const user = useSessionStore(state => state.user);
@@ -246,18 +446,64 @@ export function HomeScreen(): React.JSX.Element {
     }, [isAuthenticatedHome, timezone, user?.uid]),
   );
 
-  const filterCounts = useMemo(
-    () => getHomeFilterCounts(homeData.circles),
-    [homeData.circles],
-  );
-  const displayedCircles = useMemo(
+  useEffect(() => {
+    if (!isAuthenticatedHome || !user?.uid) {
+      setRemoteMomentumSummary(undefined);
+      return undefined;
+    }
+
+    return subscribeToMomentumSummary({
+      onError: () => undefined,
+      onSummary: setRemoteMomentumSummary,
+      uid: user.uid,
+    });
+  }, [isAuthenticatedHome, user?.uid]);
+
+  useEffect(() => {
+    if (!isAuthenticatedHome || !user?.uid) {
+      setUnreadInboxCount(0);
+      return undefined;
+    }
+
+    return subscribeToInboxUnreadCount({
+      onCount: setUnreadInboxCount,
+      onError: () => setUnreadInboxCount(0),
+      uid: user.uid,
+    });
+  }, [isAuthenticatedHome, user?.uid]);
+
+  const todayActionCircles = useMemo(
     () =>
       sortHomeCircles(
         homeData.circles.filter(circle =>
+          ['check_in', 'nudge', 'share'].includes(
+            getTodayCircleCardActionVariant(circle),
+          ),
+        ),
+      ),
+    [homeData.circles],
+  );
+  const activeSectionCircles = useMemo(
+    () =>
+      sortHomeCircles(
+        homeData.circles.filter(
+          circle => getTodayCircleCardActionVariant(circle) === 'view',
+        ),
+      ),
+    [homeData.circles],
+  );
+  const filterCounts = useMemo(
+    () => getHomeFilterCounts(activeSectionCircles),
+    [activeSectionCircles],
+  );
+  const displayedActiveCircles = useMemo(
+    () =>
+      sortHomeCircles(
+        activeSectionCircles.filter(circle =>
           matchesHomeCircleFilter(circle, activeFilter),
         ),
       ),
-    [activeFilter, homeData.circles],
+    [activeFilter, activeSectionCircles],
   );
   const selectedFilterChipStyles = useMemo(
     () => ({
@@ -329,15 +575,8 @@ export function HomeScreen(): React.JSX.Element {
     (isAuthenticatedHome ? undefined : homeGreetingFallback);
   const initials = getProfileInitials(profile);
   const avatarSource = getProfileAvatarSource(profile, user?.photoURL);
-  const progressLabel =
-    isAuthenticatedHome && homeData.hasRealProgress
-      ? `${homeData.progressPercent}%`
-      : 'Start';
-  const personalProgressState = getHomePersonalProgressState({
-    homeData,
-    isAuthenticatedHome,
-    isIncompleteProfile,
-  });
+  const momentumSummary =
+    remoteMomentumSummary ?? buildMomentumSummaryFromHomeData(homeData);
   const showAccountPrompt = !isAuthenticatedHome;
   const showAuthenticatedEmptyState = shouldShowAuthenticatedHomeEmptyState({
     circleCount: homeData.circles.length,
@@ -500,9 +739,7 @@ export function HomeScreen(): React.JSX.Element {
         Alert.alert(
           'Nudge sent',
           result.nudged > 0
-            ? `${result.nudged} member${
-                result.nudged === 1 ? '' : 's'
-              } nudged.`
+            ? `${result.nudged} member${result.nudged === 1 ? '' : 's'} nudged.`
             : 'Everyone is covered right now.',
         );
       })
@@ -555,49 +792,14 @@ export function HomeScreen(): React.JSX.Element {
     );
   };
 
-  const handlePersonalProgressPress = () => {
-    if (personalProgressState.action === 'auth') {
-      openAccountAuth();
-      return;
+  const openInbox = () => {
+    setUnreadInboxCount(0);
+
+    if (isAuthenticatedHome && user?.uid) {
+      markAllInboxEventsRead().catch(() => undefined);
     }
 
-    if (personalProgressState.action === 'finishProfile') {
-      setOnboardingStep('finishProfile');
-      navigateToAuthWelcome(rootNavigation);
-      return;
-    }
-
-    if (personalProgressState.action === 'chooseProgressStart') {
-      Alert.alert(
-        'Start Progression',
-        'Choose how you want to make your first Tap In count.',
-        [
-          {
-            text: 'Explore circles',
-            onPress: () => navigation.navigate('Explore'),
-          },
-          {
-            text: 'Create Circle',
-            onPress: openCreateCircle,
-          },
-          {
-            style: 'cancel',
-            text: 'Cancel',
-          },
-        ],
-      );
-      return;
-    }
-
-    if (personalProgressState.action === 'shareProgress') {
-      Share.share({
-        message: "I finished today's Hoyst Tap Ins. Your move.",
-        title: 'Hoyst Progression',
-      }).catch(() => undefined);
-      return;
-    }
-
-    navigation.navigate('Profile');
+    rootNavigation?.navigate('Inbox');
   };
 
   return (
@@ -605,18 +807,17 @@ export function HomeScreen(): React.JSX.Element {
       <View style={styles.topBar}>
         <BrandMark isDark={theme.isDark} kind="logo" style={styles.logo} />
         <View style={styles.topActions}>
-          <HeaderAction onPress={() => navigation.navigate('Inbox')}>
-            <Bell
-              color={theme.accentSecondaryForeground}
-              size={22}
-              strokeWidth={2.2}
-            />
-          </HeaderAction>
-          <HeaderAction onPress={() => navigation.navigate('Profile')}>
+          <InboxHeaderAction
+            onPress={openInbox}
+            unreadCount={unreadInboxCount}
+          />
+          <HeaderAction
+            onPress={() => navigation.navigate('Profile')}
+            style={styles.avatarHeaderAction}>
             <LayeredAvatar
               initials={initials}
               imageSource={avatarSource}
-              size={32}
+              size={38}
               state="done"
             />
           </HeaderAction>
@@ -656,108 +857,75 @@ export function HomeScreen(): React.JSX.Element {
         </HoystText>
       </View>
 
-      <GlassPanel style={styles.progressPanel}>
-        <View style={styles.progressHeader}>
-          <HoystText style={styles.progressTitle} tone="muted" variant="label">
-            Last 7 Days
-          </HoystText>
-          <HoystText style={styles.progressPercent} variant="bodyStrong">
-            {progressLabel}
-          </HoystText>
-        </View>
-        <View style={styles.progressGrid}>
-          {homeData.progressDays.map(day => {
-            const isDone = day.state === 'done';
-            const isMissed = day.state === 'missed';
-            const isToday = day.state === 'today';
-            const progressCellStateStyle = isDone
-              ? {
-                  backgroundColor: `${theme.success}14`,
-                  borderColor: `${theme.successForeground}55`,
-                }
-              : isMissed
-              ? {
-                  backgroundColor: `${theme.danger}14`,
-                  borderColor: `${theme.dangerForeground}55`,
-                }
-              : isToday
-              ? {
-                  backgroundColor: `${theme.accentSecondary}16`,
-                  borderColor: `${theme.accentSecondaryForeground}80`,
-                  borderStyle: 'dashed' as const,
-                }
-              : undefined;
-            const progressCellThemeStyle = progressCellStateStyle
-              ? undefined
-              : {
-                  backgroundColor: theme.surfaceStrong,
-                  borderColor: theme.border,
-                };
-
-            return (
-              <View
-                key={day.label}
-                style={[
-                  styles.progressCell,
-                  progressCellStateStyle,
-                  progressCellThemeStyle,
-                ]}>
-                <HoystText
-                  style={{
-                    color: isDone
-                      ? theme.successForeground
-                      : isMissed
-                      ? theme.dangerForeground
-                      : isToday
-                      ? theme.accentSecondaryForeground
-                      : theme.textMuted,
-                  }}
-                  variant="bodyStrong">
-                  {day.label}
-                </HoystText>
-              </View>
-            );
-          })}
-        </View>
-      </GlassPanel>
-
-      <Pressable
-        accessibilityLabel={`${personalProgressState.label}. ${personalProgressState.detail}`}
-        accessibilityRole="button"
-        onPress={handlePersonalProgressPress}
-        style={({pressed}) => [
-          styles.streakSummaryPressable,
-          {
-            opacity: pressed ? actionMotion.pressedOpacity : 1,
-            transform: [{scale: pressed ? actionMotion.pressedScale : 1}],
-          },
-        ]}>
-        <View
-          style={[
-            styles.streakSummary,
+      <View style={styles.momentumStack}>
+        <Pressable
+        accessibilityLabel={`Your momentum. ${momentumSummary.percentage}%. ${momentumSummary.label}. ${formatOpportunityCount(
+          momentumSummary,
+        )}`}
+          accessibilityRole="button"
+          onPress={() => navigation.navigate('Momentum')}
+          style={({pressed}) => [
+            styles.momentumPanelPressable,
             {
-              backgroundColor: theme.surfaceStrong,
-              borderColor: theme.border,
+              opacity: pressed ? actionMotion.pressedOpacity : 1,
+              transform: [{scale: pressed ? actionMotion.pressedScale : 1}],
             },
           ]}>
-          <View style={[styles.streakIconWrap, styles.streakIconTint]}>
-            <Medal
-              color={theme.warningForeground}
-              size={20}
-              strokeWidth={2.1}
-            />
-          </View>
-          <View style={styles.streakCopy}>
-            <HoystText style={styles.streakEyebrow} tone="muted" variant="tiny">
-              Personal Progression
-            </HoystText>
-            <HoystText style={styles.streakValue}>
-              {personalProgressState.label}
-            </HoystText>
-          </View>
-          <ChevronRight color={theme.textSubtle} size={20} strokeWidth={2.2} />
-        </View>
-      </Pressable>
+          <GlassPanel padding="compact" style={styles.momentumPanel}>
+            <View style={styles.momentumPanelContent}>
+              <View style={styles.momentumStageIconWrap}>
+                <MomentumStageIcon status={momentumSummary.status} size={42} />
+              </View>
+              <View style={styles.momentumCopy}>
+                <HoystText
+                  numberOfLines={1}
+                  style={styles.momentumTitleText}
+                  tone="muted">
+                  Your momentum
+                </HoystText>
+                <View style={styles.momentumValueRow}>
+                  <HoystText style={styles.momentumPercent}>
+                    {momentumSummary.percentage}%
+                  </HoystText>
+                  <View
+                    style={[
+                      styles.momentumStatusBadge,
+                      {backgroundColor: `${theme.success}14`},
+                    ]}>
+                    <HoystText
+                      numberOfLines={1}
+                      style={[
+                        styles.momentumStatusText,
+                        {color: theme.successForeground},
+                      ]}>
+                      {momentumSummary.label.toUpperCase()}
+                    </HoystText>
+                  </View>
+                </View>
+                <HoystText
+                  numberOfLines={2}
+                  style={styles.momentumMetaText}
+                  tone="muted">
+                  {formatOpportunityCount(momentumSummary)}
+                </HoystText>
+              </View>
+              <View style={styles.momentumTrendWrap}>
+                <MomentumBars percentage={momentumSummary.percentage} />
+                <ChevronRight
+                  color={theme.textSubtle}
+                  size={16}
+                  strokeWidth={2.4}
+                />
+              </View>
+            </View>
+          </GlassPanel>
+        </Pressable>
+
+        <HomeStreakCalendar
+          days={homeData.progressDays}
+          streakDays={homeData.personalStreakDays}
+        />
+      </View>
 
       {showAccountPrompt ? (
         <GlassPanel style={styles.emptyPanel}>
@@ -779,8 +947,8 @@ export function HomeScreen(): React.JSX.Element {
               onPress={openAccountAuth}
             />
             <HoystButton
-              label="Explore circles"
-              onPress={() => navigation.navigate('Explore')}
+              label="Find circles"
+              onPress={() => navigation.navigate('Circles')}
               variant="outline"
             />
           </View>
@@ -793,40 +961,22 @@ export function HomeScreen(): React.JSX.Element {
             <HoystText variant="title">Your circles</HoystText>
             <HoystText tone="muted">
               {showAuthenticatedEmptyState
-                ? 'Create a Circle or find one in Explore to begin tracking real Tap Ins.'
+                ? 'Create a Circle or find one in Circles to begin tracking real Tap Ins.'
                 : 'Manage your Circles, invite your people, and handle what needs you right now.'}
             </HoystText>
           </View>
 
-          {homeData.circles.length > 0 ? (
-            <View style={styles.filterRow}>
-              {filters.map(filter => {
-                const isSelected = activeFilter === filter;
-                return (
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityState={{selected: isSelected}}
-                    key={filter}
-                    onPress={() => setActiveFilter(filter)}
-                    style={({pressed}) => [
-                      styles.filterChipButton,
-                      {opacity: pressed ? 0.88 : 1},
-                    ]}>
-                    <HoystChip
-                      label={`${filterLabels[filter]} ${filterCounts[filter]}`}
-                      style={[
-                        styles.filterChip,
-                        isSelected
-                          ? selectedFilterChipStyles[filter]
-                          : styles.filterChipInactive,
-                      ]}
-                      tone={filterTones[filter]}
-                    />
-                  </Pressable>
-                );
-              })}
-            </View>
-          ) : null}
+          {todayActionCircles.map(circle => (
+            <TodayCircleCard
+              card={circle}
+              isNudged={nudgedCircleIds.has(circle.id)}
+              isNudging={nudgingCircleIds.has(circle.id)}
+              key={circle.id}
+              onActionPress={() => handleCircleAction(circle)}
+              onCardPress={() => openCircleDetail(circle.id)}
+              variant="today"
+            />
+          ))}
         </View>
       ) : null}
 
@@ -852,8 +1002,8 @@ export function HomeScreen(): React.JSX.Element {
         <GlassPanel style={styles.emptyPanel}>
           <View style={styles.emptyActions}>
             <HoystButton
-              label="Explore circles"
-              onPress={() => navigation.navigate('Explore')}
+              label="Find circles"
+              onPress={() => navigation.navigate('Circles')}
             />
             <HoystButton
               label="Create Circle"
@@ -864,16 +1014,52 @@ export function HomeScreen(): React.JSX.Element {
         </GlassPanel>
       ) : null}
 
-      {displayedCircles.map(circle => (
-        <TodayCircleCard
-          card={circle}
-          isNudged={nudgedCircleIds.has(circle.id)}
-          isNudging={nudgingCircleIds.has(circle.id)}
-          key={circle.id}
-          onActionPress={() => handleCircleAction(circle)}
-          onCardPress={() => openCircleDetail(circle.id)}
-        />
-      ))}
+      {activeSectionCircles.length > 0 ? (
+        <View style={styles.circleSectionGroup}>
+          <HoystText variant="title">Active Circles</HoystText>
+          <View style={styles.filterRow}>
+            {filters.map(filter => {
+              const isSelected = activeFilter === filter;
+              return (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityState={{selected: isSelected}}
+                  key={filter}
+                  onPress={() => setActiveFilter(filter)}
+                  style={({pressed}) => [
+                    styles.filterChipButton,
+                    {opacity: pressed ? 0.88 : 1},
+                  ]}>
+                  <HoystChip
+                    label={`${filterLabels[filter]} ${filterCounts[filter]}`}
+                    style={[
+                      styles.filterChip,
+                      isSelected
+                        ? selectedFilterChipStyles[filter]
+                        : styles.filterChipInactive,
+                    ]}
+                    tone={filterTones[filter]}
+                  />
+                </Pressable>
+              );
+            })}
+          </View>
+          <View style={styles.activeCirclesGrid}>
+            {displayedActiveCircles.map(circle => (
+              <View key={circle.id} style={styles.activeCircleTile}>
+                <TodayCircleCard
+                  card={circle}
+                  isNudged={nudgedCircleIds.has(circle.id)}
+                  isNudging={nudgingCircleIds.has(circle.id)}
+                  onActionPress={() => handleCircleAction(circle)}
+                  onCardPress={() => openCircleDetail(circle.id)}
+                  variant="active"
+                />
+              </View>
+            ))}
+          </View>
+        </View>
+      ) : null}
 
       {showCreateCircleButton ? (
         <Pressable
@@ -920,14 +1106,27 @@ const styles = StyleSheet.create({
   content: {
     paddingBottom: 172,
   },
+  activeCirclesGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  activeCircleTile: {
+    flexBasis: '48%',
+    flexGrow: 1,
+    minWidth: 154,
+  },
+  circleSectionGroup: {
+    gap: 12,
+  },
   topBar: {
     alignItems: 'center',
     flexDirection: 'row',
     justifyContent: 'space-between',
   },
   logo: {
-    height: 34,
-    width: 81,
+    height: 38,
+    width: 90,
   },
   topActions: {
     alignItems: 'center',
@@ -936,11 +1135,52 @@ const styles = StyleSheet.create({
   },
   headerAction: {
     alignItems: 'center',
-    borderRadius: 16,
+    borderRadius: 22,
     borderWidth: 1,
-    height: 38,
+    height: 44,
     justifyContent: 'center',
-    width: 38,
+    width: 44,
+  },
+  avatarHeaderAction: {
+    transform: [{translateY: -2}],
+  },
+  inboxBadge: {
+    alignItems: 'center',
+    backgroundColor: brandColors.purple,
+    borderColor: brandColors.white,
+    borderRadius: 11,
+    borderWidth: 2,
+    height: 22,
+    justifyContent: 'center',
+    minWidth: 22,
+    paddingHorizontal: 5,
+    position: 'absolute',
+    right: -8,
+    top: -8,
+  },
+  inboxBadgeText: {
+    color: brandColors.white,
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 0,
+    lineHeight: 15,
+    textAlign: 'center',
+  },
+  inboxHeaderAction: {
+    alignItems: 'center',
+    backgroundColor: brandColors.white,
+    borderColor: 'rgba(7,11,26,0.16)',
+    borderRadius: 21,
+    borderWidth: 1,
+    elevation: 3,
+    height: 42,
+    justifyContent: 'center',
+    overflow: 'visible',
+    shadowColor: 'rgba(15,23,42,0.18)',
+    shadowOffset: {height: 4, width: 0},
+    shadowOpacity: 1,
+    shadowRadius: 10,
+    width: 42,
   },
   heroCopy: {
     gap: 8,
@@ -969,14 +1209,83 @@ const styles = StyleSheet.create({
     opacity: 0.5,
     width: '64%',
   },
-  progressHeader: {
+  momentumCopy: {
+    flex: 1,
+    gap: 4,
+    minWidth: 0,
+  },
+  momentumBar: {
+    borderRadius: radius.pill,
+    width: 7,
+  },
+  momentumBars: {
+    alignItems: 'flex-end',
+    flexDirection: 'row',
+    gap: 4,
+    height: 56,
+  },
+  momentumPanel: {
+    minHeight: 104,
+  },
+  momentumPanelContent: {
     alignItems: 'center',
     flexDirection: 'row',
+    gap: 8,
     justifyContent: 'space-between',
-    marginBottom: 0,
   },
-  progressPanel: {
-    marginHorizontal: 0,
+  momentumPanelPressable: {
+    borderRadius: radius.lg,
+  },
+  momentumStack: {
+    gap: 10,
+  },
+  momentumPercent: {
+    fontSize: 26,
+    fontWeight: '800',
+    letterSpacing: 0,
+    lineHeight: 30,
+  },
+  momentumStatusBadge: {
+    borderRadius: radius.pill,
+    flexShrink: 1,
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+  },
+  momentumStatusText: {
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0,
+    lineHeight: 14,
+  },
+  momentumStageIconWrap: {
+    alignSelf: 'flex-start',
+    flexShrink: 0,
+    marginRight: 6,
+    paddingTop: 1,
+  },
+  momentumTitleText: {
+    fontSize: 16,
+    fontWeight: '800',
+    letterSpacing: 0,
+    lineHeight: 21,
+  },
+  momentumMetaText: {
+    fontSize: 13,
+    fontWeight: '600',
+    letterSpacing: 0,
+    lineHeight: 17,
+  },
+  momentumTrendWrap: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    flexShrink: 0,
+    gap: 9,
+  },
+  momentumValueRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 5,
+    minWidth: 0,
   },
   progressTitle: {
     fontSize: 11,
@@ -985,60 +1294,37 @@ const styles = StyleSheet.create({
     letterSpacing: 1.4,
     textTransform: 'uppercase',
   },
-  progressPercent: {
-    fontSize: 11,
-    lineHeight: 11,
+  streakCalendarBadge: {
+    fontSize: 13,
+    fontWeight: '800',
+    letterSpacing: 0,
+    lineHeight: 17,
   },
-  progressGrid: {
-    flexDirection: 'row',
-    gap: 8,
-    justifyContent: 'space-between',
-  },
-  progressCell: {
+  streakCalendarDay: {
     alignItems: 'center',
     aspectRatio: 1,
-    borderRadius: 9,
+    borderRadius: 12,
     borderWidth: 1.25,
     flex: 1,
     justifyContent: 'center',
+    minWidth: 0,
   },
-  streakSummary: {
-    alignItems: 'center',
-    borderRadius: radius.lg,
-    borderWidth: 1,
+  streakCalendarDayText: {
+    fontSize: 14,
+    lineHeight: 18,
+  },
+  streakCalendarGrid: {
     flexDirection: 'row',
-    gap: 12,
-    minHeight: 84,
-    paddingHorizontal: 16,
+    gap: 7,
   },
-  streakSummaryPressable: {
-    alignSelf: 'stretch',
-    borderRadius: radius.lg,
-    width: '100%',
-  },
-  streakIconWrap: {
+  streakCalendarHeader: {
     alignItems: 'center',
-    borderRadius: 16,
-    height: 46,
-    justifyContent: 'center',
-    width: 46,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
   },
-  streakIconTint: {
-    backgroundColor: 'rgba(255,138,61,0.14)',
-  },
-  streakCopy: {
-    flex: 1,
-    gap: 4,
-  },
-  streakEyebrow: {
-    letterSpacing: 1.4,
-    textTransform: 'uppercase',
-  },
-  streakValue: {
-    fontSize: 18,
-    fontWeight: '800',
-    letterSpacing: -0.3,
-    lineHeight: 22,
+  streakCalendarPanel: {
+    gap: 14,
+    minHeight: 108,
   },
   circlesSection: {
     gap: 14,

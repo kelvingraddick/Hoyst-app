@@ -37,6 +37,7 @@ import {HoystChip} from '../../../design/components/HoystChip';
 import {HoystInput} from '../../../design/components/HoystInput';
 import {HoystScreen} from '../../../design/components/HoystScreen';
 import {HoystText} from '../../../design/components/HoystText';
+import {CircleCategoryPill} from '../../../design/components/CircleCategoryIcon';
 import {StatusAvatarRow} from '../../../design/components/StatusAvatarRow';
 import {TapInRingMark} from '../../../design/components/TapInRingMark';
 import {actionMotion, actionShadow} from '../../../design/tokens/actions';
@@ -69,22 +70,6 @@ type DetailStatusPill = {
   tone: HoystChipTone;
 };
 
-function getCategoryTone(category: string): HoystChipTone {
-  if (category === 'Fitness') {
-    return 'green';
-  }
-
-  if (category === 'Deep Work') {
-    return 'orange';
-  }
-
-  if (category === 'Sobriety') {
-    return 'purple';
-  }
-
-  return 'neutral';
-}
-
 function getDetailStatusPill(
   detail: CircleDetailModel,
 ): DetailStatusPill | undefined {
@@ -109,7 +94,7 @@ function getDetailStatusPill(
   }
 
   if (detail.remainingCheckIns && detail.remainingCheckIns > 0) {
-    return {label: 'Others Needed', tone: 'purple'};
+    return {label: 'Others Needed', tone: 'yellow'};
   }
 
   return {label: 'Complete', tone: 'green'};
@@ -506,15 +491,14 @@ export function CircleDetailScreen({
   route,
 }: Props): React.JSX.Element {
   const theme = useHoystTheme();
-  const returnTab = route.params.source === 'notification' ? 'Inbox' : 'Home';
   const navigateBack = useCallback(() => {
     if (navigation.canGoBack()) {
       navigation.goBack();
       return;
     }
 
-    navigation.replace('MainTabs', {screen: returnTab});
-  }, [navigation, returnTab]);
+    navigation.replace('MainTabs', {screen: 'Home'});
+  }, [navigation]);
   const [nudged, setNudged] = useState(false);
   const [isNudging, setIsNudging] = useState(false);
   const [reviewingRequestId, setReviewingRequestId] = useState<string>();
@@ -906,10 +890,7 @@ export function CircleDetailScreen({
       <View style={styles.heroSection}>
         <View style={styles.heroHeader}>
           <View style={styles.headerTags}>
-            <HoystChip
-              label={detail.category.toUpperCase()}
-              tone={getCategoryTone(detail.category)}
-            />
+            <CircleCategoryPill category={detail.category} uppercase />
             <View style={styles.streakRow}>
               {isAlreadyTappedInLabel ? (
                 <Check

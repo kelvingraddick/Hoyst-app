@@ -19,6 +19,7 @@ import {HoystChip} from '../../../design/components/HoystChip';
 import {HoystScreen} from '../../../design/components/HoystScreen';
 import {HoystText} from '../../../design/components/HoystText';
 import {LayeredAvatar} from '../../../design/components/LayeredAvatar';
+import {CircleCategoryPill} from '../../../design/components/CircleCategoryIcon';
 import {TapInRingMark} from '../../../design/components/TapInRingMark';
 import {actionMotion, actionShadow} from '../../../design/tokens/actions';
 import {radius} from '../../../design/tokens/radius';
@@ -35,24 +36,6 @@ import {
 import {nudgeCircleMembers} from '../../circles/services/circle-service';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'TapInPicker'>;
-
-function getCategoryTone(
-  category: string,
-): React.ComponentProps<typeof HoystChip>['tone'] {
-  if (category === 'Fitness') {
-    return 'green';
-  }
-
-  if (category === 'Sobriety') {
-    return 'purple';
-  }
-
-  if (category === 'Deep Work') {
-    return 'orange';
-  }
-
-  return 'neutral';
-}
 
 function sortDueCircles(
   left: CircleManagementCard,
@@ -76,7 +59,12 @@ function sortDueCircles(
 
 function getRemainingTapInsLabel(circle: CircleManagementCard) {
   const count = circle.remainingCheckIns;
-  const periodCopy = circle.commitmentCadence === 'daily' ? 'today' : 'this week';
+  const periodCopy =
+    circle.commitmentCadence === 'daily'
+      ? 'today'
+      : circle.commitmentCadence === 'monthly'
+      ? 'this month'
+      : 'this week';
 
   return count === 1
     ? `1 Tap In left ${periodCopy}`
@@ -305,10 +293,7 @@ export function TapInPickerScreen({navigation}: Props): React.JSX.Element {
               <GlassPanel key={circle.id} style={styles.dueCard}>
                 <View style={styles.cardHeader}>
                   <View style={styles.headerTags}>
-                    <HoystChip
-                      label={circle.category.toUpperCase()}
-                      tone={getCategoryTone(circle.category)}
-                    />
+                    <CircleCategoryPill category={circle.category} uppercase />
                     <View style={styles.streakRow}>
                       {circle.streakDays > 7 ? (
                         <Flame
@@ -598,10 +583,7 @@ export function TapInPickerScreen({navigation}: Props): React.JSX.Element {
                   </Pressable>
                 </View>
                 <View style={styles.secondaryMeta}>
-                  <HoystChip
-                    label={circle.category.toUpperCase()}
-                    tone={getCategoryTone(circle.category)}
-                  />
+                  <CircleCategoryPill category={circle.category} uppercase />
                   <HoystText style={{color: statusTone}} variant="caption">
                     {circle.progressPercent}% tapped in
                   </HoystText>

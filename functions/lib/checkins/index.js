@@ -8,6 +8,7 @@ const zod_1 = require("zod");
 const firebase_1 = require("../firebase");
 const grace_1 = require("./grace");
 const remove_1 = require("./remove");
+const momentum_1 = require("../momentum");
 const notifications_1 = require("../notifications");
 const commitments_1 = require("../shared/commitments");
 const submitTapInSchema = zod_1.z.object({
@@ -90,6 +91,31 @@ function getCommitmentWeekDateKeys(timezone, now = new Date()) {
         return `${year}-${month}-${day}`;
     });
 }
+function getCommitmentMonthDateKeys(timezone, now = new Date()) {
+    const parts = new Intl.DateTimeFormat('en-US', {
+        day: '2-digit',
+        month: '2-digit',
+        timeZone: timezone,
+        year: 'numeric',
+    }).formatToParts(now);
+    const year = Number(parts.find(part => part.type === 'year')?.value ?? '1970');
+    const month = Number(parts.find(part => part.type === 'month')?.value ?? '1');
+    const dayCount = new Date(Date.UTC(year, month, 0)).getUTCDate();
+    return Array.from({ length: dayCount }, (_, index) => [
+        String(year),
+        String(month).padStart(2, '0'),
+        String(index + 1).padStart(2, '0'),
+    ].join('-'));
+}
+function getCommitmentPeriodDateKeys(cadence, timezone, now = new Date()) {
+    if (cadence === 'daily') {
+        return [getDateKeyForDate(timezone, now)];
+    }
+    if (cadence === 'monthly') {
+        return getCommitmentMonthDateKeys(timezone, now);
+    }
+    return getCommitmentWeekDateKeys(timezone, now);
+}
 exports.submitTapIn = (0, https_1.onCall)(async (request) => {
     const { profile, uid } = await requireCompletedProfile(request.auth?.uid);
     const input = submitTapInSchema.parse(request.data);
@@ -150,6 +176,17 @@ exports.submitTapIn = (0, https_1.onCall)(async (request) => {
             dateKey,
             updatedAt: now,
         }, { merge: true });
+        await (0, momentum_1.recordTapInOpportunity)({
+            checkInId: uid,
+            circle,
+            circleId: input.circleId,
+            dateKey,
+            memberCount: typeof circle?.memberCount === 'number' ? circle.memberCount : undefined,
+            profile,
+            status: input.status,
+            transaction,
+            uid,
+        });
         return { checkInId: uid, dateKey };
     });
     const [circleSnapshot, memberSnapshots] = await Promise.all([
@@ -160,14 +197,14 @@ exports.submitTapIn = (0, https_1.onCall)(async (request) => {
     const timezone = circle?.timezone ?? profile.timezone ?? 'UTC';
     const commitmentCadence = (0, commitments_1.getCommitmentCadence)(circle);
     const requiredTapIns = (0, commitments_1.getRequiredTapIns)(circle);
-    const weekDateKeys = getCommitmentWeekDateKeys(timezone);
-    const weeklyCheckInSnapshots = await Promise.all(weekDateKeys.map(dateKey => circleRef.collection('days').doc(dateKey).collection('checkIns').get()));
+    const periodDateKeys = getCommitmentPeriodDateKeys(commitmentCadence, timezone);
+    const periodCheckInSnapshots = await Promise.all(periodDateKeys.map(dateKey => circleRef.collection('days').doc(dateKey).collection('checkIns').get()));
     const coveredCounts = new Map();
-    const todaySnapshotIndex = weekDateKeys.indexOf(result.dateKey);
-    const todayCheckInSnapshot = weeklyCheckInSnapshots[todaySnapshotIndex >= 0 ? todaySnapshotIndex : 0];
+    const todaySnapshotIndex = periodDateKeys.indexOf(result.dateKey);
+    const todayCheckInSnapshot = periodCheckInSnapshots[todaySnapshotIndex >= 0 ? todaySnapshotIndex : 0];
     const scoringSnapshots = commitmentCadence === 'daily' && todayCheckInSnapshot
         ? [todayCheckInSnapshot]
-        : weeklyCheckInSnapshots;
+        : periodCheckInSnapshots;
     scoringSnapshots.forEach(snapshot => {
         snapshot.docs.forEach(doc => {
             if (['done', 'skip'].includes(doc.data().status)) {
@@ -192,7 +229,7 @@ exports.submitTapIn = (0, https_1.onCall)(async (request) => {
     if (remainingCount > 0 && remainingCount <= 2) {
         const periodKey = commitmentCadence === 'daily'
             ? result.dateKey
-            : weekDateKeys[0] ?? result.dateKey;
+            : periodDateKeys[0] ?? result.dateKey;
         await Promise.all(pendingMembers.map(memberData => (0, notifications_1.notifyCircleAtRisk)({
             commitmentCadence,
             circleId: input.circleId,
@@ -239,6 +276,13 @@ exports.removeTapIn = (0, https_1.onCall)(async (request) => {
             dateKey,
             updatedAt: now,
         }, { merge: true });
+        await (0, momentum_1.removeTapInOpportunity)({
+            circle,
+            circleId: input.circleId,
+            dateKey,
+            transaction,
+            uid,
+        });
         return { dateKey, removed: true };
     });
 });

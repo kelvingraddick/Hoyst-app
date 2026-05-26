@@ -90,7 +90,7 @@ export function HoystButton({
           <View style={styles.content}>
             {renderedIcon}
             <HoystText
-              style={{color: textColor ?? theme.onBrightAccent}}
+              style={{color: textColor ?? theme.onPurpleAccent}}
               variant="button">
               {label}
             </HoystText>

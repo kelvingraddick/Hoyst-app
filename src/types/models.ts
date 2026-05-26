@@ -11,7 +11,19 @@ export type CircleMemberState = 'done' | 'pending' | 'missed' | 'skipped';
 export type CircleActivityTone = 'success' | 'pending' | 'alert';
 export type ProgressDayState = 'done' | 'missed' | 'today' | 'future';
 export type CircleJoinLabel = 'Open seats' | 'Request to join';
-export type CommitmentCadence = 'daily' | 'weekly';
+export type CommitmentCadence = 'daily' | 'weekly' | 'monthly';
+export type OpportunityStatus =
+  | 'upcoming'
+  | 'available'
+  | 'completed'
+  | 'missed'
+  | 'expired'
+  | 'skipped';
+export type MomentumStatus =
+  | 'getting_started'
+  | 'building_momentum'
+  | 'strong_momentum'
+  | 'peak_momentum';
 
 export type UserProfile = {
   id: string;
@@ -31,6 +43,44 @@ export type GraceRule = {
 
 export type CommitmentFrequency = {
   tapInsPerWeek: number;
+  opportunitiesPerPeriod?: number;
+};
+
+export type CommitmentSchedule = {
+  cadence: CommitmentCadence;
+  opportunitiesPerPeriod: number;
+  slotPolicy: 'scheduled_slots';
+  timezone: string;
+};
+
+export type MomentumSummary = {
+  availableOpportunities: number;
+  bestStreak: number;
+  completedOpportunities: number;
+  currentStreak: number;
+  label: string;
+  percentage: number;
+  periodKey: string;
+  status: MomentumStatus;
+};
+
+export type Opportunity = {
+  availableDateKey: string;
+  cadence: CommitmentCadence;
+  circleId: string;
+  completedAt?: unknown;
+  completionDateKey?: string;
+  commitment: string;
+  createdAt?: unknown;
+  expiresDateKey: string;
+  id: string;
+  linkedCheckInId?: string;
+  periodKey: string;
+  slotIndex: number;
+  status: OpportunityStatus;
+  title: string;
+  timezone: string;
+  updatedAt?: unknown;
 };
 
 export type Circle = {

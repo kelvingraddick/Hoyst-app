@@ -5,7 +5,11 @@ export const actionMotion = {
 
 export const actionShadow = {
   compactRadius: 18,
-  largeRadius: 22,
+  largeRadius: 24,
   offset: {height: 0, width: 0},
-  elevation: 10,
+  elevation: 12,
+} as const;
+
+export const touchTarget = {
+  minimum: 44,
 } as const;

@@ -1,5 +1,7 @@
 import type {FirebaseFirestoreTypes} from '@react-native-firebase/firestore';
+import firestore from '@react-native-firebase/firestore';
 
+import {firebaseAuth} from '../../../lib/firebase/auth';
 import {firebaseFirestore} from '../../../lib/firebase/firestore';
 import {firebaseFunctions} from '../../../lib/firebase/functions';
 import type {InboxEvent, InboxEventType} from '../../../types/models';
@@ -15,6 +17,7 @@ const defaultNotificationSettings: NotificationSettings = {
   productUpdates: true,
   tapInReminders: true,
 };
+const inboxReadBatchLimit = 500;
 
 function toListenerError(error: unknown, fallbackMessage: string) {
   return error instanceof Error ? error : new Error(fallbackMessage);
@@ -216,6 +219,43 @@ export function subscribeToInboxEvents({
     );
 }
 
+export function subscribeToInboxUnreadCount({
+  onCount,
+  onError,
+  uid,
+}: {
+  onCount: (count: number) => void;
+  onError?: (error: Error) => void;
+  uid: string;
+}) {
+  return firebaseFirestore()
+    .collection('userPrivate')
+    .doc(uid)
+    .collection('inbox')
+    .where('readAt', '==', null)
+    .limit(10)
+    .onSnapshot(
+      (
+        snapshot: FirebaseFirestoreTypes.QuerySnapshot | null | undefined,
+      ) => {
+        if (!snapshot) {
+          onCount(0);
+          onError?.(new Error('Inbox unread listener returned no snapshot.'));
+          return;
+        }
+
+        onCount(snapshot.docs.length);
+      },
+      error =>
+        onError?.(
+          toListenerError(
+            error,
+            'Inbox unread listener could not load updates.',
+          ),
+        ),
+    );
+}
+
 export async function updateNotificationSettings(
   notificationSettings: Partial<NotificationSettings>,
 ) {
@@ -228,6 +268,76 @@ export async function updateNotificationSettings(
 
 export async function markInboxEventRead(eventId: string) {
   const callable = firebaseFunctions().httpsCallable('markInboxEventRead');
-  const result = await callable({eventId});
-  return result.data as {read: true};
+
+  try {
+    const result = await callable({eventId});
+    return result.data as {read: true};
+  } catch (error) {
+    const uid = firebaseAuth().currentUser?.uid;
+
+    if (!uid) {
+      throw error;
+    }
+
+    await firebaseFirestore()
+      .collection('userPrivate')
+      .doc(uid)
+      .collection('inbox')
+      .doc(eventId)
+      .set(
+        {readAt: firestore.FieldValue.serverTimestamp()},
+        {merge: true},
+      );
+
+    return {read: true as const};
+  }
+}
+
+export async function markAllInboxEventsRead() {
+  const callable = firebaseFunctions().httpsCallable('markInboxEventsRead');
+
+  try {
+    const result = await callable();
+    return result.data as {read: number};
+  } catch (error) {
+    const uid = firebaseAuth().currentUser?.uid;
+
+    if (!uid) {
+      throw error;
+    }
+
+    const snapshot = await firebaseFirestore()
+      .collection('userPrivate')
+      .doc(uid)
+      .collection('inbox')
+      .where('readAt', '==', null)
+      .get();
+
+    if (snapshot.empty) {
+      return {read: 0};
+    }
+
+    const readAt = firestore.FieldValue.serverTimestamp();
+    let batch = firebaseFirestore().batch();
+    let pendingWrites = 0;
+    let read = 0;
+
+    for (const doc of snapshot.docs) {
+      batch.set(doc.ref, {readAt}, {merge: true});
+      pendingWrites += 1;
+      read += 1;
+
+      if (pendingWrites === inboxReadBatchLimit) {
+        await batch.commit();
+        batch = firebaseFirestore().batch();
+        pendingWrites = 0;
+      }
+    }
+
+    if (pendingWrites > 0) {
+      await batch.commit();
+    }
+
+    return {read};
+  }
 }
