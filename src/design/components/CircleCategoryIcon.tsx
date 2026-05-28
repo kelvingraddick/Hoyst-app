@@ -3,7 +3,7 @@ import {StyleSheet, View, type StyleProp, type ViewStyle} from 'react-native';
 import Svg, {Circle, G, Path, Rect} from 'react-native-svg';
 
 import {useHoystTheme} from '../theme/useHoystTheme';
-import {brandColors} from '../tokens/colors';
+import {brandColors, type HoystTheme} from '../tokens/colors';
 import {radius} from '../tokens/radius';
 import {typography} from '../tokens/typography';
 import {HoystText} from './HoystText';
@@ -149,7 +149,10 @@ const categoryAliases: Record<string, CircleCategoryKey> = {
 };
 
 function normalizeCategoryKey(category: string) {
-  return category.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+  return category
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '');
 }
 
 export function getCircleCategoryVisual(
@@ -166,6 +169,19 @@ export function getCircleCategoryVisual(
     ...categoryVisuals.general,
     isFallback: normalizedKey !== 'general',
   };
+}
+
+export function getCircleCategoryForegroundColor(
+  category: string,
+  theme: HoystTheme,
+) {
+  const visual = getCircleCategoryVisual(category);
+
+  if (visual.tone === 'neutral') {
+    return theme.textMuted;
+  }
+
+  return theme.isDark ? visual.accentLight : visual.foregroundColor;
 }
 
 function FitnessArtwork({visual}: IconArtworkProps) {
@@ -464,12 +480,7 @@ export function CircleCategoryPill({
   const theme = useHoystTheme();
   const visual = getCircleCategoryVisual(category);
   const displayLabel = label ?? visual.label;
-  const foregroundColor =
-    visual.tone === 'neutral'
-      ? theme.textMuted
-      : theme.isDark
-      ? visual.accentLight
-      : visual.foregroundColor;
+  const foregroundColor = getCircleCategoryForegroundColor(category, theme);
   const backgroundColor =
     visual.tone === 'neutral' ? theme.surfaceHigh : `${visual.accentColor}22`;
 

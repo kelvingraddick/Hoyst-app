@@ -38,6 +38,7 @@ import {HoystInput} from '../../../design/components/HoystInput';
 import {HoystScreen} from '../../../design/components/HoystScreen';
 import {HoystText} from '../../../design/components/HoystText';
 import {CircleCategoryPill} from '../../../design/components/CircleCategoryIcon';
+import {SectionHeader} from '../../../design/components/SectionHeader';
 import {StatusAvatarRow} from '../../../design/components/StatusAvatarRow';
 import {TapInRingMark} from '../../../design/components/TapInRingMark';
 import {actionMotion, actionShadow} from '../../../design/tokens/actions';
@@ -623,13 +624,10 @@ export function CircleDetailScreen({
           </View>
         </View>
         <GlassPanel>
-          <View style={styles.heroCopy}>
-            <HoystText variant="title">Circle unavailable</HoystText>
-            <HoystText tone="muted">
-              This circle was not found, or your account does not have access to
-              it yet.
-            </HoystText>
-          </View>
+          <SectionHeader
+            description="This circle was not found, or your account does not have access to it yet."
+            title="Circle unavailable"
+          />
         </GlassPanel>
       </HoystScreen>
     );

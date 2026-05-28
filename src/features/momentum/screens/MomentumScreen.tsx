@@ -5,6 +5,7 @@ import {AchievementCard} from '../../../design/components/AchievementCard';
 import {GlassPanel} from '../../../design/components/GlassPanel';
 import {HoystScreen} from '../../../design/components/HoystScreen';
 import {HoystText} from '../../../design/components/HoystText';
+import {SectionHeader} from '../../../design/components/SectionHeader';
 import {
   MomentumAchievementFlameIllustration,
   MomentumCalendarIllustration,
@@ -457,9 +458,7 @@ export function MomentumScreen(): React.JSX.Element {
       </GlassPanel>
 
       <View style={styles.achievementsSection}>
-        <View style={styles.sectionHeader}>
-          <HoystText variant="title">Achievements</HoystText>
-        </View>
+        <SectionHeader title="Achievements" />
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -760,11 +759,6 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     height: 8,
     overflow: 'hidden',
-  },
-  sectionHeader: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
   },
   smallIcon: {
     alignItems: 'center',

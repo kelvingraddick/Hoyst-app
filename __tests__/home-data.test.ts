@@ -4,15 +4,19 @@ import {
   buildHomeDataFromCircles,
   createEmptyHomeData,
   getHomeFilterCounts,
+  getHomeCircleActionVariant,
   getHomeGreetingContext,
   getHomeGreetingFallback,
   getHomeGreetingTimeWindow,
+  getTodayAttentionCircles,
+  getUpcomingAttentionCircles,
   mapHomeCircleFromData,
   matchesHomeCircleFilter,
   shouldShowAuthenticatedHomeEmptyState,
   shouldShowHomeCreateCircleButton,
   shouldShowHomeDataErrorPanel,
 } from '../src/features/home/services/home-data-service';
+import type {CircleManagementCard} from '../src/types/models';
 
 const circleData = {
   category: 'Fitness',
@@ -25,7 +29,171 @@ const circleData = {
   title: 'Real Fitness Circle',
 };
 
+function homeCard(
+  overrides: Partial<CircleManagementCard> = {},
+): CircleManagementCard {
+  return {
+    category: 'Fitness',
+    commitment: '30min workout',
+    commitmentCadence: 'daily',
+    commitmentFrequency: {tapInsPerWeek: 7},
+    completionRate: 0,
+    id: 'circle-1',
+    inviteUrl: undefined,
+    joinMode: 'invite_only',
+    maxSize: 4,
+    memberCount: 2,
+    members: [],
+    privacy: 'private',
+    progressLabel: 'Today · 0%',
+    progressPercent: 0,
+    remainingCheckIns: 1,
+    state: 'active',
+    streakDays: 0,
+    streakLabel: 'Start today',
+    title: 'Real Fitness Circle',
+    viewerHasCheckedIn: false,
+    viewerHasTappedInToday: false,
+    viewerMembershipStatus: 'active',
+    viewerRemainingTapIns: 1,
+    viewerRole: 'member',
+    viewerTodayStatus: undefined,
+    ...overrides,
+  };
+}
+
 describe('home data mapping', () => {
+  it('builds the Today attention list from Tap In and Nudge actions only', () => {
+    const needsTapIn = homeCard({
+      id: 'needs-tap-in',
+      title: 'Needs Tap In',
+    });
+    const needsNudge = homeCard({
+      id: 'needs-nudge',
+      nudgeTargetCount: 2,
+      progressPercent: 55,
+      remainingCheckIns: 2,
+      title: 'Needs Nudge',
+      viewerHasCheckedIn: true,
+      viewerHasTappedInToday: true,
+      viewerRemainingTapIns: 0,
+      viewerTodayStatus: 'done',
+    });
+    const shareOnly = homeCard({
+      id: 'share-only',
+      inviteUrl: 'https://hoyst.app/join/share-only',
+      progressPercent: 100,
+      remainingCheckIns: 0,
+      state: 'done',
+      title: 'Share Only',
+      viewerHasCheckedIn: true,
+      viewerHasTappedInToday: true,
+      viewerRemainingTapIns: 0,
+      viewerRole: 'owner',
+      viewerTodayStatus: 'done',
+    });
+    const viewOnly = homeCard({
+      id: 'view-only',
+      progressPercent: 100,
+      remainingCheckIns: 0,
+      state: 'done',
+      title: 'View Only',
+      viewerHasCheckedIn: true,
+      viewerHasTappedInToday: true,
+      viewerRemainingTapIns: 0,
+      viewerTodayStatus: 'done',
+    });
+    const pending = homeCard({
+      id: 'pending',
+      remainingCheckIns: 0,
+      title: 'Pending',
+      viewerHasCheckedIn: true,
+      viewerMembershipStatus: 'pending',
+      viewerRemainingTapIns: 0,
+    });
+
+    expect(getHomeCircleActionVariant(needsTapIn)).toBe('check_in');
+    expect(getHomeCircleActionVariant(needsNudge)).toBe('nudge');
+    expect(getHomeCircleActionVariant(shareOnly)).toBe('share');
+    expect(getHomeCircleActionVariant(viewOnly)).toBe('view');
+    expect(getHomeCircleActionVariant(pending)).toBe('view');
+    expect(
+      getTodayAttentionCircles([
+        shareOnly,
+        viewOnly,
+        pending,
+        needsNudge,
+        needsTapIn,
+      ]).map(circle => circle.id),
+    ).toEqual(['needs-tap-in', 'needs-nudge']);
+  });
+
+  it('builds Upcoming from soon attention that is not needed today', () => {
+    const today = homeCard({
+      id: 'today',
+      title: 'Today',
+    });
+    const weeklyRemaining = homeCard({
+      commitmentCadence: 'weekly',
+      commitmentFrequency: {tapInsPerWeek: 4},
+      id: 'weekly-remaining',
+      nudgeTargetCount: 0,
+      progressLabel: 'Week · 50%',
+      progressPercent: 50,
+      remainingCheckIns: 2,
+      title: 'Weekly Remaining',
+      viewerHasCheckedIn: false,
+      viewerHasTappedInToday: true,
+      viewerRemainingTapIns: 2,
+      viewerTodayStatus: 'done',
+    });
+    const dailyTomorrow = homeCard({
+      id: 'daily-tomorrow',
+      progressLabel: 'Today · 100%',
+      progressPercent: 100,
+      remainingCheckIns: 0,
+      state: 'done',
+      title: 'Daily Tomorrow',
+      viewerHasCheckedIn: true,
+      viewerHasTappedInToday: true,
+      viewerRemainingTapIns: 0,
+      viewerTodayStatus: 'done',
+    });
+    const completeWeekly = homeCard({
+      commitmentCadence: 'weekly',
+      commitmentFrequency: {tapInsPerWeek: 4},
+      id: 'complete-weekly',
+      progressLabel: 'Week · 100%',
+      progressPercent: 100,
+      remainingCheckIns: 0,
+      state: 'done',
+      title: 'Complete Weekly',
+      viewerHasCheckedIn: true,
+      viewerHasTappedInToday: true,
+      viewerRemainingTapIns: 0,
+      viewerTodayStatus: 'done',
+    });
+    const pending = homeCard({
+      id: 'pending-upcoming',
+      remainingCheckIns: 0,
+      title: 'Pending Upcoming',
+      viewerHasCheckedIn: true,
+      viewerMembershipStatus: 'pending',
+      viewerRemainingTapIns: 0,
+    });
+
+    expect(getHomeCircleActionVariant(weeklyRemaining)).toBe('view');
+    expect(
+      getUpcomingAttentionCircles([
+        today,
+        weeklyRemaining,
+        dailyTomorrow,
+        completeWeekly,
+        pending,
+      ]).map(circle => circle.id),
+    ).toEqual(['weekly-remaining', 'daily-tomorrow']);
+  });
+
   it('maps active membership and today check-ins into a real Home card', () => {
     const memberProfilesByUid = new Map([
       ['user-2', {avatarUrl: 'https://example.com/ava.png'}],

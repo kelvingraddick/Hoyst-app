@@ -3,6 +3,7 @@ import {
   Alert,
   Animated,
   Pressable,
+  ScrollView,
   Share,
   StyleSheet,
   type StyleProp,
@@ -17,16 +18,13 @@ import {useFocusEffect, useNavigation} from '@react-navigation/native';
 import {BrandMark} from '../../../design/components/BrandMark';
 import {GlassPanel} from '../../../design/components/GlassPanel';
 import {HoystButton} from '../../../design/components/HoystButton';
-import {HoystChip} from '../../../design/components/HoystChip';
 import {LayeredAvatar} from '../../../design/components/LayeredAvatar';
 import {HoystScreen} from '../../../design/components/HoystScreen';
 import {HoystText} from '../../../design/components/HoystText';
 import {MomentumStageIcon} from '../../../design/components/MomentumStageIcon';
+import {SectionHeader} from '../../../design/components/SectionHeader';
 import {TapInRingMark} from '../../../design/components/TapInRingMark';
-import {
-  TodayCircleCard,
-  getTodayCircleCardActionVariant,
-} from '../../../design/components/TodayCircleCard';
+import {TodayCircleCard} from '../../../design/components/TodayCircleCard';
 import {brandColors} from '../../../design/tokens/colors';
 import {actionMotion, actionShadow} from '../../../design/tokens/actions';
 import {radius} from '../../../design/tokens/radius';
@@ -34,14 +32,14 @@ import {useHoystTheme} from '../../../design/theme/useHoystTheme';
 import {useProtectedAction} from '../../auth/hooks/useProtectedAction';
 import {
   createEmptyHomeData,
-  getHomeFilterCounts,
+  getHomeCircleActionVariant,
   getHomeGreetingContext,
   getHomeGreetingFallback,
-  matchesHomeCircleFilter,
+  getTodayAttentionCircles,
+  getUpcomingAttentionCircles,
   shouldShowAuthenticatedHomeEmptyState,
   shouldShowHomeCreateCircleButton,
   shouldShowHomeDataErrorPanel,
-  sortHomeCircles,
   subscribeToHomeData,
   type HomeData,
   type HomeProgressCell,
@@ -64,7 +62,6 @@ import type {
 import {navigateToAuthWelcome} from '../../../navigation/auth-modal-navigation';
 import type {
   CircleManagementCard,
-  CircleManagementFilter,
   MomentumSummary,
 } from '../../../types/models';
 import {useOnboardingStore} from '../../../store/onboarding-store';
@@ -80,25 +77,6 @@ import {
   markAllInboxEventsRead,
   subscribeToInboxUnreadCount,
 } from '../../settings/services/notification-settings-service';
-
-const filterLabels: Record<CircleManagementFilter, string> = {
-  all: 'All',
-  needsYou: 'Needs you',
-  atRisk: 'At risk',
-  done: 'Done',
-};
-
-const filterTones: Record<
-  CircleManagementFilter,
-  NonNullable<React.ComponentProps<typeof HoystChip>['tone']>
-> = {
-  all: 'neutral',
-  needsYou: 'orange',
-  atRisk: 'purple',
-  done: 'green',
-};
-
-const filters: CircleManagementFilter[] = ['all', 'needsYou', 'atRisk', 'done'];
 
 type HomeGreetingState = {
   requestKey: string;
@@ -381,8 +359,6 @@ function AnimatedHomeGreeting({headline}: {headline: string}) {
 
 export function HomeScreen(): React.JSX.Element {
   const theme = useHoystTheme();
-  const [activeFilter, setActiveFilter] =
-    useState<CircleManagementFilter>('all');
   const [homeData, setHomeData] = useState<HomeData>(() =>
     createEmptyHomeData(),
   );
@@ -473,64 +449,12 @@ export function HomeScreen(): React.JSX.Element {
   }, [isAuthenticatedHome, user?.uid]);
 
   const todayActionCircles = useMemo(
-    () =>
-      sortHomeCircles(
-        homeData.circles.filter(circle =>
-          ['check_in', 'nudge', 'share'].includes(
-            getTodayCircleCardActionVariant(circle),
-          ),
-        ),
-      ),
+    () => getTodayAttentionCircles(homeData.circles),
     [homeData.circles],
   );
-  const activeSectionCircles = useMemo(
-    () =>
-      sortHomeCircles(
-        homeData.circles.filter(
-          circle => getTodayCircleCardActionVariant(circle) === 'view',
-        ),
-      ),
+  const upcomingActionCircles = useMemo(
+    () => getUpcomingAttentionCircles(homeData.circles),
     [homeData.circles],
-  );
-  const filterCounts = useMemo(
-    () => getHomeFilterCounts(activeSectionCircles),
-    [activeSectionCircles],
-  );
-  const displayedActiveCircles = useMemo(
-    () =>
-      sortHomeCircles(
-        activeSectionCircles.filter(circle =>
-          matchesHomeCircleFilter(circle, activeFilter),
-        ),
-      ),
-    [activeFilter, activeSectionCircles],
-  );
-  const selectedFilterChipStyles = useMemo(
-    () => ({
-      all: {
-        backgroundColor: theme.surfaceStrong,
-        borderColor: theme.textMuted,
-      },
-      needsYou: {
-        backgroundColor: theme.surfaceStrong,
-        borderColor: theme.warningForeground,
-      },
-      atRisk: {
-        backgroundColor: theme.surfaceStrong,
-        borderColor: theme.accentSecondaryForeground,
-      },
-      done: {
-        backgroundColor: theme.surfaceStrong,
-        borderColor: theme.successForeground,
-      },
-    }),
-    [
-      theme.accentSecondaryForeground,
-      theme.successForeground,
-      theme.surfaceStrong,
-      theme.textMuted,
-      theme.warningForeground,
-    ],
   );
   const homeGreetingContext = useMemo(
     () =>
@@ -763,12 +687,14 @@ export function HomeScreen(): React.JSX.Element {
   };
 
   const handleCircleAction = (circle: CircleManagementCard) => {
+    const actionVariant = getHomeCircleActionVariant(circle);
+
     if (circle.viewerMembershipStatus === 'pending') {
       openCircleDetail(circle.id);
       return;
     }
 
-    if (!circle.viewerHasCheckedIn && !circle.viewerHasTappedInToday) {
+    if (actionVariant === 'check_in') {
       requireAccount({circleId: circle.id, source: 'home', type: 'tapIn'}, () =>
         rootNavigation?.navigate('TapInComposer', {
           circleId: circle.id,
@@ -778,7 +704,7 @@ export function HomeScreen(): React.JSX.Element {
       return;
     }
 
-    if ((circle.nudgeTargetCount ?? 0) > 0) {
+    if (actionVariant === 'nudge') {
       nudgeCircle(circle);
       return;
     }
@@ -929,18 +855,18 @@ export function HomeScreen(): React.JSX.Element {
 
       {showAccountPrompt ? (
         <GlassPanel style={styles.emptyPanel}>
-          <View style={styles.emptyCopy}>
-            <HoystText variant="title">
-              {isIncompleteProfile
-                ? 'Complete your profile'
-                : 'Start making Progression'}
-            </HoystText>
-            <HoystText tone="muted">
-              {isIncompleteProfile
+          <SectionHeader
+            description={
+              isIncompleteProfile
                 ? 'Finish your handle and profile before circles and Tap Ins unlock.'
-                : 'Get started to save Progression, join Circles, and build your Tap In streak.'}
-            </HoystText>
-          </View>
+                : 'Get started to save Progression, join Circles, and build your Tap In streak.'
+            }
+            title={
+              isIncompleteProfile
+                ? 'Complete your profile'
+                : 'Start making Progression'
+            }
+          />
           <View style={styles.emptyActions}>
             <HoystButton
               label={isIncompleteProfile ? 'Complete profile' : 'Get started'}
@@ -957,44 +883,79 @@ export function HomeScreen(): React.JSX.Element {
 
       {isAuthenticatedHome ? (
         <View style={styles.circlesSection}>
-          <View style={styles.circlesHeader}>
-            <HoystText variant="title">Your circles</HoystText>
-            <HoystText tone="muted">
-              {showAuthenticatedEmptyState
+          <SectionHeader
+            description={
+              showAuthenticatedEmptyState
                 ? 'Create a Circle or find one in Circles to begin tracking real Tap Ins.'
-                : 'Manage your Circles, invite your people, and handle what needs you right now.'}
-            </HoystText>
-          </View>
+                : 'These circles need your attention for tap-in or nudging others.'
+            }
+            title="Today"
+          />
 
-          {todayActionCircles.map(circle => (
-            <TodayCircleCard
-              card={circle}
-              isNudged={nudgedCircleIds.has(circle.id)}
-              isNudging={nudgingCircleIds.has(circle.id)}
-              key={circle.id}
-              onActionPress={() => handleCircleAction(circle)}
-              onCardPress={() => openCircleDetail(circle.id)}
-              variant="today"
-            />
-          ))}
+          {todayActionCircles.length > 0 ? (
+            todayActionCircles.map(circle => (
+              <TodayCircleCard
+                card={circle}
+                isNudged={nudgedCircleIds.has(circle.id)}
+                isNudging={nudgingCircleIds.has(circle.id)}
+                key={circle.id}
+                onActionPress={() => handleCircleAction(circle)}
+                onCardPress={() => openCircleDetail(circle.id)}
+                variant="today"
+              />
+            ))
+          ) : !showAuthenticatedEmptyState ? (
+            <GlassPanel style={styles.emptyPanel}>
+              <SectionHeader
+                description="No Tap In or Nudge needs your attention today."
+                title="Today is clear"
+              />
+            </GlassPanel>
+          ) : null}
+        </View>
+      ) : null}
+
+      {isAuthenticatedHome && upcomingActionCircles.length > 0 ? (
+        <View style={styles.circleSectionGroup}>
+          <SectionHeader
+            description="Circles that will need attention tomorrow or later this week."
+            title="Upcoming"
+          />
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.upcomingScroll}
+            contentContainerStyle={styles.upcomingScrollContent}>
+            {upcomingActionCircles.map(circle => (
+              <TodayCircleCard
+                card={circle}
+                isNudged={nudgedCircleIds.has(circle.id)}
+                isNudging={nudgingCircleIds.has(circle.id)}
+                key={circle.id}
+                onActionPress={() => handleCircleAction(circle)}
+                onCardPress={() => openCircleDetail(circle.id)}
+                variant="upcoming"
+              />
+            ))}
+          </ScrollView>
         </View>
       ) : null}
 
       {isLoadingHomeData ? (
         <GlassPanel style={styles.emptyPanel}>
-          <HoystText variant="title">Loading your circles</HoystText>
-          <HoystText tone="muted">
-            Pulling your live Circle Progression from Hoyst.
-          </HoystText>
+          <SectionHeader
+            description="Pulling your live Circle Progression from Hoyst."
+            title="Loading your circles"
+          />
         </GlassPanel>
       ) : null}
 
       {showHomeDataErrorPanel ? (
         <GlassPanel style={styles.emptyPanel}>
-          <HoystText variant="title">Could not load Home</HoystText>
-          <HoystText tone="muted">
-            Your account is connected, but Home could not load live circle data.
-          </HoystText>
+          <SectionHeader
+            description="Your account is connected, but Home could not load live circle data."
+            title="Could not load Home"
+          />
         </GlassPanel>
       ) : null}
 
@@ -1012,53 +973,6 @@ export function HomeScreen(): React.JSX.Element {
             />
           </View>
         </GlassPanel>
-      ) : null}
-
-      {activeSectionCircles.length > 0 ? (
-        <View style={styles.circleSectionGroup}>
-          <HoystText variant="title">Active Circles</HoystText>
-          <View style={styles.filterRow}>
-            {filters.map(filter => {
-              const isSelected = activeFilter === filter;
-              return (
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityState={{selected: isSelected}}
-                  key={filter}
-                  onPress={() => setActiveFilter(filter)}
-                  style={({pressed}) => [
-                    styles.filterChipButton,
-                    {opacity: pressed ? 0.88 : 1},
-                  ]}>
-                  <HoystChip
-                    label={`${filterLabels[filter]} ${filterCounts[filter]}`}
-                    style={[
-                      styles.filterChip,
-                      isSelected
-                        ? selectedFilterChipStyles[filter]
-                        : styles.filterChipInactive,
-                    ]}
-                    tone={filterTones[filter]}
-                  />
-                </Pressable>
-              );
-            })}
-          </View>
-          <View style={styles.activeCirclesGrid}>
-            {displayedActiveCircles.map(circle => (
-              <View key={circle.id} style={styles.activeCircleTile}>
-                <TodayCircleCard
-                  card={circle}
-                  isNudged={nudgedCircleIds.has(circle.id)}
-                  isNudging={nudgingCircleIds.has(circle.id)}
-                  onActionPress={() => handleCircleAction(circle)}
-                  onCardPress={() => openCircleDetail(circle.id)}
-                  variant="active"
-                />
-              </View>
-            ))}
-          </View>
-        </View>
       ) : null}
 
       {showCreateCircleButton ? (
@@ -1106,15 +1020,12 @@ const styles = StyleSheet.create({
   content: {
     paddingBottom: 172,
   },
-  activeCirclesGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
+  upcomingScroll: {
+    marginHorizontal: -20,
   },
-  activeCircleTile: {
-    flexBasis: '48%',
-    flexGrow: 1,
-    minWidth: 154,
+  upcomingScrollContent: {
+    gap: 12,
+    paddingHorizontal: 20,
   },
   circleSectionGroup: {
     gap: 12,
@@ -1125,6 +1036,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   logo: {
+    alignSelf: 'center',
     height: 38,
     width: 90,
   },
@@ -1142,7 +1054,7 @@ const styles = StyleSheet.create({
     width: 44,
   },
   avatarHeaderAction: {
-    transform: [{translateY: -2}],
+    transform: [{translateY: -4}],
   },
   inboxBadge: {
     alignItems: 'center',
@@ -1170,17 +1082,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: brandColors.white,
     borderColor: 'rgba(7,11,26,0.16)',
-    borderRadius: 21,
+    borderRadius: 22,
     borderWidth: 1,
     elevation: 3,
-    height: 42,
+    height: 44,
     justifyContent: 'center',
     overflow: 'visible',
     shadowColor: 'rgba(15,23,42,0.18)',
     shadowOffset: {height: 4, width: 0},
     shadowOpacity: 1,
     shadowRadius: 10,
-    width: 42,
+    width: 44,
   },
   heroCopy: {
     gap: 8,
@@ -1371,20 +1283,5 @@ const styles = StyleSheet.create({
   },
   emptyPanel: {
     gap: 16,
-  },
-  filterRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-  },
-  filterChipButton: {
-    borderRadius: radius.pill,
-  },
-  filterChip: {
-    borderRadius: radius.pill,
-    borderWidth: 1,
-  },
-  filterChipInactive: {
-    borderColor: 'transparent',
   },
 });

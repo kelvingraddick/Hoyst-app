@@ -19,6 +19,11 @@ import type {
   MemberRole,
   ProgressDayState,
 } from '../../../types/models';
+import {getHomeCircleActionVariant} from './home-circle-actions';
+export {
+  getHomeCircleActionVariant,
+  type HomeCircleActionVariant,
+} from './home-circle-actions';
 
 export type HomeProgressCell = {
   dateKey: string;
@@ -941,6 +946,38 @@ export function getHomeCircleUrgencyRank(circle: CircleManagementCard) {
     return 5;
   }
   return 4;
+}
+
+export function getTodayAttentionCircles(circles: CircleManagementCard[]) {
+  return sortHomeCircles(
+    circles.filter(circle =>
+      ['check_in', 'nudge'].includes(getHomeCircleActionVariant(circle)),
+    ),
+  );
+}
+
+function needsUpcomingAttention(circle: CircleManagementCard) {
+  if (circle.viewerMembershipStatus === 'pending') {
+    return false;
+  }
+
+  const actionVariant = getHomeCircleActionVariant(circle);
+
+  if (actionVariant === 'check_in' || actionVariant === 'nudge') {
+    return false;
+  }
+
+  if (circle.commitmentCadence === 'daily') {
+    return Boolean(circle.viewerHasCheckedIn || circle.viewerHasTappedInToday);
+  }
+
+  return (
+    (circle.viewerRemainingTapIns ?? 0) > 0 || circle.remainingCheckIns > 0
+  );
+}
+
+export function getUpcomingAttentionCircles(circles: CircleManagementCard[]) {
+  return sortHomeCircles(circles.filter(needsUpcomingAttention));
 }
 
 export function matchesHomeCircleFilter(

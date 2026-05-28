@@ -1,29 +1,28 @@
 import React from 'react';
 import {Pressable, StyleSheet, View} from 'react-native';
-import {
-  ChevronRight,
-  UsersRound,
-} from 'lucide-react-native';
+import {ChevronRight, UsersRound} from 'lucide-react-native';
 
 import type {CircleManagementCard} from '../../types/models';
+import {
+  getHomeCircleActionVariant,
+  type HomeCircleActionVariant,
+} from '../../features/home/services/home-circle-actions';
 import {useHoystTheme} from '../theme/useHoystTheme';
 import {actionMotion} from '../tokens/actions';
 import {radius} from '../tokens/radius';
 import {
   CircleCategoryIcon,
   CircleCategoryPill,
+  getCircleCategoryForegroundColor,
 } from './CircleCategoryIcon';
 import {CircleCardTapInButton} from './CircleCardTapInButton';
+import {GradientRing} from './GradientRing';
 import {GlassPanel} from './GlassPanel';
 import {HoystChip} from './HoystChip';
 import {LayeredAvatar} from './LayeredAvatar';
 import {HoystText} from './HoystText';
 
-export type TodayCircleCardActionVariant =
-  | 'check_in'
-  | 'nudge'
-  | 'share'
-  | 'view';
+export type TodayCircleCardActionVariant = HomeCircleActionVariant;
 
 type TodayCircleCardProps = {
   card: CircleManagementCard;
@@ -31,11 +30,41 @@ type TodayCircleCardProps = {
   isNudging?: boolean;
   onActionPress: () => void;
   onCardPress: () => void;
-  variant?: 'today' | 'active';
+  variant?: 'today' | 'active' | 'upcoming';
 };
 
 function getPeriodCopy(card: CircleManagementCard) {
+  if (card.commitmentCadence === 'monthly') {
+    return 'this month';
+  }
+
   return card.commitmentCadence === 'daily' ? 'today' : 'this week';
+}
+
+function getUpcomingPeriodCopy(card: CircleManagementCard) {
+  if (card.commitmentCadence === 'monthly') {
+    return 'this month';
+  }
+
+  return card.commitmentCadence === 'daily' ? 'tomorrow' : 'this week';
+}
+
+function getUpcomingPrimaryCopy(card: CircleManagementCard) {
+  return `Next tap ${getUpcomingPeriodCopy(card)}`;
+}
+
+function getUpcomingSupportingCopy(card: CircleManagementCard) {
+  const viewerRemainingTapIns = card.viewerRemainingTapIns ?? 0;
+
+  if (viewerRemainingTapIns > 0) {
+    return getRemainingTapInsLabel(viewerRemainingTapIns, card);
+  }
+
+  if (card.remainingCheckIns > 0 && card.commitmentCadence !== 'daily') {
+    return `Circle still moving ${getUpcomingPeriodCopy(card)}`;
+  }
+
+  return undefined;
 }
 
 function getRemainingTapInsLabel(count: number, card: CircleManagementCard) {
@@ -46,32 +75,16 @@ function getRemainingTapInsLabel(count: number, card: CircleManagementCard) {
     : `${count} Tap Ins left ${periodCopy}`;
 }
 
-export function getTodayCircleCardActionVariant(
+function getProgressStatLabel(
   card: CircleManagementCard,
-): TodayCircleCardActionVariant {
-  const canShareInvite = Boolean(
-    card.inviteUrl &&
-      (card.viewerRole === 'owner' || card.viewerRole === 'admin'),
-  );
+  completionRate: number,
+) {
+  const periodCopy = getPeriodCopy(card);
 
-  if (card.viewerMembershipStatus === 'pending') {
-    return 'view';
-  }
-
-  if (!card.viewerHasCheckedIn && !card.viewerHasTappedInToday) {
-    return 'check_in';
-  }
-
-  if ((card.nudgeTargetCount ?? 0) > 0) {
-    return 'nudge';
-  }
-
-  if (canShareInvite) {
-    return 'share';
-  }
-
-  return 'view';
+  return `${completionRate}% tapped-in ${periodCopy}`;
 }
+
+export const getTodayCircleCardActionVariant = getHomeCircleActionVariant;
 
 function getActionLabel({
   actionVariant,
@@ -193,6 +206,7 @@ export function TodayCircleCard({
   const theme = useHoystTheme();
   const completionRate = card.completionRate ?? card.progressPercent;
   const progressTone = getProgressTone(theme, completionRate);
+  const categoryColor = getCircleCategoryForegroundColor(card.category, theme);
   const statusLabel = getStatusLabel(card);
   const statusTone = getStatusTone(statusLabel);
   const othersNeededLabel = getRemainingTapInsLabel(
@@ -226,6 +240,7 @@ export function TodayCircleCard({
       ? othersNeededLabel
       : card.progressLabel ?? `${completionRate}% tapped in`;
   const progressLabel = card.progressLabel ?? `${completionRate}%`;
+  const progressStatLabel = getProgressStatLabel(card, completionRate);
   const shownUpCount = card.members.filter(
     member => member.state === 'done',
   ).length;
@@ -243,6 +258,53 @@ export function TodayCircleCard({
   const handleActionPress = () => {
     onActionPress();
   };
+
+  if (variant === 'upcoming') {
+    const upcomingSupportingCopy = getUpcomingSupportingCopy(card);
+
+    return (
+      <Pressable
+        onPress={onCardPress}
+        style={({pressed}) => [
+          styles.cardPressable,
+          styles.upcomingPressable,
+          {opacity: pressed ? 0.94 : 1},
+        ]}>
+        <GlassPanel padding="compact" style={styles.upcomingCard}>
+          <View style={styles.upcomingBody}>
+            <CircleCategoryIcon
+              category={card.category}
+              size={52}
+              style={styles.categoryTitleIcon}
+            />
+            <View style={styles.upcomingCopy}>
+              <HoystText numberOfLines={2} style={styles.upcomingTitle}>
+                {card.title}
+              </HoystText>
+              <HoystText tone="muted" variant="caption">
+                {getUpcomingPrimaryCopy(card)}
+              </HoystText>
+              {upcomingSupportingCopy ? (
+                <HoystText
+                  numberOfLines={2}
+                  tone="muted"
+                  variant="caption">
+                  {upcomingSupportingCopy}
+                </HoystText>
+              ) : null}
+            </View>
+          </View>
+          <View style={styles.upcomingArrowWrap}>
+            <ChevronRight
+              color={theme.accentForeground}
+              size={22}
+              strokeWidth={2.4}
+            />
+          </View>
+        </GlassPanel>
+      </Pressable>
+    );
+  }
 
   if (variant === 'active') {
     return (
@@ -338,26 +400,21 @@ export function TodayCircleCard({
 
           <View style={styles.todayStats}>
             <View style={styles.statRow}>
-              <UsersRound
-                color={theme.accentForeground}
-                size={17}
-                strokeWidth={2.4}
-              />
+              <UsersRound color={categoryColor} size={17} strokeWidth={2.4} />
               <HoystText tone="muted" variant="caption">
                 {shownUpLabel}
               </HoystText>
             </View>
             <View style={styles.statRow}>
-              <View
-                style={[
-                  styles.progressDot,
-                  {
-                    borderColor: progressTone,
-                  },
-                ]}
+              <GradientRing
+                flatColor={categoryColor}
+                progress={completionRate / 100}
+                size={18}
+                strokeWidth={3}
+                trackColor={theme.ring}
               />
               <HoystText tone="muted" variant="caption">
-                Circle progress: {progressLabel}
+                {progressStatLabel}
               </HoystText>
             </View>
           </View>
@@ -498,12 +555,6 @@ const styles = StyleSheet.create({
   previewButtonPressable: {
     flexShrink: 0,
   },
-  progressDot: {
-    borderRadius: radius.pill,
-    borderWidth: 2,
-    height: 18,
-    width: 18,
-  },
   statRow: {
     alignItems: 'center',
     flexDirection: 'row',
@@ -541,6 +592,31 @@ const styles = StyleSheet.create({
   },
   todayStats: {
     gap: 8,
+  },
+  upcomingArrowWrap: {
+    alignItems: 'flex-end',
+  },
+  upcomingBody: {
+    flex: 1,
+    gap: 10,
+    minWidth: 0,
+  },
+  upcomingCard: {
+    minHeight: 154,
+    width: 180,
+  },
+  upcomingCopy: {
+    gap: 4,
+    minWidth: 0,
+  },
+  upcomingPressable: {
+    width: 180,
+  },
+  upcomingTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    letterSpacing: 0,
+    lineHeight: 20,
   },
   todayTitle: {
     fontSize: 22,

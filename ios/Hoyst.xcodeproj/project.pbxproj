@@ -178,8 +178,8 @@
 				00DD1BFF1BD5951E006B06BC /* Bundle React Native code and images */,
 				00EEFC60759A1932668264C0 /* [CP] Embed Pods Frameworks */,
 				E235C05ADACE081382539298 /* [CP] Copy Pods Resources */,
-				C0A0DE1C6212220EAECE2B5D /* [CP-User] [RNFB] Core Configuration */,
 				6E096FD548F00427679D34C6 /* Embed App Extensions */,
+				C0A0DE1C6212220EAECE2B5D /* [CP-User] [RNFB] Core Configuration */,
 			);
 			buildRules = (
 			);

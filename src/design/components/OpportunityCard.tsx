@@ -11,6 +11,7 @@ import {HoystChip} from './HoystChip';
 import {HoystText} from './HoystText';
 import {LayeredAvatar} from './LayeredAvatar';
 import {CircleCardTapInButton} from './CircleCardTapInButton';
+import {getCircleCategoryForegroundColor} from './CircleCategoryIcon';
 
 type OpportunityCardProps = {
   card: CircleManagementCard;
@@ -43,6 +44,7 @@ export function OpportunityCard({
 }: OpportunityCardProps): React.JSX.Element {
   const theme = useHoystTheme();
   const status = getStatus(card);
+  const categoryColor = getCircleCategoryForegroundColor(card.category, theme);
   const canTapIn =
     !card.viewerHasCheckedIn && card.viewerMembershipStatus !== 'pending';
 
@@ -74,11 +76,7 @@ export function OpportunityCard({
             </View>
             <HoystChip label={status.label} tone={status.tone} />
             <View style={styles.metaRow}>
-              <UsersRound
-                color={theme.accentForeground}
-                size={16}
-                strokeWidth={2.2}
-              />
+              <UsersRound color={categoryColor} size={16} strokeWidth={2.2} />
               <HoystText tone="muted" variant="caption">
                 {card.memberCount} companions
               </HoystText>

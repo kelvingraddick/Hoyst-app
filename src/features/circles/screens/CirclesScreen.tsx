@@ -1,5 +1,12 @@
 import React, {useEffect, useMemo, useState} from 'react';
-import {Alert, Pressable, Share, StyleSheet, View} from 'react-native';
+import {
+  Alert,
+  Pressable,
+  ScrollView,
+  Share,
+  StyleSheet,
+  View,
+} from 'react-native';
 import {Plus, Search, UsersRound} from 'lucide-react-native';
 import type {BottomTabScreenProps} from '@react-navigation/bottom-tabs';
 import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
@@ -12,22 +19,27 @@ import {HoystInput} from '../../../design/components/HoystInput';
 import {HoystScreen} from '../../../design/components/HoystScreen';
 import {HoystText} from '../../../design/components/HoystText';
 import {LayeredAvatar} from '../../../design/components/LayeredAvatar';
+import {SectionHeader} from '../../../design/components/SectionHeader';
 import {
   OverviewStatusIcon,
   type OverviewStatusIconKind,
 } from '../../../design/components/OverviewStatusIcon';
 import {
+  CircleCategoryIcon,
   CircleCategoryPill,
+  getCircleCategoryForegroundColor,
   getCircleCategoryVisual,
 } from '../../../design/components/CircleCategoryIcon';
-import {
-  TodayCircleCard,
-  getTodayCircleCardActionVariant,
-} from '../../../design/components/TodayCircleCard';
+import {GradientRing} from '../../../design/components/GradientRing';
+import {TodayCircleCard} from '../../../design/components/TodayCircleCard';
 import {actionMotion} from '../../../design/tokens/actions';
+import {brandColors} from '../../../design/tokens/colors';
 import {radius} from '../../../design/tokens/radius';
 import {useHoystTheme} from '../../../design/theme/useHoystTheme';
-import type {AppTabsParamList, RootStackParamList} from '../../../navigation/types';
+import type {
+  AppTabsParamList,
+  RootStackParamList,
+} from '../../../navigation/types';
 import {useSessionStore} from '../../../store/session-store';
 import type {
   CircleActivityItem,
@@ -37,6 +49,7 @@ import type {
 } from '../../../types/models';
 import {
   createEmptyHomeData,
+  getHomeCircleActionVariant,
   sortHomeCircles,
   subscribeToHomeData,
   type HomeData,
@@ -55,7 +68,7 @@ import {
 } from '../../settings/services/notification-settings-service';
 
 type Props = BottomTabScreenProps<AppTabsParamList, 'Circles'>;
-type OverviewTone = 'blue' | 'green' | 'orange' | 'purple';
+type OverviewTone = 'blue' | 'green' | 'orange' | 'purple' | 'yellow';
 
 function getInitials(name: string) {
   return name
@@ -76,6 +89,10 @@ function getToneForeground(
 
   if (tone === 'orange') {
     return theme.warningForeground;
+  }
+
+  if (tone === 'yellow') {
+    return theme.isDark ? brandColors.spectrumYellow : '#7A5C00';
   }
 
   if (tone === 'blue') {
@@ -123,8 +140,7 @@ function mapInboxEventToActivity(event: InboxEvent): CircleActivityItem {
     message: event.body,
     timestamp: event.createdAtLabel,
     tone:
-      event.type === 'circle_at_risk' ||
-      event.type === 'tap_in_final_warning'
+      event.type === 'circle_at_risk' || event.type === 'tap_in_final_warning'
         ? 'alert'
         : event.type === 'join_approved' || event.type === 'member_joined'
         ? 'success'
@@ -150,7 +166,7 @@ function OverviewStat({
 
   return (
     <View style={styles.overviewStat}>
-      <OverviewStatusIcon kind={iconKind} size={42} />
+      <OverviewStatusIcon color={color} kind={iconKind} size={42} />
       <HoystText style={styles.overviewValue}>{value}</HoystText>
       <HoystText
         adjustsFontSizeToFit
@@ -171,6 +187,42 @@ function OverviewStat({
   );
 }
 
+function DiscoverAvatarPreview({circle}: {circle: ExploreCircle}) {
+  const theme = useHoystTheme();
+
+  return (
+    <View style={styles.avatarRow}>
+      {circle.members.slice(0, 3).map((member, index) => (
+        <View
+          key={member.id}
+          style={[
+            styles.avatarOffset,
+            index === 0 ? undefined : styles.avatarOverlap,
+          ]}>
+          <LayeredAvatar
+            imageSource={member.avatarImage}
+            imageUrl={member.avatarUrl}
+            initials={member.initials}
+            size={36}
+            state={member.state}
+          />
+        </View>
+      ))}
+      {circle.members.length > 3 ? (
+        <View
+          style={[
+            styles.moreCountBubble,
+            {backgroundColor: theme.surfaceHigh},
+          ]}>
+          <HoystText style={styles.moreCount} tone="muted" variant="caption">
+            +{circle.members.length - 3}
+          </HoystText>
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
 function DiscoverCircleCard({
   circle,
   onPress,
@@ -181,6 +233,13 @@ function DiscoverCircleCard({
   const theme = useHoystTheme();
   const seatsOpen = Math.max(circle.maxSize - circle.memberCount, 0);
   const completionTone = getCompletionTone(theme, circle.completionRate);
+  const categoryColor = getCircleCategoryForegroundColor(
+    circle.category,
+    theme,
+  );
+  const description = circle.matchCopy ?? circle.commitment;
+  const supportingLabel = circle.matchCopy ? circle.commitment : undefined;
+  const seatsLabel = seatsOpen === 1 ? '1 seat open' : `${seatsOpen} seats open`;
 
   return (
     <Pressable
@@ -191,114 +250,189 @@ function DiscoverCircleCard({
         {opacity: pressed ? actionMotion.pressedOpacity : 1},
       ]}>
       <GlassPanel style={styles.discoverCard}>
-        <View style={styles.discoverHeader}>
+        <View style={styles.discoverBody}>
+          <View style={styles.discoverTitleRow}>
+            <View style={styles.titleCluster}>
+              <CircleCategoryIcon
+                category={circle.category}
+                size={34}
+                style={styles.categoryTitleIcon}
+              />
+              <HoystText style={styles.discoverTitle}>{circle.title}</HoystText>
+            </View>
+            <View
+              style={[
+                styles.completionBadge,
+                {
+                  backgroundColor: `${completionTone}14`,
+                  borderColor: `${completionTone}55`,
+                },
+              ]}>
+              <HoystText style={{color: completionTone}} variant="caption">
+                {circle.completionRate}%
+              </HoystText>
+            </View>
+          </View>
+
           <View style={styles.discoverMeta}>
             <CircleCategoryPill category={circle.category} uppercase />
-            <HoystText style={{color: theme.warningForeground}} variant="caption">
-              {circle.streakLabel}
+            <HoystChip
+              label={circle.joinLabel}
+              tone={circle.joinLabel === 'Open seats' ? 'green' : 'purple'}
+            />
+          </View>
+
+          <View style={styles.discoverCopy}>
+            <HoystText numberOfLines={2} tone="muted">
+              {description}
+            </HoystText>
+            {supportingLabel ? (
+              <HoystText tone="muted" variant="caption">
+                {supportingLabel}
+              </HoystText>
+            ) : null}
+          </View>
+
+          <View style={styles.discoverStats}>
+            <View style={styles.statRow}>
+              <UsersRound color={categoryColor} size={17} strokeWidth={2.4} />
+              <HoystText tone="muted" variant="caption">
+                {circle.memberCount}/{circle.maxSize} members
+              </HoystText>
+            </View>
+            <View style={styles.statRow}>
+              <GradientRing
+                flatColor={categoryColor}
+                progress={circle.completionRate / 100}
+                size={18}
+                strokeWidth={3}
+                trackColor={theme.ring}
+              />
+              <HoystText tone="muted" variant="caption">
+                {circle.completionRate}% tapped-in pace
+              </HoystText>
+            </View>
+            <HoystText tone="muted" variant="caption">
+              {circle.streakLabel} · {seatsLabel}
             </HoystText>
           </View>
-          <View
-            style={[
-              styles.completionBadge,
-              {
-                backgroundColor: `${completionTone}14`,
-                borderColor: `${completionTone}55`,
-              },
-            ]}>
-            <HoystText style={{color: completionTone}} variant="caption">
-              {circle.completionRate}%
-            </HoystText>
+
+          <View style={styles.discoverFooter}>
+            <DiscoverAvatarPreview circle={circle} />
+
+            <Pressable
+              accessibilityRole="button"
+              onPress={event => {
+                event.stopPropagation();
+                onPress();
+              }}
+              style={({pressed}) => [
+                styles.previewButtonPressable,
+                {opacity: pressed ? actionMotion.pressedOpacity : 1},
+              ]}>
+              <View
+                style={[
+                  styles.previewButton,
+                  {
+                    backgroundColor: theme.surfaceHigh,
+                    borderColor: theme.borderStrong,
+                  },
+                ]}>
+                <HoystText
+                  style={[
+                    styles.previewButtonLabel,
+                    {color: theme.actionForeground},
+                  ]}
+                  variant="button">
+                  View Circle
+                </HoystText>
+              </View>
+            </Pressable>
+          </View>
+        </View>
+      </GlassPanel>
+    </Pressable>
+  );
+}
+
+function DiscoverySectionCard({
+  actionLabel,
+  description,
+  icon,
+  metaLabels,
+  onActionPress,
+  stats,
+  supportingLabel,
+  title,
+}: {
+  actionLabel: string;
+  description: string;
+  icon: React.ReactNode;
+  metaLabels: [string, string];
+  onActionPress: () => void;
+  stats: [string, string];
+  supportingLabel: string;
+  title: string;
+}) {
+  const theme = useHoystTheme();
+
+  return (
+    <GlassPanel style={styles.discoverCard}>
+      <View style={styles.discoverBody}>
+        <View style={styles.discoverTitleRow}>
+          <View style={styles.titleCluster}>
+            <View
+              style={[
+                styles.discoveryIcon,
+                {
+                  backgroundColor: `${theme.accent}12`,
+                  borderColor: `${theme.accentForeground}24`,
+                },
+              ]}>
+              {icon}
+            </View>
+            <HoystText style={styles.discoverTitle}>{title}</HoystText>
           </View>
         </View>
 
+        <View style={styles.discoverMeta}>
+          <HoystChip label={metaLabels[0]} tone="purple" />
+          <HoystChip label={metaLabels[1]} tone="green" />
+        </View>
+
         <View style={styles.discoverCopy}>
-          <HoystText style={styles.discoverTitle}>{circle.title}</HoystText>
-          <HoystText tone="muted">{circle.commitment}</HoystText>
+          <HoystText numberOfLines={2} tone="muted">
+            {description}
+          </HoystText>
           <HoystText tone="muted" variant="caption">
-            {circle.matchCopy}
+            {supportingLabel}
           </HoystText>
         </View>
 
         <View style={styles.discoverStats}>
-          <HoystChip
-            label={circle.joinLabel}
-            tone={circle.joinLabel === 'Open seats' ? 'green' : 'purple'}
-          />
           <View style={styles.statRow}>
-            <UsersRound
-              color={theme.accentForeground}
-              size={17}
-              strokeWidth={2.4}
-            />
+            <Search color={theme.accentForeground} size={17} strokeWidth={2.4} />
             <HoystText tone="muted" variant="caption">
-              {circle.memberCount}/{circle.maxSize} members
+              {stats[0]}
             </HoystText>
           </View>
-          <HoystText tone="muted" variant="caption">
-            {seatsOpen} seats open
-          </HoystText>
-        </View>
-
-        <View style={styles.discoverFooter}>
-          <View style={styles.avatarRow}>
-            {circle.members.slice(0, 3).map((member, index) => (
-              <View
-                key={member.id}
-                style={[
-                  styles.avatarOffset,
-                  index === 0 ? undefined : styles.avatarOverlap,
-                ]}>
-                <LayeredAvatar
-                  imageSource={member.avatarImage}
-                  imageUrl={member.avatarUrl}
-                  initials={member.initials}
-                  size={36}
-                  state={member.state}
-                />
-              </View>
-            ))}
-            {circle.members.length > 3 ? (
-              <View
-                style={[
-                  styles.moreCountBubble,
-                  {backgroundColor: theme.surfaceHigh},
-                ]}>
-                <HoystText style={styles.moreCount} tone="muted" variant="caption">
-                  +{circle.members.length - 3}
-                </HoystText>
-              </View>
-            ) : null}
+          <View style={styles.statRow}>
+            <Plus color={theme.successForeground} size={17} strokeWidth={2.4} />
+            <HoystText tone="muted" variant="caption">
+              {stats[1]}
+            </HoystText>
           </View>
-
-          <Pressable
-            accessibilityRole="button"
-            onPress={event => {
-              event.stopPropagation();
-              onPress();
-            }}
-            style={({pressed}) => [
-              styles.previewButtonPressable,
-              {opacity: pressed ? actionMotion.pressedOpacity : 1},
-            ]}>
-            <View
-              style={[
-                styles.previewButton,
-                {
-                  backgroundColor: theme.surfaceHigh,
-                  borderColor: theme.borderStrong,
-                },
-              ]}>
-              <HoystText
-                style={[styles.previewButtonLabel, {color: theme.actionForeground}]}
-                variant="button">
-                Preview
-              </HoystText>
-            </View>
-          </Pressable>
         </View>
-      </GlassPanel>
-    </Pressable>
+
+        <View style={styles.discoveryAction}>
+          <HoystButton
+            label={actionLabel}
+            onPress={onActionPress}
+            variant="outline"
+          />
+        </View>
+      </View>
+    </GlassPanel>
   );
 }
 
@@ -339,7 +473,10 @@ export function CirclesScreen({navigation}: Props): React.JSX.Element {
     });
   }, [canLoad, timezone, user?.uid]);
 
-  useEffect(() => subscribeToPublicCircles(setPublicCircles, () => undefined), []);
+  useEffect(
+    () => subscribeToPublicCircles(setPublicCircles, () => undefined),
+    [],
+  );
 
   useEffect(() => {
     if (!canLoad || !user?.uid) {
@@ -361,7 +498,10 @@ export function CirclesScreen({navigation}: Props): React.JSX.Element {
     [homeData.circles],
   );
   const needsAttention = useMemo(
-    () => sortHomeCircles(activeCircles.filter(circle => !circle.viewerHasCheckedIn)),
+    () =>
+      sortHomeCircles(
+        activeCircles.filter(circle => !circle.viewerHasCheckedIn),
+      ),
     [activeCircles],
   );
   const allCircles = useMemo(
@@ -379,7 +519,8 @@ export function CirclesScreen({navigation}: Props): React.JSX.Element {
   ).length;
   const companionUpdates = events.slice(0, 2).map(mapInboxEventToActivity);
   const hasActiveCircles = activeCircles.length > 0;
-  const sourcePublicCircles = publicCircles.length > 0 ? publicCircles : exploreCircles;
+  const sourcePublicCircles =
+    publicCircles.length > 0 ? publicCircles : exploreCircles;
   const categories = useMemo(
     () => getPublicCircleCategories(sourcePublicCircles),
     [sourcePublicCircles],
@@ -463,7 +604,7 @@ export function CirclesScreen({navigation}: Props): React.JSX.Element {
   };
 
   const handleCircleAction = (circle: CircleManagementCard) => {
-    const actionVariant = getTodayCircleCardActionVariant(circle);
+    const actionVariant = getHomeCircleActionVariant(circle);
 
     if (circle.viewerMembershipStatus === 'pending') {
       openCircle(circle.id);
@@ -511,15 +652,13 @@ export function CirclesScreen({navigation}: Props): React.JSX.Element {
 
   const overviewSection = (
     <GlassPanel padding="compact" style={styles.overview}>
-      <View style={styles.overviewHeader}>
-        <HoystText variant="subtitle">Overview</HoystText>
-      </View>
+      <SectionHeader title="Overview" />
       <View style={styles.overviewRow}>
         <OverviewStat
           detail="Your attention"
           iconKind="needsTap"
           label="Needs Tap"
-          tone="purple"
+          tone="orange"
           value={needsAttention.length}
         />
         <View
@@ -529,10 +668,10 @@ export function CirclesScreen({navigation}: Props): React.JSX.Element {
           ]}
         />
         <OverviewStat
-          detail="Awaiting approval"
+          detail="Approval"
           iconKind="pending"
           label="Pending"
-          tone="orange"
+          tone="yellow"
           value={pendingCount}
         />
         <View
@@ -545,7 +684,7 @@ export function CirclesScreen({navigation}: Props): React.JSX.Element {
           detail="Keep it going"
           iconKind="onTrack"
           label="On Track"
-          tone="green"
+          tone="blue"
           value={onTrackCount}
         />
         <View
@@ -558,7 +697,7 @@ export function CirclesScreen({navigation}: Props): React.JSX.Element {
           detail="Nice work!"
           iconKind="completedToday"
           label="Completed Today"
-          tone="purple"
+          tone="green"
           value={completedTodayCount}
         />
       </View>
@@ -567,14 +706,10 @@ export function CirclesScreen({navigation}: Props): React.JSX.Element {
 
   const needAttentionSection = (
     <>
-      <View style={styles.sectionHeader}>
-        <View>
-          <HoystText variant="subtitle">Need Attention</HoystText>
-          <HoystText tone="muted" variant="caption">
-            Circles that need your Tap In to keep moving.
-          </HoystText>
-        </View>
-      </View>
+      <SectionHeader
+        description="Circles that need your Tap In to keep moving."
+        title="Need Attention"
+      />
       {needsAttention.length > 0 ? (
         needsAttention.map(circle => (
           <TodayCircleCard
@@ -589,11 +724,10 @@ export function CirclesScreen({navigation}: Props): React.JSX.Element {
         ))
       ) : (
         <GlassPanel>
-          <HoystText variant="subtitle">No circles need you right now</HoystText>
-          <HoystText tone="muted">
-            When a Tap In, nudge, or circle update needs attention, it will show
-            up here.
-          </HoystText>
+          <SectionHeader
+            description="When a Tap In, nudge, or circle update needs attention, it will show up here."
+            title="No circles need you right now"
+          />
         </GlassPanel>
       )}
     </>
@@ -601,37 +735,34 @@ export function CirclesScreen({navigation}: Props): React.JSX.Element {
 
   const allCirclesSection = (
     <>
-      <View style={styles.sectionHeader}>
-        <View>
-          <HoystText variant="subtitle">All Circles</HoystText>
-          <HoystText tone="muted" variant="caption">
-            Everything you have joined or requested to join.
-          </HoystText>
-        </View>
-      </View>
+      <SectionHeader
+        description="Everything you have joined or requested to join."
+        title="All Circles"
+      />
       {allCircles.length > 0 ? (
-        <View style={styles.allCirclesGrid}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.allCirclesScroll}
+          contentContainerStyle={styles.allCirclesScrollContent}>
           {allCircles.map(circle => (
-            <View key={circle.id} style={styles.allCircleTile}>
-              <TodayCircleCard
-                card={circle}
-                isNudged={nudgedCircleIds.has(circle.id)}
-                isNudging={nudgingCircleIds.has(circle.id)}
-                onActionPress={() => handleCircleAction(circle)}
-                onCardPress={() => openCircle(circle.id)}
-                variant="active"
-              />
-            </View>
+            <TodayCircleCard
+              card={circle}
+              isNudged={nudgedCircleIds.has(circle.id)}
+              isNudging={nudgingCircleIds.has(circle.id)}
+              key={circle.id}
+              onActionPress={() => handleCircleAction(circle)}
+              onCardPress={() => openCircle(circle.id)}
+              variant="upcoming"
+            />
           ))}
-        </View>
+        </ScrollView>
       ) : (
         <GlassPanel style={styles.emptyPanel}>
-          <View style={styles.emptyCopy}>
-            <HoystText variant="subtitle">No circles yet</HoystText>
-            <HoystText tone="muted">
-              Public Circles and your own created Circles will collect here.
-            </HoystText>
-          </View>
+          <SectionHeader
+            description="Public Circles and your own created Circles will collect here."
+            title="No circles yet"
+          />
         </GlassPanel>
       )}
     </>
@@ -639,14 +770,10 @@ export function CirclesScreen({navigation}: Props): React.JSX.Element {
 
   const companionUpdatesSection = (
     <>
-      <View style={styles.sectionHeader}>
-        <View>
-          <HoystText variant="subtitle">Companion Updates</HoystText>
-          <HoystText tone="muted" variant="caption">
-            What is happening in your circles.
-          </HoystText>
-        </View>
-      </View>
+      <SectionHeader
+        description="What is happening in your circles."
+        title="Companion Updates"
+      />
       {companionUpdates.length > 0 ? (
         companionUpdates.map((item, index) => (
           <Pressable key={item.id} onPress={() => openEvent(events[index])}>
@@ -655,43 +782,36 @@ export function CirclesScreen({navigation}: Props): React.JSX.Element {
         ))
       ) : (
         <GlassPanel>
-          <HoystText variant="subtitle">No companion updates yet</HoystText>
-          <HoystText tone="muted">
-            Nudges, joins, and circle milestones will appear here.
-          </HoystText>
+          <SectionHeader
+            description="Nudges, joins, and circle milestones will appear here."
+            title="No companion updates yet"
+          />
         </GlassPanel>
       )}
     </>
   );
 
   const startPanel = (
-    <GlassPanel style={styles.emptyPanel}>
-      <View style={styles.emptyCopy}>
-        <HoystText variant="title">Find Circles or start your own</HoystText>
-        <HoystText tone="muted">
-          Browse public Circles below, or create a Circle around the habit you
-          want to keep moving.
-        </HoystText>
-      </View>
-      <View style={styles.emptyActions}>
-        <HoystButton
-          label="Create Circle"
-          onPress={() => rootNavigation?.navigate('CreateCircle')}
-          variant="outline"
-        />
-      </View>
-    </GlassPanel>
+    <DiscoverySectionCard
+      actionLabel="Create Circle"
+      description="Browse public Circles below, or create a Circle around the habit you want to keep moving."
+      icon={
+        <Plus color={theme.accentForeground} size={28} strokeWidth={2.6} />
+      }
+      metaLabels={['Find Circles', 'Start your own']}
+      onActionPress={() => rootNavigation?.navigate('CreateCircle')}
+      stats={['Public Circles are ready to browse', 'Private rhythms start here']}
+      supportingLabel="Find people already moving, or build the space you need."
+      title="Find Circles or start your own"
+    />
   );
 
   const discoverSection = (
     <>
-      <View style={styles.findHeader}>
-        <HoystText variant="subtitle">Find Circles</HoystText>
-        <HoystText tone="muted">
-          Browse public Circles with open seats, steady Tap Ins, and members
-          moving at your pace.
-        </HoystText>
-      </View>
+      <SectionHeader
+        description="Browse public Circles with open seats, steady Tap Ins, and members moving at your pace."
+        title="Find Circles"
+      />
 
       <View style={styles.searchWrap}>
         <Search
@@ -767,24 +887,21 @@ export function CirclesScreen({navigation}: Props): React.JSX.Element {
           />
         ))
       ) : (
-        <GlassPanel style={styles.emptyPanel}>
-          <View style={styles.emptyCopy}>
-            <HoystText variant="subtitle">No Circles found</HoystText>
-            <HoystText tone="muted">
-              Try a different search or switch categories to keep browsing.
-            </HoystText>
-          </View>
-          <View style={styles.emptyActions}>
-            <HoystButton
-              label="Clear filters"
-              onPress={() => {
-                setActiveCategory('All');
-                setSearchTerm('');
-              }}
-              variant="outline"
-            />
-          </View>
-        </GlassPanel>
+        <DiscoverySectionCard
+          actionLabel="Clear filters"
+          description="Try a different search or switch categories to keep browsing."
+          icon={
+            <Search color={theme.accentForeground} size={27} strokeWidth={2.5} />
+          }
+          metaLabels={['No matches', 'Filters active']}
+          onActionPress={() => {
+            setActiveCategory('All');
+            setSearchTerm('');
+          }}
+          stats={['Search terms narrow the list', 'Categories can hide matches']}
+          supportingLabel="Clearing filters brings every public Circle back into view."
+          title="No Circles found"
+        />
       )}
     </>
   );
@@ -841,13 +958,12 @@ export function CirclesScreen({navigation}: Props): React.JSX.Element {
 }
 
 const styles = StyleSheet.create({
-  allCirclesGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
+  allCirclesScroll: {
+    marginHorizontal: -20,
   },
-  allCircleTile: {
-    width: '100%',
+  allCirclesScrollContent: {
+    gap: 12,
+    paddingHorizontal: 20,
   },
   avatarOffset: {
     borderRadius: radius.pill,
@@ -864,10 +980,14 @@ const styles = StyleSheet.create({
   cardPressable: {
     borderRadius: radius.lg,
   },
+  categoryTitleIcon: {
+    flexShrink: 0,
+  },
   completionBadge: {
     alignItems: 'center',
     borderRadius: radius.pill,
     borderWidth: 1,
+    flexShrink: 0,
     minWidth: 54,
     paddingHorizontal: 10,
     paddingVertical: 7,
@@ -876,7 +996,10 @@ const styles = StyleSheet.create({
     paddingBottom: 176,
   },
   discoverCard: {
-    minHeight: 238,
+    minHeight: 250,
+  },
+  discoverBody: {
+    gap: 13,
   },
   discoverCopy: {
     gap: 7,
@@ -887,15 +1010,8 @@ const styles = StyleSheet.create({
     gap: 12,
     justifyContent: 'space-between',
   },
-  discoverHeader: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: 10,
-    justifyContent: 'space-between',
-  },
   discoverMeta: {
     alignItems: 'center',
-    flex: 1,
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
@@ -908,19 +1024,33 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   discoverTitle: {
-    fontSize: 22,
+    flexShrink: 1,
+    fontSize: 21,
     fontWeight: '800',
     letterSpacing: 0,
-    lineHeight: 26,
-  },
-  emptyActions: {
-    gap: 12,
-  },
-  emptyCopy: {
-    gap: 8,
+    lineHeight: 25,
+    minWidth: 0,
   },
   emptyPanel: {
     gap: 16,
+  },
+  discoverTitleRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 10,
+    justifyContent: 'space-between',
+  },
+  discoveryAction: {
+    alignItems: 'stretch',
+    marginTop: 2,
+  },
+  discoveryIcon: {
+    alignItems: 'center',
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    height: 42,
+    justifyContent: 'center',
+    width: 42,
   },
   filterChip: {
     borderRadius: radius.pill,
@@ -936,9 +1066,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 10,
-  },
-  findHeader: {
-    gap: 8,
   },
   header: {
     alignItems: 'flex-start',
@@ -1007,11 +1134,6 @@ const styles = StyleSheet.create({
     opacity: 0.68,
     width: StyleSheet.hairlineWidth,
   },
-  overviewHeader: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
   overviewLabel: {
     fontSize: 10.5,
     fontWeight: '800',
@@ -1074,14 +1196,16 @@ const styles = StyleSheet.create({
   searchWrap: {
     position: 'relative',
   },
-  sectionHeader: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
   statRow: {
     alignItems: 'center',
     flexDirection: 'row',
     gap: 8,
+  },
+  titleCluster: {
+    alignItems: 'center',
+    flex: 1,
+    flexDirection: 'row',
+    gap: 10,
+    minWidth: 0,
   },
 });

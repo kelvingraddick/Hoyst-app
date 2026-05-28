@@ -1,0 +1,147 @@
+import React from 'react';
+import renderer, {act} from 'react-test-renderer';
+import {UsersRound} from 'lucide-react-native';
+
+import {CircleCardTapInButton} from '../src/design/components/CircleCardTapInButton';
+import {GradientRing} from '../src/design/components/GradientRing';
+import {TodayCircleCard} from '../src/design/components/TodayCircleCard';
+import {getHoystThemeColors} from '../src/design/tokens/colors';
+import type {CircleManagementCard} from '../src/types/models';
+
+jest.mock('@react-native-community/blur', () => ({
+  BlurView: ({children, ...props}: {children?: React.ReactNode}) => {
+    const MockReact = require('react');
+    const {View} = require('react-native');
+
+    return MockReact.createElement(View, props, children);
+  },
+}));
+
+jest.mock('../src/store/settings-store', () => ({
+  useSettingsStore: (selector: (state: {appearance: 'light'}) => unknown) =>
+    selector({appearance: 'light'}),
+}));
+
+function circle(
+  overrides: Partial<CircleManagementCard>,
+): CircleManagementCard {
+  return {
+    category: 'Fitness',
+    commitment: 'Move for 30 minutes',
+    commitmentCadence: 'daily',
+    commitmentFrequency: {tapInsPerWeek: 7},
+    completionRate: 42,
+    id: 'circle-1',
+    inviteUrl: 'https://example.com/invite',
+    joinMode: 'open',
+    maxSize: 8,
+    memberCount: 2,
+    members: [],
+    privacy: 'public',
+    progressPercent: 42,
+    remainingCheckIns: 1,
+    state: 'active',
+    streakDays: 4,
+    streakLabel: 'Start today',
+    title: 'Morning Movers',
+    viewerHasCheckedIn: false,
+    viewerMembershipStatus: 'active',
+    viewerRole: 'member',
+    viewerTodayStatus: 'rest',
+    ...overrides,
+  };
+}
+
+describe('TodayCircleCard', () => {
+  it('shows tapped-in copy and passes progress to the mini ring', () => {
+    let tree: renderer.ReactTestRenderer | undefined;
+
+    act(() => {
+      tree = renderer.create(
+        <TodayCircleCard
+          card={circle({})}
+          onActionPress={jest.fn()}
+          onCardPress={jest.fn()}
+        />,
+      );
+    });
+
+    const output = JSON.stringify(tree!.toJSON());
+    const ring = tree!.root.findByType(GradientRing);
+    const companionIcon = tree!.root.findByType(UsersRound);
+    const lightTheme = getHoystThemeColors('light');
+
+    expect(output).toContain('42% tapped-in today');
+    expect(ring.props).toMatchObject({
+      flatColor: '#07763E',
+      progress: 0.42,
+      size: 18,
+      strokeWidth: 3,
+    });
+    expect(companionIcon.props.color).toBe('#07763E');
+    expect(companionIcon.props.color).not.toBe(lightTheme.accentForeground);
+  });
+
+  it('renders upcoming daily cards as compact next-action cards', () => {
+    let tree: renderer.ReactTestRenderer | undefined;
+
+    act(() => {
+      tree = renderer.create(
+        <TodayCircleCard
+          card={circle({
+            progressPercent: 100,
+            remainingCheckIns: 0,
+            state: 'done',
+            title: 'Hydration Habit',
+            viewerHasCheckedIn: true,
+            viewerHasTappedInToday: true,
+            viewerRemainingTapIns: 0,
+            viewerTodayStatus: 'done',
+          })}
+          onActionPress={jest.fn()}
+          onCardPress={jest.fn()}
+          variant="upcoming"
+        />,
+      );
+    });
+
+    const output = JSON.stringify(tree!.toJSON());
+
+    expect(output).toContain('Hydration Habit');
+    expect(output).toContain('Next tap tomorrow');
+    expect(output).not.toContain('Tap In');
+    expect(tree!.root.findAllByType(CircleCardTapInButton)).toHaveLength(0);
+  });
+
+  it('renders upcoming weekly remaining copy', () => {
+    let tree: renderer.ReactTestRenderer | undefined;
+
+    act(() => {
+      tree = renderer.create(
+        <TodayCircleCard
+          card={circle({
+            commitmentCadence: 'weekly',
+            commitmentFrequency: {tapInsPerWeek: 4},
+            progressPercent: 50,
+            remainingCheckIns: 2,
+            title: 'Morning Crew',
+            viewerHasCheckedIn: false,
+            viewerHasTappedInToday: true,
+            viewerRemainingTapIns: 2,
+            viewerTodayStatus: 'done',
+          })}
+          onActionPress={jest.fn()}
+          onCardPress={jest.fn()}
+          variant="upcoming"
+        />,
+      );
+    });
+
+    const output = JSON.stringify(tree!.toJSON());
+
+    expect(output).toContain('Morning Crew');
+    expect(output).toContain('Next tap this week');
+    expect(output).toContain('2 Tap Ins left this week');
+    expect(tree!.root.findAllByType(CircleCardTapInButton)).toHaveLength(0);
+  });
+});

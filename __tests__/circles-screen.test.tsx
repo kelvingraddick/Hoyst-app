@@ -1,5 +1,7 @@
 import React from 'react';
+import {TextInput} from 'react-native';
 import renderer, {act} from 'react-test-renderer';
+import {UsersRound} from 'lucide-react-native';
 
 import {CirclesScreen} from '../src/features/circles/screens/CirclesScreen';
 import type {HomeData} from '../src/features/home/services/home-data-service';
@@ -64,6 +66,28 @@ jest.mock('../src/features/home/services/home-data-service', () => {
       todayDateKey: '2026-05-26',
       todayLabel: 'Today',
     })),
+    getHomeCircleActionVariant: jest.fn((circle: CircleManagementCard) => {
+      if (circle.viewerMembershipStatus === 'pending') {
+        return 'view';
+      }
+
+      if (!circle.viewerHasCheckedIn && !circle.viewerHasTappedInToday) {
+        return 'check_in';
+      }
+
+      if ((circle.nudgeTargetCount ?? 0) > 0) {
+        return 'nudge';
+      }
+
+      if (
+        circle.inviteUrl &&
+        (circle.viewerRole === 'owner' || circle.viewerRole === 'admin')
+      ) {
+        return 'share';
+      }
+
+      return 'view';
+    }),
     sortHomeCircles: jest.fn((circles: CircleManagementCard[]) => circles),
     subscribeToHomeData: jest.fn(({onData}) => {
       onData(mockHomeData);
@@ -94,7 +118,9 @@ jest.mock('../src/features/circles/services/circle-service', () => ({
   nudgeCircleMembers: jest.fn(),
 }));
 
-function circle(overrides: Partial<CircleManagementCard>): CircleManagementCard {
+function circle(
+  overrides: Partial<CircleManagementCard>,
+): CircleManagementCard {
   return {
     category: 'Fitness',
     commitment: 'Move for 30 minutes',
@@ -155,7 +181,7 @@ function homeData(circles: CircleManagementCard[]): HomeData {
   };
 }
 
-function renderScreen() {
+function renderScreenTree() {
   const navigation = {
     getParent: () => ({
       navigate: jest.fn(),
@@ -169,7 +195,11 @@ function renderScreen() {
     );
   });
 
-  return JSON.stringify(screen?.toJSON());
+  return screen!;
+}
+
+function renderScreen() {
+  return JSON.stringify(renderScreenTree().toJSON());
 }
 
 describe('CirclesScreen render paths', () => {
@@ -184,17 +214,26 @@ describe('CirclesScreen render paths', () => {
 
     expect(output).toContain('Overview');
     expect(output).toContain('Needs Tap');
+    expect(output).toContain('#A83A00');
+    expect(output).toContain('#FFF0E6');
     expect(output).toContain('Your attention');
     expect(output).toContain('Pending');
-    expect(output).toContain('Awaiting approval');
+    expect(output).toContain('#7A5C00');
+    expect(output).toContain('#FFF8EA');
+    expect(output).toContain('Approval');
     expect(output).toContain('On Track');
+    expect(output).toContain('#086CA8');
+    expect(output).toContain('#E7F8FF');
     expect(output).toContain('Keep it going');
     expect(output).toContain('Completed Today');
+    expect(output).toContain('#07763E');
+    expect(output).toContain('#E7F8EF');
     expect(output).toContain('Nice work!');
     expect(output).toContain('Need Attention');
     expect(output).toContain('All Circles');
     expect(output).toContain('Companion Updates');
     expect(output).toContain('Discover Circles');
+    expect(output).toContain('View Circle');
     expect(output.indexOf('Overview')).toBeLessThan(
       output.indexOf('Discover Circles'),
     );
@@ -205,12 +244,44 @@ describe('CirclesScreen render paths', () => {
     const output = renderScreen();
 
     expect(output).toContain('Find Circles or start your own');
+    expect(output).toContain('Start your own');
+    expect(output).toContain('Private rhythms start here');
+    expect(output).toContain('Create Circle');
     expect(output).toContain('Discover Circles');
     expect(output).toContain('Public Movers');
+    expect(output).toContain('View Circle');
     expect(output).toContain('All Circles');
     expect(output.indexOf('Discover Circles')).toBeLessThan(
       output.indexOf('All Circles'),
     );
+  });
+
+  it('uses category color for discover card member icons', () => {
+    mockHomeData = homeData([]);
+    const tree = renderScreenTree();
+
+    expect(
+      tree.root
+        .findAllByType(UsersRound)
+        .some(icon => icon.props.color === '#07763E'),
+    ).toBe(true);
+  });
+
+  it('renders a Today-style no-results discovery card', () => {
+    mockHomeData = homeData([]);
+    const tree = renderScreenTree();
+
+    act(() => {
+      tree.root.findByType(TextInput).props.onChangeText('nope');
+    });
+
+    const output = JSON.stringify(tree.toJSON());
+
+    expect(output).toContain('No Circles found');
+    expect(output).toContain('No matches');
+    expect(output).toContain('Filters active');
+    expect(output).toContain('Clearing filters brings every public Circle back into view.');
+    expect(output).toContain('Clear filters');
   });
 
   it('keeps discovery visible before pending-only circle management', () => {

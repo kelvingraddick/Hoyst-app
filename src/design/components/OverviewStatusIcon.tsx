@@ -11,6 +11,7 @@ export type OverviewStatusIconKind =
   | 'pending';
 
 type OverviewStatusIconProps = {
+  color?: string;
   kind: OverviewStatusIconKind;
   size?: number;
   style?: StyleProp<ViewStyle>;
@@ -26,6 +27,65 @@ type IconVisual = {
 
 type IconArtworkProps = {
   visual: IconVisual;
+};
+
+const colorVisuals: Record<string, IconVisual> = {
+  '#A83A00': {
+    backplateColor: '#FFF0E6',
+    highlightColor: '#FFB36B',
+    primaryColor: brandColors.orangeStrong,
+    secondaryColor: '#A83A00',
+    shadowColor: '#A83A00',
+  },
+  '#FF8A3D': {
+    backplateColor: '#FF8A3D22',
+    highlightColor: '#FFD1B3',
+    primaryColor: brandColors.orange,
+    secondaryColor: brandColors.orangeStrong,
+    shadowColor: '#A83A00',
+  },
+  '#7A5C00': {
+    backplateColor: '#FFF8EA',
+    highlightColor: '#FFE2A3',
+    primaryColor: brandColors.spectrumYellow,
+    secondaryColor: '#7A5C00',
+    shadowColor: '#7A5C00',
+  },
+  '#FFC400': {
+    backplateColor: '#FFC40022',
+    highlightColor: '#FFF1A8',
+    primaryColor: brandColors.spectrumYellow,
+    secondaryColor: '#D78B00',
+    shadowColor: '#7A5C00',
+  },
+  '#086CA8': {
+    backplateColor: '#E7F8FF',
+    highlightColor: '#8FE2FF',
+    primaryColor: brandColors.blue,
+    secondaryColor: '#086CA8',
+    shadowColor: '#064D78',
+  },
+  '#18B9FF': {
+    backplateColor: '#18B9FF22',
+    highlightColor: '#A7EAFF',
+    primaryColor: brandColors.blue,
+    secondaryColor: '#8FE2FF',
+    shadowColor: '#086CA8',
+  },
+  '#07763E': {
+    backplateColor: '#E7F8EF',
+    highlightColor: '#70E2A3',
+    primaryColor: brandColors.green,
+    secondaryColor: '#07763E',
+    shadowColor: '#064C2A',
+  },
+  '#4BE083': {
+    backplateColor: '#4BE08322',
+    highlightColor: '#A8F2C7',
+    primaryColor: '#4BE083',
+    secondaryColor: brandColors.green,
+    shadowColor: '#07763E',
+  },
 };
 
 const visuals: Record<OverviewStatusIconKind, IconVisual> = {
@@ -222,12 +282,30 @@ function renderArtwork(kind: OverviewStatusIconKind, visual: IconVisual) {
   return <NeedsTapArtwork visual={visual} />;
 }
 
+function getVisual(baseVisual: IconVisual, color?: string) {
+  if (!color) {
+    return baseVisual;
+  }
+
+  return (
+    colorVisuals[color] ?? {
+      ...baseVisual,
+      backplateColor: `${color}16`,
+      highlightColor: `${color}66`,
+      primaryColor: color,
+      secondaryColor: color,
+      shadowColor: color,
+    }
+  );
+}
+
 export function OverviewStatusIcon({
+  color,
   kind,
   size = 44,
   style,
 }: OverviewStatusIconProps): React.JSX.Element {
-  const visual = visuals[kind];
+  const visual = getVisual(visuals[kind], color);
   const sizeStyle = {
     backgroundColor: visual.backplateColor,
     borderRadius: size / 2,
