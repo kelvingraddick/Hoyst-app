@@ -17,6 +17,18 @@ jest.mock('@react-native-community/blur', () => ({
   },
 }));
 
+jest.mock('react-native-linear-gradient', () => {
+  const MockReact = require('react');
+  const {View} = require('react-native');
+
+  return ({children, ...props}: {children?: React.ReactNode}) =>
+    MockReact.createElement(View, props, children);
+});
+
+jest.mock('react-native-haptic-feedback', () => ({
+  trigger: jest.fn(),
+}));
+
 jest.mock('../src/store/settings-store', () => ({
   useSettingsStore: (selector: (state: {appearance: 'light'}) => unknown) =>
     selector({appearance: 'light'}),
@@ -68,10 +80,12 @@ describe('TodayCircleCard', () => {
 
     const output = JSON.stringify(tree!.toJSON());
     const ring = tree!.root.findByType(GradientRing);
+    const tapInButton = tree!.root.findByType(CircleCardTapInButton);
     const companionIcon = tree!.root.findByType(UsersRound);
     const lightTheme = getHoystThemeColors('light');
 
     expect(output).toContain('42% tapped-in today');
+    expect(tapInButton.props.ringState).toBe('active');
     expect(ring.props).toMatchObject({
       flatColor: '#07763E',
       progress: 0.42,
@@ -143,5 +157,34 @@ describe('TodayCircleCard', () => {
     expect(output).toContain('Next tap this week');
     expect(output).toContain('2 Tap Ins left this week');
     expect(tree!.root.findAllByType(CircleCardTapInButton)).toHaveLength(0);
+  });
+
+  it('renders pending upcoming cards with approval copy', () => {
+    let tree: renderer.ReactTestRenderer | undefined;
+
+    act(() => {
+      tree = renderer.create(
+        <TodayCircleCard
+          card={circle({
+            progressPercent: 0,
+            remainingCheckIns: 0,
+            title: 'Pending Circle',
+            viewerHasCheckedIn: false,
+            viewerMembershipStatus: 'pending',
+            viewerRemainingTapIns: 0,
+            viewerTodayStatus: undefined,
+          })}
+          onActionPress={jest.fn()}
+          onCardPress={jest.fn()}
+          variant="upcoming"
+        />,
+      );
+    });
+
+    const output = JSON.stringify(tree!.toJSON());
+
+    expect(output).toContain('Pending Circle');
+    expect(output).toContain('Pending approval');
+    expect(output).toContain('Approval needed before Tap In unlocks.');
   });
 });

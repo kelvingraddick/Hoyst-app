@@ -958,7 +958,7 @@ export function getTodayAttentionCircles(circles: CircleManagementCard[]) {
 
 function needsUpcomingAttention(circle: CircleManagementCard) {
   if (circle.viewerMembershipStatus === 'pending') {
-    return false;
+    return true;
   }
 
   const actionVariant = getHomeCircleActionVariant(circle);

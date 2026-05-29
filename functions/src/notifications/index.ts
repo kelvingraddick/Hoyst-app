@@ -1,4 +1,8 @@
-import {FieldValue, type DocumentData} from 'firebase-admin/firestore';
+import {
+  FieldValue,
+  type DocumentData,
+  type QuerySnapshot,
+} from 'firebase-admin/firestore';
 import {HttpsError, onCall} from 'firebase-functions/v2/https';
 import {defineSecret, defineString} from 'firebase-functions/params';
 import {onSchedule} from 'firebase-functions/v2/scheduler';
@@ -15,15 +19,23 @@ export const oneSignalRestApiKey = defineSecret('ONESIGNAL_REST_API_KEY');
 export const oneSignalAppId = defineString('ONESIGNAL_APP_ID', {default: ''});
 
 export type NotificationPreferenceKey =
-  | 'circleActivity'
+  | 'circleRisk'
+  | 'discovery'
   | 'productUpdates'
+  | 'nudges'
+  | 'socialActivity'
   | 'tapInReminders';
 
 export type NotificationType =
   | 'circle_at_risk'
+  | 'circle_complete'
+  | 'circle_discovery_suggestion'
+  | 'circle_nudge_prompt'
+  | 'companion_tapped_in'
   | 'join_approved'
   | 'join_declined'
   | 'join_request'
+  | 'member_due_prompt'
   | 'member_joined'
   | 'nudge'
   | 'tap_in_final_warning'
@@ -45,10 +57,13 @@ export type CreateNotificationInput = {
   actor?: NotificationActor;
   body: string;
   circleId?: string;
+  copyVariant?: string;
   dedupeKey?: string;
   deeplink: NotificationDeeplink;
+  deliveryPriority?: 'immediate' | 'routine';
   preferenceKey: NotificationPreferenceKey;
   pushData?: Record<string, string>;
+  routineTimezone?: string;
   title: string;
   type: NotificationType;
   uid: string;
@@ -78,7 +93,7 @@ export function getJoinRequestNotificationDedupeKey({
 export type NotificationSendResult = {
   created: boolean;
   eventId: string;
-  pushStatus: 'disabled' | 'failed' | 'sent' | 'skipped';
+  pushStatus: 'disabled' | 'failed' | 'sent' | 'skipped' | 'throttled';
 };
 
 export type ReminderCandidate = {
@@ -94,7 +109,11 @@ export type ReminderCandidate = {
 
 const notificationSettingsSchema = z.object({
   circleActivity: z.boolean().optional(),
+  circleRisk: z.boolean().optional(),
+  discovery: z.boolean().optional(),
+  nudges: z.boolean().optional(),
   productUpdates: z.boolean().optional(),
+  socialActivity: z.boolean().optional(),
   tapInReminders: z.boolean().optional(),
 });
 
@@ -110,10 +129,18 @@ const inboxReadBatchLimit = 500;
 
 const defaultNotificationSettings: Record<NotificationPreferenceKey, boolean> =
   {
-    circleActivity: true,
+    circleRisk: true,
+    discovery: true,
+    nudges: true,
     productUpdates: true,
+    socialActivity: true,
     tapInReminders: true,
   };
+
+const routineSpacingMs = 6 * 60 * 60 * 1000;
+const routineDailyLimit = 2;
+const discoverySpacingMs = 7 * 24 * 60 * 60 * 1000;
+const discoveryInactivityMs = 3 * 24 * 60 * 60 * 1000;
 
 function asString(value: unknown, fallback = '') {
   return typeof value === 'string' && value.trim().length > 0
@@ -129,6 +156,407 @@ function asOptionalString(value: unknown) {
 
 function sanitizeEventId(value: string) {
   return value.replace(/[^A-Za-z0-9_.-]/g, '_').slice(0, 500);
+}
+
+export type NotificationCopyContext = {
+  actorName?: string;
+  circleTitle?: string;
+  discoveryCategory?: string;
+  discoveryCircleTitle?: string;
+  periodCopy?: string;
+  remainingCount?: number;
+  targetCount?: number;
+};
+
+type NotificationCopyTemplate = (
+  context: NotificationCopyContext,
+) => {body: string; title: string};
+
+function hashString(value: string) {
+  let hash = 0;
+
+  for (let index = 0; index < value.length; index += 1) {
+    hash = (hash * 31 + value.charCodeAt(index)) >>> 0;
+  }
+
+  return hash;
+}
+
+function getTapInCountLabel(count: number | undefined) {
+  const safeCount = Math.max(1, Math.round(count ?? 1));
+  return `${safeCount} Tap In${safeCount === 1 ? '' : 's'}`;
+}
+
+function getCircleTitle(context: NotificationCopyContext) {
+  return context.circleTitle ?? context.discoveryCircleTitle ?? 'your circle';
+}
+
+function getActorName(context: NotificationCopyContext) {
+  return context.actorName ?? 'Someone';
+}
+
+function getPeriodCopy(context: NotificationCopyContext) {
+  return context.periodCopy ?? 'this period';
+}
+
+const notificationCopyCatalog: Record<
+  NotificationType,
+  NotificationCopyTemplate[]
+> = {
+  circle_at_risk: [
+    context => ({
+      body: `${getCircleTitle(context)} needs ${getTapInCountLabel(
+        context.remainingCount,
+      )} ${getPeriodCopy(context)}.`,
+      title: 'Circle Progression at risk',
+    }),
+    context => ({
+      body: `${getCircleTitle(context)} is close. ${getTapInCountLabel(
+        context.remainingCount,
+      )} will keep it moving ${getPeriodCopy(context)}.`,
+      title: 'Close to complete',
+    }),
+    context => ({
+      body: `${getCircleTitle(context)} needs a little help: ${getTapInCountLabel(
+        context.remainingCount,
+      )} left ${getPeriodCopy(context)}.`,
+      title: 'Progression needs help',
+    }),
+    context => ({
+      body: `${getTapInCountLabel(context.remainingCount)} can protect ${getCircleTitle(
+        context,
+      )} ${getPeriodCopy(context)}.`,
+      title: 'Almost there',
+    }),
+    context => ({
+      body: `${getCircleTitle(context)} is not far off. ${getTapInCountLabel(
+        context.remainingCount,
+      )} still needed ${getPeriodCopy(context)}.`,
+      title: 'Circle check-in',
+    }),
+  ],
+  circle_complete: [
+    context => ({
+      body: `${getCircleTitle(context)} is fully tapped in ${getPeriodCopy(
+        context,
+      )}. Nice work.`,
+      title: 'Circle complete',
+    }),
+    context => ({
+      body: `Everyone came through for ${getCircleTitle(context)} ${getPeriodCopy(
+        context,
+      )}.`,
+      title: 'All tapped in',
+    }),
+    context => ({
+      body: `${getCircleTitle(context)} hit the commitment ${getPeriodCopy(
+        context,
+      )}.`,
+      title: 'Progression secured',
+    }),
+    context => ({
+      body: `${getCircleTitle(context)} is complete ${getPeriodCopy(
+        context,
+      )}. The circle showed up.`,
+      title: 'Circle showed up',
+    }),
+    context => ({
+      body: `${getCircleTitle(context)} has everyone covered ${getPeriodCopy(
+        context,
+      )}.`,
+      title: 'Commitment complete',
+    }),
+  ],
+  circle_discovery_suggestion: [
+    context => ({
+      body: `${context.discoveryCircleTitle ?? 'A public circle'} could help you restart your rhythm.`,
+      title: 'Find a new circle',
+    }),
+    context => ({
+      body: `A ${context.discoveryCategory ?? 'Hoyst'} circle is open when you are ready to jump back in.`,
+      title: 'A fresh circle is waiting',
+    }),
+    context => ({
+      body: `${context.discoveryCircleTitle ?? 'A new circle'} might be a good place to build momentum again.`,
+      title: 'Restart with a circle',
+    }),
+    context => ({
+      body: `You have an open seat to explore in ${
+        context.discoveryCircleTitle ?? 'a public circle'
+      }.`,
+      title: 'Explore a circle',
+    }),
+    context => ({
+      body: `When you are ready, ${context.discoveryCircleTitle ?? 'a Hoyst circle'} can help you get moving again.`,
+      title: 'Ready for a reset?',
+    }),
+  ],
+  circle_nudge_prompt: [
+    context => ({
+      body: `${getCircleTitle(context)} could use a nudge for ${context.targetCount ?? 1} companion${
+        (context.targetCount ?? 1) === 1 ? '' : 's'
+      }.`,
+      title: 'Help the circle move',
+    }),
+    context => ({
+      body: `You are covered in ${getCircleTitle(context)}. A quick nudge could help the rest catch up.`,
+      title: 'Send a teammate a nudge',
+    }),
+    context => ({
+      body: `${getCircleTitle(context)} is close. Your nudge could help finish the job.`,
+      title: 'Keep the circle together',
+    }),
+    context => ({
+      body: `A companion in ${getCircleTitle(context)} still has room to Tap In.`,
+      title: 'Someone might need a nudge',
+    }),
+    context => ({
+      body: `You can help ${getCircleTitle(context)} stay on track with one quick nudge.`,
+      title: 'Circle needs a boost',
+    }),
+  ],
+  companion_tapped_in: [
+    context => ({
+      body: `${getActorName(context)} tapped in for ${getCircleTitle(context)}.`,
+      title: 'A companion tapped in',
+    }),
+    context => ({
+      body: `${getActorName(context)} just moved ${getCircleTitle(context)} forward.`,
+      title: 'Progress in your circle',
+    }),
+    context => ({
+      body: `${getActorName(context)} showed up in ${getCircleTitle(context)}.`,
+      title: 'Your circle is moving',
+    }),
+    context => ({
+      body: `${getCircleTitle(context)} has a fresh Tap In from ${getActorName(context)}.`,
+      title: 'New Tap In',
+    }),
+    context => ({
+      body: `${getActorName(context)} kept the momentum going in ${getCircleTitle(context)}.`,
+      title: 'Momentum update',
+    }),
+  ],
+  join_approved: [
+    context => ({
+      body: `Your request to join ${getCircleTitle(context)} was approved.`,
+      title: 'Request approved',
+    }),
+    context => ({
+      body: `You are in ${getCircleTitle(context)}. Tap In when you are ready.`,
+      title: 'Welcome to the circle',
+    }),
+    context => ({
+      body: `${getCircleTitle(context)} approved your join request.`,
+      title: 'You are approved',
+    }),
+    context => ({
+      body: `You can now join the rhythm in ${getCircleTitle(context)}.`,
+      title: 'Circle unlocked',
+    }),
+    context => ({
+      body: `Your seat in ${getCircleTitle(context)} is ready.`,
+      title: 'You are in',
+    }),
+  ],
+  join_declined: [
+    context => ({
+      body: `Your request to join ${getCircleTitle(context)} was declined.`,
+      title: 'Request declined',
+    }),
+    context => ({
+      body: `${getCircleTitle(context)} was not opened this time. You can explore another circle.`,
+      title: 'Join request update',
+    }),
+    context => ({
+      body: `This request for ${getCircleTitle(context)} did not go through.`,
+      title: 'Circle request closed',
+    }),
+    context => ({
+      body: `${getCircleTitle(context)} declined the request. There are other circles to explore.`,
+      title: 'Not this circle',
+    }),
+    context => ({
+      body: `Your ${getCircleTitle(context)} request was reviewed and declined.`,
+      title: 'Request reviewed',
+    }),
+  ],
+  join_request: [
+    context => ({
+      body: `${getActorName(context)} requested to join ${getCircleTitle(context)}.`,
+      title: 'New join request',
+    }),
+    context => ({
+      body: `${getActorName(context)} wants to join ${getCircleTitle(context)}.`,
+      title: 'Review a request',
+    }),
+    context => ({
+      body: `${getCircleTitle(context)} has a new request from ${getActorName(context)}.`,
+      title: 'Someone wants in',
+    }),
+    context => ({
+      body: `Review ${getActorName(context)} for ${getCircleTitle(context)}.`,
+      title: 'Circle request waiting',
+    }),
+    context => ({
+      body: `${getActorName(context)} is asking for a seat in ${getCircleTitle(context)}.`,
+      title: 'Join request',
+    }),
+  ],
+  member_due_prompt: [
+    context => ({
+      body: `${getCircleTitle(context)} still needs your Tap In ${getPeriodCopy(context)}.`,
+      title: 'Your circle needs you',
+    }),
+    context => ({
+      body: `You can still help ${getCircleTitle(context)} keep Progression moving.`,
+      title: 'Tap In when ready',
+    }),
+    context => ({
+      body: `${getCircleTitle(context)} has room for your Tap In ${getPeriodCopy(context)}.`,
+      title: 'A Tap In is open',
+    }),
+    context => ({
+      body: `Your spot in ${getCircleTitle(context)} is still waiting ${getPeriodCopy(context)}.`,
+      title: 'Keep your spot covered',
+    }),
+    context => ({
+      body: `A quick Tap In can help ${getCircleTitle(context)} stay steady.`,
+      title: 'Help your circle',
+    }),
+  ],
+  member_joined: [
+    context => ({
+      body: `${getActorName(context)} joined ${getCircleTitle(context)}.`,
+      title: 'New circle member',
+    }),
+    context => ({
+      body: `${getCircleTitle(context)} has a new companion: ${getActorName(context)}.`,
+      title: 'Someone joined',
+    }),
+    context => ({
+      body: `${getActorName(context)} is now part of ${getCircleTitle(context)}.`,
+      title: 'Circle grew',
+    }),
+    context => ({
+      body: `${getActorName(context)} took a seat in ${getCircleTitle(context)}.`,
+      title: 'New companion',
+    }),
+    context => ({
+      body: `${getCircleTitle(context)} welcomed ${getActorName(context)}.`,
+      title: 'Member joined',
+    }),
+  ],
+  nudge: [
+    context => ({
+      body: `${getActorName(context)} nudged you in ${getCircleTitle(context)}.`,
+      title: 'Tap In nudge',
+    }),
+    context => ({
+      body: `${getActorName(context)} sent a nudge from ${getCircleTitle(context)}.`,
+      title: 'Nudge from your circle',
+    }),
+    context => ({
+      body: `${getCircleTitle(context)} got a nudge from ${getActorName(context)}.`,
+      title: 'A companion nudged you',
+    }),
+    context => ({
+      body: `${getActorName(context)} is keeping ${getCircleTitle(context)} moving.`,
+      title: 'Your circle checked in',
+    }),
+    context => ({
+      body: `${getActorName(context)} gave you a friendly Tap In nudge.`,
+      title: 'Friendly nudge',
+    }),
+  ],
+  tap_in_final_warning: [
+    context => ({
+      body: `2 hours left to Tap In for ${getCircleTitle(context)}.`,
+      title: '2 hours left',
+    }),
+    context => ({
+      body: `${getCircleTitle(context)} is closing soon. Tap In while there is still time.`,
+      title: 'Last call',
+    }),
+    context => ({
+      body: `Your ${getCircleTitle(context)} window has 2 hours left.`,
+      title: 'Tap In window closing',
+    }),
+    context => ({
+      body: `There is still time to cover ${getCircleTitle(context)} today.`,
+      title: 'Still time',
+    }),
+    context => ({
+      body: `Final reminder for ${getCircleTitle(context)}. Keep the Commitment covered.`,
+      title: 'Final Tap In reminder',
+    }),
+  ],
+  tap_in_midday_reminder: [
+    context => ({
+      body: `Tap In to keep ${getCircleTitle(context)} Progression moving.`,
+      title: 'Keep your Commitment moving',
+    }),
+    context => ({
+      body: `${getCircleTitle(context)} is open for your Tap In.`,
+      title: 'Tap In is ready',
+    }),
+    context => ({
+      body: `A small Tap In now keeps ${getCircleTitle(context)} steady.`,
+      title: 'Midday check-in',
+    }),
+    context => ({
+      body: `${getCircleTitle(context)} has a Tap In waiting when you have a minute.`,
+      title: 'Your circle is waiting',
+    }),
+    context => ({
+      body: `Keep the rhythm alive in ${getCircleTitle(context)}.`,
+      title: 'Time to Tap In',
+    }),
+  ],
+};
+
+export function getNotificationCopyVariantIndex({
+  dedupeKey,
+  type,
+  variantCount,
+}: {
+  dedupeKey: string;
+  type: NotificationType;
+  variantCount: number;
+}) {
+  if (variantCount <= 0) {
+    return 0;
+  }
+
+  return hashString(`${type}:${dedupeKey}`) % variantCount;
+}
+
+export function resolveNotificationCopy({
+  context = {},
+  dedupeKey,
+  fallbackBody,
+  fallbackTitle,
+  type,
+}: {
+  context?: NotificationCopyContext;
+  dedupeKey: string;
+  fallbackBody?: string;
+  fallbackTitle?: string;
+  type: NotificationType;
+}) {
+  const templates = notificationCopyCatalog[type] ?? [];
+  const variantIndex = getNotificationCopyVariantIndex({
+    dedupeKey,
+    type,
+    variantCount: templates.length,
+  });
+  const resolved = templates[variantIndex]?.(context);
+
+  return {
+    body: resolved?.body ?? fallbackBody ?? '',
+    copyVariant: `${type}_${variantIndex}`,
+    title: resolved?.title ?? fallbackTitle ?? '',
+  };
 }
 
 function getOneSignalConfig() {
@@ -167,6 +595,97 @@ function getLocalDateTimeParts(now: Date, timezone: string) {
     hour: Number(hourValue === '24' ? '0' : hourValue),
     minute: Number(getPart('minute', '00')),
   };
+}
+
+function asDate(value: unknown): Date | undefined {
+  if (value instanceof Date) {
+    return value;
+  }
+
+  if (
+    value &&
+    typeof value === 'object' &&
+    'toDate' in value &&
+    typeof value.toDate === 'function'
+  ) {
+    const date = value.toDate();
+    return date instanceof Date ? date : undefined;
+  }
+
+  return undefined;
+}
+
+export type RoutineDeliveryState = {
+  discoveryLastSentAt?: unknown;
+  routineDateKey?: unknown;
+  routineLastSentAt?: unknown;
+  routineSentCount?: unknown;
+};
+
+export function getRoutineNotificationEligibility({
+  deliveryState,
+  now = new Date(),
+  type,
+  timezone,
+}: {
+  deliveryState?: RoutineDeliveryState;
+  now?: Date;
+  type: NotificationType;
+  timezone: string;
+}) {
+  const localDateKey = getLocalDateTimeParts(now, timezone).dateKey;
+  const routineLastSentAt = asDate(deliveryState?.routineLastSentAt);
+  const discoveryLastSentAt = asDate(deliveryState?.discoveryLastSentAt);
+  const routineDateKey =
+    typeof deliveryState?.routineDateKey === 'string'
+      ? deliveryState.routineDateKey
+      : undefined;
+  const routineSentCount =
+    typeof deliveryState?.routineSentCount === 'number' &&
+    Number.isFinite(deliveryState.routineSentCount)
+      ? deliveryState.routineSentCount
+      : 0;
+
+  if (
+    routineLastSentAt &&
+    now.getTime() - routineLastSentAt.getTime() < routineSpacingMs
+  ) {
+    return {eligible: false, reason: 'routine-spacing'};
+  }
+
+  if (routineDateKey === localDateKey && routineSentCount >= routineDailyLimit) {
+    return {eligible: false, reason: 'routine-daily-limit'};
+  }
+
+  if (
+    type === 'circle_discovery_suggestion' &&
+    discoveryLastSentAt &&
+    now.getTime() - discoveryLastSentAt.getTime() < discoverySpacingMs
+  ) {
+    return {eligible: false, reason: 'discovery-spacing'};
+  }
+
+  return {eligible: true, reason: 'eligible'};
+}
+
+export function getDiscoveryInactivityEligibility({
+  lastTapInAt,
+  now = new Date(),
+}: {
+  lastTapInAt?: unknown;
+  now?: Date;
+}) {
+  const lastTapInDate = asDate(lastTapInAt);
+
+  if (!lastTapInDate) {
+    return {eligible: false, reason: 'missing-last-tap-in'};
+  }
+
+  if (now.getTime() - lastTapInDate.getTime() < discoveryInactivityMs) {
+    return {eligible: false, reason: 'recent-tap-in'};
+  }
+
+  return {eligible: true, reason: 'eligible'};
 }
 
 function getCommitmentWeekDateKeys(timezone: string, now = new Date()) {
@@ -265,7 +784,35 @@ function isPreferenceEnabled(
   key: NotificationPreferenceKey,
 ) {
   const value = notificationSettings?.[key];
-  return typeof value === 'boolean' ? value : defaultNotificationSettings[key];
+
+  if (typeof value === 'boolean') {
+    return value;
+  }
+
+  if (
+    (key === 'circleRisk' ||
+      key === 'nudges' ||
+      key === 'socialActivity') &&
+    typeof notificationSettings?.circleActivity === 'boolean'
+  ) {
+    return notificationSettings.circleActivity;
+  }
+
+  if (
+    key === 'discovery' &&
+    typeof notificationSettings?.productUpdates === 'boolean'
+  ) {
+    return notificationSettings.productUpdates;
+  }
+
+  return defaultNotificationSettings[key];
+}
+
+export function getNotificationPreferenceEnabled(
+  notificationSettings: Record<string, unknown> | undefined,
+  key: NotificationPreferenceKey,
+) {
+  return isPreferenceEnabled(notificationSettings, key);
 }
 
 async function isUserPreferenceEnabled(
@@ -285,6 +832,7 @@ export function buildOneSignalPushPayload({
   body,
   circleId,
   eventId,
+  pushData,
   title,
   type,
   uid,
@@ -293,6 +841,7 @@ export function buildOneSignalPushPayload({
   body: string;
   circleId?: string;
   eventId: string;
+  pushData?: Record<string, string>;
   title: string;
   type: NotificationType;
   uid: string;
@@ -303,6 +852,7 @@ export function buildOneSignalPushPayload({
     data: {
       ...(circleId ? {circleId} : {}),
       eventId,
+      ...(pushData ?? {}),
       type,
     },
     headings: {en: title},
@@ -355,6 +905,7 @@ async function sendPushToUser({
   body,
   circleId,
   eventId,
+  pushData,
   title,
   type,
   uid,
@@ -362,6 +913,7 @@ async function sendPushToUser({
   body: string;
   circleId?: string;
   eventId: string;
+  pushData?: Record<string, string>;
   title: string;
   type: NotificationType;
   uid: string;
@@ -379,6 +931,7 @@ async function sendPushToUser({
         body,
         circleId,
         eventId,
+        pushData,
         title,
         type,
         uid,
@@ -404,13 +957,59 @@ async function sendPushToUser({
   return {oneSignalId: payload.id, status: 'sent' as const};
 }
 
+async function recordRoutineNotificationDelivery({
+  now = new Date(),
+  type,
+  uid,
+  timezone,
+}: {
+  now?: Date;
+  type: NotificationType;
+  uid: string;
+  timezone: string;
+}) {
+  const userPrivateRef = db.collection('userPrivate').doc(uid);
+  const snapshot = await userPrivateRef.get();
+  const deliveryState = (snapshot.data()?.notificationDelivery ?? {}) as
+    | RoutineDeliveryState
+    | undefined;
+  const localDateKey = getLocalDateTimeParts(now, timezone).dateKey;
+  const priorDateKey =
+    typeof deliveryState?.routineDateKey === 'string'
+      ? deliveryState.routineDateKey
+      : undefined;
+  const priorCount =
+    typeof deliveryState?.routineSentCount === 'number' &&
+    Number.isFinite(deliveryState.routineSentCount)
+      ? deliveryState.routineSentCount
+      : 0;
+
+  await userPrivateRef.set(
+    {
+      notificationDelivery: {
+        ...(type === 'circle_discovery_suggestion'
+          ? {discoveryLastSentAt: FieldValue.serverTimestamp()}
+          : {}),
+        routineDateKey: localDateKey,
+        routineLastSentAt: FieldValue.serverTimestamp(),
+        routineSentCount: priorDateKey === localDateKey ? priorCount + 1 : 1,
+      },
+    },
+    {merge: true},
+  );
+}
+
 export async function createInboxEvent({
   actor,
   body,
   circleId,
+  copyVariant,
   dedupeKey,
   deeplink,
+  deliveryPriority = 'immediate',
   preferenceKey,
+  pushData,
+  routineTimezone = 'UTC',
   title,
   type,
   uid,
@@ -429,11 +1028,32 @@ export async function createInboxEvent({
     return {created: false, eventId, pushStatus: 'skipped'};
   }
 
-  const enabled = await isUserPreferenceEnabled(uid, preferenceKey);
+  const userPrivateSnapshot = await db.collection('userPrivate').doc(uid).get();
+  const userPrivate = userPrivateSnapshot.data();
+  const enabled = isPreferenceEnabled(
+    userPrivate?.notificationSettings as Record<string, unknown> | undefined,
+    preferenceKey,
+  );
+
+  if (enabled && deliveryPriority === 'routine') {
+    const routineEligibility = getRoutineNotificationEligibility({
+      deliveryState: userPrivate?.notificationDelivery as
+        | RoutineDeliveryState
+        | undefined,
+      type,
+      timezone: routineTimezone,
+    });
+
+    if (!routineEligibility.eligible) {
+      return {created: false, eventId, pushStatus: 'throttled'};
+    }
+  }
+
   await eventRef.set({
     actor: actor ?? null,
     body,
     circleId: circleId ?? null,
+    copyVariant: copyVariant ?? null,
     createdAt: FieldValue.serverTimestamp(),
     deeplink,
     preferenceKey,
@@ -462,6 +1082,7 @@ export async function createInboxEvent({
     body,
     circleId,
     eventId,
+    pushData,
     title,
     type,
     uid,
@@ -482,6 +1103,16 @@ export async function createInboxEvent({
     {merge: true},
   );
 
+  if (deliveryPriority === 'routine' && pushResult.status === 'sent') {
+    await recordRoutineNotificationDelivery({
+      type,
+      uid,
+      timezone: routineTimezone,
+    }).catch(error =>
+      console.error('record_routine_notification_delivery_failed', error),
+    );
+  }
+
   return {created: true, eventId, pushStatus: pushResult.status};
 }
 
@@ -500,19 +1131,28 @@ export async function notifyOwnerJoinRequest({
 }) {
   const actor = buildActor(requester);
   const actorName = actor?.displayName ?? 'Someone';
+  const dedupeKey = getJoinRequestNotificationDedupeKey({
+    circleId,
+    requesterId: actor?.uid,
+    requestToken,
+  });
+  const copy = resolveNotificationCopy({
+    context: {actorName, circleTitle},
+    dedupeKey,
+    fallbackBody: `${actorName} requested to join ${circleTitle}.`,
+    fallbackTitle: 'New join request',
+    type: 'join_request',
+  });
 
   return createInboxEvent({
     actor,
-    body: `${actorName} requested to join ${circleTitle}.`,
+    body: copy.body,
     circleId,
-    dedupeKey: getJoinRequestNotificationDedupeKey({
-      circleId,
-      requesterId: actor?.uid,
-      requestToken,
-    }),
+    copyVariant: copy.copyVariant,
+    dedupeKey,
     deeplink: {circleId, screen: 'CircleDetail'},
-    preferenceKey: 'circleActivity',
-    title: 'New join request',
+    preferenceKey: 'socialActivity',
+    title: copy.title,
     type: 'join_request',
     uid: ownerId,
   });
@@ -531,6 +1171,14 @@ export async function notifyOwnerNewJoin({
 }) {
   const actor = buildActor(joinedMember);
   const actorName = actor?.displayName ?? 'Someone';
+  const dedupeKey = `member_joined_${circleId}_${actor?.uid ?? 'unknown'}`;
+  const copy = resolveNotificationCopy({
+    context: {actorName, circleTitle},
+    dedupeKey,
+    fallbackBody: `${actorName} joined ${circleTitle}.`,
+    fallbackTitle: 'New circle member',
+    type: 'member_joined',
+  });
 
   if (actor?.uid === ownerId) {
     return undefined;
@@ -538,12 +1186,13 @@ export async function notifyOwnerNewJoin({
 
   return createInboxEvent({
     actor,
-    body: `${actorName} joined ${circleTitle}.`,
+    body: copy.body,
     circleId,
-    dedupeKey: `member_joined_${circleId}_${actor?.uid ?? 'unknown'}`,
+    copyVariant: copy.copyVariant,
+    dedupeKey,
     deeplink: {circleId, screen: 'CircleDetail'},
-    preferenceKey: 'circleActivity',
-    title: 'New circle member',
+    preferenceKey: 'socialActivity',
+    title: copy.title,
     type: 'member_joined',
     uid: ownerId,
   });
@@ -562,19 +1211,30 @@ export async function notifyJoinRequestReview({
   owner?: DocumentData;
   requesterId: string;
 }) {
-  return createInboxEvent({
-    actor: buildActor(owner),
-    body: approved
+  const type = approved ? 'join_approved' : ('join_declined' as const);
+  const dedupeKey = `join_review_${circleId}_${requesterId}_${
+    approved ? 'approved' : 'declined'
+  }`;
+  const copy = resolveNotificationCopy({
+    context: {circleTitle},
+    dedupeKey,
+    fallbackBody: approved
       ? `Your request to join ${circleTitle} was approved.`
       : `Your request to join ${circleTitle} was declined.`,
+    fallbackTitle: approved ? 'Request approved' : 'Request declined',
+    type,
+  });
+
+  return createInboxEvent({
+    actor: buildActor(owner),
+    body: copy.body,
     circleId,
-    dedupeKey: `join_review_${circleId}_${requesterId}_${
-      approved ? 'approved' : 'declined'
-    }`,
+    copyVariant: copy.copyVariant,
+    dedupeKey,
     deeplink: {circleId, screen: 'CircleDetail'},
-    preferenceKey: 'circleActivity',
-    title: approved ? 'Request approved' : 'Request declined',
-    type: approved ? 'join_approved' : 'join_declined',
+    preferenceKey: 'socialActivity',
+    title: copy.title,
+    type,
     uid: requesterId,
   });
 }
@@ -594,15 +1254,24 @@ export async function notifyNudge({
 }) {
   const notificationActor = buildActor(actor);
   const actorName = notificationActor?.displayName ?? 'Someone';
+  const dedupeKey = `nudge_${circleId}_${dateKey}_${targetUid}`;
+  const copy = resolveNotificationCopy({
+    context: {actorName, circleTitle},
+    dedupeKey,
+    fallbackBody: `${actorName} nudged you in ${circleTitle}.`,
+    fallbackTitle: 'Tap In nudge',
+    type: 'nudge',
+  });
 
   return createInboxEvent({
     actor: notificationActor,
-    body: `${actorName} nudged you in ${circleTitle}.`,
+    body: copy.body,
     circleId,
-    dedupeKey: `nudge_${circleId}_${dateKey}_${targetUid}`,
+    copyVariant: copy.copyVariant,
+    dedupeKey,
     deeplink: {circleId, screen: 'TapInComposer', source: 'notification'},
-    preferenceKey: 'circleActivity',
-    title: 'Tap In nudge',
+    preferenceKey: 'nudges',
+    title: copy.title,
     type: 'nudge',
     uid: targetUid,
   });
@@ -617,16 +1286,218 @@ export function getCircleAtRiskNotificationBody({
   commitmentCadence: CommitmentCadence;
   remainingCount: number;
 }) {
-  const periodCopy =
-    commitmentCadence === 'daily'
-      ? 'today'
-      : commitmentCadence === 'monthly'
-      ? 'this month'
-      : 'this week';
+  const periodCopy = getCommitmentPeriodCopy(commitmentCadence);
 
   return `${circleTitle} needs ${remainingCount} more Tap In${
     remainingCount === 1 ? '' : 's'
   } ${periodCopy}.`;
+}
+
+function getCommitmentPeriodCopy(commitmentCadence: CommitmentCadence) {
+  return commitmentCadence === 'daily'
+    ? 'today'
+    : commitmentCadence === 'monthly'
+    ? 'this month'
+    : 'this week';
+}
+
+export async function notifyCompanionTappedIn({
+  actor,
+  circleId,
+  circleTitle,
+  dateKey,
+  targetUid,
+}: {
+  actor?: DocumentData;
+  circleId: string;
+  circleTitle: string;
+  dateKey: string;
+  targetUid: string;
+}) {
+  const notificationActor = buildActor(actor);
+  const actorName = notificationActor?.displayName ?? 'Someone';
+  const dedupeKey = `companion_tapped_in_${circleId}_${dateKey}_${
+    notificationActor?.uid ?? 'unknown'
+  }_${targetUid}`;
+  const copy = resolveNotificationCopy({
+    context: {actorName, circleTitle},
+    dedupeKey,
+    fallbackBody: `${actorName} tapped in for ${circleTitle}.`,
+    fallbackTitle: 'A companion tapped in',
+    type: 'companion_tapped_in',
+  });
+
+  return createInboxEvent({
+    actor: notificationActor,
+    body: copy.body,
+    circleId,
+    copyVariant: copy.copyVariant,
+    dedupeKey,
+    deeplink: {circleId, screen: 'CircleDetail'},
+    preferenceKey: 'socialActivity',
+    title: copy.title,
+    type: 'companion_tapped_in',
+    uid: targetUid,
+  });
+}
+
+export async function notifyCircleComplete({
+  circleId,
+  circleTitle,
+  commitmentCadence,
+  periodKey,
+  targetUid,
+}: {
+  circleId: string;
+  circleTitle: string;
+  commitmentCadence: CommitmentCadence;
+  periodKey: string;
+  targetUid: string;
+}) {
+  const periodCopy = getCommitmentPeriodCopy(commitmentCadence);
+  const dedupeKey = `circle_complete_${circleId}_${periodKey}_${targetUid}`;
+  const copy = resolveNotificationCopy({
+    context: {circleTitle, periodCopy},
+    dedupeKey,
+    fallbackBody: `${circleTitle} is fully tapped in ${periodCopy}.`,
+    fallbackTitle: 'Circle complete',
+    type: 'circle_complete',
+  });
+
+  return createInboxEvent({
+    body: copy.body,
+    circleId,
+    copyVariant: copy.copyVariant,
+    dedupeKey,
+    deeplink: {circleId, screen: 'CircleDetail'},
+    preferenceKey: 'socialActivity',
+    title: copy.title,
+    type: 'circle_complete',
+    uid: targetUid,
+  });
+}
+
+export async function notifyMemberDuePrompt({
+  circleId,
+  circleTitle,
+  commitmentCadence,
+  periodKey,
+  targetUid,
+  timezone,
+}: {
+  circleId: string;
+  circleTitle: string;
+  commitmentCadence: CommitmentCadence;
+  periodKey: string;
+  targetUid: string;
+  timezone: string;
+}) {
+  const periodCopy = getCommitmentPeriodCopy(commitmentCadence);
+  const dedupeKey = `member_due_prompt_${circleId}_${periodKey}_${targetUid}`;
+  const copy = resolveNotificationCopy({
+    context: {circleTitle, periodCopy},
+    dedupeKey,
+    fallbackBody: `${circleTitle} still needs your Tap In ${periodCopy}.`,
+    fallbackTitle: 'Your circle needs you',
+    type: 'member_due_prompt',
+  });
+
+  return createInboxEvent({
+    body: copy.body,
+    circleId,
+    copyVariant: copy.copyVariant,
+    dedupeKey,
+    deeplink: {circleId, screen: 'TapInComposer', source: 'notification'},
+    deliveryPriority: 'routine',
+    preferenceKey: 'tapInReminders',
+    routineTimezone: timezone,
+    title: copy.title,
+    type: 'member_due_prompt',
+    uid: targetUid,
+  });
+}
+
+export async function notifyCircleNudgePrompt({
+  circleId,
+  circleTitle,
+  periodKey,
+  targetCount,
+  targetUid,
+  timezone,
+}: {
+  circleId: string;
+  circleTitle: string;
+  periodKey: string;
+  targetCount: number;
+  targetUid: string;
+  timezone: string;
+}) {
+  const dedupeKey = `circle_nudge_prompt_${circleId}_${periodKey}_${targetUid}`;
+  const copy = resolveNotificationCopy({
+    context: {circleTitle, targetCount},
+    dedupeKey,
+    fallbackBody: `${circleTitle} could use a nudge for ${targetCount} companion${
+      targetCount === 1 ? '' : 's'
+    }.`,
+    fallbackTitle: 'Help the circle move',
+    type: 'circle_nudge_prompt',
+  });
+
+  return createInboxEvent({
+    body: copy.body,
+    circleId,
+    copyVariant: copy.copyVariant,
+    dedupeKey,
+    deeplink: {circleId, screen: 'CircleDetail'},
+    deliveryPriority: 'routine',
+    preferenceKey: 'nudges',
+    routineTimezone: timezone,
+    title: copy.title,
+    type: 'circle_nudge_prompt',
+    uid: targetUid,
+  });
+}
+
+export async function notifyCircleDiscoverySuggestion({
+  category,
+  circleId,
+  circleTitle,
+  dateKey,
+  targetUid,
+  timezone,
+}: {
+  category: string;
+  circleId: string;
+  circleTitle: string;
+  dateKey: string;
+  targetUid: string;
+  timezone: string;
+}) {
+  const dedupeKey = `circle_discovery_${circleId}_${dateKey}_${targetUid}`;
+  const copy = resolveNotificationCopy({
+    context: {
+      discoveryCategory: category,
+      discoveryCircleTitle: circleTitle,
+    },
+    dedupeKey,
+    fallbackBody: `${circleTitle} could help you restart your rhythm.`,
+    fallbackTitle: 'Find a new circle',
+    type: 'circle_discovery_suggestion',
+  });
+
+  return createInboxEvent({
+    body: copy.body,
+    circleId,
+    copyVariant: copy.copyVariant,
+    dedupeKey,
+    deeplink: {circleId, screen: 'CircleDetail'},
+    deliveryPriority: 'routine',
+    preferenceKey: 'discovery',
+    routineTimezone: timezone,
+    title: copy.title,
+    type: 'circle_discovery_suggestion',
+    uid: targetUid,
+  });
 }
 
 export async function notifyCircleAtRisk({
@@ -644,17 +1515,28 @@ export async function notifyCircleAtRisk({
   remainingCount: number;
   targetUid: string;
 }) {
-  return createInboxEvent({
-    body: getCircleAtRiskNotificationBody({
+  const periodCopy = getCommitmentPeriodCopy(commitmentCadence);
+  const dedupeKey = `circle_at_risk_${circleId}_${periodKey}_${targetUid}`;
+  const copy = resolveNotificationCopy({
+    context: {circleTitle, periodCopy, remainingCount},
+    dedupeKey,
+    fallbackBody: getCircleAtRiskNotificationBody({
       circleTitle,
       commitmentCadence,
       remainingCount,
     }),
+    fallbackTitle: 'Circle Progression at risk',
+    type: 'circle_at_risk',
+  });
+
+  return createInboxEvent({
+    body: copy.body,
     circleId,
-    dedupeKey: `circle_at_risk_${circleId}_${periodKey}_${targetUid}`,
+    copyVariant: copy.copyVariant,
+    dedupeKey,
     deeplink: {circleId, screen: 'CircleDetail'},
-    preferenceKey: 'circleActivity',
-    title: 'Circle Progression at risk',
+    preferenceKey: 'circleRisk',
+    title: copy.title,
     type: 'circle_at_risk',
     uid: targetUid,
   });
@@ -788,32 +1670,265 @@ async function sendTapInReminders(kind: 'final' | 'midday') {
         continue;
       }
 
+      const type =
+        kind === 'midday'
+          ? 'tap_in_midday_reminder'
+          : 'tap_in_final_warning';
+      const copy = resolveNotificationCopy({
+        context: {circleTitle},
+        dedupeKey: eligibility.dedupeKey,
+        fallbackBody:
+          kind === 'midday'
+            ? `Tap In to keep ${circleTitle} Progression moving.`
+            : `2 hours left to Tap In for ${circleTitle}.`,
+        fallbackTitle:
+          kind === 'midday' ? 'Keep your Commitment moving' : '2 hours left',
+        type,
+      });
+
       sendPromises.push(
         createInboxEvent({
-          body:
-            kind === 'midday'
-              ? `Tap In to keep ${circleTitle} Progression moving.`
-              : `2 hours left to Tap In for ${circleTitle}.`,
+          body: copy.body,
           circleId: circleSnapshot.id,
+          copyVariant: copy.copyVariant,
           dedupeKey: eligibility.dedupeKey,
           deeplink: {
             circleId: circleSnapshot.id,
             screen: 'TapInComposer',
             source: 'notification',
           },
+          deliveryPriority: kind === 'midday' ? 'routine' : 'immediate',
           preferenceKey: 'tapInReminders',
-          title:
-            kind === 'midday'
-              ? 'Keep your Commitment moving'
-              : '2 hours left',
-          type:
-            kind === 'midday'
-              ? 'tap_in_midday_reminder'
-              : 'tap_in_final_warning',
+          routineTimezone: timezone,
+          title: copy.title,
+          type,
           uid,
         }),
       );
     }
+  }
+
+  await Promise.all(sendPromises);
+  return {sentOrSkipped: sendPromises.length};
+}
+
+function getPeriodKey({
+  commitmentCadence,
+  dateKey,
+  periodDateKeys,
+}: {
+  commitmentCadence: CommitmentCadence;
+  dateKey: string;
+  periodDateKeys: string[];
+}) {
+  return commitmentCadence === 'daily'
+    ? dateKey
+    : periodDateKeys[0] ?? dateKey;
+}
+
+async function sendCircleEngagementPrompts() {
+  const targetHour = 18;
+  const now = new Date();
+  const circleSnapshots = await db.collection('circles').get();
+  const sendPromises: Promise<unknown>[] = [];
+
+  for (const circleSnapshot of circleSnapshots.docs) {
+    const circle = circleSnapshot.data();
+    const timezone = asString(circle.timezone, 'UTC');
+    const local = getLocalDateTimeParts(now, timezone);
+
+    if (local.hour !== targetHour) {
+      continue;
+    }
+
+    const commitmentCadence = getCommitmentCadence(circle);
+    const periodDateKeys = getCommitmentPeriodDateKeys(
+      commitmentCadence,
+      timezone,
+      now,
+    );
+    const requiredTapIns = getRequiredTapIns(circle);
+    const [memberSnapshots, ...periodCheckInSnapshots] = await Promise.all([
+      circleSnapshot.ref
+        .collection('members')
+        .where('status', '==', 'active')
+        .get(),
+      ...periodDateKeys.map(dateKey =>
+        circleSnapshot.ref
+          .collection('days')
+          .doc(dateKey)
+          .collection('checkIns')
+          .get(),
+      ),
+    ]);
+    const coveredCounts = new Map<string, number>();
+
+    periodCheckInSnapshots.forEach(snapshot => {
+      snapshot.docs.forEach(doc => {
+        if (doc.data().status === 'done' || doc.data().status === 'skip') {
+          const uid = asString(doc.data().uid, doc.id);
+          coveredCounts.set(uid, (coveredCounts.get(uid) ?? 0) + 1);
+        }
+      });
+    });
+
+    const members = memberSnapshots.docs
+      .map(snapshot => snapshot.data())
+      .map(member => ({
+        ...member,
+        uid: asString(member.uid),
+      }))
+      .filter((member): member is DocumentData & {uid: string} =>
+        Boolean(member.uid),
+      );
+    const behindMembers = members.filter(
+      member => (coveredCounts.get(member.uid) ?? 0) < requiredTapIns,
+    );
+    const engagedMembers = members.filter(
+      member => (coveredCounts.get(member.uid) ?? 0) >= requiredTapIns,
+    );
+
+    if (behindMembers.length === 0) {
+      continue;
+    }
+
+    const circleTitle = asString(circle.title, 'Your circle');
+    const periodKey = getPeriodKey({
+      commitmentCadence,
+      dateKey: local.dateKey,
+      periodDateKeys,
+    });
+
+    behindMembers.forEach(member => {
+      sendPromises.push(
+        notifyMemberDuePrompt({
+          circleId: circleSnapshot.id,
+          circleTitle,
+          commitmentCadence,
+          periodKey,
+          targetUid: member.uid,
+          timezone,
+        }),
+      );
+    });
+
+    engagedMembers.forEach(member => {
+      sendPromises.push(
+        notifyCircleNudgePrompt({
+          circleId: circleSnapshot.id,
+          circleTitle,
+          periodKey,
+          targetCount: behindMembers.length,
+          targetUid: member.uid,
+          timezone,
+        }),
+      );
+    });
+  }
+
+  await Promise.all(sendPromises);
+  return {sentOrSkipped: sendPromises.length};
+}
+
+async function getEligibleDiscoveryCircleForUser({
+  publicCircleSnapshots,
+  uid,
+}: {
+  publicCircleSnapshots: QuerySnapshot<DocumentData>;
+  uid: string;
+}) {
+  for (const circleSnapshot of publicCircleSnapshots.docs) {
+    const circle = circleSnapshot.data();
+    const memberCount =
+      typeof circle.memberCount === 'number' && Number.isFinite(circle.memberCount)
+        ? circle.memberCount
+        : 0;
+    const maxSize =
+      typeof circle.maxSize === 'number' && Number.isFinite(circle.maxSize)
+        ? circle.maxSize
+        : 0;
+
+    if (maxSize > 0 && memberCount >= maxSize) {
+      continue;
+    }
+
+    const memberSnapshot = await db
+      .collection('circles')
+      .doc(circleSnapshot.id)
+      .collection('members')
+      .doc(uid)
+      .get();
+    const memberStatus = memberSnapshot.data()?.status;
+
+    if (memberStatus === 'active' || memberStatus === 'pending') {
+      continue;
+    }
+
+    return {
+      category: asString(circle.category, 'Hoyst'),
+      circleId: circleSnapshot.id,
+      title: asString(circle.title, 'Hoyst Circle'),
+    };
+  }
+
+  return undefined;
+}
+
+async function sendCircleDiscoverySuggestions() {
+  const now = new Date();
+  const [userPrivateSnapshots, publicCircleSnapshots] = await Promise.all([
+    db.collection('userPrivate').get(),
+    db
+      .collection('publicCircleIndex')
+      .orderBy('updatedAt', 'desc')
+      .limit(25)
+      .get(),
+  ]);
+  const sendPromises: Promise<unknown>[] = [];
+
+  if (publicCircleSnapshots.empty) {
+    return {sentOrSkipped: 0};
+  }
+
+  for (const userPrivateSnapshot of userPrivateSnapshots.docs) {
+    const uid = userPrivateSnapshot.id;
+    const userPrivate = userPrivateSnapshot.data();
+    const notificationSettings = userPrivate.notificationSettings as
+      | Record<string, unknown>
+      | undefined;
+
+    if (!isPreferenceEnabled(notificationSettings, 'discovery')) {
+      continue;
+    }
+
+    const inactivity = getDiscoveryInactivityEligibility({
+      lastTapInAt: userPrivate.lastTapInAt ?? userPrivate.lastSignInAt,
+      now,
+    });
+
+    if (!inactivity.eligible) {
+      continue;
+    }
+
+    const circle = await getEligibleDiscoveryCircleForUser({
+      publicCircleSnapshots,
+      uid,
+    });
+
+    if (!circle) {
+      continue;
+    }
+
+    sendPromises.push(
+      notifyCircleDiscoverySuggestion({
+        category: circle.category,
+        circleId: circle.circleId,
+        circleTitle: circle.title,
+        dateKey: getLocalDateTimeParts(now, 'UTC').dateKey,
+        targetUid: uid,
+        timezone: 'UTC',
+      }),
+    );
   }
 
   await Promise.all(sendPromises);
@@ -831,6 +1946,14 @@ export const sendFinalTapInWarnings = onSchedule(
   {schedule: '0 * * * *', secrets: [oneSignalRestApiKey]},
   async () => {
     await sendTapInReminders('final');
+  },
+);
+
+export const sendRoutineEngagementNotifications = onSchedule(
+  {schedule: '15 * * * *', secrets: [oneSignalRestApiKey]},
+  async () => {
+    await sendCircleEngagementPrompts();
+    await sendCircleDiscoverySuggestions();
   },
 );
 
@@ -884,4 +2007,5 @@ export const notificationModules = {
   markInboxEventsRead: 'active',
   sendFinalTapInWarnings: 'active',
   sendMiddayTapInReminders: 'active',
+  sendRoutineEngagementNotifications: 'active',
 };

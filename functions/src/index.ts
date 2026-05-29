@@ -7,6 +7,7 @@ export {
   notificationModules,
   sendFinalTapInWarnings,
   sendMiddayTapInReminders,
+  sendRoutineEngagementNotifications,
   updateNotificationSettings,
 } from './notifications';
 export {completeProfile, deleteAccount} from './auth';

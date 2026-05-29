@@ -206,8 +206,11 @@ describe('notification settings service listeners', () => {
     expect(() => handleSnapshot(null)).not.toThrow();
 
     expect(onSettings).toHaveBeenCalledWith({
-      circleActivity: true,
+      circleRisk: true,
+      discovery: true,
+      nudges: true,
       productUpdates: true,
+      socialActivity: true,
       tapInReminders: true,
     });
     expect(onError).toHaveBeenCalledWith(
@@ -215,6 +218,36 @@ describe('notification settings service listeners', () => {
         message: 'Notification settings listener returned no snapshot.',
       }),
     );
+  });
+
+  it('maps granular settings with legacy fallbacks', () => {
+    const onSettings = jest.fn();
+
+    subscribeToNotificationSettings({
+      onSettings,
+      uid: 'user-1',
+    });
+
+    const handleSnapshot = mockSettingsOnSnapshot.mock.calls[0][0];
+    handleSnapshot({
+      data: () => ({
+        notificationSettings: {
+          circleActivity: false,
+          productUpdates: false,
+          socialActivity: true,
+          tapInReminders: true,
+        },
+      }),
+    });
+
+    expect(onSettings).toHaveBeenCalledWith({
+      circleRisk: false,
+      discovery: false,
+      nudges: false,
+      productUpdates: false,
+      socialActivity: true,
+      tapInReminders: true,
+    });
   });
 
   it('marks one inbox event read through the callable', async () => {

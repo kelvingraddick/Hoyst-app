@@ -1,4 +1,4 @@
-import React, {useEffect, useRef} from 'react';
+import React, {useEffect, useRef, useState} from 'react';
 import {Platform, StyleSheet, View} from 'react-native';
 import {createBottomTabNavigator} from '@react-navigation/bottom-tabs';
 import type {NativeStackScreenProps} from '@react-navigation/native-stack';
@@ -12,8 +12,14 @@ import {
 } from '../design/components/TabBarIcons';
 
 import {TapInRingMark} from '../design/components/TapInRingMark';
+import {getPulseRingStateForCircles} from '../design/components/pulse-ring-state';
 import {CirclesScreen} from '../features/circles/screens/CirclesScreen';
 import {HomeScreen} from '../features/home/screens/HomeScreen';
+import {
+  createEmptyHomeData,
+  subscribeToHomeData,
+  type HomeData,
+} from '../features/home/services/home-data-service';
 import {MomentumScreen} from '../features/momentum/screens/MomentumScreen';
 import {ProfileScreen} from '../features/profile/screens/ProfileScreen';
 import {useHoystTheme} from '../design/theme/useHoystTheme';
@@ -23,6 +29,7 @@ import {navigateToAuthWelcome} from './auth-modal-navigation';
 import {getRootAuthPresentation} from './root-mode';
 import type {AppTabsParamList, RootStackParamList} from './types';
 import {useOnboardingStore} from '../store/onboarding-store';
+import {useUserProfileStore} from '../store/profile-store';
 import {useSessionStore} from '../store/session-store';
 
 const Tab = createBottomTabNavigator<AppTabsParamList>();
@@ -47,6 +54,7 @@ export function AppTabsNavigator({
 }: Props): React.JSX.Element {
   const theme = useHoystTheme();
   const status = useSessionStore(state => state.status);
+  const user = useSessionStore(state => state.user);
   const beginAuthFlow = useSessionStore(state => state.beginAuthFlow);
   const consumePendingAction = useSessionStore(
     state => state.consumePendingAction,
@@ -67,7 +75,27 @@ export function AppTabsNavigator({
     state => state.startOnboardingWizard,
   );
   const setCurrentStep = useOnboardingStore(state => state.setCurrentStep);
+  const profile = useUserProfileStore(state => state.profile);
+  const timezone = profile?.timezone ?? 'UTC';
+  const [tabHomeData, setTabHomeData] = useState<HomeData>(() =>
+    createEmptyHomeData(),
+  );
   const didAutoPresentOnboardingRef = useRef(false);
+  const tabPulseRingState = getPulseRingStateForCircles(tabHomeData.circles);
+
+  useEffect(() => {
+    if (status !== 'authenticatedReady' || !user?.uid) {
+      setTabHomeData(createEmptyHomeData(timezone));
+      return undefined;
+    }
+
+    return subscribeToHomeData({
+      onData: setTabHomeData,
+      onError: () => setTabHomeData(createEmptyHomeData(timezone)),
+      timezone,
+      uid: user.uid,
+    });
+  }, [status, timezone, user?.uid]);
 
   useEffect(() => {
     if (
@@ -185,6 +213,7 @@ export function AppTabsNavigator({
               <TapInRingMark
                 innerSize={46}
                 outerSize={78}
+                state={tabPulseRingState}
                 style={styles.tapInOffset}
               />
             );

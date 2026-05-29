@@ -21,6 +21,7 @@ import {GlassPanel} from './GlassPanel';
 import {HoystChip} from './HoystChip';
 import {LayeredAvatar} from './LayeredAvatar';
 import {HoystText} from './HoystText';
+import {getPulseRingStateForCircle} from './pulse-ring-state';
 
 export type TodayCircleCardActionVariant = HomeCircleActionVariant;
 
@@ -50,10 +51,18 @@ function getUpcomingPeriodCopy(card: CircleManagementCard) {
 }
 
 function getUpcomingPrimaryCopy(card: CircleManagementCard) {
+  if (card.viewerMembershipStatus === 'pending') {
+    return 'Pending approval';
+  }
+
   return `Next tap ${getUpcomingPeriodCopy(card)}`;
 }
 
 function getUpcomingSupportingCopy(card: CircleManagementCard) {
+  if (card.viewerMembershipStatus === 'pending') {
+    return 'Approval needed before Tap In unlocks.';
+  }
+
   const viewerRemainingTapIns = card.viewerRemainingTapIns ?? 0;
 
   if (viewerRemainingTapIns > 0) {
@@ -255,6 +264,7 @@ export function TodayCircleCard({
     isNudged,
     isNudging,
   });
+  const pulseRingState = getPulseRingStateForCircle(card);
   const handleActionPress = () => {
     onActionPress();
   };
@@ -285,10 +295,7 @@ export function TodayCircleCard({
                 {getUpcomingPrimaryCopy(card)}
               </HoystText>
               {upcomingSupportingCopy ? (
-                <HoystText
-                  numberOfLines={2}
-                  tone="muted"
-                  variant="caption">
+                <HoystText numberOfLines={2} tone="muted" variant="caption">
                   {upcomingSupportingCopy}
                 </HoystText>
               ) : null}
@@ -430,6 +437,7 @@ export function TodayCircleCard({
                     event.stopPropagation();
                     handleActionPress();
                   }}
+                  ringState={pulseRingState}
                 />
               ) : (
                 <Pressable

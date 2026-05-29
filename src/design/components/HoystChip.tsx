@@ -49,7 +49,9 @@ export function HoystChip({
   return (
     <View
       style={[styles.base, {backgroundColor: palette.backgroundColor}, style]}>
-      <HoystText style={{color: palette.color}} variant="tiny">
+      <HoystText
+        style={{color: palette.color, textAlign: 'center'}}
+        variant="tiny">
         {label}
       </HoystText>
     </View>
@@ -58,8 +60,10 @@ export function HoystChip({
 
 const styles = StyleSheet.create({
   base: {
+    alignItems: 'center',
     alignSelf: 'flex-start',
     borderRadius: radius.pill,
+    justifyContent: 'center',
     paddingHorizontal: 10,
     paddingVertical: 7,
   },

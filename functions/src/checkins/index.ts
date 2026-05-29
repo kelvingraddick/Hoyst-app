@@ -10,8 +10,16 @@ import {
   recordTapInOpportunity,
   removeTapInOpportunity,
 } from '../momentum';
-import {notifyCircleAtRisk} from '../notifications';
+import {
+  notifyCircleAtRisk,
+  notifyCircleComplete,
+  notifyCompanionTappedIn,
+} from '../notifications';
 import {getCommitmentCadence, getRequiredTapIns} from '../shared/commitments';
+import {
+  getCircleCompleteNotificationTargets,
+  getCompanionTapInNotificationTargets,
+} from './notification-plan';
 
 const submitTapInSchema = z.object({
   circleId: z.string().trim().min(1),
@@ -234,6 +242,13 @@ export const submitTapIn = onCall(async request => {
       },
       {merge: true},
     );
+    transaction.set(
+      db.collection('userPrivate').doc(uid),
+      {
+        lastTapInAt: now,
+      },
+      {merge: true},
+    );
 
     await recordTapInOpportunity({
       checkInId: uid,
@@ -302,20 +317,75 @@ export const submitTapIn = onCall(async request => {
       ? total + Math.max(requiredTapIns - (coveredCounts.get(memberUid) ?? 0), 0)
       : total;
   }, 0);
+  const activeMemberUids = memberSnapshots.docs
+    .map(snapshot => {
+      const memberUid = snapshot.data().uid;
+      return typeof memberUid === 'string' && memberUid.trim().length > 0
+        ? memberUid
+        : snapshot.id;
+    })
+    .filter(Boolean);
+  const totalRemainingCount = activeMemberUids.reduce(
+    (total, memberUid) =>
+      total + Math.max(requiredTapIns - (coveredCounts.get(memberUid) ?? 0), 0),
+    0,
+  );
+  const periodKey =
+    commitmentCadence === 'daily'
+      ? result.dateKey
+      : periodDateKeys[0] ?? result.dateKey;
+  const circleTitle =
+    typeof circle?.title === 'string' ? circle.title : 'Your circle';
+  const actor = {
+    avatarUrl: profile.avatarUrl ?? null,
+    displayName: profile.displayName,
+    handle: profile.handle,
+    uid,
+  };
+  const companionTargetUids = getCompanionTapInNotificationTargets({
+    activeMemberUids,
+    actorUid: uid,
+  });
+  const circleCompleteTargetUids = getCircleCompleteNotificationTargets({
+    activeMemberUids,
+    remainingTapIns: totalRemainingCount,
+  });
+
+  if (input.status === 'done') {
+    await Promise.all(
+      companionTargetUids.map(targetUid =>
+        notifyCompanionTappedIn({
+          actor,
+          circleId: input.circleId,
+          circleTitle,
+          dateKey: result.dateKey,
+          targetUid,
+        }),
+      ),
+    ).catch(error => console.error('notify_companion_tapped_in_failed', error));
+  }
+
+  if (circleCompleteTargetUids.length > 0) {
+    await Promise.all(
+      circleCompleteTargetUids.map(targetUid =>
+        notifyCircleComplete({
+          circleId: input.circleId,
+          circleTitle,
+          commitmentCadence,
+          periodKey,
+          targetUid,
+        }),
+      ),
+    ).catch(error => console.error('notify_circle_complete_failed', error));
+  }
 
   if (remainingCount > 0 && remainingCount <= 2) {
-    const periodKey =
-      commitmentCadence === 'daily'
-        ? result.dateKey
-        : periodDateKeys[0] ?? result.dateKey;
-
     await Promise.all(
       pendingMembers.map(memberData =>
         notifyCircleAtRisk({
           commitmentCadence,
           circleId: input.circleId,
-          circleTitle:
-            typeof circle?.title === 'string' ? circle.title : 'Your circle',
+          circleTitle,
           periodKey,
           remainingCount,
           targetUid: memberData.uid,

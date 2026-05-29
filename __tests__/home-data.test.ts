@@ -191,7 +191,7 @@ describe('home data mapping', () => {
         completeWeekly,
         pending,
       ]).map(circle => circle.id),
-    ).toEqual(['weekly-remaining', 'daily-tomorrow']);
+    ).toEqual(['weekly-remaining', 'daily-tomorrow', 'pending-upcoming']);
   });
 
   it('maps active membership and today check-ins into a real Home card', () => {

@@ -1,4 +1,35 @@
 import {getRemoveTapInDecision} from '../functions/src/checkins/remove';
+import {
+  getCircleCompleteNotificationTargets,
+  getCompanionTapInNotificationTargets,
+} from '../functions/src/checkins/notification-plan';
+
+describe('Tap In notification targeting', () => {
+  it('notifies every other active member for companion Tap Ins', () => {
+    expect(
+      getCompanionTapInNotificationTargets({
+        activeMemberUids: ['user-1', 'user-2', 'user-3'],
+        actorUid: 'user-1',
+      }),
+    ).toEqual(['user-2', 'user-3']);
+  });
+
+  it('notifies all active members only when the circle is complete', () => {
+    expect(
+      getCircleCompleteNotificationTargets({
+        activeMemberUids: ['user-1', 'user-2'],
+        remainingTapIns: 1,
+      }),
+    ).toEqual([]);
+
+    expect(
+      getCircleCompleteNotificationTargets({
+        activeMemberUids: ['user-1', 'user-2'],
+        remainingTapIns: 0,
+      }),
+    ).toEqual(['user-1', 'user-2']);
+  });
+});
 
 describe('remove Tap In decision', () => {
   it('removes a done check-in for an active member', () => {

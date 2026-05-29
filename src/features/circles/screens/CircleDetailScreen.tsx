@@ -40,8 +40,12 @@ import {HoystText} from '../../../design/components/HoystText';
 import {CircleCategoryPill} from '../../../design/components/CircleCategoryIcon';
 import {SectionHeader} from '../../../design/components/SectionHeader';
 import {StatusAvatarRow} from '../../../design/components/StatusAvatarRow';
-import {TapInRingMark} from '../../../design/components/TapInRingMark';
-import {actionMotion, actionShadow} from '../../../design/tokens/actions';
+import {TapInPulseButton} from '../../../design/components/TapInPulseButton';
+import {
+  getPulseRingStateForCircle,
+  type PulseRingState,
+} from '../../../design/components/pulse-ring-state';
+import {actionMotion} from '../../../design/tokens/actions';
 import {radius} from '../../../design/tokens/radius';
 import {useHoystTheme} from '../../../design/theme/useHoystTheme';
 import {useProtectedAction} from '../../auth/hooks/useProtectedAction';
@@ -278,42 +282,19 @@ function DashboardUtilityAction({
 function TapInPrimaryAction({
   label,
   onPress,
+  ringState,
 }: {
   label: string;
   onPress: () => void;
+  ringState: PulseRingState;
 }) {
-  const theme = useHoystTheme();
-
   return (
-    <Pressable
+    <TapInPulseButton
+      label={label}
       onPress={onPress}
-      style={({pressed}) => [
-        styles.tapInPressable,
-        {
-          opacity: pressed ? actionMotion.pressedOpacity : 1,
-          transform: [{scale: pressed ? actionMotion.pressedScale : 1}],
-        },
-      ]}>
-      <View
-        style={[
-          styles.tapInFill,
-          {
-            backgroundColor: theme.actionSurface,
-            borderColor: theme.actionBorder,
-            shadowColor: theme.actionShadowColor,
-            shadowOpacity: theme.actionShadowOpacity,
-          },
-        ]}>
-        <View style={styles.tapInIconWrap}>
-          <TapInRingMark innerSize={22} outerSize={40} />
-        </View>
-        <HoystText
-          style={[styles.tapInLabel, {color: theme.actionForeground}]}
-          variant="button">
-          {label}
-        </HoystText>
-      </View>
-    </Pressable>
+      ringState={ringState}
+      variant="primary"
+    />
   );
 }
 
@@ -652,8 +633,7 @@ export function CircleDetailScreen({
       ? 'Today Progression'
       : 'Week Progression';
   const detailStatusPill = getDetailStatusPill(detail);
-  const nudgeTargetCount =
-    detail.nudgeTargetCount ?? nudgeTargetMembers.length;
+  const nudgeTargetCount = detail.nudgeTargetCount ?? nudgeTargetMembers.length;
   const canNudgeTargets = nudgeTargetCount > 0;
   const periodRemainingCopy = formatTapInsLeft(
     detail.remainingCheckIns ?? 0,
@@ -678,7 +658,10 @@ export function CircleDetailScreen({
     isMemberCircle &&
     (detail.viewerTodayStatus === 'done' ||
       detail.viewerTodayStatus === 'skip');
-  const tapInPrimaryActionLabel = canRemoveTodayCheckIn ? 'View Today' : 'Tap In';
+  const tapInPrimaryActionLabel = canRemoveTodayCheckIn
+    ? 'View Today'
+    : 'Tap In';
+  const tapInPulseRingState = getPulseRingStateForCircle(detail);
   const canDeleteCircle = isMemberCircle && detail.viewerRole === 'owner';
   const canLeaveCircle =
     Boolean(detail.viewerRole) && detail.viewerRole !== 'owner';
@@ -725,20 +708,16 @@ export function CircleDetailScreen({
   };
 
   const confirmRemoveTodayCheckIn = () => {
-    Alert.alert(
-      'Remove today?',
-      removeProgressionCopy,
-      [
-        {style: 'cancel', text: 'Keep'},
-        {
-          onPress: () => {
-            handleRemoveTodayCheckIn().catch(() => undefined);
-          },
-          style: 'destructive',
-          text: 'Remove',
+    Alert.alert('Remove today?', removeProgressionCopy, [
+      {style: 'cancel', text: 'Keep'},
+      {
+        onPress: () => {
+          handleRemoveTodayCheckIn().catch(() => undefined);
         },
-      ],
-    );
+        style: 'destructive',
+        text: 'Remove',
+      },
+    ]);
   };
 
   const openDeleteCircleConfirm = () => {
@@ -1028,6 +1007,7 @@ export function CircleDetailScreen({
                       }),
                   )
                 }
+                ringState={tapInPulseRingState}
               />
             </View>
             {canRemoveTodayCheckIn ? (
@@ -1050,57 +1030,57 @@ export function CircleDetailScreen({
             ) : null}
             <View style={styles.quickActionRow}>
               {canNudgeTargets ? (
-              <DashboardQuickAction
-                emphasized={canNudgeTargets && !nudged}
-                icon={
-                  <BellRing
-                    color={
-                      nudged
-                        ? theme.successForeground
-                        : canNudgeTargets
-                        ? theme.accentSecondaryForeground
-                        : theme.text
-                    }
-                    size={18}
-                    strokeWidth={2.2}
-                  />
-                }
-                label={
-                  isNudging
-                    ? 'Nudging...'
-                    : nudged
-                    ? 'Nudged'
-                    : `Nudge ${nudgeTargetCount}`
-                }
-                onPress={() => {
-                  if (isNudging) {
-                    return;
+                <DashboardQuickAction
+                  emphasized={canNudgeTargets && !nudged}
+                  icon={
+                    <BellRing
+                      color={
+                        nudged
+                          ? theme.successForeground
+                          : canNudgeTargets
+                          ? theme.accentSecondaryForeground
+                          : theme.text
+                      }
+                      size={18}
+                      strokeWidth={2.2}
+                    />
                   }
+                  label={
+                    isNudging
+                      ? 'Nudging...'
+                      : nudged
+                      ? 'Nudged'
+                      : `Nudge ${nudgeTargetCount}`
+                  }
+                  onPress={() => {
+                    if (isNudging) {
+                      return;
+                    }
 
-                  setIsNudging(true);
-                  nudgeCircleMembers(detail.id)
-                    .then(result => {
-                      setNudged(true);
-                      Alert.alert(
-                        'Nudge sent',
-                        result.nudged > 0
-                          ? `${result.nudged} member${
-                              result.nudged === 1 ? '' : 's'
-                            } nudged.`
-                          : 'Everyone is covered right now.',
-                      );
-                    })
-                    .catch(error => {
-                      Alert.alert(
-                        'Nudge failed',
-                        (error as {message?: string}).message ??
-                          'Could not send a nudge.',
-                      );
-                    })
-                    .finally(() => setIsNudging(false));
-                }}
-                supportingText={nudgeTargetCopy}
-              />
+                    setIsNudging(true);
+                    nudgeCircleMembers(detail.id)
+                      .then(result => {
+                        setNudged(true);
+                        Alert.alert(
+                          'Nudge sent',
+                          result.nudged > 0
+                            ? `${result.nudged} member${
+                                result.nudged === 1 ? '' : 's'
+                              } nudged.`
+                            : 'Everyone is covered right now.',
+                        );
+                      })
+                      .catch(error => {
+                        Alert.alert(
+                          'Nudge failed',
+                          (error as {message?: string}).message ??
+                            'Could not send a nudge.',
+                        );
+                      })
+                      .finally(() => setIsNudging(false));
+                  }}
+                  supportingText={nudgeTargetCopy}
+                />
               ) : null}
               {canInvite ? (
                 <DashboardQuickAction
@@ -1261,13 +1241,9 @@ export function CircleDetailScreen({
                           strokeWidth={2.2}
                         />
                       }
-                      label={
-                        isLeavingCircle ? 'Working...' : leaveActionLabel
-                      }
+                      label={isLeavingCircle ? 'Working...' : leaveActionLabel}
                       labelColor={theme.dangerForeground}
-                      onPress={
-                        isLeavingCircle ? undefined : confirmLeaveCircle
-                      }
+                      onPress={isLeavingCircle ? undefined : confirmLeaveCircle}
                       showChevron={false}
                       supportingText={leaveActionSupportingText}
                     />
@@ -1574,35 +1550,6 @@ const styles = StyleSheet.create({
     gap: 10,
     minWidth: '100%',
     width: '100%',
-  },
-  tapInPressable: {
-    borderRadius: radius.md,
-    width: '100%',
-  },
-  tapInFill: {
-    alignItems: 'center',
-    borderRadius: radius.md,
-    borderWidth: 1,
-    elevation: actionShadow.elevation,
-    flexDirection: 'row',
-    gap: 7,
-    justifyContent: 'center',
-    minHeight: 68,
-    paddingHorizontal: 24,
-    shadowOffset: actionShadow.offset,
-    shadowRadius: actionShadow.compactRadius,
-    width: '100%',
-  },
-  tapInIconWrap: {
-    alignItems: 'center',
-    height: 44,
-    justifyContent: 'center',
-    width: 44,
-  },
-  tapInLabel: {
-    fontSize: 17,
-    fontWeight: '800',
-    lineHeight: 21,
   },
   dashboardQuickPressable: {
     alignSelf: 'stretch',

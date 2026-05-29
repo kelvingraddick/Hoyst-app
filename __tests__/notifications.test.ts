@@ -52,10 +52,188 @@ jest.mock('firebase-functions/v2/scheduler', () => ({
 import {
   buildOneSignalPushPayload,
   getCircleAtRiskNotificationBody,
+  getDiscoveryInactivityEligibility,
   getJoinRequestNotificationDedupeKey,
+  getNotificationCopyVariantIndex,
+  getNotificationPreferenceEnabled,
   getReminderEligibility,
+  getRoutineNotificationEligibility,
   markInboxEventsRead,
+  resolveNotificationCopy,
 } from '../functions/src/notifications';
+
+describe('notification copy rotation', () => {
+  it('selects stable copy from the dedupe key', () => {
+    const first = resolveNotificationCopy({
+      context: {actorName: 'Ava', circleTitle: 'Hydration Circle'},
+      dedupeKey: 'nudge_circle-1_2026-05-29_user-1',
+      type: 'nudge',
+    });
+    const second = resolveNotificationCopy({
+      context: {actorName: 'Ava', circleTitle: 'Hydration Circle'},
+      dedupeKey: 'nudge_circle-1_2026-05-29_user-1',
+      type: 'nudge',
+    });
+
+    expect(second).toEqual(first);
+    expect(first.body).toContain('Ava');
+    expect(first.copyVariant).toMatch(/^nudge_[0-4]$/);
+  });
+
+  it('supports the new notification purposes', () => {
+    const newTypes = [
+      'companion_tapped_in',
+      'circle_complete',
+      'member_due_prompt',
+      'circle_nudge_prompt',
+      'circle_discovery_suggestion',
+    ] as const;
+
+    newTypes.forEach(type => {
+      const copy = resolveNotificationCopy({
+        context: {
+          actorName: 'Ava',
+          circleTitle: 'Maker Mornings',
+          discoveryCategory: 'Fitness',
+          discoveryCircleTitle: 'Morning Miles',
+          periodCopy: 'this week',
+          targetCount: 2,
+        },
+        dedupeKey: `${type}_example`,
+        type,
+      });
+
+      expect(copy.title.length).toBeGreaterThan(0);
+      expect(copy.body.length).toBeGreaterThan(0);
+      expect(copy.copyVariant).toMatch(new RegExp(`^${type}_[0-4]$`));
+    });
+  });
+
+  it('keeps variant indexes in range', () => {
+    expect(
+      getNotificationCopyVariantIndex({
+        dedupeKey: 'event-1',
+        type: 'circle_complete',
+        variantCount: 5,
+      }),
+    ).toBeGreaterThanOrEqual(0);
+    expect(
+      getNotificationCopyVariantIndex({
+        dedupeKey: 'event-1',
+        type: 'circle_complete',
+        variantCount: 5,
+      }),
+    ).toBeLessThan(5);
+  });
+});
+
+describe('notification settings compatibility', () => {
+  it('defaults new preferences on', () => {
+    expect(getNotificationPreferenceEnabled(undefined, 'socialActivity')).toBe(
+      true,
+    );
+    expect(getNotificationPreferenceEnabled(undefined, 'circleRisk')).toBe(true);
+    expect(getNotificationPreferenceEnabled(undefined, 'nudges')).toBe(true);
+    expect(getNotificationPreferenceEnabled(undefined, 'discovery')).toBe(true);
+  });
+
+  it('maps legacy circle activity to new circle preferences', () => {
+    const legacySettings = {
+      circleActivity: false,
+      productUpdates: false,
+      tapInReminders: true,
+    };
+
+    expect(
+      getNotificationPreferenceEnabled(legacySettings, 'socialActivity'),
+    ).toBe(false);
+    expect(getNotificationPreferenceEnabled(legacySettings, 'circleRisk')).toBe(
+      false,
+    );
+    expect(getNotificationPreferenceEnabled(legacySettings, 'nudges')).toBe(
+      false,
+    );
+    expect(getNotificationPreferenceEnabled(legacySettings, 'discovery')).toBe(
+      false,
+    );
+  });
+});
+
+describe('routine notification cadence', () => {
+  const now = new Date('2026-05-29T18:00:00.000Z');
+
+  it('enforces routine spacing and daily caps', () => {
+    expect(
+      getRoutineNotificationEligibility({
+        deliveryState: {
+          routineLastSentAt: new Date('2026-05-29T14:30:00.000Z'),
+        },
+        now,
+        timezone: 'UTC',
+        type: 'member_due_prompt',
+      }),
+    ).toMatchObject({eligible: false, reason: 'routine-spacing'});
+
+    expect(
+      getRoutineNotificationEligibility({
+        deliveryState: {
+          routineDateKey: '2026-05-29',
+          routineLastSentAt: new Date('2026-05-29T10:00:00.000Z'),
+          routineSentCount: 2,
+        },
+        now,
+        timezone: 'UTC',
+        type: 'circle_nudge_prompt',
+      }),
+    ).toMatchObject({eligible: false, reason: 'routine-daily-limit'});
+  });
+
+  it('spaces discovery pushes weekly', () => {
+    expect(
+      getRoutineNotificationEligibility({
+        deliveryState: {
+          discoveryLastSentAt: new Date('2026-05-25T18:00:00.000Z'),
+        },
+        now,
+        timezone: 'UTC',
+        type: 'circle_discovery_suggestion',
+      }),
+    ).toMatchObject({eligible: false, reason: 'discovery-spacing'});
+  });
+
+  it('allows routine pushes after the spacing window', () => {
+    expect(
+      getRoutineNotificationEligibility({
+        deliveryState: {
+          routineDateKey: '2026-05-29',
+          routineLastSentAt: new Date('2026-05-29T08:00:00.000Z'),
+          routineSentCount: 1,
+        },
+        now,
+        timezone: 'UTC',
+        type: 'member_due_prompt',
+      }),
+    ).toMatchObject({eligible: true, reason: 'eligible'});
+  });
+});
+
+describe('discovery inactivity eligibility', () => {
+  it('requires three quiet Tap In days', () => {
+    expect(
+      getDiscoveryInactivityEligibility({
+        lastTapInAt: new Date('2026-05-27T18:00:00.000Z'),
+        now: new Date('2026-05-29T18:00:00.000Z'),
+      }),
+    ).toMatchObject({eligible: false, reason: 'recent-tap-in'});
+
+    expect(
+      getDiscoveryInactivityEligibility({
+        lastTapInAt: new Date('2026-05-25T18:00:00.000Z'),
+        now: new Date('2026-05-29T18:00:00.000Z'),
+      }),
+    ).toMatchObject({eligible: true, reason: 'eligible'});
+  });
+});
 
 describe('notification reminder eligibility', () => {
   it('allows active members with due Tap Ins and enabled reminders', () => {

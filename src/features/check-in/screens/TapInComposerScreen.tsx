@@ -12,9 +12,15 @@ import {HoystScreen} from '../../../design/components/HoystScreen';
 import {HoystText} from '../../../design/components/HoystText';
 import {CircleCategoryPill} from '../../../design/components/CircleCategoryIcon';
 import {TapInRingMark} from '../../../design/components/TapInRingMark';
-import {actionMotion, actionShadow} from '../../../design/tokens/actions';
+import {TapInPulseButton} from '../../../design/components/TapInPulseButton';
+import {
+  getPulseRingStateForCircle,
+  type PulseRingState,
+} from '../../../design/components/pulse-ring-state';
+import {actionMotion} from '../../../design/tokens/actions';
 import {radius} from '../../../design/tokens/radius';
 import {useHoystTheme} from '../../../design/theme/useHoystTheme';
+import {triggerTapInSuccessHaptic} from '../../../lib/haptics/tap-in-haptics';
 import {removeTapIn, submitTapIn} from '../services/check-in-service';
 import type {
   CheckInStatus,
@@ -36,48 +42,23 @@ type ComposerActionProps = {
   disabled?: boolean;
   label: string;
   onPress?: () => void;
+  ringState?: PulseRingState;
 };
 
 function ComposerPrimaryAction({
   disabled,
   label,
   onPress,
+  ringState = 'active',
 }: ComposerActionProps): React.JSX.Element {
-  const theme = useHoystTheme();
-
   return (
-    <Pressable
-      accessibilityRole="button"
+    <TapInPulseButton
       disabled={disabled}
-      onPress={disabled ? undefined : onPress}
-      style={({pressed}) => [
-        styles.composerPrimaryPressable,
-        {
-          opacity: disabled ? 0.42 : pressed ? actionMotion.pressedOpacity : 1,
-          shadowColor: theme.actionShadowColor,
-          shadowOpacity: theme.actionShadowOpacity,
-          transform: [
-            {scale: pressed && !disabled ? actionMotion.pressedScale : 1},
-          ],
-        },
-      ]}>
-      <View
-        style={[
-          styles.composerPrimaryFill,
-          {
-            backgroundColor: theme.actionSurface,
-            borderColor: theme.actionBorder,
-          },
-        ]}>
-        <TapInRingMark innerSize={18} outerSize={32} />
-        <HoystText
-          numberOfLines={1}
-          style={[styles.composerPrimaryLabel, {color: theme.actionForeground}]}
-          variant="button">
-          {label}
-        </HoystText>
-      </View>
-    </Pressable>
+      label={label}
+      onPress={onPress}
+      ringState={ringState}
+      variant="primary"
+    />
   );
 }
 
@@ -199,8 +180,7 @@ export function TapInComposerScreen({
   const hasPreviewNote = trimmedNote.length > 0;
   const hasPreviewPhoto = Boolean(draft.photoUri);
   const shouldShowPreview = hasPreviewNote || hasPreviewPhoto;
-  const progressLabel =
-    detail.progressLabel ?? `${detail.completionRate}% in`;
+  const progressLabel = detail.progressLabel ?? `${detail.completionRate}% in`;
   const remainingPeriodCopy =
     detail.commitmentCadence === 'daily' ? 'today' : 'this week';
   const statusLabel =
@@ -210,9 +190,9 @@ export function TapInComposerScreen({
       ? 'Skipped today'
       : detail.viewerHasCheckedIn
       ? 'Already tapped in'
-    : detail.remainingCheckIns === 1
-    ? `1 Tap In left ${remainingPeriodCopy}`
-    : `${detail.remainingCheckIns ?? 0} Tap Ins left ${remainingPeriodCopy}`;
+      : detail.remainingCheckIns === 1
+      ? `1 Tap In left ${remainingPeriodCopy}`
+      : `${detail.remainingCheckIns ?? 0} Tap Ins left ${remainingPeriodCopy}`;
   const skipGraceRule = detail.graceRules?.skip;
   const canSubmitTapIn = !detail.viewerHasTappedInToday;
   const canSkip =
@@ -221,12 +201,13 @@ export function TapInComposerScreen({
     Boolean(skipGraceRule && skipGraceRule.allowance > 0);
   const canRemoveTodayCheckIn =
     detail.viewerTodayStatus === 'done' || detail.viewerTodayStatus === 'skip';
+  const composerPulseRingState = getPulseRingStateForCircle(detail);
   const removeActionLabel =
     detail.viewerTodayStatus === 'skip' ? 'Remove Skip' : 'Remove Tap In';
   const checkedInStatusCopy =
     detail.viewerTodayStatus === 'skip'
       ? 'Your grace skip is covering today for this Circle.'
-    : detail.viewerHasCheckedIn
+      : detail.viewerHasCheckedIn
       ? 'You are covered right now for this Circle.'
       : detail.commitmentCadence === 'daily'
       ? 'Your Tap In is counted for today.'
@@ -276,6 +257,10 @@ export function TapInComposerScreen({
         status: checkInStatus,
       });
 
+      if (checkInStatus === 'done') {
+        triggerTapInSuccessHaptic();
+      }
+
       navigation.replace('TapInComplete', {
         circleId: route.params.circleId,
         source: route.params.source,
@@ -309,20 +294,16 @@ export function TapInComposerScreen({
   };
 
   const confirmRemoveTapIn = () => {
-    Alert.alert(
-      'Remove today?',
-      removeProgressionCopy,
-      [
-        {style: 'cancel', text: 'Keep'},
-        {
-          onPress: () => {
-            handleRemoveTapIn().catch(() => undefined);
-          },
-          style: 'destructive',
-          text: 'Remove',
+    Alert.alert('Remove today?', removeProgressionCopy, [
+      {style: 'cancel', text: 'Keep'},
+      {
+        onPress: () => {
+          handleRemoveTapIn().catch(() => undefined);
         },
-      ],
-    );
+        style: 'destructive',
+        text: 'Remove',
+      },
+    ]);
   };
 
   return (
@@ -344,7 +325,11 @@ export function TapInComposerScreen({
 
       <GlassPanel style={styles.heroPanel}>
         <View style={styles.heroHeader}>
-          <TapInRingMark innerSize={44} outerSize={78} />
+          <TapInRingMark
+            innerSize={44}
+            outerSize={78}
+            state={composerPulseRingState}
+          />
           <View style={styles.heroCopy}>
             <HoystText style={styles.heroTitle} variant="display">
               Tap In
@@ -388,7 +373,11 @@ export function TapInComposerScreen({
                 },
               ]}>
               <View style={styles.previewHeader}>
-                <TapInRingMark innerSize={22} outerSize={40} />
+                <TapInRingMark
+                  innerSize={22}
+                  outerSize={40}
+                  state={composerPulseRingState}
+                />
                 <View style={styles.previewHeaderCopy}>
                   <HoystText style={styles.previewTitle}>
                     Today is covered
@@ -398,9 +387,7 @@ export function TapInComposerScreen({
                   </HoystText>
                 </View>
               </View>
-              <HoystText tone="muted">
-                {removeProgressionCopy}
-              </HoystText>
+              <HoystText tone="muted">{removeProgressionCopy}</HoystText>
             </View>
             <View style={styles.actionStack}>
               <HoystButton
@@ -554,7 +541,11 @@ export function TapInComposerScreen({
                       },
                     ]}>
                     <View style={styles.previewHeader}>
-                      <TapInRingMark innerSize={22} outerSize={40} />
+                      <TapInRingMark
+                        innerSize={22}
+                        outerSize={40}
+                        state={composerPulseRingState}
+                      />
                       <View style={styles.previewHeaderCopy}>
                         <HoystText style={styles.previewTitle}>
                           {detail.title}
@@ -614,6 +605,7 @@ export function TapInComposerScreen({
                         handleConfirm().catch(() => undefined);
                       }
                 }
+                ringState={composerPulseRingState}
               />
               {canSkip ? (
                 <ComposerUtilityAction
@@ -710,31 +702,6 @@ const styles = StyleSheet.create({
   actionStack: {
     gap: 10,
     marginTop: 6,
-  },
-  composerPrimaryPressable: {
-    borderRadius: radius.md,
-    elevation: actionShadow.elevation,
-    shadowOffset: actionShadow.offset,
-    shadowRadius: actionShadow.compactRadius,
-    width: '100%',
-  },
-  composerPrimaryFill: {
-    alignItems: 'center',
-    borderRadius: radius.md,
-    borderWidth: 1,
-    flexDirection: 'row',
-    gap: 8,
-    justifyContent: 'center',
-    minHeight: 58,
-    paddingHorizontal: 18,
-    width: '100%',
-  },
-  composerPrimaryLabel: {
-    flexShrink: 1,
-    fontSize: 16,
-    fontWeight: '800',
-    lineHeight: 20,
-    textAlign: 'center',
   },
   composerUtilityPressable: {
     borderRadius: radius.md,

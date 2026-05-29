@@ -35,12 +35,18 @@ function getInitials(name: string) {
 }
 
 function getInboxTone(event: InboxEvent): CircleActivityTone {
-  if (event.type === 'join_approved' || event.type === 'member_joined') {
+  if (
+    event.type === 'circle_complete' ||
+    event.type === 'companion_tapped_in' ||
+    event.type === 'join_approved' ||
+    event.type === 'member_joined'
+  ) {
     return 'success';
   }
 
   if (
     event.type === 'circle_at_risk' ||
+    event.type === 'member_due_prompt' ||
     event.type === 'tap_in_final_warning' ||
     event.type === 'join_declined'
   ) {
@@ -57,14 +63,29 @@ function getActionLabel(event: InboxEvent) {
   if (event.type === 'tap_in_final_warning') {
     return 'Last call';
   }
+  if (event.type === 'member_due_prompt') {
+    return 'Tap In';
+  }
   if (event.type === 'join_request') {
     return 'Review';
   }
   if (event.type === 'nudge') {
     return 'Nudge';
   }
+  if (event.type === 'circle_nudge_prompt') {
+    return 'Nudge';
+  }
   if (event.type === 'circle_at_risk') {
     return 'At risk';
+  }
+  if (event.type === 'circle_complete') {
+    return 'Complete';
+  }
+  if (event.type === 'companion_tapped_in') {
+    return 'Tapped in';
+  }
+  if (event.type === 'circle_discovery_suggestion') {
+    return 'Explore';
   }
   return event.type === 'join_approved' || event.type === 'member_joined'
     ? 'Joined'
@@ -202,8 +223,8 @@ export function InboxScreen({navigation}: Props): React.JSX.Element {
           <View style={styles.emptyState}>
             <HoystText variant="title">No updates yet</HoystText>
             <HoystText tone="muted">
-              Circle requests, reminders, nudges, and streak alerts will show up
-              here.
+              Circle requests, reminders, nudges, discovery, and streak alerts
+              will show up here.
             </HoystText>
           </View>
         </GlassPanel>

@@ -21,7 +21,11 @@ import {HoystText} from '../../../design/components/HoystText';
 import {LayeredAvatar} from '../../../design/components/LayeredAvatar';
 import {CircleCategoryPill} from '../../../design/components/CircleCategoryIcon';
 import {TapInRingMark} from '../../../design/components/TapInRingMark';
-import {actionMotion, actionShadow} from '../../../design/tokens/actions';
+import {TapInPulseButton} from '../../../design/components/TapInPulseButton';
+import {
+  getPulseRingStateForCircle,
+  getPulseRingStateForCircles,
+} from '../../../design/components/pulse-ring-state';
 import {radius} from '../../../design/tokens/radius';
 import {useHoystTheme} from '../../../design/theme/useHoystTheme';
 import type {RootStackParamList} from '../../../navigation/types';
@@ -81,9 +85,9 @@ export function TapInPickerScreen({navigation}: Props): React.JSX.Element {
   const [nudgedCircleIds, setNudgedCircleIds] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
-  const [nudgingCircleIds, setNudgingCircleIds] = useState<
-    ReadonlySet<string>
-  >(() => new Set());
+  const [nudgingCircleIds, setNudgingCircleIds] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
   const profile = useUserProfileStore(state => state.profile);
   const status = useSessionStore(state => state.status);
   const user = useSessionStore(state => state.user);
@@ -131,6 +135,7 @@ export function TapInPickerScreen({navigation}: Props): React.JSX.Element {
   const doneCount = activeCircles.filter(
     circle => circle.viewerHasCheckedIn,
   ).length;
+  const heroPulseRingState = getPulseRingStateForCircles(activeCircles);
   const showLoadingState = isLoadingHomeData;
   const showDataErrorState =
     hasHomeDataError && !isLoadingHomeData && activeCircles.length === 0;
@@ -192,9 +197,7 @@ export function TapInPickerScreen({navigation}: Props): React.JSX.Element {
         Alert.alert(
           'Nudge sent',
           result.nudged > 0
-            ? `${result.nudged} member${
-                result.nudged === 1 ? '' : 's'
-              } nudged.`
+            ? `${result.nudged} member${result.nudged === 1 ? '' : 's'} nudged.`
             : 'Everyone is covered right now.',
         );
       })
@@ -239,15 +242,18 @@ export function TapInPickerScreen({navigation}: Props): React.JSX.Element {
 
       <GlassPanel style={styles.heroPanel}>
         <View style={styles.heroIconWrap}>
-          <TapInRingMark innerSize={56} outerSize={100} />
+          <TapInRingMark
+            innerSize={56}
+            outerSize={100}
+            state={heroPulseRingState}
+          />
         </View>
         <View style={styles.headerCopy}>
           <HoystText style={styles.centerText} variant="display">
             Tap In
           </HoystText>
           <HoystText style={styles.centerText} tone="muted">
-            Handle the Circles that need your Tap In, then keep the rest
-            moving.
+            Handle the Circles that need your Tap In, then keep the rest moving.
           </HoystText>
         </View>
         <View style={styles.summaryChips}>
@@ -393,38 +399,15 @@ export function TapInPickerScreen({navigation}: Props): React.JSX.Element {
                     ) : null}
                   </View>
 
-                  <Pressable
+                  <TapInPulseButton
+                    label={actionLabel}
                     onPress={() =>
                       canTapInNow ? openTapIn(circle.id) : openCircle(circle.id)
                     }
-                    style={({pressed}) => [
-                      styles.primaryActionWrap,
-                      {
-                        opacity: pressed ? actionMotion.pressedOpacity : 1,
-                        shadowColor: theme.actionShadowColor,
-                        shadowOpacity: theme.actionShadowOpacity,
-                      },
-                    ]}>
-                    <View
-                      style={[
-                        styles.primaryAction,
-                        {
-                          backgroundColor: theme.actionSurface,
-                          borderColor: theme.actionBorder,
-                        },
-                      ]}>
-                      <TapInRingMark innerSize={17} outerSize={30} />
-                      <HoystText
-                        numberOfLines={1}
-                        style={[
-                          styles.primaryActionLabel,
-                          {color: theme.actionForeground},
-                        ]}
-                        variant="button">
-                        {actionLabel}
-                      </HoystText>
-                    </View>
-                  </Pressable>
+                    ringState={getPulseRingStateForCircle(circle)}
+                    style={styles.primaryActionWrap}
+                    variant="card"
+                  />
                 </View>
               </GlassPanel>
             );
@@ -475,8 +458,8 @@ export function TapInPickerScreen({navigation}: Props): React.JSX.Element {
               Your Commitments are complete
             </HoystText>
             <HoystText style={styles.centerText} tone="muted">
-              Every active Circle has what it needs from you right now. You
-              can still keep Members moving below.
+              Every active Circle has what it needs from you right now. You can
+              still keep Members moving below.
             </HoystText>
           </View>
         </GlassPanel>
@@ -735,31 +718,9 @@ const styles = StyleSheet.create({
     gap: 5,
   },
   primaryActionWrap: {
-    borderRadius: radius.md,
-    elevation: actionShadow.elevation,
     flexShrink: 0,
     marginLeft: 'auto',
-    minWidth: 116,
-    shadowOffset: actionShadow.offset,
-    shadowRadius: actionShadow.compactRadius,
-  },
-  primaryAction: {
-    alignItems: 'center',
-    borderRadius: radius.md,
-    borderWidth: 1,
-    flexDirection: 'row',
-    gap: 8,
-    justifyContent: 'center',
-    minHeight: 48,
-    minWidth: 116,
-    paddingHorizontal: 14,
-  },
-  primaryActionLabel: {
-    flexShrink: 0,
-    fontSize: 14,
-    fontWeight: '800',
-    lineHeight: 18,
-    textAlign: 'center',
+    minWidth: 130,
   },
   emptyPanel: {
     minHeight: 186,

@@ -149,7 +149,6 @@
 				0F143D173F0495942865BB42 /* Info.plist */,
 				DFCC209711D7231671FFCBD8 /* OneSignalNotificationServiceExtension.entitlements */,
 			);
-			name = OneSignalNotificationServiceExtension;
 			path = OneSignalNotificationServiceExtension;
 			sourceTree = "<group>";
 		};

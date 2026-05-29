@@ -149,13 +149,11 @@ function mapInboxEventToActivity(event: InboxEvent): CircleActivityItem {
 }
 
 function OverviewStat({
-  detail,
   iconKind,
   label,
   tone,
   value,
 }: {
-  detail: string;
   iconKind: OverviewStatusIconKind;
   label: string;
   tone: OverviewTone;
@@ -168,21 +166,7 @@ function OverviewStat({
     <View style={styles.overviewStat}>
       <OverviewStatusIcon color={color} kind={iconKind} size={42} />
       <HoystText style={styles.overviewValue}>{value}</HoystText>
-      <HoystText
-        adjustsFontSizeToFit
-        minimumFontScale={0.78}
-        numberOfLines={1}
-        style={[styles.overviewLabel, {color}]}>
-        {label}
-      </HoystText>
-      <HoystText
-        adjustsFontSizeToFit
-        minimumFontScale={0.82}
-        numberOfLines={1}
-        style={styles.overviewDetail}
-        tone="muted">
-        {detail}
-      </HoystText>
+      <HoystChip label={label} style={styles.overviewChip} tone={tone} />
     </View>
   );
 }
@@ -652,12 +636,13 @@ export function CirclesScreen({navigation}: Props): React.JSX.Element {
 
   const overviewSection = (
     <GlassPanel padding="compact" style={styles.overview}>
-      <SectionHeader title="Overview" />
+      <HoystText tone="muted" variant="bodyStrong">
+        Overview
+      </HoystText>
       <View style={styles.overviewRow}>
         <OverviewStat
-          detail="Your attention"
           iconKind="needsTap"
-          label="Needs Tap"
+          label="Needs You"
           tone="orange"
           value={needsAttention.length}
         />
@@ -668,7 +653,6 @@ export function CirclesScreen({navigation}: Props): React.JSX.Element {
           ]}
         />
         <OverviewStat
-          detail="Approval"
           iconKind="pending"
           label="Pending"
           tone="yellow"
@@ -681,7 +665,6 @@ export function CirclesScreen({navigation}: Props): React.JSX.Element {
           ]}
         />
         <OverviewStat
-          detail="Keep it going"
           iconKind="onTrack"
           label="On Track"
           tone="blue"
@@ -694,9 +677,8 @@ export function CirclesScreen({navigation}: Props): React.JSX.Element {
           ]}
         />
         <OverviewStat
-          detail="Nice work!"
           iconKind="completedToday"
-          label="Completed Today"
+          label="Done"
           tone="green"
           value={completedTodayCount}
         />
@@ -1121,26 +1103,14 @@ const styles = StyleSheet.create({
   overview: {
     gap: 14,
   },
-  overviewDetail: {
-    fontSize: 10,
-    letterSpacing: 0,
-    lineHeight: 13,
-    maxWidth: '100%',
-    textAlign: 'center',
+  overviewChip: {
+    alignSelf: 'center',
   },
   overviewDivider: {
     alignSelf: 'stretch',
     marginVertical: 10,
     opacity: 0.68,
     width: StyleSheet.hairlineWidth,
-  },
-  overviewLabel: {
-    fontSize: 10.5,
-    fontWeight: '800',
-    letterSpacing: 0,
-    lineHeight: 13,
-    maxWidth: '100%',
-    textAlign: 'center',
   },
   overviewRow: {
     alignItems: 'stretch',
@@ -1150,7 +1120,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flex: 1,
     gap: 4,
-    minHeight: 118,
+    minHeight: 100,
     minWidth: 0,
     paddingHorizontal: 2,
     paddingVertical: 2,

@@ -132,9 +132,14 @@ export type CircleActivityItem = {
 
 export type InboxEventType =
   | 'circle_at_risk'
+  | 'circle_complete'
+  | 'circle_discovery_suggestion'
+  | 'circle_nudge_prompt'
+  | 'companion_tapped_in'
   | 'join_approved'
   | 'join_declined'
   | 'join_request'
+  | 'member_due_prompt'
   | 'member_joined'
   | 'nudge'
   | 'tap_in_final_warning'

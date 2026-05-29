@@ -37,6 +37,7 @@ function handleNotificationClick(event: NotificationClickEvent) {
     circleId &&
     (type === 'tap_in_midday_reminder' ||
       type === 'tap_in_final_warning' ||
+      type === 'member_due_prompt' ||
       type === 'nudge')
   ) {
     navigationRef.navigate('TapInComposer', {

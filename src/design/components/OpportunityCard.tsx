@@ -12,6 +12,7 @@ import {HoystText} from './HoystText';
 import {LayeredAvatar} from './LayeredAvatar';
 import {CircleCardTapInButton} from './CircleCardTapInButton';
 import {getCircleCategoryForegroundColor} from './CircleCategoryIcon';
+import {getPulseRingStateForCircle} from './pulse-ring-state';
 
 type OpportunityCardProps = {
   card: CircleManagementCard;
@@ -45,6 +46,7 @@ export function OpportunityCard({
   const theme = useHoystTheme();
   const status = getStatus(card);
   const categoryColor = getCircleCategoryForegroundColor(card.category, theme);
+  const pulseRingState = getPulseRingStateForCircle(card);
   const canTapIn =
     !card.viewerHasCheckedIn && card.viewerMembershipStatus !== 'pending';
 
@@ -121,6 +123,7 @@ export function OpportunityCard({
                     event.stopPropagation();
                     onTapInPress?.();
                   }}
+                  ringState={pulseRingState}
                   style={styles.action}
                 />
               ) : (

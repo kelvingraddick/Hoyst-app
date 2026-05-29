@@ -7,14 +7,20 @@ import {firebaseFunctions} from '../../../lib/firebase/functions';
 import type {InboxEvent, InboxEventType} from '../../../types/models';
 
 export type NotificationSettings = {
-  circleActivity: boolean;
+  circleRisk: boolean;
+  discovery: boolean;
+  nudges: boolean;
   productUpdates: boolean;
+  socialActivity: boolean;
   tapInReminders: boolean;
 };
 
 const defaultNotificationSettings: NotificationSettings = {
-  circleActivity: true,
+  circleRisk: true,
+  discovery: true,
+  nudges: true,
   productUpdates: true,
+  socialActivity: true,
   tapInReminders: true,
 };
 const inboxReadBatchLimit = 500;
@@ -80,15 +86,29 @@ function normalizeNotificationSettings(value: unknown): NotificationSettings {
     value && typeof value === 'object'
       ? (value as Record<string, unknown>)
       : {};
+  const legacyCircleActivity = asBoolean(data.circleActivity, true);
+  const productUpdates = asBoolean(
+    data.productUpdates,
+    defaultNotificationSettings.productUpdates,
+  );
 
   return {
-    circleActivity: asBoolean(
-      data.circleActivity,
-      defaultNotificationSettings.circleActivity,
+    circleRisk: asBoolean(
+      data.circleRisk,
+      legacyCircleActivity,
     ),
-    productUpdates: asBoolean(
-      data.productUpdates,
-      defaultNotificationSettings.productUpdates,
+    discovery: asBoolean(
+      data.discovery,
+      productUpdates,
+    ),
+    nudges: asBoolean(
+      data.nudges,
+      legacyCircleActivity,
+    ),
+    productUpdates,
+    socialActivity: asBoolean(
+      data.socialActivity,
+      legacyCircleActivity,
     ),
     tapInReminders: asBoolean(
       data.tapInReminders,

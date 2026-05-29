@@ -25,6 +25,10 @@ jest.mock('react-native-linear-gradient', () => {
     MockReact.createElement(View, props, children);
 });
 
+jest.mock('react-native-haptic-feedback', () => ({
+  trigger: jest.fn(),
+}));
+
 jest.mock('../src/store/settings-store', () => ({
   useSettingsStore: (selector: (state: {appearance: 'light'}) => unknown) =>
     selector({appearance: 'light'}),
@@ -213,22 +217,24 @@ describe('CirclesScreen render paths', () => {
     const output = renderScreen();
 
     expect(output).toContain('Overview');
-    expect(output).toContain('Needs Tap');
+    expect(output).toContain('Needs You');
+    expect(output).not.toContain('Needs Tap');
     expect(output).toContain('#A83A00');
     expect(output).toContain('#FFF0E6');
-    expect(output).toContain('Your attention');
     expect(output).toContain('Pending');
     expect(output).toContain('#7A5C00');
     expect(output).toContain('#FFF8EA');
-    expect(output).toContain('Approval');
     expect(output).toContain('On Track');
     expect(output).toContain('#086CA8');
     expect(output).toContain('#E7F8FF');
-    expect(output).toContain('Keep it going');
-    expect(output).toContain('Completed Today');
+    expect(output).toContain('Done');
     expect(output).toContain('#07763E');
     expect(output).toContain('#E7F8EF');
-    expect(output).toContain('Nice work!');
+    expect(output).not.toContain('Completed Today');
+    expect(output).not.toContain('Your attention');
+    expect(output).not.toContain('Approval');
+    expect(output).not.toContain('Keep it going');
+    expect(output).not.toContain('Nice work!');
     expect(output).toContain('Need Attention');
     expect(output).toContain('All Circles');
     expect(output).toContain('Companion Updates');
@@ -280,7 +286,9 @@ describe('CirclesScreen render paths', () => {
     expect(output).toContain('No Circles found');
     expect(output).toContain('No matches');
     expect(output).toContain('Filters active');
-    expect(output).toContain('Clearing filters brings every public Circle back into view.');
+    expect(output).toContain(
+      'Clearing filters brings every public Circle back into view.',
+    );
     expect(output).toContain('Clear filters');
   });
 

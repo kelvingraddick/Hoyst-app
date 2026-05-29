@@ -14,6 +14,7 @@ import {
   BellRing,
   Check,
   ChevronRight,
+  Compass,
   FileText,
   LifeBuoy,
   LockKeyhole,
@@ -876,16 +877,61 @@ export function ProfileScreen({navigation}: Props): React.JSX.Element {
             trailingKind="switch"
           />
           <SettingsRow
-            detail="Circle activity, nudges, and group updates."
+            detail="Companion Tap Ins, completions, joins, and requests."
             icon={UsersRound}
             iconTone="green"
-            title="Circle activity"
+            title="Companion activity"
             trailing={
               <SettingsSwitch
                 onValueChange={value =>
-                  setServerNotificationPreference('circleActivity', value)
+                  setServerNotificationPreference('socialActivity', value)
                 }
-                value={notifications.circleActivity}
+                value={notifications.socialActivity}
+              />
+            }
+            trailingKind="switch"
+          />
+          <SettingsRow
+            detail="Warnings when a circle is close to slipping."
+            icon={Shield}
+            iconTone="orange"
+            title="Circle risk"
+            trailing={
+              <SettingsSwitch
+                onValueChange={value =>
+                  setServerNotificationPreference('circleRisk', value)
+                }
+                value={notifications.circleRisk}
+              />
+            }
+            trailingKind="switch"
+          />
+          <SettingsRow
+            detail="Manual nudges and prompts to help companions."
+            icon={BellRing}
+            iconTone="purple"
+            title="Nudges"
+            trailing={
+              <SettingsSwitch
+                onValueChange={value =>
+                  setServerNotificationPreference('nudges', value)
+                }
+                value={notifications.nudges}
+              />
+            }
+            trailingKind="switch"
+          />
+          <SettingsRow
+            detail="Suggestions after a few quiet Tap In days."
+            icon={Compass}
+            iconTone="blue"
+            title="Circle discovery"
+            trailing={
+              <SettingsSwitch
+                onValueChange={value =>
+                  setServerNotificationPreference('discovery', value)
+                }
+                value={notifications.discovery}
               />
             }
             trailingKind="switch"

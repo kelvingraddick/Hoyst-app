@@ -2,6 +2,7 @@ import React from 'react';
 import renderer, {act} from 'react-test-renderer';
 import {UsersRound} from 'lucide-react-native';
 
+import {CircleCardTapInButton} from '../src/design/components/CircleCardTapInButton';
 import {OpportunityCard} from '../src/design/components/OpportunityCard';
 import type {CircleManagementCard} from '../src/types/models';
 
@@ -12,6 +13,18 @@ jest.mock('@react-native-community/blur', () => ({
 
     return MockReact.createElement(View, props, children);
   },
+}));
+
+jest.mock('react-native-linear-gradient', () => {
+  const MockReact = require('react');
+  const {View} = require('react-native');
+
+  return ({children, ...props}: {children?: React.ReactNode}) =>
+    MockReact.createElement(View, props, children);
+});
+
+jest.mock('react-native-haptic-feedback', () => ({
+  trigger: jest.fn(),
 }));
 
 jest.mock('../src/store/settings-store', () => ({
@@ -60,5 +73,36 @@ describe('OpportunityCard', () => {
     const companionIcon = tree!.root.findByType(UsersRound);
 
     expect(companionIcon.props.color).toBe('#086CA8');
+  });
+
+  it('passes active pulse state and preserves the Tap In handler', () => {
+    const onTapInPress = jest.fn();
+    const stopPropagation = jest.fn();
+    let tree: renderer.ReactTestRenderer | undefined;
+
+    act(() => {
+      tree = renderer.create(
+        <OpportunityCard
+          card={circle({
+            remainingCheckIns: 2,
+            viewerHasCheckedIn: false,
+            viewerHasTappedInToday: false,
+            viewerTodayStatus: 'rest',
+          })}
+          onTapInPress={onTapInPress}
+        />,
+      );
+    });
+
+    const button = tree!.root.findByType(CircleCardTapInButton);
+
+    expect(button.props.ringState).toBe('active');
+
+    act(() => {
+      button.props.onPress({stopPropagation});
+    });
+
+    expect(stopPropagation).toHaveBeenCalled();
+    expect(onTapInPress).toHaveBeenCalled();
   });
 });

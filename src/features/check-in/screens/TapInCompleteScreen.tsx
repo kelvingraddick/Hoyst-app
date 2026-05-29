@@ -480,7 +480,11 @@ export function TapInCompleteScreen({
               ]}
             />
             <Animated.View style={ringSpinAnimatedStyle}>
-              <TapInRingMark innerSize={52} outerSize={92} />
+              <TapInRingMark
+                innerSize={52}
+                outerSize={92}
+                state={isSkip ? 'atRisk' : 'streak'}
+              />
             </Animated.View>
           </Animated.View>
 
@@ -533,7 +537,9 @@ export function TapInCompleteScreen({
                   <HoystText tone="muted" variant="label">
                     Circle Commitment
                   </HoystText>
-                  <HoystText style={styles.summaryTitle}>{commitment}</HoystText>
+                  <HoystText style={styles.summaryTitle}>
+                    {commitment}
+                  </HoystText>
                 </View>
                 <HoystText
                   style={{color: theme.successForeground}}
