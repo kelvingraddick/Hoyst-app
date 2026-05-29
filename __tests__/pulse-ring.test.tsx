@@ -108,6 +108,9 @@ describe('PulseRing', () => {
     const centerFill = tree!.root.findByProps({
       testID: 'pulse-ring-center-fill',
     });
+    const innerGlow = tree!.root.findByProps({
+      testID: 'pulse-ring-inner-glow',
+    });
 
     expect(ribbons.map(ribbon => ribbon.props.testID)).toEqual([
       'pulse-ring-ribbon-green',
@@ -192,8 +195,13 @@ describe('PulseRing', () => {
     capSweeps.forEach(sweep => {
       expect(sweep).toBeCloseTo(firstCapSweep, 4);
     });
-    expect(centerFill.props.fill).toBe('#FFFFFF');
+    expect(centerFill.props.fill).toBe('#070B1A');
     expect(centerFill.props.opacity).toBeUndefined();
+    expect(innerGlow.props.fill).toBe('none');
+    expect(innerGlow.props.opacity).toBe(0.78);
+    expect(innerGlow.props.stroke).toEqual(
+      expect.stringContaining('pulseInnerGlowGradient'),
+    );
     expect(ribbonStops).toEqual(
       expect.arrayContaining([
         '#00C853',

@@ -377,7 +377,10 @@ export function PulseRing({
   const rippleRadius = size / 2 + Math.max(3, size * 0.07);
   const trailGradientId = `pulseTrailGradient${id}`;
   const glassGradientId = `pulseGlassGradient${id}`;
+  const innerGlowGradientId = `pulseInnerGlowGradient${id}`;
   const ribbonClipId = `pulseRingRibbonClip${id}`;
+  const centerFillRadius =
+    ribbonInnerRadius + Math.max(0.4, effectiveStrokeWidth * 0.08);
   const pulseScale = breathProgress.interpolate({
     inputRange: [0, 1],
     outputRange: [1, config.scalePeak],
@@ -561,6 +564,20 @@ export function PulseRing({
                 }
               />
             </SvgLinearGradient>
+            <SvgLinearGradient
+              id={innerGlowGradientId}
+              x1={center - ribbonOuterRadius}
+              x2={center + ribbonOuterRadius}
+              y1={center + ribbonOuterRadius}
+              y2={center - ribbonOuterRadius}
+              gradientUnits="userSpaceOnUse">
+              <Stop offset="0" stopColor={brandColors.blue} />
+              <Stop offset="0.22" stopColor={brandColors.purple} />
+              <Stop offset="0.42" stopColor="#FF1EA8" />
+              <Stop offset="0.58" stopColor={brandColors.orangeStrong} />
+              <Stop offset="0.76" stopColor={brandColors.spectrumYellow} />
+              <Stop offset="1" stopColor={brandColors.spectrumGreen} />
+            </SvgLinearGradient>
             {RING_RIBBONS.map(ribbon => {
               const endAngle = ribbon.startAngle + RIBBON_BASE_SWEEP_DEGREES;
               const gradientStart = getPointOnCircle({
@@ -693,9 +710,19 @@ export function PulseRing({
           <Circle
             cx={center}
             cy={center}
-            fill={theme.isDark ? brandColors.charcoal : brandColors.white}
-            r={ribbonInnerRadius + Math.max(0.4, effectiveStrokeWidth * 0.08)}
+            fill={brandColors.charcoal}
+            r={centerFillRadius}
             testID="pulse-ring-center-fill"
+          />
+          <Circle
+            cx={center}
+            cy={center}
+            fill="none"
+            opacity={0.78}
+            r={centerFillRadius}
+            stroke={`url(#${innerGlowGradientId})`}
+            strokeWidth={Math.max(1.4, effectiveStrokeWidth * 0.36)}
+            testID="pulse-ring-inner-glow"
           />
           <Circle
             cx={center}
