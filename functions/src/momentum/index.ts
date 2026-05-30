@@ -106,7 +106,7 @@ function mapOpportunitySnapshot(snapshot: DocumentSnapshot): MomentumOpportunity
   };
 }
 
-async function recalculateMomentumSummaryForUser(uid: string) {
+export async function recalculateMomentumSummaryForUser(uid: string) {
   const momentumRef = db
     .collection('userPrivate')
     .doc(uid)
@@ -133,43 +133,6 @@ async function recalculateMomentumSummaryForUser(uid: string) {
   });
 
   await momentumRef.set(
-    {
-      ...summary,
-      updatedAt: FieldValue.serverTimestamp(),
-    },
-    {merge: true},
-  );
-
-  return summary;
-}
-
-async function recalculateMomentumSummaryInTransaction(
-  transaction: Transaction,
-  uid: string,
-) {
-  const userPrivateRef = db.collection('userPrivate').doc(uid);
-  const momentumRef = userPrivateRef.collection('momentum').doc('current');
-  const [momentumSnapshot, opportunitySnapshots] = await Promise.all([
-    transaction.get(momentumRef),
-    transaction.get(
-      userPrivateRef
-        .collection('opportunities')
-        .where('isCurrentPeriod', '==', true),
-    ),
-  ]);
-  const opportunities = opportunitySnapshots.docs
-    .map(mapOpportunitySnapshot)
-    .filter((opportunity): opportunity is MomentumOpportunity =>
-      Boolean(opportunity),
-    );
-  const summary = calculateMomentumSummary({
-    opportunities,
-    periodKey: 'current',
-    priorBestStreak: asNumber(momentumSnapshot.data()?.bestStreak, 0),
-  });
-
-  transaction.set(
-    momentumRef,
     {
       ...summary,
       updatedAt: FieldValue.serverTimestamp(),
@@ -301,8 +264,6 @@ export async function recordTapInOpportunity({
     },
     {merge: true},
   );
-
-  return recalculateMomentumSummaryInTransaction(transaction, uid);
 }
 
 export async function removeTapInOpportunity({
@@ -331,7 +292,7 @@ export async function removeTapInOpportunity({
   });
 
   if (matchedIndex < 0) {
-    return recalculateMomentumSummaryInTransaction(transaction, uid);
+    return;
   }
 
   const slot = slots[matchedIndex];
@@ -369,8 +330,6 @@ export async function removeTapInOpportunity({
       {merge: true},
     );
   }
-
-  return recalculateMomentumSummaryInTransaction(transaction, uid);
 }
 
 export const materializeMomentumOpportunities = onSchedule(

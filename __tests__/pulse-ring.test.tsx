@@ -3,9 +3,11 @@ import renderer, {act} from 'react-test-renderer';
 import {Circle, Path, Stop} from 'react-native-svg';
 
 import {PulseRing} from '../src/design/components/PulseRing';
+import {getHoystThemeColors} from '../src/design/tokens/colors';
 import {
   getPulseRingStateForCircle,
   getPulseRingStateForCircles,
+  type PulseRingState,
 } from '../src/design/components/pulse-ring-state';
 import type {CircleManagementCard} from '../src/types/models';
 
@@ -77,6 +79,12 @@ function getOuterArcSweep(path: string) {
   return getClockwiseSweep(startAngle, endAngle);
 }
 
+function getCenterGlyphNodes(tree: renderer.ReactTestRenderer) {
+  return tree.root.findAll(node =>
+    String(node.props.testID ?? '').startsWith('pulse-ring-center-glyph-'),
+  );
+}
+
 describe('PulseRing', () => {
   it('renders the main ring as cascading spectrum ribbons', () => {
     let tree: renderer.ReactTestRenderer | undefined;
@@ -107,6 +115,9 @@ describe('PulseRing', () => {
     ];
     const centerFill = tree!.root.findByProps({
       testID: 'pulse-ring-center-fill',
+    });
+    const centerTint = tree!.root.findByProps({
+      testID: 'pulse-ring-center-tint',
     });
     const innerGlow = tree!.root.findByProps({
       testID: 'pulse-ring-inner-glow',
@@ -195,8 +206,12 @@ describe('PulseRing', () => {
     capSweeps.forEach(sweep => {
       expect(sweep).toBeCloseTo(firstCapSweep, 4);
     });
-    expect(centerFill.props.fill).toBe('#070B1A');
+    expect(centerFill.props.fill).toBe(
+      getHoystThemeColors('light').surfaceMuted,
+    );
     expect(centerFill.props.opacity).toBeUndefined();
+    expect(centerTint.props.fill).toBe(getHoystThemeColors('light').textMuted);
+    expect(centerTint.props.opacity).toBe(0.2);
     expect(innerGlow.props.fill).toBe('none');
     expect(innerGlow.props.opacity).toBe(0.78);
     expect(innerGlow.props.stroke).toEqual(
@@ -219,16 +234,96 @@ describe('PulseRing', () => {
         ),
       ),
     ).toBe(false);
+    expect(getCenterGlyphNodes(tree!)).toHaveLength(0);
+  });
+
+  it('renders a solid center mask with state tint by default', () => {
+    const theme = getHoystThemeColors('light');
+    let tree: renderer.ReactTestRenderer | undefined;
+
+    act(() => {
+      tree = renderer.create(<PulseRing animated={false} state="active" />);
+    });
+
+    const centerFill = tree!.root.findByProps({
+      testID: 'pulse-ring-center-fill',
+    });
+    const centerTint = tree!.root.findByProps({
+      testID: 'pulse-ring-center-tint',
+    });
+
+    expect(centerFill.props.fill).toBe(theme.surfaceMuted);
+    expect(centerFill.props.opacity).toBeUndefined();
+    expect(centerTint.props.fill).toBe(theme.success);
+    expect(centerTint.props.opacity).toBe(0.24);
+    expect(getCenterGlyphNodes(tree!)).toHaveLength(0);
+  });
+
+  it('renders subtle contextual center tints without center glyphs', () => {
+    const theme = getHoystThemeColors('light');
+    const expectedStates: {
+      backplateColor: string;
+      backplateOpacity: number;
+      state: PulseRingState;
+    }[] = [
+      {
+        backplateColor: theme.textMuted,
+        backplateOpacity: 0.2,
+        state: 'idle',
+      },
+      {
+        backplateColor: theme.success,
+        backplateOpacity: 0.24,
+        state: 'active',
+      },
+      {
+        backplateColor: theme.warning,
+        backplateOpacity: 0.24,
+        state: 'atRisk',
+      },
+      {
+        backplateColor: theme.accent,
+        backplateOpacity: 0.24,
+        state: 'streak',
+      },
+    ];
+
+    expectedStates.forEach(({backplateColor, backplateOpacity, state}) => {
+      let tree: renderer.ReactTestRenderer | undefined;
+
+      act(() => {
+        tree = renderer.create(
+          <PulseRing animated={false} centerTreatment="state" state={state} />,
+        );
+      });
+
+      const centerFill = tree!.root.findByProps({
+        testID: 'pulse-ring-center-fill',
+      });
+      const centerTint = tree!.root.findByProps({
+        testID: 'pulse-ring-center-tint',
+      });
+
+      expect(centerFill.props.fill).toBe(theme.surfaceMuted);
+      expect(centerFill.props.opacity).toBeUndefined();
+      expect(centerTint.props.fill).toBe(backplateColor);
+      expect(centerTint.props.opacity).toBe(backplateOpacity);
+      expect(getCenterGlyphNodes(tree!)).toHaveLength(0);
+    });
   });
 
   it('renders a streak trail only in the streak state', () => {
     let idleTree: renderer.ReactTestRenderer | undefined;
     let streakTree: renderer.ReactTestRenderer | undefined;
+    let streakWithoutTrailTree: renderer.ReactTestRenderer | undefined;
 
     act(() => {
       idleTree = renderer.create(<PulseRing animated={false} state="idle" />);
       streakTree = renderer.create(
         <PulseRing animated={false} state="streak" />,
+      );
+      streakWithoutTrailTree = renderer.create(
+        <PulseRing animated={false} showTrail={false} state="streak" />,
       );
     });
 
@@ -238,9 +333,13 @@ describe('PulseRing', () => {
     const streakTrails = streakTree!.root
       .findAllByType(Path)
       .filter(path => String(path.props.stroke).includes('pulseTrailGradient'));
+    const disabledTrails = streakWithoutTrailTree!.root
+      .findAllByType(Path)
+      .filter(path => String(path.props.stroke).includes('pulseTrailGradient'));
 
     expect(idleTrails).toHaveLength(0);
     expect(streakTrails).toHaveLength(1);
+    expect(disabledTrails).toHaveLength(0);
   });
 
   it('maps circle data to model-driven ring states', () => {

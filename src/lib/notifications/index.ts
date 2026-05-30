@@ -15,6 +15,22 @@ let navigationRef: NavigationContainerRef<RootStackParamList> | undefined;
 let pushUserId: string | undefined;
 let warnedMissingAppId = false;
 
+async function optInWithExistingPermission(): Promise<boolean> {
+  if (!initialized) {
+    return false;
+  }
+
+  const existingPermission =
+    await OneSignal.Notifications.getPermissionAsync().catch(() => false);
+
+  if (!existingPermission) {
+    return false;
+  }
+
+  OneSignal.User.pushSubscription.optIn();
+  return true;
+}
+
 function asString(value: unknown) {
   return typeof value === 'string' && value.trim().length > 0
     ? value.trim()
@@ -53,6 +69,14 @@ function handleNotificationClick(event: NotificationClickEvent) {
   }
 
   navigationRef.navigate('Inbox');
+}
+
+function handlePermissionChange(granted: boolean) {
+  if (!granted) {
+    return;
+  }
+
+  syncPushSubscription().catch(() => undefined);
 }
 
 function getOneSignalAppId() {
@@ -95,10 +119,10 @@ export function initializePushNotifications(): void {
 
   OneSignal.initialize(appId);
   OneSignal.Notifications.addEventListener('click', handleNotificationClick);
-
-  if (pushUserId) {
-    OneSignal.login(pushUserId);
-  }
+  OneSignal.Notifications.addEventListener(
+    'permissionChange',
+    handlePermissionChange,
+  );
 }
 
 export async function identifyPushUser(uid: string): Promise<void> {
@@ -107,13 +131,18 @@ export async function identifyPushUser(uid: string): Promise<void> {
   }
 
   pushUserId = uid;
+  await syncPushSubscription();
+}
+
+export async function syncPushSubscription(): Promise<boolean> {
   initializePushNotifications();
 
-  if (!initialized) {
-    return;
+  if (!initialized || !pushUserId) {
+    return false;
   }
 
-  OneSignal.login(uid);
+  OneSignal.login(pushUserId);
+  return optInWithExistingPermission();
 }
 
 export async function clearPushUser(): Promise<void> {
@@ -143,11 +172,9 @@ export async function requestPushNotificationPermission(): Promise<boolean> {
     return false;
   }
 
-  const existingPermission =
-    await OneSignal.Notifications.getPermissionAsync().catch(() => false);
+  const existingPermission = await optInWithExistingPermission();
 
   if (existingPermission) {
-    OneSignal.User.pushSubscription.optIn();
     return true;
   }
 

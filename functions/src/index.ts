@@ -11,7 +11,7 @@ export {
   updateNotificationSettings,
 } from './notifications';
 export {completeProfile, deleteAccount} from './auth';
-export {removeTapIn, submitTapIn} from './checkins';
+export {processTapInSideEffects, removeTapIn, submitTapIn} from './checkins';
 export {
   createCircle,
   deleteCircle,

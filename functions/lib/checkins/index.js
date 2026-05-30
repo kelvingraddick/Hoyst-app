@@ -1,8 +1,9 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.removeTapIn = exports.submitTapIn = void 0;
+exports.removeTapIn = exports.processTapInSideEffects = exports.submitTapIn = void 0;
 const firestore_1 = require("firebase-admin/firestore");
 const auth_1 = require("firebase-admin/auth");
+const firestore_2 = require("firebase-functions/v2/firestore");
 const https_1 = require("firebase-functions/v2/https");
 const zod_1 = require("zod");
 const firebase_1 = require("../firebase");
@@ -117,13 +118,117 @@ function getCommitmentPeriodDateKeys(cadence, timezone, now = new Date()) {
     }
     return getCommitmentWeekDateKeys(timezone, now);
 }
-exports.submitTapIn = (0, https_1.onCall)(async (request) => {
+function asCleanString(value) {
+    return typeof value === 'string' && value.trim().length > 0
+        ? value.trim()
+        : undefined;
+}
+async function processTapInSideEffectsForCheckIn({ checkIn, circleId, dateKey, status, uid, }) {
+    const circleRef = firebase_1.db.collection('circles').doc(circleId);
+    await (0, momentum_1.recalculateMomentumSummaryForUser)(uid).catch(error => console.error('recalculate_momentum_summary_failed', error));
+    const [circleSnapshot, memberSnapshots] = await Promise.all([
+        circleRef.get(),
+        circleRef.collection('members').where('status', '==', 'active').get(),
+    ]);
+    const circle = circleSnapshot.data();
+    const timezone = asCleanString(circle?.timezone) ?? 'UTC';
+    const commitmentCadence = (0, commitments_1.getCommitmentCadence)(circle);
+    const requiredTapIns = (0, commitments_1.getRequiredTapIns)(circle);
+    const periodDateKeys = getCommitmentPeriodDateKeys(commitmentCadence, timezone);
+    const periodCheckInSnapshots = await Promise.all(periodDateKeys.map(periodDateKey => circleRef
+        .collection('days')
+        .doc(periodDateKey)
+        .collection('checkIns')
+        .get()));
+    const coveredCounts = new Map();
+    const todaySnapshotIndex = periodDateKeys.indexOf(dateKey);
+    const todayCheckInSnapshot = periodCheckInSnapshots[todaySnapshotIndex >= 0 ? todaySnapshotIndex : 0];
+    const scoringSnapshots = commitmentCadence === 'daily' && todayCheckInSnapshot
+        ? [todayCheckInSnapshot]
+        : periodCheckInSnapshots;
+    scoringSnapshots.forEach(snapshot => {
+        snapshot.docs.forEach(doc => {
+            if (['done', 'skip'].includes(doc.data().status)) {
+                coveredCounts.set(doc.id, (coveredCounts.get(doc.id) ?? 0) + 1);
+            }
+        });
+    });
+    const pendingMembers = memberSnapshots.docs
+        .map(snapshot => snapshot.data())
+        .filter(memberData => {
+        const memberUid = memberData.uid;
+        return (typeof memberUid === 'string' &&
+            memberUid !== uid &&
+            (coveredCounts.get(memberUid) ?? 0) < requiredTapIns);
+    });
+    const remainingCount = pendingMembers.reduce((total, memberData) => {
+        const memberUid = memberData.uid;
+        return typeof memberUid === 'string'
+            ? total +
+                Math.max(requiredTapIns - (coveredCounts.get(memberUid) ?? 0), 0)
+            : total;
+    }, 0);
+    const activeMemberUids = memberSnapshots.docs
+        .map(snapshot => {
+        const memberUid = snapshot.data().uid;
+        return typeof memberUid === 'string' && memberUid.trim().length > 0
+            ? memberUid
+            : snapshot.id;
+    })
+        .filter(Boolean);
+    const totalRemainingCount = activeMemberUids.reduce((total, memberUid) => total + Math.max(requiredTapIns - (coveredCounts.get(memberUid) ?? 0), 0), 0);
+    const periodKey = commitmentCadence === 'daily' ? dateKey : periodDateKeys[0] ?? dateKey;
+    const circleTitle = asCleanString(circle?.title) ?? 'Your circle';
+    const actor = {
+        avatarUrl: asCleanString(checkIn.avatarUrl) ?? null,
+        displayName: asCleanString(checkIn.displayName) ?? 'Someone',
+        handle: asCleanString(checkIn.handle) ?? null,
+        uid,
+    };
+    const companionTargetUids = (0, notification_plan_1.getCompanionTapInNotificationTargets)({
+        activeMemberUids,
+        actorUid: uid,
+    });
+    const circleCompleteTargetUids = (0, notification_plan_1.getCircleCompleteNotificationTargets)({
+        activeMemberUids,
+        remainingTapIns: totalRemainingCount,
+    });
+    if (status === 'done') {
+        await Promise.all(companionTargetUids.map(targetUid => (0, notifications_1.notifyCompanionTappedIn)({
+            actor,
+            circleId,
+            circleTitle,
+            dateKey,
+            targetUid,
+        }))).catch(error => console.error('notify_companion_tapped_in_failed', error));
+    }
+    if (circleCompleteTargetUids.length > 0) {
+        await Promise.all(circleCompleteTargetUids.map(targetUid => (0, notifications_1.notifyCircleComplete)({
+            circleId,
+            circleTitle,
+            commitmentCadence,
+            periodKey,
+            targetUid,
+        }))).catch(error => console.error('notify_circle_complete_failed', error));
+    }
+    if (remainingCount > 0 && remainingCount <= 2) {
+        await Promise.all(pendingMembers.map(memberData => (0, notifications_1.notifyCircleAtRisk)({
+            commitmentCadence,
+            circleId,
+            circleTitle,
+            periodKey,
+            remainingCount,
+            targetUid: memberData.uid,
+        }))).catch(error => console.error('notify_circle_at_risk_failed', error));
+    }
+}
+async function submitTapInHandler(request) {
     const { profile, uid } = await requireCompletedProfile(request.auth?.uid);
     const input = submitTapInSchema.parse(request.data);
     const circleRef = firebase_1.db.collection('circles').doc(input.circleId);
     const memberRef = circleRef.collection('members').doc(uid);
     const now = firestore_1.FieldValue.serverTimestamp();
-    const result = await firebase_1.db.runTransaction(async (transaction) => {
+    return firebase_1.db.runTransaction(async (transaction) => {
         const [circleSnapshot, memberSnapshot] = await Promise.all([
             transaction.get(circleRef),
             transaction.get(memberRef),
@@ -162,6 +267,19 @@ exports.submitTapIn = (0, https_1.onCall)(async (request) => {
                 throw new https_1.HttpsError('resource-exhausted', 'No skips are available for this grace window.');
             }
         }
+        await (0, momentum_1.recordTapInOpportunity)({
+            checkInId: uid,
+            circle,
+            circleId: input.circleId,
+            dateKey,
+            memberCount: typeof circle?.memberCount === 'number'
+                ? circle.memberCount
+                : undefined,
+            profile,
+            status: input.status,
+            transaction,
+            uid,
+        });
         transaction.set(checkInRef, {
             avatarUrl: profile.avatarUrl ?? null,
             createdAt: now,
@@ -180,112 +298,26 @@ exports.submitTapIn = (0, https_1.onCall)(async (request) => {
         transaction.set(firebase_1.db.collection('userPrivate').doc(uid), {
             lastTapInAt: now,
         }, { merge: true });
-        await (0, momentum_1.recordTapInOpportunity)({
-            checkInId: uid,
-            circle,
-            circleId: input.circleId,
-            dateKey,
-            memberCount: typeof circle?.memberCount === 'number' ? circle.memberCount : undefined,
-            profile,
-            status: input.status,
-            transaction,
-            uid,
-        });
         return { checkInId: uid, dateKey };
     });
-    const [circleSnapshot, memberSnapshots] = await Promise.all([
-        circleRef.get(),
-        circleRef.collection('members').where('status', '==', 'active').get(),
-    ]);
-    const circle = circleSnapshot.data();
-    const timezone = circle?.timezone ?? profile.timezone ?? 'UTC';
-    const commitmentCadence = (0, commitments_1.getCommitmentCadence)(circle);
-    const requiredTapIns = (0, commitments_1.getRequiredTapIns)(circle);
-    const periodDateKeys = getCommitmentPeriodDateKeys(commitmentCadence, timezone);
-    const periodCheckInSnapshots = await Promise.all(periodDateKeys.map(dateKey => circleRef.collection('days').doc(dateKey).collection('checkIns').get()));
-    const coveredCounts = new Map();
-    const todaySnapshotIndex = periodDateKeys.indexOf(result.dateKey);
-    const todayCheckInSnapshot = periodCheckInSnapshots[todaySnapshotIndex >= 0 ? todaySnapshotIndex : 0];
-    const scoringSnapshots = commitmentCadence === 'daily' && todayCheckInSnapshot
-        ? [todayCheckInSnapshot]
-        : periodCheckInSnapshots;
-    scoringSnapshots.forEach(snapshot => {
-        snapshot.docs.forEach(doc => {
-            if (['done', 'skip'].includes(doc.data().status)) {
-                coveredCounts.set(doc.id, (coveredCounts.get(doc.id) ?? 0) + 1);
-            }
-        });
-    });
-    const pendingMembers = memberSnapshots.docs
-        .map(snapshot => snapshot.data())
-        .filter(memberData => {
-        const memberUid = memberData.uid;
-        return (typeof memberUid === 'string' &&
-            memberUid !== uid &&
-            (coveredCounts.get(memberUid) ?? 0) < requiredTapIns);
-    });
-    const remainingCount = pendingMembers.reduce((total, memberData) => {
-        const memberUid = memberData.uid;
-        return typeof memberUid === 'string'
-            ? total + Math.max(requiredTapIns - (coveredCounts.get(memberUid) ?? 0), 0)
-            : total;
-    }, 0);
-    const activeMemberUids = memberSnapshots.docs
-        .map(snapshot => {
-        const memberUid = snapshot.data().uid;
-        return typeof memberUid === 'string' && memberUid.trim().length > 0
-            ? memberUid
-            : snapshot.id;
-    })
-        .filter(Boolean);
-    const totalRemainingCount = activeMemberUids.reduce((total, memberUid) => total + Math.max(requiredTapIns - (coveredCounts.get(memberUid) ?? 0), 0), 0);
-    const periodKey = commitmentCadence === 'daily'
-        ? result.dateKey
-        : periodDateKeys[0] ?? result.dateKey;
-    const circleTitle = typeof circle?.title === 'string' ? circle.title : 'Your circle';
-    const actor = {
-        avatarUrl: profile.avatarUrl ?? null,
-        displayName: profile.displayName,
-        handle: profile.handle,
-        uid,
-    };
-    const companionTargetUids = (0, notification_plan_1.getCompanionTapInNotificationTargets)({
-        activeMemberUids,
-        actorUid: uid,
-    });
-    const circleCompleteTargetUids = (0, notification_plan_1.getCircleCompleteNotificationTargets)({
-        activeMemberUids,
-        remainingTapIns: totalRemainingCount,
-    });
-    if (input.status === 'done') {
-        await Promise.all(companionTargetUids.map(targetUid => (0, notifications_1.notifyCompanionTappedIn)({
-            actor,
-            circleId: input.circleId,
-            circleTitle,
-            dateKey: result.dateKey,
-            targetUid,
-        }))).catch(error => console.error('notify_companion_tapped_in_failed', error));
+}
+exports.submitTapIn = (0, https_1.onCall)(submitTapInHandler);
+exports.processTapInSideEffects = (0, firestore_2.onDocumentCreated)({
+    document: 'circles/{circleId}/days/{dateKey}/checkIns/{uid}',
+    secrets: [notifications_1.oneSignalRestApiKey],
+}, async (event) => {
+    const checkIn = event.data?.data();
+    const status = checkIn?.status;
+    if (!checkIn || (status !== 'done' && status !== 'skip')) {
+        return;
     }
-    if (circleCompleteTargetUids.length > 0) {
-        await Promise.all(circleCompleteTargetUids.map(targetUid => (0, notifications_1.notifyCircleComplete)({
-            circleId: input.circleId,
-            circleTitle,
-            commitmentCadence,
-            periodKey,
-            targetUid,
-        }))).catch(error => console.error('notify_circle_complete_failed', error));
-    }
-    if (remainingCount > 0 && remainingCount <= 2) {
-        await Promise.all(pendingMembers.map(memberData => (0, notifications_1.notifyCircleAtRisk)({
-            commitmentCadence,
-            circleId: input.circleId,
-            circleTitle,
-            periodKey,
-            remainingCount,
-            targetUid: memberData.uid,
-        }))).catch(error => console.error('notify_circle_at_risk_failed', error));
-    }
-    return result;
+    await processTapInSideEffectsForCheckIn({
+        checkIn,
+        circleId: event.params.circleId,
+        dateKey: event.params.dateKey,
+        status,
+        uid: event.params.uid,
+    });
 });
 exports.removeTapIn = (0, https_1.onCall)(async (request) => {
     const input = removeTapInSchema.parse(request.data);
@@ -293,7 +325,7 @@ exports.removeTapIn = (0, https_1.onCall)(async (request) => {
     const circleRef = firebase_1.db.collection('circles').doc(input.circleId);
     const memberRef = circleRef.collection('members').doc(uid);
     const now = firestore_1.FieldValue.serverTimestamp();
-    return firebase_1.db.runTransaction(async (transaction) => {
+    const result = await firebase_1.db.runTransaction(async (transaction) => {
         const [circleSnapshot, memberSnapshot] = await Promise.all([
             transaction.get(circleRef),
             transaction.get(memberRef),
@@ -316,12 +348,6 @@ exports.removeTapIn = (0, https_1.onCall)(async (request) => {
         if (!decision.removed) {
             return { dateKey, removed: false };
         }
-        transaction.delete(checkInRef);
-        transaction.set(circleRef.collection('days').doc(dateKey), {
-            checkInCount: firestore_1.FieldValue.increment(decision.checkInCountDelta),
-            dateKey,
-            updatedAt: now,
-        }, { merge: true });
         await (0, momentum_1.removeTapInOpportunity)({
             circle,
             circleId: input.circleId,
@@ -329,6 +355,16 @@ exports.removeTapIn = (0, https_1.onCall)(async (request) => {
             transaction,
             uid,
         });
+        transaction.delete(checkInRef);
+        transaction.set(circleRef.collection('days').doc(dateKey), {
+            checkInCount: firestore_1.FieldValue.increment(decision.checkInCountDelta),
+            dateKey,
+            updatedAt: now,
+        }, { merge: true });
         return { dateKey, removed: true };
     });
+    if (result.removed) {
+        await (0, momentum_1.recalculateMomentumSummaryForUser)(uid).catch(error => console.error('recalculate_momentum_summary_failed', error));
+    }
+    return result;
 });

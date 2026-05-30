@@ -1,6 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.backfillMomentumOpportunities = exports.materializeMomentumOpportunities = void 0;
+exports.recalculateMomentumSummaryForUser = recalculateMomentumSummaryForUser;
 exports.recordTapInOpportunity = recordTapInOpportunity;
 exports.removeTapInOpportunity = removeTapInOpportunity;
 const firestore_1 = require("firebase-admin/firestore");
@@ -85,29 +86,6 @@ async function recalculateMomentumSummaryForUser(uid) {
     }, { merge: true });
     return summary;
 }
-async function recalculateMomentumSummaryInTransaction(transaction, uid) {
-    const userPrivateRef = firebase_1.db.collection('userPrivate').doc(uid);
-    const momentumRef = userPrivateRef.collection('momentum').doc('current');
-    const [momentumSnapshot, opportunitySnapshots] = await Promise.all([
-        transaction.get(momentumRef),
-        transaction.get(userPrivateRef
-            .collection('opportunities')
-            .where('isCurrentPeriod', '==', true)),
-    ]);
-    const opportunities = opportunitySnapshots.docs
-        .map(mapOpportunitySnapshot)
-        .filter((opportunity) => Boolean(opportunity));
-    const summary = (0, schedule_1.calculateMomentumSummary)({
-        opportunities,
-        periodKey: 'current',
-        priorBestStreak: asNumber(momentumSnapshot.data()?.bestStreak, 0),
-    });
-    transaction.set(momentumRef, {
-        ...summary,
-        updatedAt: firestore_1.FieldValue.serverTimestamp(),
-    }, { merge: true });
-    return summary;
-}
 function buildOpportunityPayload({ checkInId, circle, circleId, dateKey, profile, slot, status, uid, }) {
     return {
         availableDateKey: slot.availableDateKey,
@@ -184,7 +162,6 @@ async function recordTapInOpportunity({ checkInId, circle, circleId, dateKey, me
         riskState: 'active',
         updatedAt: firestore_1.FieldValue.serverTimestamp(),
     }, { merge: true });
-    return recalculateMomentumSummaryInTransaction(transaction, uid);
 }
 async function removeTapInOpportunity({ circle, circleId, dateKey, transaction, uid, }) {
     const userPrivateRef = firebase_1.db.collection('userPrivate').doc(uid);
@@ -199,7 +176,7 @@ async function removeTapInOpportunity({ circle, circleId, dateKey, transaction, 
             (data.status === 'completed' || data.status === 'skipped'));
     });
     if (matchedIndex < 0) {
-        return recalculateMomentumSummaryInTransaction(transaction, uid);
+        return;
     }
     const slot = slots[matchedIndex];
     const opportunityRef = opportunityRefs[matchedIndex];
@@ -226,7 +203,6 @@ async function removeTapInOpportunity({ circle, circleId, dateKey, transaction, 
             updatedAt: firestore_1.FieldValue.serverTimestamp(),
         }, { merge: true });
     }
-    return recalculateMomentumSummaryInTransaction(transaction, uid);
 }
 exports.materializeMomentumOpportunities = (0, scheduler_1.onSchedule)({ schedule: '0 * * * *' }, async () => {
     const now = new Date();

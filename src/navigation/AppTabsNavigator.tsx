@@ -211,6 +211,7 @@ export function AppTabsNavigator({
           if (route.name === 'TapIn') {
             return (
               <TapInRingMark
+                centerTreatment="state"
                 innerSize={46}
                 outerSize={78}
                 state={tabPulseRingState}

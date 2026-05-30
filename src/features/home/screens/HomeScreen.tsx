@@ -10,7 +10,7 @@ import {
   View,
   type ViewStyle,
 } from 'react-native';
-import {Bell, ChevronRight} from 'lucide-react-native';
+import {Bell} from 'lucide-react-native';
 import type {BottomTabNavigationProp} from '@react-navigation/bottom-tabs';
 import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import {useFocusEffect, useNavigation} from '@react-navigation/native';
@@ -83,6 +83,8 @@ type HomeGreetingState = {
   headline: string;
   source: 'fallback' | 'gemini';
 };
+
+const MOMENTUM_ICON_SIZE = 54;
 
 function MomentumBars({percentage}: {percentage: number}) {
   const theme = useHoystTheme();
@@ -785,9 +787,9 @@ export function HomeScreen(): React.JSX.Element {
 
       <View style={styles.momentumStack}>
         <Pressable
-        accessibilityLabel={`Your momentum. ${momentumSummary.percentage}%. ${momentumSummary.label}. ${formatOpportunityCount(
-          momentumSummary,
-        )}`}
+          accessibilityLabel={`Your momentum. ${momentumSummary.percentage}%. ${
+            momentumSummary.label
+          }. ${formatOpportunityCount(momentumSummary)}`}
           accessibilityRole="button"
           onPress={() => navigation.navigate('Momentum')}
           style={({pressed}) => [
@@ -800,7 +802,10 @@ export function HomeScreen(): React.JSX.Element {
           <GlassPanel padding="compact" style={styles.momentumPanel}>
             <View style={styles.momentumPanelContent}>
               <View style={styles.momentumStageIconWrap}>
-                <MomentumStageIcon status={momentumSummary.status} size={42} />
+                <MomentumStageIcon
+                  status={momentumSummary.status}
+                  size={MOMENTUM_ICON_SIZE}
+                />
               </View>
               <View style={styles.momentumCopy}>
                 <HoystText
@@ -837,11 +842,6 @@ export function HomeScreen(): React.JSX.Element {
               </View>
               <View style={styles.momentumTrendWrap}>
                 <MomentumBars percentage={momentumSummary.percentage} />
-                <ChevronRight
-                  color={theme.textSubtle}
-                  size={16}
-                  strokeWidth={2.4}
-                />
               </View>
             </View>
           </GlassPanel>
@@ -1141,6 +1141,7 @@ const styles = StyleSheet.create({
   },
   momentumPanelContent: {
     alignItems: 'center',
+    alignSelf: 'stretch',
     flexDirection: 'row',
     gap: 8,
     justifyContent: 'space-between',
@@ -1170,10 +1171,12 @@ const styles = StyleSheet.create({
     lineHeight: 14,
   },
   momentumStageIconWrap: {
-    alignSelf: 'flex-start',
+    alignItems: 'center',
     flexShrink: 0,
-    marginRight: 6,
-    paddingTop: 1,
+    height: MOMENTUM_ICON_SIZE,
+    justifyContent: 'center',
+    marginRight: 4,
+    width: MOMENTUM_ICON_SIZE,
   },
   momentumTitleText: {
     fontSize: 16,

@@ -263,8 +263,13 @@ export function TapInComposerScreen({
 
       navigation.replace('TapInComplete', {
         circleId: route.params.circleId,
+        circleTitle: detail.title,
+        commitment: detail.commitment,
+        inviteUrl: detail.inviteUrl,
+        progressLabel: detail.progressLabel,
         source: route.params.source,
         status: checkInStatus,
+        streakLabel: detail.streakLabel,
         note: note.length > 0 ? note : undefined,
         photoUri: draft.photoUri,
       });
@@ -326,6 +331,7 @@ export function TapInComposerScreen({
       <GlassPanel style={styles.heroPanel}>
         <View style={styles.heroHeader}>
           <TapInRingMark
+            centerTreatment="state"
             innerSize={44}
             outerSize={78}
             state={composerPulseRingState}
@@ -374,6 +380,7 @@ export function TapInComposerScreen({
               ]}>
               <View style={styles.previewHeader}>
                 <TapInRingMark
+                  centerTreatment="state"
                   innerSize={22}
                   outerSize={40}
                   state={composerPulseRingState}
@@ -542,6 +549,7 @@ export function TapInComposerScreen({
                     ]}>
                     <View style={styles.previewHeader}>
                       <TapInRingMark
+                        centerTreatment="state"
                         innerSize={22}
                         outerSize={40}
                         state={composerPulseRingState}

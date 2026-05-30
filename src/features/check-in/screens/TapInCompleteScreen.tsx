@@ -47,6 +47,14 @@ type SparkleConfig = {
   top?: number;
 };
 
+type CompletionDetailSnapshot = Pick<
+  CircleDetailModel,
+  'commitment' | 'title'
+> &
+  Partial<
+    Pick<CircleDetailModel, 'inviteUrl' | 'progressLabel' | 'streakLabel'>
+  >;
+
 const sparkleConfigs: SparkleConfig[] = [
   {left: 18, rotation: 38, size: 18, top: 14, travelX: 16, travelY: -42},
   {right: 28, rotation: -28, size: 22, top: 34, travelX: -22, travelY: -38},
@@ -65,6 +73,11 @@ const sparkleConfigs: SparkleConfig[] = [
   {bottom: 18, left: 142, rotation: 44, size: 18, travelX: 18, travelY: -40},
   {bottom: 16, right: 148, rotation: -34, size: 14, travelX: -16, travelY: -32},
 ];
+
+function cleanOptionalText(value?: string) {
+  const trimmed = value?.trim();
+  return trimmed && trimmed.length > 0 ? trimmed : undefined;
+}
 
 export function TapInCompleteScreen({
   navigation,
@@ -94,17 +107,44 @@ export function TapInCompleteScreen({
   const note = route.params.note?.trim();
   const hasNote = Boolean(note);
   const isSkip = route.params.status === 'skip';
+  const snapshotDetail = useMemo<CompletionDetailSnapshot | undefined>(() => {
+    const title = cleanOptionalText(route.params.circleTitle);
+    const commitment = cleanOptionalText(route.params.commitment);
+    const progressLabel = cleanOptionalText(route.params.progressLabel);
+    const streakLabel = cleanOptionalText(route.params.streakLabel);
+    const inviteUrl = cleanOptionalText(route.params.inviteUrl);
+
+    if (!title && !commitment && !progressLabel && !streakLabel && !inviteUrl) {
+      return undefined;
+    }
+
+    return {
+      commitment: commitment ?? "Today's Tap In",
+      ...(inviteUrl ? {inviteUrl} : {}),
+      ...(progressLabel ? {progressLabel} : {}),
+      ...(streakLabel ? {streakLabel} : {}),
+      title: title ?? 'Hoyst Circle',
+    };
+  }, [
+    route.params.circleTitle,
+    route.params.commitment,
+    route.params.inviteUrl,
+    route.params.progressLabel,
+    route.params.streakLabel,
+  ]);
+  const displayDetail = detail ?? snapshotDetail;
+  const hasCompletionContent = hasResolvedDetail || Boolean(snapshotDetail);
   const isReadyForCelebration =
-    hasLaidOut && hasSettledNavigation && hasResolvedDetail;
+    hasLaidOut && hasSettledNavigation && hasCompletionContent;
   const canShowStoryShare = canShareTapInStory(route.params.status);
   const storyData = useMemo(
     () =>
       buildTapInStoryShareData({
-        detail,
+        detail: displayDetail,
         note,
         photoUri: route.params.photoUri,
       }),
-    [detail, note, route.params.photoUri],
+    [displayDetail, note, route.params.photoUri],
   );
   const canGenerateStory =
     isReadyForCelebration && (!storyData.photoUri || isStoryPhotoSettled);
@@ -301,8 +341,8 @@ export function TapInCompleteScreen({
       setIsSharingStory(false);
     }
   };
-  const commitment = hasResolvedDetail
-    ? detail?.commitment ?? "Today's Tap In"
+  const commitment = hasCompletionContent
+    ? displayDetail?.commitment ?? "Today's Tap In"
     : 'Loading Tap In details';
   const headerTitle = isReadyForCelebration
     ? isSkip
@@ -310,7 +350,7 @@ export function TapInCompleteScreen({
       : 'Tap In Complete'
     : 'Finalizing Tap In';
   const statusLabel = isSkip ? 'Skip recorded' : 'Update sent';
-  const loadingCopy = hasResolvedDetail
+  const loadingCopy = hasCompletionContent
     ? 'Getting the screen ready.'
     : 'Loading your circle.';
   const sparkleColors = [
@@ -481,8 +521,10 @@ export function TapInCompleteScreen({
             />
             <Animated.View style={ringSpinAnimatedStyle}>
               <TapInRingMark
+                centerTreatment="state"
                 innerSize={52}
                 outerSize={92}
+                showTrail={false}
                 state={isSkip ? 'atRisk' : 'streak'}
               />
             </Animated.View>

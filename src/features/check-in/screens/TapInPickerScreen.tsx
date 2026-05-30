@@ -243,6 +243,7 @@ export function TapInPickerScreen({navigation}: Props): React.JSX.Element {
       <GlassPanel style={styles.heroPanel}>
         <View style={styles.heroIconWrap}>
           <TapInRingMark
+            centerTreatment="state"
             innerSize={56}
             outerSize={100}
             state={heroPulseRingState}

@@ -5,6 +5,7 @@ import {
   Modal,
   Platform,
   Pressable,
+  ScrollView,
   Share,
   StyleSheet,
   View,
@@ -12,35 +13,36 @@ import {
 import {
   ArrowLeft,
   Bell,
-  BellRing,
   Check,
   ChevronRight,
-  Clock3,
+  ClipboardCheck,
   Flame,
   Globe2,
   LogOut,
   Lock,
   Pencil,
-  Send,
-  Settings2,
   Trash2,
   UserPlus,
   UsersRound,
 } from 'lucide-react-native';
 import type {NativeStackScreenProps} from '@react-navigation/native-stack';
+import Svg, {Circle as SvgCircle, G, Path, Rect} from 'react-native-svg';
 
-import {ActivityFeedCard} from '../../../design/components/ActivityFeedCard';
-import {BrandMark} from '../../../design/components/BrandMark';
+import {GradientRing} from '../../../design/components/GradientRing';
 import {GlassPanel} from '../../../design/components/GlassPanel';
 import {HoystButton} from '../../../design/components/HoystButton';
 import {HoystChip} from '../../../design/components/HoystChip';
 import {HoystInput} from '../../../design/components/HoystInput';
 import {HoystScreen} from '../../../design/components/HoystScreen';
 import {HoystText} from '../../../design/components/HoystText';
-import {CircleCategoryPill} from '../../../design/components/CircleCategoryIcon';
+import {
+  CircleCategoryIcon,
+  getCircleCategoryForegroundColor,
+  getCircleCategoryVisual,
+} from '../../../design/components/CircleCategoryIcon';
+import {LayeredAvatar} from '../../../design/components/LayeredAvatar';
 import {SectionHeader} from '../../../design/components/SectionHeader';
-import {StatusAvatarRow} from '../../../design/components/StatusAvatarRow';
-import {TapInPulseButton} from '../../../design/components/TapInPulseButton';
+import {TapInRingMark} from '../../../design/components/TapInRingMark';
 import {
   getPulseRingStateForCircle,
   type PulseRingState,
@@ -48,6 +50,7 @@ import {
 import {actionMotion} from '../../../design/tokens/actions';
 import {radius} from '../../../design/tokens/radius';
 import {useHoystTheme} from '../../../design/theme/useHoystTheme';
+import {triggerTapInPressHaptic} from '../../../lib/haptics/tap-in-haptics';
 import {useProtectedAction} from '../../auth/hooks/useProtectedAction';
 import {useUserProfileStore} from '../../../store/profile-store';
 import {useSessionStore} from '../../../store/session-store';
@@ -65,7 +68,11 @@ import {
   buildPublicCircleDetail,
   subscribeToMemberCircleDetail,
 } from '../../home/services/home-data-service';
-import type {CircleDetailModel, CircleSummary} from '../../../types/models';
+import type {
+  CircleDetailModel,
+  CircleMemberStatus,
+  CircleSummary,
+} from '../../../types/models';
 import type {RootStackParamList} from '../../../navigation/types';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'CircleDetail'>;
@@ -74,6 +81,7 @@ type DetailStatusPill = {
   label: string;
   tone: HoystChipTone;
 };
+type ToolTileTone = 'green' | 'purple' | 'blue' | 'orange';
 
 function getDetailStatusPill(
   detail: CircleDetailModel,
@@ -125,34 +133,26 @@ function getJoinModeLabel(detail: CircleDetailModel) {
   return detail.joinLabel ?? 'Requests open';
 }
 
-function formatTapInsLeft(count: number, detail: CircleDetailModel) {
-  if (count <= 0) {
-    return 'Commitment complete';
-  }
-
-  const periodCopy =
-    detail.commitmentCadence === 'daily' ? 'today' : 'this week';
-
-  return count === 1
-    ? `1 Tap In left ${periodCopy}`
-    : `${count} Tap Ins left ${periodCopy}`;
-}
-
 function formatNudgeTargetCount(count: number) {
   return count === 1 ? '1 Member to nudge' : `${count} Members to nudge`;
 }
 
 function TopBarButton({
+  accessibilityLabel,
   children,
   onPress,
 }: {
+  accessibilityLabel: string;
   children: React.ReactNode;
-  onPress?: () => void;
+  onPress: () => void;
 }) {
   const theme = useHoystTheme();
 
   return (
     <Pressable
+      accessibilityLabel={accessibilityLabel}
+      accessibilityRole="button"
+      hitSlop={6}
       onPress={onPress}
       style={({pressed}) => [
         styles.topBarButton,
@@ -167,57 +167,175 @@ function TopBarButton({
   );
 }
 
-function DashboardQuickAction({
-  emphasized,
-  icon,
-  label,
-  onPress,
-  supportingText,
+function CategoryTextPill({
+  category,
+  uppercase = false,
 }: {
-  emphasized?: boolean;
-  icon: React.ReactNode;
-  label: string;
-  onPress?: () => void;
-  supportingText: string;
+  category: string;
+  uppercase?: boolean;
 }) {
   const theme = useHoystTheme();
+  const visual = getCircleCategoryVisual(category);
+  const foregroundColor = getCircleCategoryForegroundColor(category, theme);
+  const label = uppercase ? visual.label.toUpperCase() : visual.label;
 
   return (
-    <Pressable
-      onPress={onPress}
-      style={({pressed}) => [
-        styles.dashboardQuickPressable,
+    <View
+      style={[
+        styles.categoryTextPill,
+        styles.identityPill,
         {
-          opacity: pressed ? actionMotion.pressedOpacity : 1,
-          transform: [{scale: pressed ? actionMotion.pressedScale : 1}],
+          backgroundColor:
+            visual.tone === 'neutral'
+              ? theme.surfaceHigh
+              : `${visual.accentColor}22`,
         },
       ]}>
-      <View
-        style={[
-          styles.dashboardQuickFill,
-          {
-            backgroundColor: emphasized
-              ? `${theme.accent}22`
-              : theme.surfaceHigh,
-            borderColor: emphasized
-              ? `${theme.accentForeground}77`
-              : theme.borderStrong,
-          },
-        ]}>
-        <View style={styles.dashboardQuickIcon}>{icon}</View>
-        <View style={styles.dashboardActionCopy}>
-          <HoystText
-            numberOfLines={1}
-            style={styles.dashboardActionLabel}
-            variant="button">
-            {label}
-          </HoystText>
-          <HoystText numberOfLines={1} tone="muted" variant="caption">
-            {supportingText}
-          </HoystText>
-        </View>
-      </View>
-    </Pressable>
+      <HoystText style={{color: foregroundColor}} variant="tiny">
+        {label}
+      </HoystText>
+    </View>
+  );
+}
+
+function CircleDetailArtworkIcon({
+  color,
+  kind,
+  size = 30,
+}: {
+  color: string;
+  kind:
+    | 'completion'
+    | 'flame'
+    | 'goals'
+    | 'leaderboard'
+    | 'members'
+    | 'settings';
+  size?: number;
+}) {
+  if (kind === 'members') {
+    return (
+      <Svg height={size} viewBox="0 0 64 64" width={size}>
+        <G>
+          <SvgCircle cx="25" cy="23" fill={`${color}55`} r="8" />
+          <SvgCircle cx="25" cy="23" fill={color} r="6.5" />
+          <SvgCircle cx="42" cy="25" fill={`${color}44`} r="7" />
+          <SvgCircle cx="42" cy="25" fill={color} r="5.7" />
+          <SvgCircle cx="14" cy="28" fill={`${color}40`} r="6" />
+          <SvgCircle cx="14" cy="28" fill={color} r="4.8" />
+          <Path
+            d="M10 49 C11.6 39.4 17.5 34.5 25 34.5 C32.5 34.5 38.4 39.4 40 49 Z"
+            fill={color}
+          />
+          <Path
+            d="M34 49 C35.1 41.2 39.6 37.1 45 37.1 C50.7 37.1 55.2 41.4 56.5 49 Z"
+            fill={`${color}C8`}
+          />
+          <Path
+            d="M4.5 49 C5.7 42.3 9.5 38.7 14.2 38.7 C18.7 38.7 22.5 42.4 23.4 49 Z"
+            fill={`${color}B8`}
+          />
+        </G>
+      </Svg>
+    );
+  }
+
+  if (kind === 'leaderboard') {
+    return (
+      <Svg height={size} viewBox="0 0 64 64" width={size}>
+        <G>
+          <Rect
+            fill={`${color}80`}
+            height="20"
+            rx="3"
+            width="11"
+            x="10"
+            y="34"
+          />
+          <Rect fill={color} height="31" rx="3" width="11" x="27" y="23" />
+          <Rect
+            fill={`${color}C8`}
+            height="42"
+            rx="3"
+            width="11"
+            x="44"
+            y="12"
+          />
+          <Path
+            d="M10 54 H55"
+            stroke={color}
+            strokeLinecap="round"
+            strokeWidth="4"
+          />
+          <Path
+            d="M31 28 H35 M48 17 H52 M14 39 H18"
+            stroke="rgba(255,255,255,0.72)"
+            strokeLinecap="round"
+            strokeWidth="3"
+          />
+        </G>
+      </Svg>
+    );
+  }
+
+  if (kind === 'goals') {
+    return (
+      <Svg height={size} viewBox="0 0 64 64" width={size}>
+        <G fill="none" stroke={color} strokeLinecap="round">
+          <SvgCircle cx="30" cy="34" r="20" strokeWidth="5" />
+          <SvgCircle cx="30" cy="34" r="12" strokeWidth="4" />
+          <SvgCircle cx="30" cy="34" fill={color} r="4" strokeWidth="0" />
+          <Path d="M42 22 L52 12" strokeWidth="5" />
+          <Path
+            d="M51 12 L54 22 L44 19"
+            strokeLinejoin="round"
+            strokeWidth="4"
+          />
+          <Path d="M42 22 L30 34" strokeWidth="4" />
+        </G>
+      </Svg>
+    );
+  }
+
+  if (kind === 'settings') {
+    return (
+      <Svg height={size} viewBox="0 0 64 64" width={size}>
+        <G fill={color}>
+          <Path d="M36 8 L39 15.4 C41.1 16 43 16.8 44.7 18 L52 15 L57 24 L50.8 28.7 C51 29.8 51.1 30.9 51.1 32 C51.1 33.1 51 34.2 50.8 35.3 L57 40 L52 49 L44.7 46 C43 47.2 41.1 48 39 48.6 L36 56 H26 L23 48.6 C20.9 48 19 47.2 17.3 46 L10 49 L5 40 L11.2 35.3 C11 34.2 10.9 33.1 10.9 32 C10.9 30.9 11 29.8 11.2 28.7 L5 24 L10 15 L17.3 18 C19 16.8 20.9 16 23 15.4 L26 8 Z" />
+          <SvgCircle cx="31" cy="32" fill="rgba(255,255,255,0.86)" r="11" />
+          <SvgCircle cx="31" cy="32" fill={color} r="6" />
+        </G>
+      </Svg>
+    );
+  }
+
+  if (kind === 'flame') {
+    return (
+      <Svg height={size} viewBox="0 0 64 64" width={size}>
+        <Path
+          d="M31 56 C19 54 12 45.5 13.5 34.5 C14.5 26.5 19.5 20 25 15 C25 22 29 25 32 28 C36 22 36.5 15 34.5 8 C46 15 53 25.5 53 38 C53 48.5 44.5 56 31 56 Z"
+          fill={`${color}D8`}
+        />
+        <Path
+          d="M32 55 C25 53.5 21.5 48.5 22 42 C22.4 36.5 26 32.5 30 29 C30 34 33.2 36 35.5 39 C37.7 35.8 38.2 31.5 37.2 27.5 C43.5 32.5 47 38.2 46.5 44.5 C46 51.2 40.5 55 32 55 Z"
+          fill="rgba(255,255,255,0.78)"
+        />
+        <Path
+          d="M32 55 C27.8 53.6 26 50 27 46 C27.8 42.9 30.1 40.5 32.5 38.5 C32.4 42 35.5 44 37 47 C39.5 44 39.8 41 39.2 38 C43 41.3 44.6 45.3 43.4 49.3 C41.9 53.6 37.8 55.6 32 55 Z"
+          fill={color}
+        />
+      </Svg>
+    );
+  }
+
+  return (
+    <Svg height={size} viewBox="0 0 64 64" width={size}>
+      <G fill="none" stroke={color} strokeLinecap="round" strokeWidth="6">
+        <Path d="M18 34 A16 16 0 1 0 26 18" />
+        <Path d="M17 19 L25.5 18 L24.5 26.5" strokeLinejoin="round" />
+      </G>
+      <SvgCircle cx="32" cy="34" fill={`${color}18`} r="13" />
+    </Svg>
   );
 }
 
@@ -237,9 +355,43 @@ function DashboardUtilityAction({
   supportingText: string;
 }) {
   const theme = useHoystTheme();
+  const content = (
+    <View
+      style={[
+        styles.dashboardUtilityFill,
+        {
+          backgroundColor: theme.surfaceSoft,
+          borderColor: theme.borderStrong,
+        },
+      ]}>
+      <View style={styles.dashboardUtilityIcon}>{icon}</View>
+      <View style={styles.dashboardActionCopy}>
+        <HoystText
+          numberOfLines={1}
+          style={[
+            styles.dashboardUtilityLabel,
+            labelColor ? {color: labelColor} : undefined,
+          ]}
+          variant="button">
+          {label}
+        </HoystText>
+        <HoystText numberOfLines={1} tone="muted" variant="caption">
+          {supportingText}
+        </HoystText>
+      </View>
+      {showChevron ? (
+        <ChevronRight color={theme.textSubtle} size={17} strokeWidth={2.2} />
+      ) : null}
+    </View>
+  );
+
+  if (!onPress) {
+    return <View style={styles.dashboardUtilityPressable}>{content}</View>;
+  }
 
   return (
     <Pressable
+      accessibilityRole="button"
       onPress={onPress}
       style={({pressed}) => [
         styles.dashboardUtilityPressable,
@@ -248,129 +400,684 @@ function DashboardUtilityAction({
           transform: [{scale: pressed ? actionMotion.pressedScale : 1}],
         },
       ]}>
-      <View
-        style={[
-          styles.dashboardUtilityFill,
-          {
-            backgroundColor: theme.surfaceSoft,
-            borderColor: theme.borderStrong,
-          },
-        ]}>
-        <View style={styles.dashboardUtilityIcon}>{icon}</View>
-        <View style={styles.dashboardActionCopy}>
-          <HoystText
-            numberOfLines={1}
-            style={[
-              styles.dashboardUtilityLabel,
-              labelColor ? {color: labelColor} : undefined,
-            ]}
-            variant="button">
-            {label}
+      {content}
+    </Pressable>
+  );
+}
+
+function DailyTaskCard({
+  category,
+  commitment,
+  title,
+}: {
+  category: string;
+  commitment: string;
+  title: string;
+}) {
+  const theme = useHoystTheme();
+  const visual = getCircleCategoryVisual(category);
+  const foregroundColor = getCircleCategoryForegroundColor(category, theme);
+  const accentBackgroundColor =
+    visual.tone === 'neutral' ? theme.surfaceHigh : `${visual.accentColor}18`;
+
+  return (
+    <GlassPanel padding="none" style={styles.dailyTaskCard}>
+      <View style={styles.dailyTaskCardContent}>
+        <View
+          style={[
+            styles.dailyTaskIcon,
+            {backgroundColor: accentBackgroundColor},
+          ]}>
+          <ClipboardCheck color={foregroundColor} size={25} strokeWidth={2.2} />
+        </View>
+        <View style={styles.dailyTaskCopy}>
+          <HoystText numberOfLines={2} style={styles.dailyTaskPrimary}>
+            {commitment}
           </HoystText>
+          <HoystText numberOfLines={1} tone="muted" variant="caption">
+            {title}
+          </HoystText>
+        </View>
+      </View>
+    </GlassPanel>
+  );
+}
+
+function TapInReferenceAction({
+  label,
+  onPress,
+  ringState,
+  supportingText,
+}: {
+  label: string;
+  onPress: () => void;
+  ringState: PulseRingState;
+  supportingText: string;
+}) {
+  const theme = useHoystTheme();
+  const [isPressed, setIsPressed] = useState(false);
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      onPressIn={() => {
+        setIsPressed(true);
+        triggerTapInPressHaptic();
+      }}
+      onPress={onPress}
+      onPressOut={() => setIsPressed(false)}
+      style={({pressed}) => [
+        styles.tapInReferenceAction,
+        {
+          backgroundColor: theme.surfaceStrong,
+          borderColor: pressed
+            ? theme.successForeground
+            : `${theme.successForeground}66`,
+          opacity: pressed ? actionMotion.pressedOpacity : 1,
+          shadowColor: theme.shadow,
+          transform: [{scale: pressed ? actionMotion.pressedScale : 1}],
+        },
+      ]}>
+      <View style={styles.tapInReferenceContent}>
+        <TapInRingMark
+          animated
+          centerTreatment="state"
+          innerSize={42}
+          isPressed={isPressed}
+          outerSize={72}
+          showTrail
+          state={ringState}
+          style={styles.tapInReferenceRing}
+        />
+        <View style={styles.tapInReferenceCopy}>
+          <HoystText style={styles.tapInReferenceTitle}>{label}</HoystText>
           <HoystText numberOfLines={1} tone="muted" variant="caption">
             {supportingText}
           </HoystText>
         </View>
-        {showChevron ? (
-          <ChevronRight color={theme.textSubtle} size={17} strokeWidth={2.2} />
-        ) : null}
       </View>
     </Pressable>
   );
 }
 
-function TapInPrimaryAction({
-  label,
-  onPress,
-  ringState,
-}: {
-  label: string;
-  onPress: () => void;
-  ringState: PulseRingState;
-}) {
+function getProgressSectionSubtitle(detail: CircleDetailModel) {
+  if (detail.commitmentCadence === 'monthly') {
+    return 'Progress this month';
+  }
+
+  if (detail.commitmentCadence === 'weekly') {
+    return 'Progress this week';
+  }
+
+  return 'Progress today';
+}
+
+function getMemberStatusLabel(member: CircleMemberStatus) {
+  if (member.membershipStatus === 'pending') {
+    return 'Pending';
+  }
+
+  if (member.state === 'done') {
+    return 'Done';
+  }
+
+  if (member.state === 'skipped') {
+    return 'Skipped';
+  }
+
+  if (member.state === 'pending') {
+    return 'Needed';
+  }
+
+  return 'Missed';
+}
+
+function getMemberProgressConfig(
+  member: CircleMemberStatus,
+  theme: ReturnType<typeof useHoystTheme>,
+) {
+  if (member.membershipStatus === 'pending') {
+    return {
+      progress: 0.34,
+      ringColor: theme.accentSecondaryForeground,
+      trackColor: `${theme.accentSecondary}12`,
+    };
+  }
+
+  if (member.state === 'done') {
+    return {
+      progress: 1,
+      ringColor: theme.successForeground,
+      trackColor: `${theme.success}14`,
+    };
+  }
+
+  if (member.state === 'skipped') {
+    return {
+      progress: 1,
+      ringColor: theme.warningForeground,
+      trackColor: `${theme.warning}14`,
+    };
+  }
+
+  if (member.state === 'pending') {
+    return {
+      progress: 0.34,
+      ringColor: theme.warningForeground,
+      trackColor: `${theme.warning}12`,
+    };
+  }
+
+  return {
+    progress: 0.08,
+    ringColor: theme.dangerForeground,
+    trackColor: theme.ring,
+  };
+}
+
+function ProgressStatusBadge({member}: {member: CircleMemberStatus}) {
+  const theme = useHoystTheme();
+
+  if (member.state === 'done' && member.membershipStatus !== 'pending') {
+    return (
+      <View
+        style={[
+          styles.companionStatusBadge,
+          {
+            backgroundColor: theme.successForeground,
+            borderColor: theme.surfaceStrong,
+          },
+        ]}>
+        <Check color={theme.surfaceStrong} size={12} strokeWidth={3} />
+      </View>
+    );
+  }
+
+  const color =
+    member.membershipStatus === 'pending'
+      ? theme.accentSecondaryForeground
+      : member.state === 'skipped'
+      ? theme.warningForeground
+      : member.state === 'missed'
+      ? theme.dangerForeground
+      : theme.warningForeground;
+
   return (
-    <TapInPulseButton
-      label={label}
-      onPress={onPress}
-      ringState={ringState}
-      variant="primary"
+    <View
+      style={[
+        styles.companionStatusBadge,
+        styles.companionStatusBadgeOpen,
+        {
+          backgroundColor: theme.surfaceStrong,
+          borderColor: color,
+        },
+      ]}
     />
   );
 }
 
-function DetailProgressPanel({
-  completionLabel,
-  days,
-  title,
+function CompanionProgressScroller({
+  members,
+  subtitle,
 }: {
-  completionLabel: string;
-  days: CircleDetailModel['monthProgress'];
-  title: string;
+  members: CircleMemberStatus[];
+  subtitle: string;
 }) {
   const theme = useHoystTheme();
 
   return (
-    <GlassPanel style={styles.progressPanel}>
-      <View style={styles.progressHeader}>
-        <HoystText style={styles.progressTitle} tone="muted" variant="label">
+    <View style={styles.companionSection}>
+      <View style={styles.progressSectionHeader}>
+        <HoystText variant="subtitle">Companions</HoystText>
+        <HoystText
+          numberOfLines={1}
+          style={styles.progressSectionSubtitle}
+          tone="muted"
+          variant="caption">
+          {subtitle}
+        </HoystText>
+      </View>
+      {members.length > 0 ? (
+        <ScrollView
+          contentContainerStyle={styles.companionScrollContent}
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.companionScroll}>
+          {members.map(member => {
+            const label = getMemberStatusLabel(member);
+            const progress = getMemberProgressConfig(member, theme);
+            return (
+              <View key={member.id} style={styles.companionItem}>
+                <View style={styles.companionRingWrap}>
+                  <GradientRing
+                    flatColor={progress.ringColor}
+                    progress={progress.progress}
+                    size={80}
+                    strokeWidth={6}
+                    trackColor={progress.trackColor}
+                  />
+                  <View style={styles.companionAvatarWrap}>
+                    <LayeredAvatar
+                      imageSource={member.avatarImage}
+                      imageUrl={member.avatarUrl}
+                      initials={member.initials}
+                      size={64}
+                      state={member.state}
+                    />
+                  </View>
+                  <ProgressStatusBadge member={member} />
+                </View>
+                <HoystText
+                  numberOfLines={1}
+                  style={styles.companionName}
+                  variant="caption">
+                  {member.name}
+                </HoystText>
+                <HoystText style={{color: progress.ringColor}} variant="tiny">
+                  {label}
+                </HoystText>
+              </View>
+            );
+          })}
+        </ScrollView>
+      ) : (
+        <HoystText tone="muted">
+          Companions will appear here once people join this Circle.
+        </HoystText>
+      )}
+    </View>
+  );
+}
+
+function CircleDetailIconBadge({
+  backgroundColor,
+  badge,
+  children,
+}: {
+  backgroundColor: string;
+  badge?: string;
+  children: React.ReactNode;
+}) {
+  const theme = useHoystTheme();
+
+  return (
+    <View style={[styles.iconBadge, {backgroundColor}]}>
+      {children}
+      {badge ? (
+        <View
+          style={[
+            styles.iconBadgeCount,
+            {
+              backgroundColor: theme.successForeground,
+              borderColor: theme.surfaceStrong,
+            },
+          ]}>
+          <HoystText style={styles.iconBadgeCountText} variant="tiny">
+            {badge}
+          </HoystText>
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+function NudgePanel({
+  isNudging,
+  nudged,
+  onPress,
+  targetCount,
+  targetCopy,
+}: {
+  isNudging: boolean;
+  nudged: boolean;
+  onPress: () => void;
+  targetCount: number;
+  targetCopy: string;
+}) {
+  const theme = useHoystTheme();
+  const title = isNudging
+    ? 'Nudging...'
+    : nudged
+    ? 'Nudge Sent'
+    : 'Send a Nudge';
+
+  return (
+    <Pressable
+      accessibilityLabel={`${title}. ${targetCopy}`}
+      accessibilityRole="button"
+      onPress={onPress}
+      style={({pressed}) => [
+        styles.nudgePanel,
+        {
+          backgroundColor: `${theme.success}20`,
+          borderColor: `${theme.successForeground}73`,
+          opacity: pressed ? actionMotion.pressedOpacity : 1,
+          shadowColor: theme.shadow,
+          transform: [{scale: pressed ? actionMotion.pressedScale : 1}],
+        },
+      ]}>
+      <View style={styles.nudgePanelContent}>
+        <CircleDetailIconBadge
+          backgroundColor={`${theme.success}20`}
+          badge={String(targetCount)}>
+          <Bell color={theme.successForeground} size={23} strokeWidth={2.2} />
+        </CircleDetailIconBadge>
+        <View style={styles.nudgeCopy}>
+          <HoystText style={styles.nudgeTitle}>{title}</HoystText>
+          <HoystText
+            numberOfLines={1}
+            style={styles.nudgeSubtitle}
+            tone="muted">
+            Remind members to tap in
+          </HoystText>
+        </View>
+        <View
+          style={[
+            styles.nudgeActionIcon,
+            {backgroundColor: theme.successForeground},
+          ]}>
+          <ChevronRight
+            color={theme.surfaceStrong}
+            size={18}
+            strokeWidth={2.7}
+          />
+        </View>
+      </View>
+    </Pressable>
+  );
+}
+
+function getToolTileToneColors(
+  tone: ToolTileTone,
+  theme: ReturnType<typeof useHoystTheme>,
+) {
+  if (tone === 'purple') {
+    return {
+      backgroundColor: `${theme.accentSecondary}16`,
+      color: theme.accentSecondaryForeground,
+    };
+  }
+
+  if (tone === 'blue') {
+    return {
+      backgroundColor: `${theme.accentTertiary}16`,
+      color: theme.accentTertiaryForeground,
+    };
+  }
+
+  if (tone === 'orange') {
+    return {
+      backgroundColor: `${theme.warning}16`,
+      color: theme.warningForeground,
+    };
+  }
+
+  return {
+    backgroundColor: `${theme.success}16`,
+    color: theme.successForeground,
+  };
+}
+
+function MemberToolTile({
+  icon,
+  onPress,
+  subtitle,
+  title,
+  tone,
+}: {
+  icon: React.ReactNode;
+  onPress?: () => void;
+  subtitle: string;
+  title: string;
+  tone: ToolTileTone;
+}) {
+  const theme = useHoystTheme();
+  const toneColors = getToolTileToneColors(tone, theme);
+  const content = (
+    <View
+      style={[
+        styles.memberToolTileInner,
+        {
+          backgroundColor: theme.surfaceStrong,
+          borderColor: theme.border,
+          shadowColor: theme.shadow,
+        },
+      ]}>
+      <View
+        style={[
+          styles.memberToolIcon,
+          {backgroundColor: toneColors.backgroundColor},
+        ]}>
+        {icon}
+      </View>
+      <View style={styles.memberToolCopy}>
+        <HoystText
+          adjustsFontSizeToFit
+          minimumFontScale={0.82}
+          numberOfLines={1}
+          style={styles.memberToolTitle}>
           {title}
         </HoystText>
-        <HoystText style={styles.progressPercent} variant="bodyStrong">
-          {completionLabel}
+        <HoystText
+          adjustsFontSizeToFit
+          minimumFontScale={0.82}
+          numberOfLines={1}
+          style={[styles.memberToolSubtitle, {color: theme.textMuted}]}>
+          {subtitle}
         </HoystText>
       </View>
-      <View style={styles.progressGrid}>
-        {days.slice(0, 7).map(day => {
-          const isDone = day.state === 'done';
-          const isMissed = day.state === 'missed';
-          const isToday = day.state === 'today';
-          const progressCellStateStyle = isDone
-            ? {
-                backgroundColor: `${theme.success}14`,
-                borderColor: `${theme.successForeground}55`,
-              }
-            : isMissed
-            ? {
-                backgroundColor: `${theme.danger}14`,
-                borderColor: `${theme.dangerForeground}55`,
-              }
-            : isToday
-            ? {
-                backgroundColor: `${theme.accentSecondary}16`,
-                borderColor: `${theme.accentSecondaryForeground}80`,
-                borderStyle: 'dashed' as const,
-              }
-            : undefined;
-          const progressCellThemeStyle = progressCellStateStyle
-            ? undefined
-            : {backgroundColor: theme.surfaceStrong, borderColor: theme.border};
+    </View>
+  );
 
-          return (
-            <View
-              key={day.day}
-              style={[
-                styles.progressCell,
-                progressCellStateStyle,
-                progressCellThemeStyle,
-              ]}>
-              <HoystText
-                style={{
-                  color: isDone
-                    ? theme.successForeground
-                    : isMissed
-                    ? theme.dangerForeground
-                    : isToday
-                    ? theme.accentSecondaryForeground
-                    : theme.textMuted,
-                }}
-                variant="bodyStrong">
-                {String(day.day).padStart(2, '0')}
-              </HoystText>
-            </View>
-          );
-        })}
+  if (!onPress) {
+    return <View style={styles.memberToolTile}>{content}</View>;
+  }
+
+  return (
+    <View style={styles.memberToolTile}>
+      <Pressable
+        accessibilityRole="button"
+        onPress={onPress}
+        style={({pressed}) => [
+          styles.memberToolPressable,
+          {
+            opacity: pressed ? actionMotion.pressedOpacity : 1,
+            transform: [{scale: pressed ? actionMotion.pressedScale : 1}],
+          },
+        ]}>
+        {content}
+      </Pressable>
+    </View>
+  );
+}
+
+function MemberToolsTiles({
+  isExpanded,
+  isOwner,
+  onToggleManage,
+}: {
+  isExpanded: boolean;
+  isOwner: boolean;
+  onToggleManage: () => void;
+}) {
+  const theme = useHoystTheme();
+
+  return (
+    <View style={styles.memberToolsSection}>
+      <HoystText variant="subtitle">
+        {isOwner ? 'Circle Tools' : 'Member Tools'}
+      </HoystText>
+      <View style={styles.memberToolsGrid}>
+        <MemberToolTile
+          icon={
+            <CircleDetailArtworkIcon
+              color={theme.successForeground}
+              kind="members"
+              size={25}
+            />
+          }
+          subtitle="View all"
+          title="Members"
+          tone="green"
+        />
+        <MemberToolTile
+          icon={
+            <CircleDetailArtworkIcon
+              color={theme.accentSecondaryForeground}
+              kind="leaderboard"
+              size={25}
+            />
+          }
+          subtitle="See ranks"
+          title="Leaderboard"
+          tone="purple"
+        />
+        <MemberToolTile
+          icon={
+            <CircleDetailArtworkIcon
+              color={theme.accentTertiaryForeground}
+              kind="goals"
+              size={25}
+            />
+          }
+          subtitle="Track progress"
+          title="Goals"
+          tone="blue"
+        />
+        <MemberToolTile
+          icon={
+            <CircleDetailArtworkIcon
+              color={theme.warningForeground}
+              kind="settings"
+              size={25}
+            />
+          }
+          onPress={onToggleManage}
+          subtitle={isExpanded ? 'Hide tools' : 'Manage group'}
+          title="Settings"
+          tone="orange"
+        />
       </View>
-    </GlassPanel>
+    </View>
+  );
+}
+
+function StatsMetric({
+  accentColor,
+  caption,
+  icon,
+  label,
+  value,
+}: {
+  accentColor: string;
+  caption: string;
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+}) {
+  return (
+    <View style={styles.statsMetric}>
+      <View
+        style={[styles.statsMetricIcon, {backgroundColor: `${accentColor}16`}]}>
+        {icon}
+      </View>
+      <View style={styles.statsMetricCopy}>
+        <HoystText numberOfLines={1} style={styles.statsMetricValue}>
+          {value}
+        </HoystText>
+        <HoystText numberOfLines={1} style={styles.statsMetricLabel}>
+          {label}
+        </HoystText>
+        <HoystText
+          numberOfLines={1}
+          style={styles.statsMetricCaption}
+          tone="muted">
+          {caption}
+        </HoystText>
+      </View>
+    </View>
+  );
+}
+
+function getStatsPeriodLabel(detail: CircleDetailModel) {
+  if (detail.commitmentCadence === 'monthly') {
+    return 'This month';
+  }
+
+  if (detail.commitmentCadence === 'weekly') {
+    return 'This week';
+  }
+
+  return 'Today';
+}
+
+function CircleStatsCard({detail}: {detail: CircleDetailModel}) {
+  const theme = useHoystTheme();
+  const progress = Math.max(0, Math.min(100, detail.completionRate));
+  const streakValue =
+    detail.streakDays ?? Number.parseInt(detail.streakLabel, 10);
+  const activeStreakCount = Number.isFinite(streakValue) ? streakValue : 0;
+  const periodLabel = getStatsPeriodLabel(detail);
+
+  return (
+    <View style={styles.statsSection}>
+      <View style={styles.statsTitleRow}>
+        <HoystText variant="subtitle">Stats</HoystText>
+        <HoystText
+          style={[styles.statsSeeAll, {color: theme.successForeground}]}>
+          See all
+        </HoystText>
+      </View>
+      <GlassPanel padding="none">
+        <View style={styles.statsCard}>
+          <StatsMetric
+            accentColor={theme.success}
+            caption={periodLabel}
+            icon={
+              <CircleDetailArtworkIcon
+                color={theme.successForeground}
+                kind="completion"
+                size={27}
+              />
+            }
+            label="Completion Rate"
+            value={`${progress}%`}
+          />
+          <View
+            style={[styles.statsDivider, {backgroundColor: theme.borderStrong}]}
+          />
+          <StatsMetric
+            accentColor={theme.warning}
+            caption="Active"
+            icon={
+              <CircleDetailArtworkIcon
+                color={theme.warningForeground}
+                kind="flame"
+                size={27}
+              />
+            }
+            label="Streaks"
+            value={String(activeStreakCount)}
+          />
+          <View
+            style={[styles.statsDivider, {backgroundColor: theme.borderStrong}]}
+          />
+          <StatsMetric
+            accentColor={theme.accentSecondary}
+            caption="Active"
+            icon={
+              <CircleDetailArtworkIcon
+                color={theme.accentSecondaryForeground}
+                kind="members"
+                size={27}
+              />
+            }
+            label="Members"
+            value={`${detail.memberCount}/${detail.maxSize}`}
+          />
+        </View>
+      </GlassPanel>
+    </View>
   );
 }
 
@@ -413,8 +1120,7 @@ function DeleteCircleConfirmModal({
                 strokeWidth={2.3}
               />
               <HoystText
-                style={{color: theme.dangerForeground}}
-                variant="title">
+                style={[styles.modalTitle, {color: theme.dangerForeground}]}>
                 Delete circle
               </HoystText>
             </View>
@@ -527,9 +1233,6 @@ export function CircleDetailScreen({
       [],
     [detail?.members],
   );
-  const missedMembers =
-    detail?.members.filter(member => member.state === 'missed') ?? [];
-
   useEffect(() => {
     return subscribeToPublicCircle(route.params.circleId, setPublicCircle, () =>
       setPublicCircle(undefined),
@@ -597,12 +1300,15 @@ export function CircleDetailScreen({
     return (
       <HoystScreen contentContainerStyle={styles.content}>
         <View style={styles.topBar}>
-          <View style={styles.brandRow}>
-            <TopBarButton onPress={navigateBack}>
+          <View style={styles.topBarSlot}>
+            <TopBarButton accessibilityLabel="Go back" onPress={navigateBack}>
               <ArrowLeft color={theme.text} size={22} strokeWidth={2.3} />
             </TopBarButton>
-            <BrandMark isDark={theme.isDark} kind="logo" style={styles.logo} />
           </View>
+          <HoystText numberOfLines={1} style={styles.topTitle}>
+            Circle unavailable
+          </HoystText>
+          <View style={styles.topBarSlot} />
         </View>
         <GlassPanel>
           <SectionHeader
@@ -619,26 +1325,9 @@ export function CircleDetailScreen({
   const canInvite =
     Boolean(detail.inviteUrl) &&
     (detail.viewerRole === 'owner' || detail.viewerRole === 'admin');
-  const progressTone =
-    detail.completionRate >= 85
-      ? theme.successForeground
-      : detail.completionRate >= 70
-      ? theme.accentSecondaryForeground
-      : detail.completionRate >= 50
-      ? theme.warningForeground
-      : theme.dangerForeground;
-  const statusLabel = detail.progressLabel ?? `${detail.completionRate}%`;
-  const progressPanelTitle =
-    detail.commitmentCadence === 'daily'
-      ? 'Today Progression'
-      : 'Week Progression';
   const detailStatusPill = getDetailStatusPill(detail);
   const nudgeTargetCount = detail.nudgeTargetCount ?? nudgeTargetMembers.length;
   const canNudgeTargets = nudgeTargetCount > 0;
-  const periodRemainingCopy = formatTapInsLeft(
-    detail.remainingCheckIns ?? 0,
-    detail,
-  );
   const nudgeTargetCopy = formatNudgeTargetCount(nudgeTargetCount);
   const previewCopy =
     detail.matchCopy ?? 'Preview the circle before you jump in.';
@@ -679,7 +1368,25 @@ export function CircleDetailScreen({
   const removeProgressionCopy =
     detail.commitmentCadence === 'daily'
       ? "This will undo today's Progression for this Circle."
+      : detail.commitmentCadence === 'monthly'
+      ? "This will undo this month's Progression for this Circle."
       : "This will undo this week's Progression for this Circle.";
+  const commitmentPrefix =
+    detail.commitmentCadence === 'monthly'
+      ? 'Monthly Goal'
+      : detail.commitmentCadence === 'weekly'
+      ? 'Weekly Task'
+      : 'Daily Task';
+  const roleOrJoinLabel = isMemberCircle
+    ? getRoleLabel(detail)
+    : getJoinModeLabel(detail);
+  const tapInSupportingText = canRemoveTodayCheckIn
+    ? "Review today's Tap In"
+    : detail.commitmentCadence === 'monthly'
+    ? 'Log your progress this month'
+    : detail.commitmentCadence === 'weekly'
+    ? 'Log your progress this week'
+    : 'Log your progress for today';
 
   const shareInvite = () => {
     if (!canInvite || !detail.inviteUrl) {
@@ -691,6 +1398,35 @@ export function CircleDetailScreen({
       message: `Join ${detail.title} on Hoyst: ${detail.inviteUrl}`,
       url: detail.inviteUrl,
     }).catch(() => undefined);
+  };
+
+  const openInbox = () => {
+    navigation.navigate('Inbox');
+  };
+
+  const handleSendNudge = () => {
+    if (isNudging) {
+      return;
+    }
+
+    setIsNudging(true);
+    nudgeCircleMembers(detail.id)
+      .then(result => {
+        setNudged(true);
+        Alert.alert(
+          'Nudge sent',
+          result.nudged > 0
+            ? `${result.nudged} member${result.nudged === 1 ? '' : 's'} nudged.`
+            : 'Everyone is covered right now.',
+        );
+      })
+      .catch(error => {
+        Alert.alert(
+          'Nudge failed',
+          (error as {message?: string}).message ?? 'Could not send a nudge.',
+        );
+      })
+      .finally(() => setIsNudging(false));
   };
 
   const handleRemoveTodayCheckIn = async () => {
@@ -845,153 +1581,157 @@ export function CircleDetailScreen({
 
   return (
     <HoystScreen contentContainerStyle={styles.content}>
-      <View style={styles.topBar}>
-        <View style={styles.brandRow}>
-          <TopBarButton onPress={navigateBack}>
-            <ArrowLeft color={theme.text} size={22} strokeWidth={2.3} />
-          </TopBarButton>
-          <BrandMark isDark={theme.isDark} kind="logo" style={styles.logo} />
-        </View>
-        <View style={styles.topActions}>
-          <TopBarButton>
-            <Bell color={theme.textMuted} size={20} strokeWidth={2.2} />
-          </TopBarButton>
-          {isMemberCircle ? (
-            <TopBarButton onPress={canInvite ? shareInvite : undefined}>
-              <UserPlus color={theme.textMuted} size={17} strokeWidth={2.2} />
+      <View style={styles.screenStack}>
+        <View style={styles.topBar}>
+          <View
+            style={[
+              styles.topBarSlot,
+              canInvite ? styles.topBarSideWide : undefined,
+            ]}>
+            <TopBarButton accessibilityLabel="Go back" onPress={navigateBack}>
+              <ArrowLeft color={theme.text} size={22} strokeWidth={2.3} />
             </TopBarButton>
-          ) : null}
+          </View>
+          <View style={styles.topTitleCluster}>
+            <View
+              style={styles.topTitleIcon}
+              testID="circle-detail-title-category-icon">
+              <CircleCategoryIcon
+                category={detail.category}
+                size={canInvite ? 30 : 34}
+              />
+            </View>
+            <HoystText
+              adjustsFontSizeToFit
+              minimumFontScale={0.68}
+              numberOfLines={1}
+              style={styles.topTitle}>
+              {detail.title}
+            </HoystText>
+          </View>
+          <View
+            style={[
+              styles.topActions,
+              canInvite ? styles.topBarSideWide : undefined,
+            ]}>
+            <TopBarButton accessibilityLabel="Open Inbox" onPress={openInbox}>
+              <Bell color={theme.textMuted} size={20} strokeWidth={2.2} />
+            </TopBarButton>
+            {canInvite ? (
+              <TopBarButton
+                accessibilityLabel="Invite members"
+                onPress={shareInvite}>
+                <UserPlus color={theme.textMuted} size={17} strokeWidth={2.2} />
+              </TopBarButton>
+            ) : null}
+          </View>
         </View>
-      </View>
 
-      <View style={styles.heroSection}>
-        <View style={styles.heroHeader}>
-          <View style={styles.headerTags}>
-            <CircleCategoryPill category={detail.category} uppercase />
-            <View style={styles.streakRow}>
+        <View style={styles.identitySection}>
+          <View style={styles.identityPillRow}>
+            <CategoryTextPill category={detail.category} uppercase />
+            {detailStatusPill ? (
+              <HoystChip
+                label={detailStatusPill.label}
+                style={styles.identityPill}
+                tone={detailStatusPill.tone}
+              />
+            ) : null}
+            <View
+              style={[
+                styles.streakChip,
+                styles.identityPill,
+                {
+                  backgroundColor: `${theme.success}18`,
+                  borderColor: `${theme.successForeground}22`,
+                },
+              ]}>
               {isAlreadyTappedInLabel ? (
                 <Check
                   color={theme.successForeground}
-                  size={15}
-                  strokeWidth={2.8}
+                  size={14}
+                  strokeWidth={2.6}
                 />
-              ) : showFlameIcon ? (
+              ) : (
                 <Flame
-                  color={theme.warningForeground}
-                  size={15}
+                  color={
+                    showFlameIcon
+                      ? theme.warningForeground
+                      : theme.successForeground
+                  }
+                  size={14}
                   strokeWidth={2.4}
                 />
-              ) : null}
+              )}
               <HoystText
                 style={{
                   color: showFlameIcon
                     ? theme.warningForeground
                     : theme.successForeground,
                 }}
-                variant="bodyStrong">
+                variant="caption">
                 {detail.streakLabel}
               </HoystText>
             </View>
           </View>
-          <View
-            style={[
-              styles.progressBadge,
-              {
-                backgroundColor: `${progressTone}12`,
-                borderColor: `${progressTone}66`,
-              },
-            ]}>
-            {detail.state === 'done' ? (
-              <Check color={progressTone} size={12} strokeWidth={2.6} />
-            ) : detail.state === 'risk' ? (
-              <Clock3 color={progressTone} size={12} strokeWidth={2.4} />
-            ) : null}
-            <HoystText style={{color: progressTone}} variant="caption">
-              {statusLabel}
-            </HoystText>
-          </View>
-        </View>
-
-        <View style={styles.heroCopy}>
-          <HoystText style={styles.heroTitle}>{detail.title}</HoystText>
-          <HoystText tone="muted">{detail.commitmentLabel}</HoystText>
-          {detailStatusPill ? (
-            <HoystChip
-              label={detailStatusPill.label}
-              tone={detailStatusPill.tone}
-            />
-          ) : (
-            <HoystText tone="muted" variant="caption">
+          {!detailStatusPill ? (
+            <HoystText style={styles.previewCopy} tone="muted">
               {previewCopy}
             </HoystText>
-          )}
-        </View>
-
-        <View style={styles.metaRow}>
-          <View style={styles.metaItem}>
-            <UsersRound color={theme.textSubtle} size={15} strokeWidth={2.1} />
+          ) : null}
+          <View style={styles.metaRow}>
+            <View style={styles.metaItem}>
+              <UsersRound
+                color={theme.textSubtle}
+                size={15}
+                strokeWidth={2.1}
+              />
+              <HoystText tone="muted" variant="caption">
+                {detail.memberCount}/{detail.maxSize} members
+              </HoystText>
+            </View>
+            <View
+              style={[
+                styles.managementDot,
+                {backgroundColor: theme.borderStrong},
+              ]}
+            />
+            <View style={styles.metaItem}>
+              {detail.privacy === 'private' ? (
+                <Lock color={theme.textSubtle} size={14} strokeWidth={2.1} />
+              ) : (
+                <Globe2 color={theme.textSubtle} size={14} strokeWidth={2.1} />
+              )}
+              <HoystText tone="muted" variant="caption">
+                {privacyLabel}
+              </HoystText>
+            </View>
+            <View
+              style={[
+                styles.managementDot,
+                {backgroundColor: theme.borderStrong},
+              ]}
+            />
             <HoystText tone="muted" variant="caption">
-              {detail.memberCount}/{detail.maxSize} members
+              {roleOrJoinLabel}
             </HoystText>
           </View>
-          <View
-            style={[
-              styles.managementDot,
-              {backgroundColor: theme.borderStrong},
-            ]}
+          <DailyTaskCard
+            category={detail.category}
+            commitment={detail.commitment}
+            title={commitmentPrefix}
           />
-          <View style={styles.metaItem}>
-            {detail.privacy === 'private' ? (
-              <Lock color={theme.textSubtle} size={14} strokeWidth={2.1} />
-            ) : (
-              <Globe2 color={theme.textSubtle} size={14} strokeWidth={2.1} />
-            )}
-            <HoystText tone="muted" variant="caption">
-              {privacyLabel}
-            </HoystText>
-          </View>
-          <View
-            style={[
-              styles.managementDot,
-              {backgroundColor: theme.borderStrong},
-            ]}
-          />
-          <HoystText tone="muted" variant="caption">
-            {isMemberCircle ? getRoleLabel(detail) : getJoinModeLabel(detail)}
-          </HoystText>
         </View>
 
-        <View style={styles.memberStatusBlock}>
-          <View style={styles.sectionHeader}>
-            <HoystText tone="muted" variant="label">
-              Member Status
-            </HoystText>
-            <HoystText tone="muted" variant="caption">
-              {detail.members.length} total
-            </HoystText>
-          </View>
-          <StatusAvatarRow members={detail.members} />
-        </View>
-      </View>
+        <CompanionProgressScroller
+          members={detail.members}
+          subtitle={getProgressSectionSubtitle(detail)}
+        />
 
-      <GlassPanel style={styles.actionPanel}>
-        <View style={styles.sectionHeader}>
-          <HoystText tone="muted" variant="label">
-            Action Dashboard
-          </HoystText>
-          <HoystText tone="muted" variant="caption">
-            {isMemberCircle
-              ? `${periodRemainingCopy}, ${missedMembers.length} missed`
-              : isPendingMembership
-              ? 'Pending approval'
-              : getJoinModeLabel(detail)}
-          </HoystText>
-        </View>
-
-        {isMemberCircle ? (
-          <View style={styles.dashboardGrid}>
-            <View style={styles.primaryActionWrap}>
-              <TapInPrimaryAction
+        <View style={styles.actionSection}>
+          {isMemberCircle ? (
+            <>
+              <TapInReferenceAction
                 label={tapInPrimaryActionLabel}
                 onPress={() =>
                   requireAccount(
@@ -1008,228 +1748,183 @@ export function CircleDetailScreen({
                   )
                 }
                 ringState={tapInPulseRingState}
+                supportingText={tapInSupportingText}
               />
-            </View>
-            {canRemoveTodayCheckIn ? (
-              <DashboardUtilityAction
-                icon={
-                  <Trash2
-                    color={theme.dangerForeground}
-                    size={17}
-                    strokeWidth={2.2}
-                  />
-                }
-                labelColor={theme.dangerForeground}
-                label={isRemovingTapIn ? 'Removing...' : removeActionLabel}
-                onPress={
-                  isRemovingTapIn ? undefined : confirmRemoveTodayCheckIn
-                }
-                showChevron={false}
-                supportingText="Undo today"
-              />
-            ) : null}
-            <View style={styles.quickActionRow}>
-              {canNudgeTargets ? (
-                <DashboardQuickAction
-                  emphasized={canNudgeTargets && !nudged}
+              {canRemoveTodayCheckIn ? (
+                <DashboardUtilityAction
                   icon={
-                    <BellRing
-                      color={
-                        nudged
-                          ? theme.successForeground
-                          : canNudgeTargets
-                          ? theme.accentSecondaryForeground
-                          : theme.text
-                      }
-                      size={18}
+                    <Trash2
+                      color={theme.dangerForeground}
+                      size={17}
                       strokeWidth={2.2}
                     />
                   }
-                  label={
-                    isNudging
-                      ? 'Nudging...'
-                      : nudged
-                      ? 'Nudged'
-                      : `Nudge ${nudgeTargetCount}`
+                  labelColor={theme.dangerForeground}
+                  label={isRemovingTapIn ? 'Removing...' : removeActionLabel}
+                  onPress={
+                    isRemovingTapIn ? undefined : confirmRemoveTodayCheckIn
                   }
-                  onPress={() => {
-                    if (isNudging) {
-                      return;
-                    }
-
-                    setIsNudging(true);
-                    nudgeCircleMembers(detail.id)
-                      .then(result => {
-                        setNudged(true);
-                        Alert.alert(
-                          'Nudge sent',
-                          result.nudged > 0
-                            ? `${result.nudged} member${
-                                result.nudged === 1 ? '' : 's'
-                              } nudged.`
-                            : 'Everyone is covered right now.',
-                        );
-                      })
-                      .catch(error => {
-                        Alert.alert(
-                          'Nudge failed',
-                          (error as {message?: string}).message ??
-                            'Could not send a nudge.',
-                        );
-                      })
-                      .finally(() => setIsNudging(false));
-                  }}
-                  supportingText={nudgeTargetCopy}
+                  showChevron={false}
+                  supportingText="Undo today"
                 />
               ) : null}
-              {canInvite ? (
-                <DashboardQuickAction
-                  icon={<Send color={theme.text} size={17} strokeWidth={2.2} />}
-                  label="Invite"
-                  onPress={shareInvite}
-                  supportingText="Share link"
+              {canNudgeTargets ? (
+                <NudgePanel
+                  isNudging={isNudging}
+                  nudged={nudged}
+                  onPress={handleSendNudge}
+                  targetCopy={nudgeTargetCopy}
+                  targetCount={nudgeTargetCount}
                 />
-              ) : (
-                <DashboardQuickAction
+              ) : null}
+              {canDeleteCircle ? (
+                <View style={styles.circleToolsGroup}>
+                  <MemberToolsTiles
+                    isExpanded={isOwnerToolsExpanded}
+                    isOwner
+                    onToggleManage={() =>
+                      setIsOwnerToolsExpanded(currentValue => !currentValue)
+                    }
+                  />
+                  {isOwnerToolsExpanded ? (
+                    <View style={styles.ownerToolsActions}>
+                      {pendingJoinRequests.length > 0 ? (
+                        <View style={styles.joinRequestStack}>
+                          {pendingJoinRequests.map(member => (
+                            <View
+                              key={member.id}
+                              style={[
+                                styles.joinRequestRow,
+                                {
+                                  backgroundColor: theme.surfaceSoft,
+                                  borderColor: theme.borderStrong,
+                                },
+                              ]}>
+                              <View style={styles.joinRequestCopy}>
+                                <HoystText variant="bodyStrong">
+                                  {member.name}
+                                </HoystText>
+                                <HoystText tone="muted" variant="caption">
+                                  Wants to join
+                                </HoystText>
+                              </View>
+                              <View style={styles.joinRequestActions}>
+                                <HoystButton
+                                  disabled={reviewingRequestId === member.id}
+                                  label="Decline"
+                                  onPress={() => {
+                                    handleReviewJoinRequest(
+                                      member.id,
+                                      false,
+                                    ).catch(() => undefined);
+                                  }}
+                                  style={styles.joinRequestButton}
+                                  variant="outline"
+                                />
+                                <HoystButton
+                                  disabled={reviewingRequestId === member.id}
+                                  label="Approve"
+                                  onPress={() => {
+                                    handleReviewJoinRequest(
+                                      member.id,
+                                      true,
+                                    ).catch(() => undefined);
+                                  }}
+                                  style={styles.joinRequestButton}
+                                />
+                              </View>
+                            </View>
+                          ))}
+                        </View>
+                      ) : null}
+                      <DashboardUtilityAction
+                        icon={
+                          <Pencil
+                            color={theme.text}
+                            size={17}
+                            strokeWidth={2.2}
+                          />
+                        }
+                        label="Edit Circle"
+                        onPress={openEditCircle}
+                        supportingText="Owner settings"
+                      />
+                      <DashboardUtilityAction
+                        icon={
+                          <Trash2
+                            color={theme.dangerForeground}
+                            size={17}
+                            strokeWidth={2.2}
+                          />
+                        }
+                        label="Delete Circle"
+                        labelColor={theme.dangerForeground}
+                        onPress={openDeleteCircleConfirm}
+                        showChevron={false}
+                        supportingText="Permanent"
+                      />
+                    </View>
+                  ) : null}
+                </View>
+              ) : canLeaveCircle ? (
+                <View style={styles.circleToolsGroup}>
+                  <MemberToolsTiles
+                    isExpanded={isMemberToolsExpanded}
+                    isOwner={false}
+                    onToggleManage={() =>
+                      setIsMemberToolsExpanded(currentValue => !currentValue)
+                    }
+                  />
+                  {isMemberToolsExpanded ? (
+                    <View style={styles.ownerToolsActions}>
+                      <DashboardUtilityAction
+                        icon={
+                          <LogOut
+                            color={theme.dangerForeground}
+                            size={17}
+                            strokeWidth={2.2}
+                          />
+                        }
+                        label={
+                          isLeavingCircle ? 'Working...' : leaveActionLabel
+                        }
+                        labelColor={theme.dangerForeground}
+                        onPress={
+                          isLeavingCircle ? undefined : confirmLeaveCircle
+                        }
+                        showChevron={false}
+                        supportingText={leaveActionSupportingText}
+                      />
+                    </View>
+                  ) : null}
+                </View>
+              ) : null}
+            </>
+          ) : isPendingMembership && canLeaveCircle ? (
+            <>
+              <View style={styles.publicActionStack}>
+                <HoystButton
                   icon={
-                    <UserPlus color={theme.text} size={17} strokeWidth={2.2} />
+                    <UserPlus
+                      color={theme.actionForeground}
+                      size={18}
+                      strokeWidth={2.4}
+                    />
                   }
-                  label="Members"
-                  supportingText="See who is in"
+                  disabled
+                  label="Pending approval"
                 />
-              )}
-            </View>
-            {canDeleteCircle ? (
-              <View style={styles.circleToolsGroup}>
-                <HoystText
-                  style={styles.circleToolsHeader}
-                  tone="muted"
-                  variant="label">
-                  Circle tools
+                <HoystText tone="muted" variant="caption">
+                  The circle owner will review your request.
                 </HoystText>
-                <DashboardUtilityAction
-                  icon={
-                    <Settings2
-                      color={
-                        isOwnerToolsExpanded
-                          ? theme.accentSecondaryForeground
-                          : theme.text
-                      }
-                      size={16}
-                      strokeWidth={2.2}
-                    />
-                  }
-                  label={isOwnerToolsExpanded ? 'Hide tools' : 'Manage'}
-                  onPress={() =>
-                    setIsOwnerToolsExpanded(currentValue => !currentValue)
-                  }
-                  supportingText="Owner settings"
-                />
-                {isOwnerToolsExpanded ? (
-                  <View style={styles.ownerToolsActions}>
-                    {pendingJoinRequests.length > 0 ? (
-                      <View style={styles.joinRequestStack}>
-                        {pendingJoinRequests.map(member => (
-                          <View
-                            key={member.id}
-                            style={[
-                              styles.joinRequestRow,
-                              {
-                                backgroundColor: theme.surfaceSoft,
-                                borderColor: theme.borderStrong,
-                              },
-                            ]}>
-                            <View style={styles.joinRequestCopy}>
-                              <HoystText variant="bodyStrong">
-                                {member.name}
-                              </HoystText>
-                              <HoystText tone="muted" variant="caption">
-                                Wants to join
-                              </HoystText>
-                            </View>
-                            <View style={styles.joinRequestActions}>
-                              <HoystButton
-                                disabled={reviewingRequestId === member.id}
-                                label="Decline"
-                                onPress={() => {
-                                  handleReviewJoinRequest(
-                                    member.id,
-                                    false,
-                                  ).catch(() => undefined);
-                                }}
-                                style={styles.joinRequestButton}
-                                variant="outline"
-                              />
-                              <HoystButton
-                                disabled={reviewingRequestId === member.id}
-                                label="Approve"
-                                onPress={() => {
-                                  handleReviewJoinRequest(
-                                    member.id,
-                                    true,
-                                  ).catch(() => undefined);
-                                }}
-                                style={styles.joinRequestButton}
-                              />
-                            </View>
-                          </View>
-                        ))}
-                      </View>
-                    ) : null}
-                    <DashboardUtilityAction
-                      icon={
-                        <Pencil
-                          color={theme.text}
-                          size={17}
-                          strokeWidth={2.2}
-                        />
-                      }
-                      label="Edit Circle"
-                      onPress={openEditCircle}
-                      supportingText="Owner settings"
-                    />
-                    <DashboardUtilityAction
-                      icon={
-                        <Trash2
-                          color={theme.dangerForeground}
-                          size={17}
-                          strokeWidth={2.2}
-                        />
-                      }
-                      label="Delete Circle"
-                      labelColor={theme.dangerForeground}
-                      onPress={openDeleteCircleConfirm}
-                      showChevron={false}
-                      supportingText="Permanent"
-                    />
-                  </View>
-                ) : null}
               </View>
-            ) : canLeaveCircle ? (
               <View style={styles.circleToolsGroup}>
-                <HoystText
-                  style={styles.circleToolsHeader}
-                  tone="muted"
-                  variant="label">
-                  Member tools
-                </HoystText>
-                <DashboardUtilityAction
-                  icon={
-                    <Settings2
-                      color={
-                        isMemberToolsExpanded
-                          ? theme.accentSecondaryForeground
-                          : theme.text
-                      }
-                      size={16}
-                      strokeWidth={2.2}
-                    />
-                  }
-                  label={isMemberToolsExpanded ? 'Hide tools' : 'Manage'}
-                  onPress={() =>
+                <MemberToolsTiles
+                  isExpanded={isMemberToolsExpanded}
+                  isOwner={false}
+                  onToggleManage={() =>
                     setIsMemberToolsExpanded(currentValue => !currentValue)
                   }
-                  supportingText="Member settings"
                 />
                 {isMemberToolsExpanded ? (
                   <View style={styles.ownerToolsActions}>
@@ -1250,22 +1945,8 @@ export function CircleDetailScreen({
                   </View>
                 ) : null}
               </View>
-            ) : (
-              <DashboardUtilityAction
-                icon={
-                  <Settings2 color={theme.text} size={16} strokeWidth={2.2} />
-                }
-                label="Manage"
-                supportingText={
-                  detail.viewerRole === 'member'
-                    ? 'Member settings'
-                    : 'Circle tools'
-                }
-              />
-            )}
-          </View>
-        ) : isPendingMembership && canLeaveCircle ? (
-          <View style={styles.dashboardGrid}>
+            </>
+          ) : (
             <View style={styles.publicActionStack}>
               <HoystButton
                 icon={
@@ -1275,118 +1956,40 @@ export function CircleDetailScreen({
                     strokeWidth={2.4}
                   />
                 }
-                disabled
-                label="Pending approval"
+                disabled={isPendingMembership}
+                label={
+                  isPendingMembership
+                    ? 'Pending approval'
+                    : isJoining
+                    ? 'Working...'
+                    : joinActionLabel
+                }
+                onPress={
+                  isPendingMembership
+                    ? undefined
+                    : () =>
+                        requireAccount(
+                          {circleId: detail.id, type: 'joinCircle'},
+                          () => {
+                            handleJoinCircle().catch(() => undefined);
+                          },
+                        )
+                }
               />
               <HoystText tone="muted" variant="caption">
-                The circle owner will review your request.
+                {isPendingMembership
+                  ? 'The circle owner will review your request.'
+                  : detail.joinLabel === 'Open seats'
+                  ? `${detail.maxSize - detail.memberCount} seats open today`
+                  : 'The circle owner will review your request.'}
               </HoystText>
             </View>
-            <View style={styles.circleToolsGroup}>
-              <HoystText
-                style={styles.circleToolsHeader}
-                tone="muted"
-                variant="label">
-                Member tools
-              </HoystText>
-              <DashboardUtilityAction
-                icon={
-                  <Settings2
-                    color={
-                      isMemberToolsExpanded
-                        ? theme.accentSecondaryForeground
-                        : theme.text
-                    }
-                    size={16}
-                    strokeWidth={2.2}
-                  />
-                }
-                label={isMemberToolsExpanded ? 'Hide tools' : 'Manage'}
-                onPress={() =>
-                  setIsMemberToolsExpanded(currentValue => !currentValue)
-                }
-                supportingText="Member settings"
-              />
-              {isMemberToolsExpanded ? (
-                <View style={styles.ownerToolsActions}>
-                  <DashboardUtilityAction
-                    icon={
-                      <LogOut
-                        color={theme.dangerForeground}
-                        size={17}
-                        strokeWidth={2.2}
-                      />
-                    }
-                    label={isLeavingCircle ? 'Working...' : leaveActionLabel}
-                    labelColor={theme.dangerForeground}
-                    onPress={isLeavingCircle ? undefined : confirmLeaveCircle}
-                    showChevron={false}
-                    supportingText={leaveActionSupportingText}
-                  />
-                </View>
-              ) : null}
-            </View>
-          </View>
-        ) : (
-          <View style={styles.publicActionStack}>
-            <HoystButton
-              icon={
-                <UserPlus
-                  color={theme.actionForeground}
-                  size={18}
-                  strokeWidth={2.4}
-                />
-              }
-              disabled={isPendingMembership}
-              label={
-                isPendingMembership
-                  ? 'Pending approval'
-                  : isJoining
-                  ? 'Working...'
-                  : joinActionLabel
-              }
-              onPress={
-                isPendingMembership
-                  ? undefined
-                  : () =>
-                      requireAccount(
-                        {circleId: detail.id, type: 'joinCircle'},
-                        () => {
-                          handleJoinCircle().catch(() => undefined);
-                        },
-                      )
-              }
-            />
-            <HoystText tone="muted" variant="caption">
-              {isPendingMembership
-                ? 'The circle owner will review your request.'
-                : detail.joinLabel === 'Open seats'
-                ? `${detail.maxSize - detail.memberCount} seats open today`
-                : 'The circle owner will review your request.'}
-            </HoystText>
-          </View>
-        )}
-      </GlassPanel>
-
-      <DetailProgressPanel
-        completionLabel={detail.progressLabel ?? `${detail.completionRate}%`}
-        days={detail.monthProgress}
-        title={progressPanelTitle}
-      />
-
-      <View style={styles.activitySection}>
-        <View style={styles.sectionHeader}>
-          <HoystText tone="muted" variant="label">
-            Recent Activity
-          </HoystText>
-          <HoystText tone="muted" variant="caption">
-            {detail.activity.length} updates
-          </HoystText>
+          )}
         </View>
-        {detail.activity.map(item => (
-          <ActivityFeedCard item={item} key={item.id} />
-        ))}
+
+        <CircleStatsCard detail={detail} />
       </View>
+
       <DeleteCircleConfirmModal
         canConfirm={canConfirmDeleteCircle}
         circleTitle={detail.title}
@@ -1407,79 +2010,98 @@ const styles = StyleSheet.create({
   content: {
     paddingBottom: 148,
   },
+  screenStack: {
+    gap: 16,
+  },
   topBar: {
     alignItems: 'center',
     flexDirection: 'row',
     justifyContent: 'space-between',
+    minHeight: 48,
   },
-  brandRow: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: 10,
+  topBarSlot: {
+    alignItems: 'flex-start',
+    width: 52,
   },
   topActions: {
     flexDirection: 'row',
-    gap: 10,
+    gap: 8,
+    justifyContent: 'flex-end',
+    width: 52,
+  },
+  topBarSideWide: {
+    width: 96,
   },
   topBarButton: {
     alignItems: 'center',
     borderRadius: 16,
     borderWidth: 1,
-    height: 40,
+    height: 44,
     justifyContent: 'center',
-    minWidth: 40,
+    minWidth: 44,
     paddingHorizontal: 8,
   },
-  logo: {
-    height: 20,
-    width: 48,
+  topTitle: {
+    flexShrink: 1,
+    fontSize: 21,
+    fontWeight: '800',
+    letterSpacing: 0,
+    lineHeight: 26,
+    textAlign: 'center',
   },
-  heroSection: {
-    gap: 16,
-  },
-  heroHeader: {
-    alignItems: 'flex-start',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  headerTags: {
+  topTitleCluster: {
     alignItems: 'center',
     flex: 1,
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-    paddingRight: 10,
+    gap: 6,
+    justifyContent: 'center',
+    minWidth: 0,
   },
-  streakRow: {
+  topTitleIcon: {
+    flexShrink: 0,
+  },
+  categoryTextPill: {
+    alignItems: 'center',
+    borderRadius: radius.pill,
+    justifyContent: 'center',
+    paddingHorizontal: 14,
+  },
+  identitySection: {
+    alignItems: 'center',
+    gap: 12,
+  },
+  identityPill: {
+    alignItems: 'center',
+    height: 34,
+    justifyContent: 'center',
+    minHeight: 34,
+    paddingVertical: 0,
+  },
+  identityPillRow: {
     alignItems: 'center',
     flexDirection: 'row',
-    gap: 5,
+    flexWrap: 'wrap',
+    gap: 8,
+    justifyContent: 'center',
   },
-  progressBadge: {
+  previewCopy: {
+    paddingHorizontal: 14,
+    textAlign: 'center',
+  },
+  streakChip: {
     alignItems: 'center',
     borderRadius: radius.pill,
     borderWidth: 1,
     flexDirection: 'row',
-    gap: 4,
-    justifyContent: 'center',
-    minHeight: 32,
-    minWidth: 64,
-    paddingHorizontal: 10,
-  },
-  heroCopy: {
-    gap: 8,
-  },
-  heroTitle: {
-    fontSize: 30,
-    fontWeight: '800',
-    letterSpacing: -0.6,
-    lineHeight: 34,
+    gap: 5,
+    paddingHorizontal: 13,
   },
   metaRow: {
     alignItems: 'center',
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
+    justifyContent: 'center',
   },
   metaItem: {
     alignItems: 'center',
@@ -1491,33 +2113,271 @@ const styles = StyleSheet.create({
     height: 3,
     width: 3,
   },
-  memberStatusBlock: {
+  dailyTaskCard: {
+    alignSelf: 'stretch',
+    minHeight: 82,
+  },
+  dailyTaskCardContent: {
+    alignItems: 'center',
+    alignSelf: 'stretch',
+    flexDirection: 'row',
     gap: 12,
+    minHeight: 82,
+    paddingHorizontal: 14,
+    paddingVertical: 13,
   },
-  actionPanel: {
-    minHeight: 170,
+  dailyTaskCopy: {
+    flex: 1,
+    gap: 3,
+    minWidth: 0,
   },
-  sectionHeader: {
+  dailyTaskPrimary: {
+    fontSize: 15,
+    fontWeight: '800',
+    letterSpacing: 0,
+    lineHeight: 20,
+  },
+  dailyTaskIcon: {
+    alignItems: 'center',
+    borderRadius: radius.pill,
+    height: 52,
+    justifyContent: 'center',
+    width: 52,
+  },
+  companionSection: {
+    alignItems: 'stretch',
+    gap: 14,
+  },
+  progressSectionHeader: {
     alignItems: 'center',
     flexDirection: 'row',
-    justifyContent: 'space-between',
     gap: 12,
+    justifyContent: 'space-between',
   },
-  dashboardGrid: {
+  progressSectionSubtitle: {
+    flexShrink: 1,
+    textAlign: 'right',
+  },
+  companionScroll: {
     alignSelf: 'stretch',
-    alignItems: 'stretch',
-    gap: 10,
+    marginHorizontal: -4,
+  },
+  companionScrollContent: {
+    alignItems: 'flex-start',
+    gap: 14,
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+  },
+  companionStatusBadge: {
+    alignItems: 'center',
+    borderRadius: radius.pill,
+    borderWidth: 2.5,
+    bottom: 4,
+    height: 23,
+    justifyContent: 'center',
+    position: 'absolute',
+    right: 5,
+    width: 23,
+  },
+  companionStatusBadgeOpen: {
+    borderWidth: 2.5,
+  },
+  companionItem: {
+    alignItems: 'center',
+    gap: 4,
+    width: 92,
+  },
+  companionRingWrap: {
+    alignItems: 'center',
+    borderRadius: radius.pill,
+    height: 86,
+    justifyContent: 'center',
+    position: 'relative',
+    width: 86,
+  },
+  companionAvatarWrap: {
+    alignItems: 'center',
+    bottom: 0,
+    justifyContent: 'center',
+    left: 0,
+    position: 'absolute',
+    right: 0,
+    top: 0,
+  },
+  companionName: {
+    maxWidth: 94,
+    textAlign: 'center',
+  },
+  actionSection: {
+    gap: 14,
+  },
+  tapInReferenceAction: {
+    alignItems: 'center',
+    alignSelf: 'stretch',
+    borderRadius: radius.pill,
+    borderWidth: 1.5,
+    elevation: 4,
+    flexDirection: 'row',
+    gap: 12,
+    minHeight: 82,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    shadowOffset: {height: 12, width: 0},
+    shadowOpacity: 0.12,
+    shadowRadius: 24,
+  },
+  tapInReferenceCopy: {
+    flex: 1,
+    gap: 2,
+    minWidth: 0,
+  },
+  tapInReferenceContent: {
+    alignItems: 'center',
+    alignSelf: 'stretch',
+    flexDirection: 'row',
+    gap: 12,
     width: '100%',
   },
-  circleToolsGroup: {
-    gap: 8,
+  tapInReferenceRing: {
+    flexShrink: 0,
   },
-  circleToolsHeader: {
-    paddingHorizontal: 2,
+  tapInReferenceTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+    letterSpacing: 0,
+    lineHeight: 24,
+  },
+  nudgePanel: {
+    alignSelf: 'stretch',
+    borderRadius: radius.lg,
+    borderWidth: 1.4,
+    elevation: 3,
+    overflow: 'hidden',
+    minHeight: 76,
+    paddingHorizontal: 10,
+    paddingVertical: 9,
+    shadowOffset: {height: 10, width: 0},
+    shadowOpacity: 0.1,
+    shadowRadius: 16,
+    width: '100%',
+  },
+  nudgePanelContent: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 9,
+    minHeight: 58,
+    width: '100%',
+  },
+  nudgeActionIcon: {
+    alignItems: 'center',
+    borderRadius: radius.pill,
+    height: 34,
+    justifyContent: 'center',
+    width: 34,
+  },
+  nudgeCopy: {
+    flex: 1,
+    gap: 2,
+    minWidth: 0,
+  },
+  nudgeSubtitle: {
+    fontSize: 12,
+    fontWeight: '600',
+    letterSpacing: 0,
+    lineHeight: 16,
+  },
+  nudgeTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    letterSpacing: 0,
+    lineHeight: 22,
+  },
+  iconBadge: {
+    alignItems: 'center',
+    borderRadius: radius.pill,
+    height: 46,
+    justifyContent: 'center',
+    position: 'relative',
+    width: 46,
+  },
+  iconBadgeCount: {
+    alignItems: 'center',
+    borderRadius: radius.pill,
+    borderWidth: 2,
+    height: 22,
+    justifyContent: 'center',
+    position: 'absolute',
+    right: -2,
+    top: -4,
+    width: 22,
+  },
+  iconBadgeCountText: {
+    color: '#FFFFFF',
+    letterSpacing: 0,
+  },
+  memberToolsSection: {
+    gap: 12,
+  },
+  memberToolsGrid: {
+    alignItems: 'stretch',
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    width: '100%',
+  },
+  memberToolIcon: {
+    alignItems: 'center',
+    borderRadius: radius.pill,
+    height: 42,
+    justifyContent: 'center',
+    width: 42,
+  },
+  memberToolCopy: {
+    flex: 1,
+    gap: 2,
+    minWidth: 0,
+  },
+  memberToolSubtitle: {
+    fontSize: 12,
+    fontWeight: '600',
+    letterSpacing: 0,
+    lineHeight: 16,
+  },
+  memberToolTile: {
+    borderRadius: radius.md,
+    width: '48.8%',
+    minWidth: 0,
+  },
+  memberToolPressable: {
+    width: '100%',
+  },
+  memberToolTileInner: {
+    alignItems: 'center',
+    borderRadius: radius.md,
+    borderWidth: 1,
+    elevation: 2,
+    flexDirection: 'row',
+    gap: 8,
+    minHeight: 78,
+    paddingHorizontal: 10,
+    paddingVertical: 11,
+    shadowOffset: {height: 7, width: 0},
+    shadowOpacity: 0.08,
+    shadowRadius: 14,
+    width: '100%',
+  },
+  memberToolTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    letterSpacing: 0,
+    lineHeight: 18,
+  },
+  circleToolsGroup: {
+    gap: 12,
   },
   ownerToolsActions: {
     gap: 8,
-    paddingLeft: 12,
+    paddingTop: 2,
   },
   joinRequestActions: {
     flexDirection: 'row',
@@ -1541,55 +2401,20 @@ const styles = StyleSheet.create({
   joinRequestStack: {
     gap: 8,
   },
-  primaryActionWrap: {
-    marginBottom: 2,
-  },
-  quickActionRow: {
-    alignSelf: 'stretch',
-    flexDirection: 'row',
-    gap: 10,
-    minWidth: '100%',
-    width: '100%',
-  },
-  dashboardQuickPressable: {
-    alignSelf: 'stretch',
-    borderRadius: radius.md,
-    flex: 1,
-    flexBasis: 0,
-    minWidth: 0,
-  },
-  dashboardQuickFill: {
-    alignItems: 'flex-start',
-    borderRadius: radius.md,
-    borderWidth: 1,
-    gap: 10,
-    justifyContent: 'center',
-    minHeight: 86,
-    minWidth: 0,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    width: '100%',
-  },
-  dashboardQuickIcon: {
-    alignItems: 'center',
-    height: 24,
-    justifyContent: 'center',
-    width: 24,
-  },
   dashboardUtilityPressable: {
     alignSelf: 'stretch',
-    borderRadius: radius.md,
+    borderRadius: radius.pill,
     width: '100%',
   },
   dashboardUtilityFill: {
     alignItems: 'center',
-    borderRadius: radius.md,
+    borderRadius: radius.pill,
     borderWidth: 1,
     flexDirection: 'row',
-    gap: 11,
-    minHeight: 58,
+    gap: 9,
+    minHeight: 54,
     paddingHorizontal: 14,
-    paddingVertical: 10,
+    paddingVertical: 8,
     width: '100%',
   },
   dashboardUtilityIcon: {
@@ -1614,6 +2439,65 @@ const styles = StyleSheet.create({
   publicActionStack: {
     gap: 10,
   },
+  statsSection: {
+    gap: 12,
+  },
+  statsCard: {
+    alignItems: 'stretch',
+    gap: 0,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  statsDivider: {
+    height: StyleSheet.hairlineWidth,
+    marginLeft: 56,
+  },
+  statsMetric: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 10,
+    minHeight: 58,
+    minWidth: 0,
+    paddingVertical: 7,
+  },
+  statsMetricCopy: {
+    flex: 1,
+    minWidth: 0,
+  },
+  statsMetricIcon: {
+    alignItems: 'center',
+    borderRadius: radius.pill,
+    height: 44,
+    justifyContent: 'center',
+    width: 44,
+  },
+  statsMetricLabel: {
+    fontSize: 14,
+    fontWeight: '700',
+    letterSpacing: 0,
+    lineHeight: 18,
+  },
+  statsMetricValue: {
+    fontSize: 18,
+    fontWeight: '800',
+    letterSpacing: 0,
+    lineHeight: 22,
+  },
+  statsMetricCaption: {
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  statsSeeAll: {
+    fontSize: 14,
+    fontWeight: '800',
+    letterSpacing: 0,
+    lineHeight: 18,
+  },
+  statsTitleRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
   modalActions: {
     gap: 10,
   },
@@ -1624,6 +2508,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flexDirection: 'row',
     gap: 8,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+    letterSpacing: 0,
+    lineHeight: 24,
   },
   modalKeyboard: {
     flex: 1,
@@ -1637,41 +2527,5 @@ const styles = StyleSheet.create({
   },
   modalPanel: {
     alignSelf: 'stretch',
-  },
-  progressHeader: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 0,
-  },
-  progressPanel: {
-    marginHorizontal: 0,
-  },
-  progressTitle: {
-    fontSize: 11,
-    fontWeight: '700',
-    lineHeight: 11,
-    letterSpacing: 1.4,
-    textTransform: 'uppercase',
-  },
-  progressPercent: {
-    fontSize: 11,
-    lineHeight: 11,
-  },
-  progressGrid: {
-    flexDirection: 'row',
-    gap: 8,
-    justifyContent: 'space-between',
-  },
-  progressCell: {
-    alignItems: 'center',
-    aspectRatio: 1,
-    borderRadius: 9,
-    borderWidth: 1.25,
-    flex: 1,
-    justifyContent: 'center',
-  },
-  activitySection: {
-    gap: 12,
   },
 });

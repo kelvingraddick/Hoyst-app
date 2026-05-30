@@ -24,13 +24,17 @@ import type {PulseRingState} from './pulse-ring-state';
 
 type PulseRingProps = {
   animated?: boolean;
+  centerTreatment?: PulseRingCenterTreatment;
   isPressed?: boolean;
+  showTrail?: boolean;
   size?: number;
   state?: PulseRingState;
   strokeWidth?: number;
   style?: StyleProp<ViewStyle>;
   testID?: string;
 };
+
+type PulseRingCenterTreatment = 'plain' | 'state';
 
 type RingStateConfig = {
   glowColor: string;
@@ -58,6 +62,11 @@ type RingRibbon = {
   name: RingRibbonName;
   shadeColor: string;
   startAngle: number;
+};
+
+type RingCenterConfig = {
+  backplateColor: string;
+  backplateOpacity: number;
 };
 
 const RIBBON_BASE_SWEEP_DEGREES = 60;
@@ -171,6 +180,42 @@ function getStateConfig(state: PulseRingState): RingStateConfig {
     restingGlowOpacity: 0.34,
     scalePeak: 1,
     trail: false,
+  };
+}
+
+function getStateCenterConfig({
+  state,
+  theme,
+}: {
+  state: PulseRingState;
+  theme: ReturnType<typeof useHoystTheme>;
+}): RingCenterConfig {
+  const backplateOpacity = theme.isDark ? 0.32 : 0.24;
+
+  if (state === 'active') {
+    return {
+      backplateColor: theme.success,
+      backplateOpacity,
+    };
+  }
+
+  if (state === 'atRisk') {
+    return {
+      backplateColor: theme.warning,
+      backplateOpacity,
+    };
+  }
+
+  if (state === 'streak') {
+    return {
+      backplateColor: theme.accent,
+      backplateOpacity,
+    };
+  }
+
+  return {
+    backplateColor: theme.textMuted,
+    backplateOpacity: theme.isDark ? 0.28 : 0.2,
   };
 }
 
@@ -351,6 +396,7 @@ function getApertureBladePath({
 export function PulseRing({
   animated = true,
   isPressed = false,
+  showTrail = true,
   size = 72,
   state = 'idle',
   strokeWidth,
@@ -381,6 +427,7 @@ export function PulseRing({
   const ribbonClipId = `pulseRingRibbonClip${id}`;
   const centerFillRadius =
     ribbonInnerRadius + Math.max(0.4, effectiveStrokeWidth * 0.08);
+  const centerTintRadius = centerFillRadius;
   const pulseScale = breathProgress.interpolate({
     inputRange: [0, 1],
     outputRange: [1, config.scalePeak],
@@ -407,6 +454,7 @@ export function PulseRing({
     radius: radius + effectiveStrokeWidth * 1.6,
     startAngle: 26,
   });
+  const centerConfig = getStateCenterConfig({state, theme});
 
   useEffect(() => {
     if (isTestEnvironment) {
@@ -710,9 +758,17 @@ export function PulseRing({
           <Circle
             cx={center}
             cy={center}
-            fill={brandColors.charcoal}
+            fill={theme.surfaceMuted}
             r={centerFillRadius}
             testID="pulse-ring-center-fill"
+          />
+          <Circle
+            cx={center}
+            cy={center}
+            fill={centerConfig.backplateColor}
+            opacity={centerConfig.backplateOpacity}
+            r={centerTintRadius}
+            testID="pulse-ring-center-tint"
           />
           <Circle
             cx={center}
@@ -733,7 +789,7 @@ export function PulseRing({
             stroke={`url(#${glassGradientId})`}
             strokeWidth={Math.max(1, effectiveStrokeWidth * 0.32)}
           />
-          {config.trail ? (
+          {config.trail && showTrail ? (
             <G>
               <Path
                 d={trailPath}

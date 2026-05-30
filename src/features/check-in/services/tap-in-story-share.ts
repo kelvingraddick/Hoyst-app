@@ -18,8 +18,20 @@ export type TapInStoryShareData = {
   streakLabel: string;
 };
 
+type TapInStoryShareDetail = Pick<CircleDetailModel, 'commitment' | 'title'> &
+  Partial<
+    Pick<
+      CircleDetailModel,
+      | 'completionRate'
+      | 'inviteUrl'
+      | 'progressLabel'
+      | 'streakDays'
+      | 'streakLabel'
+    >
+  >;
+
 type BuildTapInStoryShareDataInput = {
-  detail?: CircleDetailModel;
+  detail?: TapInStoryShareDetail;
   note?: string;
   photoUri?: string;
 };

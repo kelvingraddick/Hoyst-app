@@ -6,9 +6,11 @@ import type {PulseRingState} from './pulse-ring-state';
 
 type TapInRingMarkProps = {
   animated?: boolean;
+  centerTreatment?: 'plain' | 'state';
   innerSize?: number;
   isPressed?: boolean;
   outerSize?: number;
+  showTrail?: boolean;
   state?: PulseRingState;
   style?: StyleProp<ViewStyle>;
   testID?: string;
@@ -16,9 +18,11 @@ type TapInRingMarkProps = {
 
 export function TapInRingMark({
   animated,
+  centerTreatment,
   innerSize = 45,
   isPressed,
   outerSize = 81,
+  showTrail,
   state = 'idle',
   style,
   testID,
@@ -31,7 +35,9 @@ export function TapInRingMark({
   return (
     <PulseRing
       animated={animated}
+      centerTreatment={centerTreatment}
       isPressed={isPressed}
+      showTrail={showTrail}
       size={outerSize}
       state={state}
       strokeWidth={strokeWidth}

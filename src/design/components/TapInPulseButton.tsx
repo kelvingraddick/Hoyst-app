@@ -115,6 +115,7 @@ export function TapInPulseButton({
         ]}>
         <TapInRingMark
           animated={!disabled}
+          centerTreatment="state"
           innerSize={spec.iconInnerSize}
           isPressed={isPressed}
           outerSize={spec.iconOuterSize}
