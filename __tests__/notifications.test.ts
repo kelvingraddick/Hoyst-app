@@ -54,6 +54,7 @@ import {
   getCircleAtRiskNotificationBody,
   getDiscoveryInactivityEligibility,
   getJoinRequestNotificationDedupeKey,
+  getNudgeNotificationDedupeKey,
   getNotificationCopyVariantIndex,
   getNotificationPreferenceEnabled,
   getReminderEligibility,
@@ -363,6 +364,28 @@ describe('join request notification dedupe keys', () => {
     });
 
     expect(secondRequest).not.toBe(firstRequest);
+  });
+});
+
+describe('nudge notification dedupe keys', () => {
+  it('allows different actors to nudge the same target on the same day', () => {
+    const philNudge = getNudgeNotificationDedupeKey({
+      actorUid: 'phil-uid',
+      circleId: 'building-hoyst',
+      dateKey: '2026-05-31',
+      targetUid: 'kelvin-uid',
+    });
+    const avaNudge = getNudgeNotificationDedupeKey({
+      actorUid: 'ava-uid',
+      circleId: 'building-hoyst',
+      dateKey: '2026-05-31',
+      targetUid: 'kelvin-uid',
+    });
+
+    expect(philNudge).toBe(
+      'nudge_building-hoyst_2026-05-31_phil-uid_kelvin-uid',
+    );
+    expect(avaNudge).not.toBe(philNudge);
   });
 });
 

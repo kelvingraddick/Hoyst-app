@@ -2,6 +2,7 @@ import React from 'react';
 import {AccessibilityInfo, InteractionManager, View} from 'react-native';
 import renderer, {act} from 'react-test-renderer';
 
+import {TapInRingMark} from '../src/design/components/TapInRingMark';
 import {TapInCompleteScreen} from '../src/features/check-in/screens/TapInCompleteScreen';
 
 const mockSubscribeToMemberCircleDetail = jest.fn((_options: unknown) =>
@@ -140,5 +141,20 @@ describe('TapInCompleteScreen', () => {
     expect(output).not.toContain('Finalizing Tap In');
     expect(output).not.toContain('Loading Tap In details');
     expect(output).not.toContain('Loading your circle');
+  });
+
+  it('keeps the success ring celebratory without the rotating streak trail', async () => {
+    let tree: renderer.ReactTestRenderer | undefined;
+
+    await act(async () => {
+      tree = renderCompleteScreen();
+    });
+
+    const ring = tree!.root
+      .findAllByType(TapInRingMark)
+      .find(node => node.props.outerSize === 92);
+
+    expect(ring?.props.state).toBe('streak');
+    expect(ring?.props.showTrail).toBe(false);
   });
 });

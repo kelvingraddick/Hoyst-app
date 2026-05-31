@@ -80,6 +80,7 @@ export function AppTabsNavigator({
   const [tabHomeData, setTabHomeData] = useState<HomeData>(() =>
     createEmptyHomeData(),
   );
+  const [tabPulseInteractionKey, setTabPulseInteractionKey] = useState(0);
   const didAutoPresentOnboardingRef = useRef(false);
   const tabPulseRingState = getPulseRingStateForCircles(tabHomeData.circles);
 
@@ -213,6 +214,7 @@ export function AppTabsNavigator({
               <TapInRingMark
                 centerTreatment="state"
                 innerSize={46}
+                interactionKey={tabPulseInteractionKey}
                 outerSize={78}
                 state={tabPulseRingState}
                 style={styles.tapInOffset}
@@ -240,6 +242,7 @@ export function AppTabsNavigator({
         listeners={() => ({
           tabPress: event => {
             event.preventDefault();
+            setTabPulseInteractionKey(current => current + 1);
 
             if (status === 'authenticatedReady') {
               rootNavigation.navigate('TapInPicker');

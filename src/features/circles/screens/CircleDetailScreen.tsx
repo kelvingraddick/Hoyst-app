@@ -42,15 +42,11 @@ import {
 } from '../../../design/components/CircleCategoryIcon';
 import {LayeredAvatar} from '../../../design/components/LayeredAvatar';
 import {SectionHeader} from '../../../design/components/SectionHeader';
-import {TapInRingMark} from '../../../design/components/TapInRingMark';
-import {
-  getPulseRingStateForCircle,
-  type PulseRingState,
-} from '../../../design/components/pulse-ring-state';
+import {TapInPulseButton} from '../../../design/components/TapInPulseButton';
+import {getPulseRingStateForCircle} from '../../../design/components/pulse-ring-state';
 import {actionMotion} from '../../../design/tokens/actions';
 import {radius} from '../../../design/tokens/radius';
 import {useHoystTheme} from '../../../design/theme/useHoystTheme';
-import {triggerTapInPressHaptic} from '../../../lib/haptics/tap-in-haptics';
 import {useProtectedAction} from '../../auth/hooks/useProtectedAction';
 import {useUserProfileStore} from '../../../store/profile-store';
 import {useSessionStore} from '../../../store/session-store';
@@ -451,52 +447,17 @@ function TapInReferenceAction({
 }: {
   label: string;
   onPress: () => void;
-  ringState: PulseRingState;
+  ringState: React.ComponentProps<typeof TapInPulseButton>['ringState'];
   supportingText: string;
 }) {
-  const theme = useHoystTheme();
-  const [isPressed, setIsPressed] = useState(false);
-
   return (
-    <Pressable
-      accessibilityRole="button"
-      onPressIn={() => {
-        setIsPressed(true);
-        triggerTapInPressHaptic();
-      }}
-      onPress={onPress}
-      onPressOut={() => setIsPressed(false)}
-      style={({pressed}) => [
-        styles.tapInReferenceAction,
-        {
-          backgroundColor: theme.surfaceStrong,
-          borderColor: pressed
-            ? theme.successForeground
-            : `${theme.successForeground}66`,
-          opacity: pressed ? actionMotion.pressedOpacity : 1,
-          shadowColor: theme.shadow,
-          transform: [{scale: pressed ? actionMotion.pressedScale : 1}],
-        },
-      ]}>
-      <View style={styles.tapInReferenceContent}>
-        <TapInRingMark
-          animated
-          centerTreatment="state"
-          innerSize={42}
-          isPressed={isPressed}
-          outerSize={72}
-          showTrail
-          state={ringState}
-          style={styles.tapInReferenceRing}
-        />
-        <View style={styles.tapInReferenceCopy}>
-          <HoystText style={styles.tapInReferenceTitle}>{label}</HoystText>
-          <HoystText numberOfLines={1} tone="muted" variant="caption">
-            {supportingText}
-          </HoystText>
-        </View>
-      </View>
-    </Pressable>
+    <TapInPulseButton
+      label={label}
+      onPress={() => onPress()}
+      ringState={ringState}
+      supportingText={supportingText}
+      variant="reference"
+    />
   );
 }
 

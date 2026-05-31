@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.notificationModules = exports.markInboxEventsRead = exports.markInboxEventRead = exports.updateNotificationSettings = exports.sendRoutineEngagementNotifications = exports.sendFinalTapInWarnings = exports.sendMiddayTapInReminders = exports.oneSignalAppId = exports.oneSignalRestApiKey = void 0;
 exports.getJoinRequestNotificationDedupeKey = getJoinRequestNotificationDedupeKey;
+exports.getNudgeNotificationDedupeKey = getNudgeNotificationDedupeKey;
 exports.getNotificationCopyVariantIndex = getNotificationCopyVariantIndex;
 exports.resolveNotificationCopy = resolveNotificationCopy;
 exports.getRoutineNotificationEligibility = getRoutineNotificationEligibility;
@@ -39,6 +40,12 @@ function getJoinRequestNotificationDedupeKey({ circleId, requesterId, requestTok
         ? requestToken.trim()
         : 'current';
     return `join_request_${circleId}_${safeRequesterId}_${safeRequestToken}`;
+}
+function getNudgeNotificationDedupeKey({ actorUid, circleId, dateKey, targetUid, }) {
+    const safeActorUid = typeof actorUid === 'string' && actorUid.trim().length > 0
+        ? actorUid.trim()
+        : 'unknown';
+    return `nudge_${circleId}_${dateKey}_${safeActorUid}_${targetUid}`;
 }
 const notificationSettingsSchema = zod_1.z.object({
     circleActivity: zod_1.z.boolean().optional(),
@@ -575,11 +582,6 @@ function isPreferenceEnabled(notificationSettings, key) {
 function getNotificationPreferenceEnabled(notificationSettings, key) {
     return isPreferenceEnabled(notificationSettings, key);
 }
-async function isUserPreferenceEnabled(uid, key) {
-    const snapshot = await firebase_1.db.collection('userPrivate').doc(uid).get();
-    const data = snapshot.data();
-    return isPreferenceEnabled(data?.notificationSettings, key);
-}
 function buildOneSignalPushPayload({ appId, body, circleId, eventId, pushData, title, type, uid, }) {
     return {
         app_id: appId,
@@ -843,7 +845,12 @@ async function notifyJoinRequestReview({ approved, circleId, circleTitle, owner,
 async function notifyNudge({ actor, circleId, circleTitle, dateKey, targetUid, }) {
     const notificationActor = buildActor(actor);
     const actorName = notificationActor?.displayName ?? 'Someone';
-    const dedupeKey = `nudge_${circleId}_${dateKey}_${targetUid}`;
+    const dedupeKey = getNudgeNotificationDedupeKey({
+        actorUid: notificationActor?.uid,
+        circleId,
+        dateKey,
+        targetUid,
+    });
     const copy = resolveNotificationCopy({
         context: { actorName, circleTitle },
         dedupeKey,

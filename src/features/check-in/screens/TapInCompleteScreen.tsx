@@ -353,13 +353,19 @@ export function TapInCompleteScreen({
   const loadingCopy = hasCompletionContent
     ? 'Getting the screen ready.'
     : 'Loading your circle.';
-  const sparkleColors = [
-    theme.success,
-    theme.warning,
-    theme.accentSecondary,
-    theme.accentTertiary,
-    theme.accentWarmSoft,
-  ];
+  const sparkleColors = isSkip
+    ? [
+        theme.warning,
+        theme.accentWarmSoft,
+        theme.accentSecondary,
+        theme.accentTertiary,
+      ]
+    : [
+        theme.success,
+        theme.accentSecondary,
+        theme.accentTertiary,
+        theme.accent,
+      ];
   const haloAnimatedStyle = {
     opacity: haloProgress.interpolate({
       inputRange: [0, 0.18, 0.6, 1],

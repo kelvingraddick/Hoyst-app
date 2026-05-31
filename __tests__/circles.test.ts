@@ -20,6 +20,7 @@ import {
   createInitialStarterCircleDraft,
   getStarterCircleCategory,
 } from '../src/features/auth/services/onboarding-circle';
+import {getNudgeTargetUids} from '../functions/src/circles/nudge-targets';
 import type {ExploreCircle} from '../src/types/models';
 
 function publicCircle(overrides: Partial<ExploreCircle>): ExploreCircle {
@@ -191,6 +192,48 @@ describe('Circles screen selectors', () => {
       circles[1],
     ]);
     expect(filterPublicCircles(circles, 'Fitness', 'maker')).toEqual([]);
+  });
+});
+
+describe('circle nudge targeting', () => {
+  it('falls back to member document ids for legacy member docs', () => {
+    expect(
+      getNudgeTargetUids({
+        coveredCounts: new Map(),
+        members: [
+          {
+            data: {displayName: 'Kelvin North', status: 'active'},
+            id: 'kelvin-uid',
+          },
+          {
+            data: {displayName: 'Phil Stone', status: 'active'},
+            id: 'phil-uid',
+          },
+        ],
+        requiredTapIns: 1,
+        todayCoveredUids: new Set(),
+        viewerUid: 'phil-uid',
+      }),
+    ).toEqual(['kelvin-uid']);
+  });
+
+  it('skips members already covered today or complete for the period', () => {
+    expect(
+      getNudgeTargetUids({
+        coveredCounts: new Map([
+          ['kelvin-uid', 1],
+          ['ava-uid', 0],
+        ]),
+        members: [
+          {data: {uid: 'kelvin-uid'}, id: 'kelvin-uid'},
+          {data: {uid: 'ava-uid'}, id: 'ava-uid'},
+          {data: {uid: 'phil-uid'}, id: 'phil-uid'},
+        ],
+        requiredTapIns: 1,
+        todayCoveredUids: new Set(['ava-uid']),
+        viewerUid: 'phil-uid',
+      }),
+    ).toEqual([]);
   });
 });
 

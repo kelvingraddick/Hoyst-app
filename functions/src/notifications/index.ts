@@ -90,6 +90,25 @@ export function getJoinRequestNotificationDedupeKey({
   return `join_request_${circleId}_${safeRequesterId}_${safeRequestToken}`;
 }
 
+export function getNudgeNotificationDedupeKey({
+  actorUid,
+  circleId,
+  dateKey,
+  targetUid,
+}: {
+  actorUid?: string | null;
+  circleId: string;
+  dateKey: string;
+  targetUid: string;
+}) {
+  const safeActorUid =
+    typeof actorUid === 'string' && actorUid.trim().length > 0
+      ? actorUid.trim()
+      : 'unknown';
+
+  return `nudge_${circleId}_${dateKey}_${safeActorUid}_${targetUid}`;
+}
+
 export type NotificationSendResult = {
   created: boolean;
   eventId: string;
@@ -815,18 +834,6 @@ export function getNotificationPreferenceEnabled(
   return isPreferenceEnabled(notificationSettings, key);
 }
 
-async function isUserPreferenceEnabled(
-  uid: string,
-  key: NotificationPreferenceKey,
-) {
-  const snapshot = await db.collection('userPrivate').doc(uid).get();
-  const data = snapshot.data();
-  return isPreferenceEnabled(
-    data?.notificationSettings as Record<string, unknown> | undefined,
-    key,
-  );
-}
-
 export function buildOneSignalPushPayload({
   appId,
   body,
@@ -1254,7 +1261,12 @@ export async function notifyNudge({
 }) {
   const notificationActor = buildActor(actor);
   const actorName = notificationActor?.displayName ?? 'Someone';
-  const dedupeKey = `nudge_${circleId}_${dateKey}_${targetUid}`;
+  const dedupeKey = getNudgeNotificationDedupeKey({
+    actorUid: notificationActor?.uid,
+    circleId,
+    dateKey,
+    targetUid,
+  });
   const copy = resolveNotificationCopy({
     context: {actorName, circleTitle},
     dedupeKey,

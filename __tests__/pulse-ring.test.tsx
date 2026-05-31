@@ -1,14 +1,16 @@
 import React from 'react';
+import {Image, StyleSheet} from 'react-native';
 import renderer, {act} from 'react-test-renderer';
-import {Circle, Path, Stop} from 'react-native-svg';
+import {Path} from 'react-native-svg';
 
+import {getBrandRing} from '../src/design/brand/usage';
 import {PulseRing} from '../src/design/components/PulseRing';
-import {getHoystThemeColors} from '../src/design/tokens/colors';
 import {
   getPulseRingStateForCircle,
   getPulseRingStateForCircles,
   type PulseRingState,
 } from '../src/design/components/pulse-ring-state';
+import {brandColors} from '../src/design/tokens/colors';
 import type {CircleManagementCard} from '../src/types/models';
 
 jest.mock('../src/store/settings-store', () => ({
@@ -46,269 +48,109 @@ function circle(
   };
 }
 
-function getRenderedAngle({
-  center,
-  x,
-  y,
-}: {
-  center: number;
-  x: number;
-  y: number;
-}) {
-  return (Math.atan2(y - center, x - center) * 180) / Math.PI + 90;
-}
-
-function getClockwiseSweep(startAngle: number, endAngle: number) {
-  return (endAngle - startAngle + 360) % 360;
-}
-
-function getOuterArcSweep(path: string) {
-  const arcMatch = path.match(
-    /M ([\d.-]+) ([\d.-]+) A [\d.-]+ [\d.-]+ 0 [01] 1 ([\d.-]+) ([\d.-]+)/,
-  );
-
-  if (!arcMatch) {
-    throw new Error(`Could not parse outer arc from path: ${path}`);
-  }
-
-  const [, startX, startY, endX, endY] = arcMatch.map(Number);
-  const center = (72 + Math.max(18, 72 * 0.28)) / 2;
-  const startAngle = getRenderedAngle({center, x: startX, y: startY});
-  const endAngle = getRenderedAngle({center, x: endX, y: endY});
-
-  return getClockwiseSweep(startAngle, endAngle);
-}
-
-function getCenterGlyphNodes(tree: renderer.ReactTestRenderer) {
-  return tree.root.findAll(node =>
-    String(node.props.testID ?? '').startsWith('pulse-ring-center-glyph-'),
-  );
+function flattenStyle(node: renderer.ReactTestInstance) {
+  return StyleSheet.flatten(node.props.style);
 }
 
 describe('PulseRing', () => {
-  it('renders the main ring as cascading spectrum ribbons', () => {
+  it('renders the exact brand ring asset as the core ring', () => {
     let tree: renderer.ReactTestRenderer | undefined;
 
     act(() => {
       tree = renderer.create(<PulseRing animated={false} state="idle" />);
     });
 
-    const ribbons = tree!.root
-      .findAllByType(Path)
-      .filter(path =>
-        String(path.props.testID).startsWith('pulse-ring-ribbon-'),
-      );
-    const underlays = tree!.root
-      .findAllByType(Path)
-      .filter(path =>
-        String(path.props.testID).startsWith('pulse-ring-underlay-'),
-      );
-    const caps = tree!.root
-      .findAllByType(Path)
-      .filter(path => String(path.props.testID).startsWith('pulse-ring-cap-'));
-    const ribbonStops = tree!.root
-      .findAllByType(Stop)
-      .map(stop => stop.props.stopColor);
-    const allStrokedShapes = [
-      ...tree!.root.findAllByType(Path),
-      ...tree!.root.findAllByType(Circle),
-    ];
-    const centerFill = tree!.root.findByProps({
-      testID: 'pulse-ring-center-fill',
+    const baseDisk = tree!.root.findByProps({
+      testID: 'pulse-ring-base',
     });
-    const centerTint = tree!.root.findByProps({
-      testID: 'pulse-ring-center-tint',
-    });
-    const innerGlow = tree!.root.findByProps({
-      testID: 'pulse-ring-inner-glow',
+    const brandImage = tree!.root.findByProps({
+      testID: 'pulse-ring-brand-image',
     });
 
-    expect(ribbons.map(ribbon => ribbon.props.testID)).toEqual([
-      'pulse-ring-ribbon-green',
-      'pulse-ring-ribbon-blue',
-      'pulse-ring-ribbon-purple',
-      'pulse-ring-ribbon-pink',
-      'pulse-ring-ribbon-orange',
-      'pulse-ring-ribbon-yellow',
-    ]);
-    expect(underlays.map(underlay => underlay.props.testID)).toEqual([
-      'pulse-ring-underlay-green',
-      'pulse-ring-underlay-blue',
-      'pulse-ring-underlay-purple',
-      'pulse-ring-underlay-pink',
-      'pulse-ring-underlay-orange',
-      'pulse-ring-underlay-yellow',
-    ]);
-    expect(caps.map(cap => cap.props.testID)).toEqual([
-      'pulse-ring-cap-green',
-      'pulse-ring-cap-blue',
-      'pulse-ring-cap-purple',
-      'pulse-ring-cap-pink',
-      'pulse-ring-cap-orange',
-      'pulse-ring-cap-yellow',
-    ]);
-    expect(ribbons.map(ribbon => ribbon.props.fill)).toEqual([
-      expect.stringContaining('pulseRingRibbongreen'),
-      expect.stringContaining('pulseRingRibbonblue'),
-      expect.stringContaining('pulseRingRibbonpurple'),
-      expect.stringContaining('pulseRingRibbonpink'),
-      expect.stringContaining('pulseRingRibbonorange'),
-      expect.stringContaining('pulseRingRibbonyellow'),
-    ]);
-    expect(underlays.map(underlay => underlay.props.fill)).toEqual([
-      expect.stringContaining('pulseRingRibbongreen'),
-      expect.stringContaining('pulseRingRibbonblue'),
-      expect.stringContaining('pulseRingRibbonpurple'),
-      expect.stringContaining('pulseRingRibbonpink'),
-      expect.stringContaining('pulseRingRibbonorange'),
-      expect.stringContaining('pulseRingRibbonyellow'),
-    ]);
-    expect(caps.map(cap => cap.props.fill)).toEqual([
-      expect.stringContaining('pulseRingRibbongreen'),
-      expect.stringContaining('pulseRingRibbonblue'),
-      expect.stringContaining('pulseRingRibbonpurple'),
-      expect.stringContaining('pulseRingRibbonpink'),
-      expect.stringContaining('pulseRingRibbonorange'),
-      expect.stringContaining('pulseRingRibbonyellow'),
-    ]);
-    expect(ribbons.map(ribbon => ribbon.props.stroke)).toEqual([
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-    ]);
-    ribbons.forEach(ribbon => {
-      expect(ribbon.props.d).toContain(' A ');
-      expect(ribbon.props.d).toContain(' C ');
-      expect(ribbon.props.d.match(/ C /g) ?? []).toHaveLength(3);
-      expect(ribbon.props.d.match(/ A /g) ?? []).toHaveLength(1);
-      expect(ribbon.props.d).not.toContain(' L ');
-    });
-    const ribbonSweeps = ribbons.map(ribbon =>
-      getOuterArcSweep(ribbon.props.d),
+    expect(flattenStyle(baseDisk)).toEqual(
+      expect.objectContaining({
+        backgroundColor: '#FFFFFF',
+        borderColor: 'rgba(16, 24, 40, 0.06)',
+        borderRadius: 36,
+        borderWidth: 1,
+        height: 72,
+        shadowOffset: {height: 4, width: 0},
+        shadowOpacity: 0.13,
+        shadowRadius: 12,
+        width: 72,
+      }),
     );
-    const firstRibbonSweep = ribbonSweeps[0];
-
-    expect(firstRibbonSweep).toBeGreaterThan(60);
-    ribbonSweeps.forEach(sweep => {
-      expect(sweep).toBeCloseTo(firstRibbonSweep, 4);
+    expect(brandImage.type).toBe(Image);
+    expect(brandImage.props.source).toEqual(getBrandRing());
+    expect(brandImage.props.resizeMode).toBe('contain');
+    expect(StyleSheet.flatten(brandImage.props.style)).toEqual({
+      height: 56,
+      width: 56,
     });
-    underlays.forEach(underlay => {
-      expect(underlay.props.stroke).toBeUndefined();
-      expect(getOuterArcSweep(underlay.props.d)).toBeGreaterThan(60);
-    });
-    const capSweeps = caps.map(cap => getOuterArcSweep(cap.props.d));
-    const firstCapSweep = capSweeps[0];
-
-    expect(firstCapSweep).toBeGreaterThan(40);
-    capSweeps.forEach(sweep => {
-      expect(sweep).toBeCloseTo(firstCapSweep, 4);
-    });
-    expect(centerFill.props.fill).toBe(
-      getHoystThemeColors('light').surfaceMuted,
-    );
-    expect(centerFill.props.opacity).toBeUndefined();
-    expect(centerTint.props.fill).toBe(getHoystThemeColors('light').textMuted);
-    expect(centerTint.props.opacity).toBe(0.2);
-    expect(innerGlow.props.fill).toBe('none');
-    expect(innerGlow.props.opacity).toBe(0.78);
-    expect(innerGlow.props.stroke).toEqual(
-      expect.stringContaining('pulseInnerGlowGradient'),
-    );
-    expect(ribbonStops).toEqual(
-      expect.arrayContaining([
-        '#00C853',
-        '#FFC400',
-        '#FF6D00',
-        '#FF1EA8',
-        '#5A1CFF',
-        '#18B9FF',
-      ]),
-    );
     expect(
-      allStrokedShapes.some(shape =>
-        `${shape.props.fill ?? ''}${shape.props.stroke ?? ''}`.includes(
-          'pulseRingGradient',
-        ),
+      tree!.root.findAll(node =>
+        String(node.props.testID ?? '').startsWith('pulse-ring-spectrum-'),
       ),
-    ).toBe(false);
-    expect(getCenterGlyphNodes(tree!)).toHaveLength(0);
+    ).toHaveLength(0);
+    expect(
+      tree!.root.findAllByProps({testID: 'pulse-ring-center-fill'}),
+    ).toHaveLength(0);
+    expect(
+      tree!.root.findAllByProps({testID: 'pulse-ring-center-tint'}),
+    ).toHaveLength(0);
   });
 
-  it('renders a solid center mask with state tint by default', () => {
-    const theme = getHoystThemeColors('light');
-    let tree: renderer.ReactTestRenderer | undefined;
-
-    act(() => {
-      tree = renderer.create(<PulseRing animated={false} state="active" />);
-    });
-
-    const centerFill = tree!.root.findByProps({
-      testID: 'pulse-ring-center-fill',
-    });
-    const centerTint = tree!.root.findByProps({
-      testID: 'pulse-ring-center-tint',
-    });
-
-    expect(centerFill.props.fill).toBe(theme.surfaceMuted);
-    expect(centerFill.props.opacity).toBeUndefined();
-    expect(centerTint.props.fill).toBe(theme.success);
-    expect(centerTint.props.opacity).toBe(0.24);
-    expect(getCenterGlyphNodes(tree!)).toHaveLength(0);
-  });
-
-  it('renders subtle contextual center tints without center glyphs', () => {
-    const theme = getHoystThemeColors('light');
+  it('renders status colors only as subtle external glow', () => {
     const expectedStates: {
-      backplateColor: string;
-      backplateOpacity: number;
+      glowColor: string;
+      pulseColor: string;
       state: PulseRingState;
     }[] = [
       {
-        backplateColor: theme.textMuted,
-        backplateOpacity: 0.2,
+        glowColor: 'rgba(15, 23, 42, 0.08)',
+        pulseColor: brandColors.graySoft,
         state: 'idle',
       },
       {
-        backplateColor: theme.success,
-        backplateOpacity: 0.24,
+        glowColor: 'rgba(16, 185, 103, 0.18)',
+        pulseColor: brandColors.spectrumGreen,
         state: 'active',
       },
       {
-        backplateColor: theme.warning,
-        backplateOpacity: 0.24,
+        glowColor: 'rgba(255, 109, 0, 0.2)',
+        pulseColor: brandColors.orangeStrong,
         state: 'atRisk',
       },
       {
-        backplateColor: theme.accent,
-        backplateOpacity: 0.24,
+        glowColor: 'rgba(255, 30, 168, 0.18)',
+        pulseColor: '#FF1EA8',
         state: 'streak',
       },
     ];
 
-    expectedStates.forEach(({backplateColor, backplateOpacity, state}) => {
+    expectedStates.forEach(({glowColor, pulseColor, state}) => {
       let tree: renderer.ReactTestRenderer | undefined;
 
       act(() => {
-        tree = renderer.create(
-          <PulseRing animated={false} centerTreatment="state" state={state} />,
-        );
+        tree = renderer.create(<PulseRing animated={false} state={state} />);
       });
 
-      const centerFill = tree!.root.findByProps({
-        testID: 'pulse-ring-center-fill',
+      const statusGlow = tree!.root.findByProps({
+        testID: 'pulse-ring-status-glow',
       });
-      const centerTint = tree!.root.findByProps({
-        testID: 'pulse-ring-center-tint',
-      });
+      const ripple = tree!.root.findByProps({testID: 'pulse-ring-ripple'});
 
-      expect(centerFill.props.fill).toBe(theme.surfaceMuted);
-      expect(centerFill.props.opacity).toBeUndefined();
-      expect(centerTint.props.fill).toBe(backplateColor);
-      expect(centerTint.props.opacity).toBe(backplateOpacity);
-      expect(getCenterGlyphNodes(tree!)).toHaveLength(0);
+      expect(flattenStyle(statusGlow).backgroundColor).toBe(glowColor);
+      expect(flattenStyle(ripple).borderColor).toBe(pulseColor);
+      expect(
+        tree!.root.findAllByProps({testID: 'pulse-ring-bottom-glow'}),
+      ).toHaveLength(0);
+      expect(
+        tree!.root.findAllByProps({testID: 'pulse-ring-center-tint'}),
+      ).toHaveLength(0);
+      expect(
+        tree!.root.findByProps({testID: 'pulse-ring-brand-image'}).props.source,
+      ).toEqual(getBrandRing());
     });
   });
 
@@ -327,19 +169,36 @@ describe('PulseRing', () => {
       );
     });
 
-    const idleTrails = idleTree!.root
-      .findAllByType(Path)
-      .filter(path => String(path.props.stroke).includes('pulseTrailGradient'));
-    const streakTrails = streakTree!.root
-      .findAllByType(Path)
-      .filter(path => String(path.props.stroke).includes('pulseTrailGradient'));
-    const disabledTrails = streakWithoutTrailTree!.root
-      .findAllByType(Path)
-      .filter(path => String(path.props.stroke).includes('pulseTrailGradient'));
-
-    expect(idleTrails).toHaveLength(0);
-    expect(streakTrails).toHaveLength(1);
-    expect(disabledTrails).toHaveLength(0);
+    expect(
+      idleTree!.root
+        .findAllByType(Path)
+        .filter(path => path.props.testID === 'pulse-ring-trail-path'),
+    ).toHaveLength(0);
+    expect(
+      streakTree!.root
+        .findAllByType(Path)
+        .filter(path => path.props.testID === 'pulse-ring-trail-path'),
+    ).toHaveLength(1);
+    expect(streakTree!.root.findAllByType(Path)).toHaveLength(1);
+    expect(
+      streakTree!.root.findAll(
+        node =>
+          node.props.fill === brandColors.orangeStrong ||
+          node.props.stopColor === brandColors.orangeStrong,
+      ),
+    ).toHaveLength(0);
+    expect(
+      streakTree!.root.findAll(
+        node =>
+          node.props.fill === brandColors.purpleBright ||
+          node.props.stopColor === brandColors.purpleBright,
+      ).length,
+    ).toBeGreaterThan(0);
+    expect(
+      streakWithoutTrailTree!.root
+        .findAllByType(Path)
+        .filter(path => path.props.testID === 'pulse-ring-trail-path'),
+    ).toHaveLength(0);
   });
 
   it('maps circle data to model-driven ring states', () => {

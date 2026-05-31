@@ -71,28 +71,28 @@ export function CirclesTabIcon({
     <Svg fill="none" height={size} viewBox="0 0 24 24" width={size} {...props}>
       <Circle
         cx={12}
-        cy={8.55}
+        cy={8.35}
         fill={isFilled ? fill : 'none'}
         fillOpacity={isFilled ? selectedFillOpacity : 1}
-        r={4.15}
+        r={4.85}
         stroke={color}
         strokeWidth={strokeWidth}
       />
       <Circle
-        cx={8.65}
-        cy={14.4}
+        cx={8.55}
+        cy={14.25}
         fill={isFilled ? fill : 'none'}
         fillOpacity={isFilled ? selectedFillOpacity : 1}
-        r={4.15}
+        r={4.85}
         stroke={color}
         strokeWidth={strokeWidth}
       />
       <Circle
-        cx={15.35}
-        cy={14.4}
+        cx={15.45}
+        cy={14.25}
         fill={isFilled ? fill : 'none'}
         fillOpacity={isFilled ? selectedFillOpacity : 1}
-        r={4.15}
+        r={4.85}
         stroke={color}
         strokeWidth={strokeWidth}
       />

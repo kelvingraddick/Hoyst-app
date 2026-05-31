@@ -3,14 +3,17 @@ import {Pressable, View} from 'react-native';
 import renderer, {act} from 'react-test-renderer';
 
 import {HoystChip} from '../src/design/components/HoystChip';
+import {HoystText} from '../src/design/components/HoystText';
 import {InboxScreen} from '../src/features/inbox/screens/InboxScreen';
 import {
+  markAllInboxEventsRead,
   markInboxEventRead,
   subscribeToInboxEvents,
 } from '../src/features/settings/services/notification-settings-service';
 import type {InboxEvent, InboxEventType} from '../src/types/models';
 
 let mockInboxEvents: InboxEvent[];
+let emitInboxEvents: ((events: InboxEvent[]) => void) | undefined;
 
 jest.mock('@react-native-community/blur', () => {
   const MockReact = require('react');
@@ -67,6 +70,7 @@ jest.mock(
     markAllInboxEventsRead: jest.fn(() => Promise.resolve({read: 1})),
     markInboxEventRead: jest.fn(() => Promise.resolve({read: true})),
     subscribeToInboxEvents: jest.fn(({onEvents}) => {
+      emitInboxEvents = onEvents;
       onEvents(mockInboxEvents);
       return jest.fn();
     }),
@@ -137,6 +141,7 @@ function renderInbox() {
 describe('InboxScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    emitInboxEvents = undefined;
     mockInboxEvents = [];
   });
 
@@ -166,6 +171,105 @@ describe('InboxScreen', () => {
     expect(output).not.toContain('Clark Digital Clark Digital');
   });
 
+  it('shows unread rows with a status-colored dot and stronger text', () => {
+    mockInboxEvents = [
+      inboxEvent({
+        id: 'at-risk-unread',
+        isRead: false,
+        type: 'circle_at_risk',
+      }),
+    ];
+
+    const {tree} = renderInbox();
+    const unreadDots = tree.root.findAll(
+      node => node.props.testID === 'inbox-unread-dot',
+    );
+    const message = tree.root
+      .findAllByType(HoystText)
+      .find(node => node.props.children === 'Workout Circle needs an update.');
+    const timestamp = tree.root
+      .findAllByType(HoystText)
+      .find(node => node.props.children === '11h ago');
+
+    expect(unreadDots.length).toBeGreaterThan(0);
+    expect(
+      unreadDots.some(dot =>
+        JSON.stringify(dot.props.style).includes('#A83A00'),
+      ),
+    ).toBe(true);
+    expect(message?.props.style).toEqual(
+      expect.arrayContaining([expect.objectContaining({fontWeight: '700'})]),
+    );
+    expect(timestamp?.props.style).toEqual(
+      expect.arrayContaining([expect.objectContaining({fontWeight: '700'})]),
+    );
+    expect(markAllInboxEventsRead).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not render an unread marker for read rows', () => {
+    mockInboxEvents = [
+      inboxEvent({
+        id: 'already-read',
+        isRead: true,
+      }),
+    ];
+
+    const {tree} = renderInbox();
+    const unreadDots = tree.root.findAll(
+      node => node.props.testID === 'inbox-unread-dot',
+    );
+
+    expect(unreadDots).toHaveLength(0);
+  });
+
+  it('keeps a row visually unread for the current Inbox visit', () => {
+    const unreadEvent = inboxEvent({
+      id: 'current-visit-unread',
+      isRead: false,
+    });
+    mockInboxEvents = [unreadEvent];
+
+    const {tree} = renderInbox();
+
+    expect(
+      tree.root.findAll(node => node.props.testID === 'inbox-unread-dot'),
+    ).not.toHaveLength(0);
+
+    act(() => {
+      emitInboxEvents?.([{...unreadEvent, isRead: true}]);
+    });
+
+    expect(
+      tree.root.findAll(node => node.props.testID === 'inbox-unread-dot'),
+    ).not.toHaveLength(0);
+  });
+
+  it('marks new unread rows that arrive while the Inbox is open', () => {
+    const readEvent = inboxEvent({
+      id: 'already-visible',
+      isRead: true,
+    });
+    const incomingUnreadEvent = inboxEvent({
+      id: 'incoming-unread',
+      isRead: false,
+      title: 'Fresh reminder',
+    });
+    mockInboxEvents = [readEvent];
+
+    const {tree} = renderInbox();
+
+    expect(markAllInboxEventsRead).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      emitInboxEvents?.([readEvent, incomingUnreadEvent]);
+    });
+
+    expect(markAllInboxEventsRead).toHaveBeenCalledTimes(2);
+    expect(
+      tree.root.findAll(node => node.props.testID === 'inbox-unread-dot'),
+    ).not.toHaveLength(0);
+  });
+
   it('marks an event read and follows Tap In reminder deeplinks', () => {
     mockInboxEvents = [
       inboxEvent({
@@ -184,7 +288,9 @@ describe('InboxScreen', () => {
     const reminderButton = tree.root
       .findAllByType(Pressable)
       .find(
-        node => node.props.accessibilityLabel === 'Open Tap In reminder update',
+        node =>
+          node.props.accessibilityLabel ===
+          'Unread, open Tap In reminder update',
       );
 
     expect(subscribeToInboxEvents).toHaveBeenCalledWith(

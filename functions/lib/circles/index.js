@@ -10,6 +10,7 @@ const zod_1 = require("zod");
 const firebase_1 = require("../firebase");
 const notifications_1 = require("../notifications");
 const commitments_1 = require("../shared/commitments");
+const nudge_targets_1 = require("./nudge-targets");
 const graceRuleSchema = zod_1.z.object({
     allowance: zod_1.z.number().int().min(0).max(30),
     windowDays: zod_1.z.number().int().min(1).max(365),
@@ -582,16 +583,17 @@ exports.nudgeCircleMembers = (0, https_1.onCall)({ secrets: [notifications_1.one
             }
         });
     });
-    const targets = activeMemberSnapshots.docs
-        .map(snapshot => snapshot.data())
-        .filter(memberData => {
-        const targetUid = asOptionalString(memberData.uid);
-        return Boolean(targetUid &&
-            targetUid !== uid &&
-            !todayCoveredUids.has(targetUid) &&
-            (coveredCounts.get(targetUid) ?? 0) < requiredTapIns);
+    const targetUids = (0, nudge_targets_1.getNudgeTargetUids)({
+        coveredCounts,
+        members: activeMemberSnapshots.docs.map(snapshot => ({
+            data: snapshot.data(),
+            id: snapshot.id,
+        })),
+        requiredTapIns,
+        todayCoveredUids,
+        viewerUid: uid,
     });
-    await Promise.all(targets.map(memberData => (0, notifications_1.notifyNudge)({
+    await Promise.all(targetUids.map(targetUid => (0, notifications_1.notifyNudge)({
         actor: {
             avatarUrl: profile.avatarUrl ?? null,
             displayName: profile.displayName,
@@ -601,9 +603,9 @@ exports.nudgeCircleMembers = (0, https_1.onCall)({ secrets: [notifications_1.one
         circleId: input.circleId,
         circleTitle: asOptionalString(circle?.title) ?? 'your circle',
         dateKey,
-        targetUid: asOptionalString(memberData.uid) ?? '',
+        targetUid,
     })));
-    return { nudged: targets.length };
+    return { nudged: targetUids.length };
 });
 exports.leaveCircle = (0, https_1.onCall)(async (request) => {
     const { uid } = await requireCompletedProfile(request.auth?.uid);

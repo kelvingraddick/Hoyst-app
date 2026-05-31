@@ -24,6 +24,7 @@ import {
   getRequiredTapIns,
   getStoredCommitmentFrequency,
 } from '../shared/commitments';
+import {getNudgeTargetUids} from './nudge-targets';
 
 const graceRuleSchema = z.object({
   allowance: z.number().int().min(0).max(30),
@@ -795,20 +796,19 @@ export const nudgeCircleMembers = onCall(
         }
       });
     });
-    const targets = activeMemberSnapshots.docs
-      .map(snapshot => snapshot.data())
-      .filter(memberData => {
-        const targetUid = asOptionalString(memberData.uid);
-        return Boolean(
-          targetUid &&
-            targetUid !== uid &&
-            !todayCoveredUids.has(targetUid) &&
-            (coveredCounts.get(targetUid) ?? 0) < requiredTapIns,
-        );
-      });
+    const targetUids = getNudgeTargetUids({
+      coveredCounts,
+      members: activeMemberSnapshots.docs.map(snapshot => ({
+        data: snapshot.data(),
+        id: snapshot.id,
+      })),
+      requiredTapIns,
+      todayCoveredUids,
+      viewerUid: uid,
+    });
 
     await Promise.all(
-      targets.map(memberData =>
+      targetUids.map(targetUid =>
         notifyNudge({
           actor: {
             avatarUrl: profile.avatarUrl ?? null,
@@ -819,12 +819,12 @@ export const nudgeCircleMembers = onCall(
           circleId: input.circleId,
           circleTitle: asOptionalString(circle?.title) ?? 'your circle',
           dateKey,
-          targetUid: asOptionalString(memberData.uid) ?? '',
+          targetUid,
         }),
       ),
     );
 
-    return {nudged: targets.length};
+    return {nudged: targetUids.length};
   },
 );
 

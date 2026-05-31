@@ -8,6 +8,7 @@ type TapInRingMarkProps = {
   animated?: boolean;
   centerTreatment?: 'plain' | 'state';
   innerSize?: number;
+  interactionKey?: number;
   isPressed?: boolean;
   outerSize?: number;
   showTrail?: boolean;
@@ -20,6 +21,7 @@ export function TapInRingMark({
   animated,
   centerTreatment,
   innerSize = 45,
+  interactionKey,
   isPressed,
   outerSize = 81,
   showTrail,
@@ -36,6 +38,7 @@ export function TapInRingMark({
     <PulseRing
       animated={animated}
       centerTreatment={centerTreatment}
+      interactionKey={interactionKey}
       isPressed={isPressed}
       showTrail={showTrail}
       size={outerSize}

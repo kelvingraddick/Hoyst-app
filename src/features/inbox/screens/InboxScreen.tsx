@@ -1,4 +1,4 @@
-import React, {useCallback, useEffect, useState} from 'react';
+import React, {useCallback, useEffect, useRef, useState} from 'react';
 import {Pressable, StyleSheet, View} from 'react-native';
 import type {NativeStackScreenProps} from '@react-navigation/native-stack';
 import {useFocusEffect} from '@react-navigation/native';
@@ -171,11 +171,17 @@ function getEventMessage(event: InboxEvent) {
     : event.body;
 }
 
+function getUnreadEventIds(events: readonly InboxEvent[]) {
+  return events.filter(event => !event.isRead).map(event => event.id);
+}
+
 function InboxEventRow({
   event,
+  isUnread,
   onPress,
 }: {
   event: InboxEvent;
+  isUnread: boolean;
   onPress: () => void;
 }): React.JSX.Element {
   const theme = useHoystTheme();
@@ -185,7 +191,9 @@ function InboxEventRow({
 
   return (
     <Pressable
-      accessibilityLabel={`Open ${lead} update`}
+      accessibilityLabel={
+        isUnread ? `Unread, open ${lead} update` : `Open ${lead} update`
+      }
       accessibilityRole="button"
       onPress={onPress}
       style={({pressed}) => ({opacity: pressed ? 0.9 : 1})}>
@@ -198,14 +206,36 @@ function InboxEventRow({
             tone={visual.avatarTone}
             useBrandRing={visual.useBrandRing}
           />
+          <View style={styles.notificationUnreadSlot}>
+            {isUnread ? (
+              <View
+                style={[
+                  styles.notificationUnreadDot,
+                  {backgroundColor: visual.foregroundColor},
+                ]}
+                testID="inbox-unread-dot"
+              />
+            ) : null}
+          </View>
           <View style={styles.notificationCopy}>
             <HoystText>
               <HoystText style={styles.notificationLead}>{lead} </HoystText>
-              <HoystText style={{color: visual.foregroundColor}}>
+              <HoystText
+                style={[
+                  {color: visual.foregroundColor},
+                  isUnread ? styles.notificationMessageUnread : undefined,
+                ]}>
                 {message}
               </HoystText>
             </HoystText>
-            <HoystText tone="muted" variant="caption">
+            <HoystText
+              style={
+                isUnread
+                  ? [styles.notificationTimestampUnread, {color: theme.text}]
+                  : undefined
+              }
+              tone="muted"
+              variant="caption">
               {event.createdAtLabel}
             </HoystText>
           </View>
@@ -226,27 +256,103 @@ export function InboxScreen({navigation}: Props): React.JSX.Element {
   const status = useSessionStore(state => state.status);
   const [events, setEvents] = useState<InboxEvent[]>([]);
   const [hasInboxError, setHasInboxError] = useState(false);
+  const [currentVisitUnreadIds, setCurrentVisitUnreadIds] = useState<
+    ReadonlySet<string>
+  >(() => new Set());
+  const hasReceivedInboxSnapshotRef = useRef(false);
+  const hasMarkedInboxVisitReadRef = useRef(false);
+  const isInboxFocusedRef = useRef(false);
+  const latestEventsRef = useRef<InboxEvent[]>([]);
+  const markedUnreadIdsRef = useRef<Set<string>>(new Set());
+
+  const addCurrentVisitUnreadIds = useCallback(
+    (unreadIds: readonly string[]) => {
+      if (unreadIds.length === 0) {
+        return;
+      }
+
+      setCurrentVisitUnreadIds(currentIds => {
+        let nextIds: Set<string> | undefined;
+
+        unreadIds.forEach(id => {
+          if (!currentIds.has(id)) {
+            nextIds ??= new Set(currentIds);
+            nextIds.add(id);
+          }
+        });
+
+        return nextIds ?? currentIds;
+      });
+    },
+    [],
+  );
+
+  const markInboxReadForCurrentVisit = useCallback(
+    (unreadIds: readonly string[] = []) => {
+      const unmarkedUnreadIds = unreadIds.filter(
+        id => !markedUnreadIdsRef.current.has(id),
+      );
+
+      if (
+        hasMarkedInboxVisitReadRef.current &&
+        unmarkedUnreadIds.length === 0
+      ) {
+        return;
+      }
+
+      hasMarkedInboxVisitReadRef.current = true;
+      unmarkedUnreadIds.forEach(id => {
+        markedUnreadIdsRef.current.add(id);
+      });
+      markAllInboxEventsRead().catch(() => undefined);
+    },
+    [],
+  );
 
   useEffect(() => {
     if (status !== 'authenticatedReady' || !user?.uid) {
       setEvents([]);
       setHasInboxError(false);
+      setCurrentVisitUnreadIds(new Set());
+      hasReceivedInboxSnapshotRef.current = false;
+      hasMarkedInboxVisitReadRef.current = false;
+      isInboxFocusedRef.current = false;
+      latestEventsRef.current = [];
+      markedUnreadIdsRef.current.clear();
       return undefined;
     }
 
     setHasInboxError(false);
+    setCurrentVisitUnreadIds(new Set());
+    hasReceivedInboxSnapshotRef.current = false;
+    hasMarkedInboxVisitReadRef.current = false;
+    latestEventsRef.current = [];
+    markedUnreadIdsRef.current.clear();
 
     return subscribeToInboxEvents({
       onError: () => {
         setHasInboxError(true);
       },
       onEvents: nextEvents => {
+        const unreadIds = getUnreadEventIds(nextEvents);
+
+        hasReceivedInboxSnapshotRef.current = true;
+        latestEventsRef.current = nextEvents;
+        if (isInboxFocusedRef.current) {
+          addCurrentVisitUnreadIds(unreadIds);
+          markInboxReadForCurrentVisit(unreadIds);
+        }
         setEvents(nextEvents);
         setHasInboxError(false);
       },
       uid: user.uid,
     });
-  }, [status, user?.uid]);
+  }, [
+    addCurrentVisitUnreadIds,
+    markInboxReadForCurrentVisit,
+    status,
+    user?.uid,
+  ]);
 
   useFocusEffect(
     useCallback(() => {
@@ -254,11 +360,30 @@ export function InboxScreen({navigation}: Props): React.JSX.Element {
         return undefined;
       }
 
-      clearDeliveredNotifications().catch(() => undefined);
-      markAllInboxEventsRead().catch(() => undefined);
+      isInboxFocusedRef.current = true;
+      hasMarkedInboxVisitReadRef.current = false;
+      markedUnreadIdsRef.current.clear();
 
-      return undefined;
-    }, [status, user?.uid]),
+      const unreadIds = getUnreadEventIds(latestEventsRef.current);
+
+      addCurrentVisitUnreadIds(unreadIds);
+      clearDeliveredNotifications().catch(() => undefined);
+      if (hasReceivedInboxSnapshotRef.current) {
+        markInboxReadForCurrentVisit(unreadIds);
+      }
+
+      return () => {
+        isInboxFocusedRef.current = false;
+        hasMarkedInboxVisitReadRef.current = false;
+        markedUnreadIdsRef.current.clear();
+        setCurrentVisitUnreadIds(new Set());
+      };
+    }, [
+      addCurrentVisitUnreadIds,
+      markInboxReadForCurrentVisit,
+      status,
+      user?.uid,
+    ]),
   );
 
   const navigateBack = useCallback(() => {
@@ -323,6 +448,7 @@ export function InboxScreen({navigation}: Props): React.JSX.Element {
           {events.map(event => (
             <InboxEventRow
               event={event}
+              isUnread={currentVisitUnreadIds.has(event.id)}
               key={event.id}
               onPress={() => openEvent(event)}
             />
@@ -377,9 +503,25 @@ const styles = StyleSheet.create({
   notificationList: {
     gap: 10,
   },
+  notificationMessageUnread: {
+    fontWeight: '700',
+  },
   notificationRow: {
     alignItems: 'flex-start',
     flexDirection: 'row',
     gap: 10,
+  },
+  notificationTimestampUnread: {
+    fontWeight: '700',
+  },
+  notificationUnreadDot: {
+    borderRadius: 4,
+    height: 8,
+    width: 8,
+  },
+  notificationUnreadSlot: {
+    alignItems: 'center',
+    paddingTop: 13,
+    width: 8,
   },
 });
