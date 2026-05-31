@@ -102,7 +102,7 @@ function StrongMomentumIcon() {
 
 function PeakMomentumIcon() {
   return (
-    <G>
+    <G transform="translate(0 -10)">
       <Path
         d="M20 20 H44 V28 C44 40 39 47 32 47 C25 47 20 40 20 28 Z"
         fill={iconColor}

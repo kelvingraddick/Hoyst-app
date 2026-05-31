@@ -1,22 +1,20 @@
-import React, {useCallback, useEffect, useMemo, useState} from 'react';
+import React, {useCallback, useEffect, useState} from 'react';
 import {Pressable, StyleSheet, View} from 'react-native';
 import type {NativeStackScreenProps} from '@react-navigation/native-stack';
 import {useFocusEffect} from '@react-navigation/native';
 import {ArrowLeft} from 'lucide-react-native';
 
-import {ActivityFeedCard} from '../../../design/components/ActivityFeedCard';
 import {GlassPanel} from '../../../design/components/GlassPanel';
+import {HoystAvatar} from '../../../design/components/HoystAvatar';
+import {HoystChip} from '../../../design/components/HoystChip';
 import {HoystScreen} from '../../../design/components/HoystScreen';
 import {HoystText} from '../../../design/components/HoystText';
+import {brandColors} from '../../../design/tokens/colors';
 import {useHoystTheme} from '../../../design/theme/useHoystTheme';
 import {clearDeliveredNotifications} from '../../../lib/notifications';
 import type {RootStackParamList} from '../../../navigation/types';
 import {useSessionStore} from '../../../store/session-store';
-import type {
-  CircleActivityItem,
-  CircleActivityTone,
-  InboxEvent,
-} from '../../../types/models';
+import type {InboxEvent} from '../../../types/models';
 import {
   markAllInboxEventsRead,
   markInboxEventRead,
@@ -24,6 +22,14 @@ import {
 } from '../../settings/services/notification-settings-service';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Inbox'>;
+type HoystChipTone = React.ComponentProps<typeof HoystChip>['tone'];
+type HoystAvatarTone = React.ComponentProps<typeof HoystAvatar>['tone'];
+type InboxVisual = {
+  avatarTone: HoystAvatarTone;
+  chipTone: HoystChipTone;
+  foregroundColor: string;
+  useBrandRing?: boolean;
+};
 
 function getInitials(name: string) {
   return name
@@ -34,26 +40,82 @@ function getInitials(name: string) {
     .join('');
 }
 
-function getInboxTone(event: InboxEvent): CircleActivityTone {
-  if (
+function isSuccessEvent(event: InboxEvent) {
+  return (
     event.type === 'circle_complete' ||
     event.type === 'companion_tapped_in' ||
     event.type === 'join_approved' ||
     event.type === 'member_joined'
-  ) {
-    return 'success';
-  }
+  );
+}
 
+function isAlertEvent(event: InboxEvent) {
   if (
     event.type === 'circle_at_risk' ||
     event.type === 'member_due_prompt' ||
     event.type === 'tap_in_final_warning' ||
     event.type === 'join_declined'
   ) {
-    return 'alert';
+    return true;
   }
 
-  return 'pending';
+  return false;
+}
+
+function getInboxVisual(
+  event: InboxEvent,
+  theme: ReturnType<typeof useHoystTheme>,
+): InboxVisual {
+  if (isSuccessEvent(event)) {
+    return {
+      avatarTone: 'green',
+      chipTone: 'green',
+      foregroundColor: theme.successForeground,
+      useBrandRing: true,
+    };
+  }
+
+  if (isAlertEvent(event)) {
+    return {
+      avatarTone: 'muted',
+      chipTone: 'orange',
+      foregroundColor: theme.warningForeground,
+    };
+  }
+
+  if (event.type === 'tap_in_midday_reminder') {
+    return {
+      avatarTone: 'muted',
+      chipTone: 'yellow',
+      foregroundColor: theme.isDark ? brandColors.spectrumYellow : '#7A5C00',
+    };
+  }
+
+  if (event.type === 'circle_discovery_suggestion') {
+    return {
+      avatarTone: 'muted',
+      chipTone: 'blue',
+      foregroundColor: theme.accentTertiaryForeground,
+    };
+  }
+
+  if (
+    event.type === 'join_request' ||
+    event.type === 'nudge' ||
+    event.type === 'circle_nudge_prompt'
+  ) {
+    return {
+      avatarTone: 'purple',
+      chipTone: 'purple',
+      foregroundColor: theme.accentSecondaryForeground,
+    };
+  }
+
+  return {
+    avatarTone: 'muted',
+    chipTone: 'neutral',
+    foregroundColor: theme.textMuted,
+  };
 }
 
 function getActionLabel(event: InboxEvent) {
@@ -92,19 +154,70 @@ function getActionLabel(event: InboxEvent) {
     : 'Update';
 }
 
-function mapInboxEventToActivity(event: InboxEvent): CircleActivityItem {
-  const actorName = event.actor?.displayName ?? event.title;
+function getEventLead(event: InboxEvent) {
+  return event.actor?.displayName ?? event.title;
+}
 
-  return {
-    actorAvatarUrl: event.actor?.avatarUrl,
-    actorInitials: getInitials(actorName) || 'HO',
-    actorName,
-    actionLabel: getActionLabel(event),
-    id: event.id,
-    message: event.actor?.displayName ? event.body : event.body,
-    timestamp: event.createdAtLabel,
-    tone: getInboxTone(event),
-  };
+function getEventMessage(event: InboxEvent) {
+  const actorName = event.actor?.displayName?.trim();
+
+  if (!actorName) {
+    return event.body;
+  }
+
+  const duplicatedPrefix = `${actorName} `;
+  return event.body.startsWith(duplicatedPrefix)
+    ? event.body.slice(duplicatedPrefix.length)
+    : event.body;
+}
+
+function InboxEventRow({
+  event,
+  onPress,
+}: {
+  event: InboxEvent;
+  onPress: () => void;
+}): React.JSX.Element {
+  const theme = useHoystTheme();
+  const visual = getInboxVisual(event, theme);
+  const lead = getEventLead(event);
+  const message = getEventMessage(event);
+
+  return (
+    <Pressable
+      accessibilityLabel={`Open ${lead} update`}
+      accessibilityRole="button"
+      onPress={onPress}
+      style={({pressed}) => ({opacity: pressed ? 0.9 : 1})}>
+      <GlassPanel padding="compact">
+        <View style={styles.notificationRow}>
+          <HoystAvatar
+            initials={getInitials(lead) || 'HO'}
+            imageUrl={event.actor?.avatarUrl}
+            size={34}
+            tone={visual.avatarTone}
+            useBrandRing={visual.useBrandRing}
+          />
+          <View style={styles.notificationCopy}>
+            <HoystText>
+              <HoystText style={styles.notificationLead}>{lead} </HoystText>
+              <HoystText style={{color: visual.foregroundColor}}>
+                {message}
+              </HoystText>
+            </HoystText>
+            <HoystText tone="muted" variant="caption">
+              {event.createdAtLabel}
+            </HoystText>
+          </View>
+          <HoystChip
+            label={getActionLabel(event)}
+            style={styles.notificationChip}
+            tone={visual.chipTone}
+          />
+        </View>
+      </GlassPanel>
+    </Pressable>
+  );
 }
 
 export function InboxScreen({navigation}: Props): React.JSX.Element {
@@ -113,10 +226,6 @@ export function InboxScreen({navigation}: Props): React.JSX.Element {
   const status = useSessionStore(state => state.status);
   const [events, setEvents] = useState<InboxEvent[]>([]);
   const [hasInboxError, setHasInboxError] = useState(false);
-  const activityItems = useMemo(
-    () => events.map(mapInboxEventToActivity),
-    [events],
-  );
 
   useEffect(() => {
     if (status !== 'authenticatedReady' || !user?.uid) {
@@ -199,7 +308,7 @@ export function InboxScreen({navigation}: Props): React.JSX.Element {
         </Pressable>
         <HoystText variant="headline">Inbox</HoystText>
       </View>
-      {hasInboxError && activityItems.length === 0 ? (
+      {hasInboxError && events.length === 0 ? (
         <GlassPanel>
           <View style={styles.emptyState}>
             <HoystText variant="title">Could not load Inbox</HoystText>
@@ -209,15 +318,16 @@ export function InboxScreen({navigation}: Props): React.JSX.Element {
             </HoystText>
           </View>
         </GlassPanel>
-      ) : activityItems.length > 0 ? (
-        activityItems.map((item, index) => (
-          <Pressable
-            accessibilityRole="button"
-            key={item.id}
-            onPress={() => openEvent(events[index])}>
-            <ActivityFeedCard item={item} />
-          </Pressable>
-        ))
+      ) : events.length > 0 ? (
+        <View style={styles.notificationList}>
+          {events.map(event => (
+            <InboxEventRow
+              event={event}
+              key={event.id}
+              onPress={() => openEvent(event)}
+            />
+          ))}
+        </View>
       ) : (
         <GlassPanel>
           <View style={styles.emptyState}>
@@ -252,5 +362,24 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flexDirection: 'row',
     gap: 12,
+  },
+  notificationChip: {
+    marginLeft: 10,
+  },
+  notificationCopy: {
+    flex: 1,
+    gap: 4,
+    minWidth: 0,
+  },
+  notificationLead: {
+    fontWeight: '800',
+  },
+  notificationList: {
+    gap: 10,
+  },
+  notificationRow: {
+    alignItems: 'flex-start',
+    flexDirection: 'row',
+    gap: 10,
   },
 });

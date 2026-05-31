@@ -22,6 +22,7 @@ import {LayeredAvatar} from '../../../design/components/LayeredAvatar';
 import {HoystScreen} from '../../../design/components/HoystScreen';
 import {HoystText} from '../../../design/components/HoystText';
 import {MomentumStageIcon} from '../../../design/components/MomentumStageIcon';
+import {MomentumStatusPill} from '../../../design/components/MomentumStatusPill';
 import {SectionHeader} from '../../../design/components/SectionHeader';
 import {TapInRingMark} from '../../../design/components/TapInRingMark';
 import {TodayCircleCard} from '../../../design/components/TodayCircleCard';
@@ -261,6 +262,7 @@ function InboxHeaderAction({
   onPress: () => void;
   unreadCount: number;
 }) {
+  const theme = useHoystTheme();
   const badgeText = getInboxBadgeText(unreadCount);
 
   return (
@@ -272,11 +274,15 @@ function InboxHeaderAction({
       style={({pressed}) => [
         styles.inboxHeaderAction,
         {
+          backgroundColor: theme.actionSurface,
+          borderColor: theme.actionBorder,
           opacity: pressed ? actionMotion.pressedOpacity : 1,
+          shadowColor: theme.actionShadowColor,
+          shadowOpacity: theme.actionShadowOpacity,
           transform: [{scale: pressed ? actionMotion.pressedScale : 1}],
         },
       ]}>
-      <Bell color={brandColors.charcoal} size={25} strokeWidth={2.2} />
+      <Bell color={theme.actionForeground} size={25} strokeWidth={2.2} />
       {badgeText ? (
         <View style={styles.inboxBadge}>
           <HoystText
@@ -818,20 +824,10 @@ export function HomeScreen(): React.JSX.Element {
                   <HoystText style={styles.momentumPercent}>
                     {momentumSummary.percentage}%
                   </HoystText>
-                  <View
-                    style={[
-                      styles.momentumStatusBadge,
-                      {backgroundColor: `${theme.success}14`},
-                    ]}>
-                    <HoystText
-                      numberOfLines={1}
-                      style={[
-                        styles.momentumStatusText,
-                        {color: theme.successForeground},
-                      ]}>
-                      {momentumSummary.label.toUpperCase()}
-                    </HoystText>
-                  </View>
+                  <MomentumStatusPill
+                    label={momentumSummary.label}
+                    status={momentumSummary.status}
+                  />
                 </View>
                 <HoystText
                   numberOfLines={2}
@@ -1058,7 +1054,7 @@ const styles = StyleSheet.create({
   },
   inboxBadge: {
     alignItems: 'center',
-    backgroundColor: brandColors.purple,
+    backgroundColor: brandColors.red,
     borderColor: brandColors.white,
     borderRadius: 11,
     borderWidth: 2,
@@ -1080,17 +1076,13 @@ const styles = StyleSheet.create({
   },
   inboxHeaderAction: {
     alignItems: 'center',
-    backgroundColor: brandColors.white,
-    borderColor: 'rgba(7,11,26,0.16)',
     borderRadius: 22,
     borderWidth: 1,
     elevation: 3,
     height: 44,
     justifyContent: 'center',
     overflow: 'visible',
-    shadowColor: 'rgba(15,23,42,0.18)',
     shadowOffset: {height: 4, width: 0},
-    shadowOpacity: 1,
     shadowRadius: 10,
     width: 44,
   },
@@ -1157,18 +1149,6 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     letterSpacing: 0,
     lineHeight: 30,
-  },
-  momentumStatusBadge: {
-    borderRadius: radius.pill,
-    flexShrink: 1,
-    paddingHorizontal: 6,
-    paddingVertical: 3,
-  },
-  momentumStatusText: {
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 0,
-    lineHeight: 14,
   },
   momentumStageIconWrap: {
     alignItems: 'center',

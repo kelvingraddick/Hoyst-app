@@ -226,9 +226,9 @@ export function AppTabsNavigator({
           return (
             <Icon
               color={color}
-              fill={focused && route.name === 'Home' ? color : 'none'}
+              fill={focused ? color : 'none'}
               size={iconSize}
-              strokeWidth={focused ? 2.65 : 2.35}
+              strokeWidth={focused ? 2.1 : 1.9}
             />
           );
         },
@@ -292,11 +292,11 @@ const styles = StyleSheet.create({
     paddingVertical: 0,
   },
   tabBarLabel: {
-    fontSize: 11.2,
-    fontWeight: '800',
+    fontSize: 12,
+    fontWeight: '700',
     includeFontPadding: false,
     letterSpacing: 0,
-    lineHeight: 13,
+    lineHeight: 14,
     marginTop: 2,
   },
   tapInIconSlot: {

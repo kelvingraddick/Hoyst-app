@@ -17,6 +17,7 @@ import {
   MomentumStreakIllustration,
 } from '../../../design/components/MomentumIllustrations';
 import {MomentumStageIcon} from '../../../design/components/MomentumStageIcon';
+import {MomentumStatusPill} from '../../../design/components/MomentumStatusPill';
 import {radius} from '../../../design/tokens/radius';
 import {useHoystTheme} from '../../../design/theme/useHoystTheme';
 import {useSessionStore} from '../../../store/session-store';
@@ -218,9 +219,7 @@ function buildMomentumWinRecap(circles: HomeData['circles']) {
 
   return {
     badge: `${winCount} wins logged`,
-    detail: `You checked in for ${firstCircleTitle} + ${
-      winCount - 1
-    } more.`,
+    detail: `You checked in for ${firstCircleTitle} + ${winCount - 1} more.`,
     title: "Today's wins",
   };
 }
@@ -319,20 +318,10 @@ export function MomentumScreen(): React.JSX.Element {
             </HoystText>
             <View style={styles.momentumValueRow}>
               <HoystText style={styles.momentumPercent}>{scoreValue}</HoystText>
-              <View
-                style={[
-                  styles.momentumStatusBadge,
-                  {backgroundColor: `${theme.success}14`},
-                ]}>
-                <HoystText
-                  numberOfLines={1}
-                  style={[
-                    styles.momentumStatusText,
-                    {color: theme.successForeground},
-                  ]}>
-                  {summary.label.toUpperCase()}
-                </HoystText>
-              </View>
+              <MomentumStatusPill
+                label={summary.label}
+                status={summary.status}
+              />
             </View>
             <HoystText
               numberOfLines={2}
@@ -697,18 +686,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginRight: 4,
     width: MOMENTUM_ICON_SIZE,
-  },
-  momentumStatusBadge: {
-    borderRadius: radius.pill,
-    flexShrink: 1,
-    paddingHorizontal: 6,
-    paddingVertical: 3,
-  },
-  momentumStatusText: {
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 0,
-    lineHeight: 14,
   },
   momentumTrendWrap: {
     alignItems: 'center',
