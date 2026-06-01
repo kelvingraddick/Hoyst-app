@@ -35,6 +35,7 @@ import {HoystChip} from '../../../design/components/HoystChip';
 import {HoystInput} from '../../../design/components/HoystInput';
 import {HoystScreen} from '../../../design/components/HoystScreen';
 import {HoystText} from '../../../design/components/HoystText';
+import {NudgeMark} from '../../../design/components/NudgeMark';
 import {
   CircleCategoryIcon,
   getCircleCategoryForegroundColor,
@@ -650,38 +651,6 @@ function CompanionProgressScroller({
   );
 }
 
-function CircleDetailIconBadge({
-  backgroundColor,
-  badge,
-  children,
-}: {
-  backgroundColor: string;
-  badge?: string;
-  children: React.ReactNode;
-}) {
-  const theme = useHoystTheme();
-
-  return (
-    <View style={[styles.iconBadge, {backgroundColor}]}>
-      {children}
-      {badge ? (
-        <View
-          style={[
-            styles.iconBadgeCount,
-            {
-              backgroundColor: theme.successForeground,
-              borderColor: theme.surfaceStrong,
-            },
-          ]}>
-          <HoystText style={styles.iconBadgeCountText} variant="tiny">
-            {badge}
-          </HoystText>
-        </View>
-      ) : null}
-    </View>
-  );
-}
-
 function NudgePanel({
   isNudging,
   nudged,
@@ -701,47 +670,79 @@ function NudgePanel({
     : nudged
     ? 'Nudge Sent'
     : 'Send a Nudge';
+  const disabled = isNudging || nudged;
+  const foregroundColor = theme.accentSecondaryForeground;
 
   return (
     <Pressable
       accessibilityLabel={`${title}. ${targetCopy}`}
       accessibilityRole="button"
-      onPress={onPress}
+      accessibilityState={{busy: isNudging, disabled}}
+      disabled={disabled}
+      onPress={disabled ? undefined : onPress}
       style={({pressed}) => [
         styles.nudgePanel,
         {
-          backgroundColor: `${theme.success}20`,
-          borderColor: `${theme.successForeground}73`,
-          opacity: pressed ? actionMotion.pressedOpacity : 1,
+          opacity: disabled ? (nudged ? 0.84 : 0.58) : pressed ? 0.94 : 1,
           shadowColor: theme.shadow,
           transform: [{scale: pressed ? actionMotion.pressedScale : 1}],
         },
       ]}>
-      <View style={styles.nudgePanelContent}>
-        <CircleDetailIconBadge
-          backgroundColor={`${theme.success}20`}
-          badge={String(targetCount)}>
-          <Bell color={theme.successForeground} size={23} strokeWidth={2.2} />
-        </CircleDetailIconBadge>
-        <View style={styles.nudgeCopy}>
-          <HoystText style={styles.nudgeTitle}>{title}</HoystText>
-          <HoystText
-            numberOfLines={1}
-            style={styles.nudgeSubtitle}
-            tone="muted">
-            Remind members to tap in
-          </HoystText>
-        </View>
-        <View
-          style={[
-            styles.nudgeActionIcon,
-            {backgroundColor: theme.successForeground},
-          ]}>
-          <ChevronRight
-            color={theme.surfaceStrong}
-            size={18}
-            strokeWidth={2.7}
-          />
+      <View
+        style={[
+          styles.nudgePanelFrame,
+          {
+            backgroundColor: theme.backgroundElevated,
+            borderColor: theme.isDark
+              ? theme.borderStrong
+              : 'rgba(16,24,40,0.18)',
+          },
+        ]}>
+        <View style={styles.nudgePanelContent}>
+          <View
+            style={[
+              styles.nudgeMarkWrap,
+              {
+                backgroundColor: theme.isDark
+                  ? 'rgba(122,85,255,0.18)'
+                  : 'rgba(90,28,255,0.10)',
+              },
+            ]}>
+            <NudgeMark color={foregroundColor} size={23} strokeWidth={5} />
+            <View
+              style={[
+                styles.nudgeCountBadge,
+                {
+                  backgroundColor: foregroundColor,
+                  borderColor: theme.backgroundElevated,
+                },
+              ]}>
+              <HoystText style={styles.nudgeCountBadgeText} variant="tiny">
+                {targetCount}
+              </HoystText>
+            </View>
+          </View>
+          <View style={styles.nudgeCopy}>
+            <HoystText style={[styles.nudgeTitle, {color: foregroundColor}]}>
+              {title}
+            </HoystText>
+            <HoystText
+              numberOfLines={1}
+              style={[styles.nudgeSubtitle, {color: foregroundColor}]}>
+              {targetCopy}
+            </HoystText>
+          </View>
+          <View
+            style={[
+              styles.nudgeActionIcon,
+              {
+                backgroundColor: theme.isDark
+                  ? 'rgba(122,85,255,0.18)'
+                  : 'rgba(90,28,255,0.10)',
+              },
+            ]}>
+            <ChevronRight color={foregroundColor} size={17} strokeWidth={2.5} />
+          </View>
         </View>
       </View>
     </Pressable>
@@ -2210,71 +2211,80 @@ const styles = StyleSheet.create({
   },
   nudgePanel: {
     alignSelf: 'stretch',
-    borderRadius: radius.lg,
-    borderWidth: 1.4,
+    borderRadius: radius.pill,
     elevation: 3,
     overflow: 'hidden',
-    minHeight: 76,
-    paddingHorizontal: 10,
-    paddingVertical: 9,
-    shadowOffset: {height: 10, width: 0},
-    shadowOpacity: 0.1,
+    shadowOffset: {height: 8, width: 0},
+    shadowOpacity: 0.07,
     shadowRadius: 16,
+    width: '100%',
+  },
+  nudgePanelFrame: {
+    alignSelf: 'stretch',
+    borderRadius: radius.pill,
+    borderWidth: 1.5,
+    minHeight: 66,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
     width: '100%',
   },
   nudgePanelContent: {
     alignItems: 'center',
     flexDirection: 'row',
-    gap: 9,
-    minHeight: 58,
+    gap: 11,
+    minHeight: 48,
     width: '100%',
   },
   nudgeActionIcon: {
     alignItems: 'center',
     borderRadius: radius.pill,
-    height: 34,
+    height: 30,
     justifyContent: 'center',
-    width: 34,
+    width: 30,
+  },
+  nudgeCountBadge: {
+    alignItems: 'center',
+    borderRadius: radius.pill,
+    borderWidth: 1.5,
+    bottom: 0,
+    height: 18,
+    justifyContent: 'center',
+    minWidth: 18,
+    paddingHorizontal: 4,
+    position: 'absolute',
+    right: 0,
+  },
+  nudgeCountBadgeText: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+    letterSpacing: 0,
+    lineHeight: 12,
   },
   nudgeCopy: {
     flex: 1,
-    gap: 2,
+    gap: 1,
     minWidth: 0,
+  },
+  nudgeMarkWrap: {
+    alignItems: 'center',
+    borderRadius: radius.pill,
+    height: 42,
+    justifyContent: 'center',
+    position: 'relative',
+    width: 42,
   },
   nudgeSubtitle: {
     fontSize: 12,
     fontWeight: '600',
     letterSpacing: 0,
     lineHeight: 16,
+    opacity: 0.76,
   },
   nudgeTitle: {
-    fontSize: 18,
+    fontSize: 15,
     fontWeight: '800',
     letterSpacing: 0,
-    lineHeight: 22,
-  },
-  iconBadge: {
-    alignItems: 'center',
-    borderRadius: radius.pill,
-    height: 46,
-    justifyContent: 'center',
-    position: 'relative',
-    width: 46,
-  },
-  iconBadgeCount: {
-    alignItems: 'center',
-    borderRadius: radius.pill,
-    borderWidth: 2,
-    height: 22,
-    justifyContent: 'center',
-    position: 'absolute',
-    right: -2,
-    top: -4,
-    width: 22,
-  },
-  iconBadgeCountText: {
-    color: '#FFFFFF',
-    letterSpacing: 0,
+    lineHeight: 19,
   },
   memberToolsSection: {
     gap: 12,

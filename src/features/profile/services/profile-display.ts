@@ -24,6 +24,16 @@ export const loggedOutProfileStatLabels = [
   'Tap Ins',
 ] as const;
 
+function getSafeStatCount(value?: number) {
+  return typeof value === 'number' && Number.isFinite(value)
+    ? Math.max(0, Math.floor(value))
+    : 0;
+}
+
+export function formatProfileStatValue(value?: number) {
+  return getSafeStatCount(value).toLocaleString('en-US');
+}
+
 export function getProfileInitials(profile?: Pick<UserProfile, 'name'>) {
   const initials = profile?.name
     .split(' ')
@@ -49,8 +59,30 @@ export function getProfileAvatarSource(
 }
 
 export function formatActiveCircleCountLabel(activeCircleCount: number) {
-  return `${activeCircleCount} ${
-    activeCircleCount === 1 ? 'Circle' : 'Circles'
+  const count = getSafeStatCount(activeCircleCount);
+
+  return `${formatProfileStatValue(count)} ${
+    count === 1 ? 'Circle' : 'Circles'
+  }`;
+}
+
+export function formatLongestStreakLabel(longestStreakDays?: number) {
+  const count = getSafeStatCount(longestStreakDays);
+
+  if (count <= 0) {
+    return 'No Streak Yet';
+  }
+
+  return `${formatProfileStatValue(count)} ${
+    count === 1 ? 'Day' : 'Days'
+  } Best`;
+}
+
+export function formatTapInCountLabel(totalTapIns?: number) {
+  const count = getSafeStatCount(totalTapIns);
+
+  return `${formatProfileStatValue(count)} ${
+    count === 1 ? 'Tap In' : 'Tap Ins'
   }`;
 }
 
@@ -58,12 +90,14 @@ export function formatPersonalStreakLabel({
   hasTappedInToday,
   personalStreakDays,
 }: Pick<ProfileSummary, 'hasTappedInToday' | 'personalStreakDays'>) {
-  if (personalStreakDays <= 0) {
+  const count = getSafeStatCount(personalStreakDays);
+
+  if (count <= 0) {
     return 'No Streak Yet';
   }
 
-  const dayLabel = personalStreakDays === 1 ? 'Day' : 'Days';
-  const baseLabel = `${personalStreakDays} ${dayLabel} Streak`;
+  const dayLabel = count === 1 ? 'Day' : 'Days';
+  const baseLabel = `${formatProfileStatValue(count)} ${dayLabel} Streak`;
 
   return hasTappedInToday ? baseLabel : `${baseLabel}, Today Pending`;
 }

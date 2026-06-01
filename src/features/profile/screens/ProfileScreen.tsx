@@ -13,9 +13,11 @@ import {
   Bell,
   BellRing,
   Check,
+  CheckCircle2,
   ChevronRight,
   Compass,
   FileText,
+  Flame,
   LifeBuoy,
   LockKeyhole,
   LogOut,
@@ -24,6 +26,7 @@ import {
   Shield,
   ShieldCheck,
   Smartphone,
+  Trophy,
   Trash2,
   UserRound,
   UsersRound,
@@ -35,7 +38,6 @@ import {useQuery} from '@tanstack/react-query';
 
 import {BrandMark} from '../../../design/components/BrandMark';
 import {GlassPanel} from '../../../design/components/GlassPanel';
-import {HoystChip} from '../../../design/components/HoystChip';
 import {HoystButton} from '../../../design/components/HoystButton';
 import {HoystInput} from '../../../design/components/HoystInput';
 import {HoystScreen} from '../../../design/components/HoystScreen';
@@ -63,14 +65,16 @@ import {
 } from '../../settings/services/notification-settings-service';
 import {requestPushNotificationPermission} from '../../../lib/notifications';
 import {
-  formatActiveCircleCountLabel,
-  formatPersonalStreakLabel,
+  formatProfileStatValue,
   getProfileAvatarSource,
   getProfileInitials,
   loggedOutProfileBenefits,
   loggedOutProfileStatLabels,
 } from '../services/profile-display';
-import {getProfileSummary} from '../services/profile-summary-service';
+import {
+  getProfileSummary,
+  type ProfileSummary,
+} from '../services/profile-summary-service';
 
 type Props = BottomTabScreenProps<AppTabsParamList, 'Profile'>;
 
@@ -140,6 +144,114 @@ type SettingsIconTone =
   | 'neutral'
   | 'orange'
   | 'purple';
+
+type ProfileStatTone = 'blue' | 'green' | 'orange' | 'purple';
+
+type ProfileHeroStatProps = {
+  detail: string;
+  icon: LucideIcon;
+  label: string;
+  tone: ProfileStatTone;
+  value: string;
+};
+
+function getProfileStatColor(
+  theme: ReturnType<typeof useHoystTheme>,
+  tone: ProfileStatTone,
+) {
+  if (tone === 'green') {
+    return theme.successForeground;
+  }
+
+  if (tone === 'orange') {
+    return theme.accentWarmForeground;
+  }
+
+  if (tone === 'blue') {
+    return theme.accentTertiaryForeground;
+  }
+
+  return theme.accentSecondaryForeground;
+}
+
+function formatSummaryStatValue(value?: number) {
+  return typeof value === 'number' && Number.isFinite(value)
+    ? formatProfileStatValue(value)
+    : '-';
+}
+
+function getCurrentStreakDetail(summary?: ProfileSummary) {
+  if (!summary) {
+    return 'Loading';
+  }
+
+  if (summary.personalStreakDays <= 0) {
+    return 'No streak yet';
+  }
+
+  return summary.hasTappedInToday ? 'Tapped in today' : 'Today pending';
+}
+
+function getLongestStreakDetail(summary?: ProfileSummary) {
+  const longestStreakDays = summary?.longestStreakDays;
+
+  if (
+    typeof longestStreakDays !== 'number' ||
+    !Number.isFinite(longestStreakDays)
+  ) {
+    return 'Loading';
+  }
+
+  if (longestStreakDays <= 0) {
+    return 'No streak yet';
+  }
+
+  return longestStreakDays === 1 ? 'Day best' : 'Days best';
+}
+
+function ProfileHeroStat({
+  detail,
+  icon: Icon,
+  label,
+  tone,
+  value,
+}: ProfileHeroStatProps): React.JSX.Element {
+  const theme = useHoystTheme();
+  const color = getProfileStatColor(theme, tone);
+
+  return (
+    <View
+      style={[
+        styles.profileStat,
+        {
+          backgroundColor: `${color}12`,
+          borderColor: `${color}34`,
+        },
+      ]}>
+      <View style={[styles.profileStatIcon, {backgroundColor: `${color}18`}]}>
+        <Icon color={color} size={18} strokeWidth={2.2} />
+      </View>
+      <View style={styles.profileStatCopy}>
+        <HoystText
+          adjustsFontSizeToFit
+          numberOfLines={1}
+          style={styles.profileStatValue}
+          variant="subtitle">
+          {value}
+        </HoystText>
+        <HoystText
+          numberOfLines={1}
+          style={{color}}
+          variant="caption">
+          {label}
+        </HoystText>
+        <HoystText numberOfLines={1} tone="muted" variant="tiny">
+          {detail}
+        </HoystText>
+      </View>
+    </View>
+  );
+}
 
 function LoggedOutBenefitRow({
   Icon,
@@ -795,41 +907,69 @@ export function ProfileScreen({navigation}: Props): React.JSX.Element {
   return (
     <HoystScreen
       contentContainerStyle={[styles.content, styles.loggedInContent]}>
-      <GlassPanel style={styles.loggedInPanel}>
-        <View style={styles.loggedInPanelGroup}>
-          <View style={styles.profileHeader}>
-            <LayeredAvatar
-              initials={initials}
-              imageSource={avatarSource}
-              size={54}
-              state="done"
-            />
-            <View style={styles.copy}>
-              <HoystText>{profile.name}</HoystText>
-              <HoystText tone="muted">@{profile.handle}</HoystText>
-              {profile.bio ? (
-                <HoystText numberOfLines={2} tone="muted" variant="caption">
-                  {profile.bio}
-                </HoystText>
-              ) : null}
-            </View>
+      <View style={styles.profileHero}>
+        <View style={styles.profileHeroIdentity}>
+          <LayeredAvatar
+            initials={initials}
+            imageSource={avatarSource}
+            size={88}
+            state="done"
+          />
+          <View style={styles.profileHeroCopy}>
+            <HoystText
+              numberOfLines={2}
+              style={styles.profileName}
+              variant="largeTitle">
+              {profile.name}
+            </HoystText>
+            <HoystText
+              numberOfLines={1}
+              style={styles.profileHandle}
+              tone="muted">
+              @{profile.handle}
+            </HoystText>
+            {profile.bio ? (
+              <HoystText
+                numberOfLines={3}
+                style={styles.profileBio}
+                tone="muted"
+                variant="caption">
+                {profile.bio}
+              </HoystText>
+            ) : null}
           </View>
-          {profileSummary ? (
-            <View style={styles.chips}>
-              <HoystChip
-                label={formatPersonalStreakLabel(profileSummary)}
-                tone="green"
-              />
-              <HoystChip
-                label={formatActiveCircleCountLabel(
-                  profileSummary.activeCircleCount,
-                )}
-                tone="purple"
-              />
-            </View>
-          ) : null}
         </View>
-      </GlassPanel>
+        <View style={styles.profileStatsGrid}>
+          <ProfileHeroStat
+            detail={getCurrentStreakDetail(profileSummary)}
+            icon={Flame}
+            label="Current Streak"
+            tone="green"
+            value={formatSummaryStatValue(profileSummary?.personalStreakDays)}
+          />
+          <ProfileHeroStat
+            detail={getLongestStreakDetail(profileSummary)}
+            icon={Trophy}
+            label="Longest Streak"
+            tone="orange"
+            value={formatSummaryStatValue(profileSummary?.longestStreakDays)}
+          />
+          <ProfileHeroStat
+            detail="All time"
+            icon={CheckCircle2}
+            label="Tap Ins"
+            tone="blue"
+            value={formatSummaryStatValue(profileSummary?.totalTapIns)}
+          />
+          <ProfileHeroStat
+            detail="Joined now"
+            icon={UsersRound}
+            label="Circles"
+            tone="purple"
+            value={formatSummaryStatValue(profileSummary?.activeCircleCount)}
+          />
+        </View>
+      </View>
       <View style={styles.settingsStack}>
         <SettingsSection title="Account">
           <SettingsRow
@@ -1079,31 +1219,69 @@ const styles = StyleSheet.create({
     alignItems: 'stretch',
     width: '100%',
   },
-  loggedInPanel: {
+  profileHero: {
     alignSelf: 'stretch',
-    marginHorizontal: 0,
+    gap: 20,
+    paddingBottom: 4,
+    paddingTop: 12,
     width: '100%',
   },
-  loggedInPanelGroup: {
-    alignSelf: 'stretch',
-    gap: 12,
-    width: '100%',
-  },
-  profileHeader: {
+  profileHeroIdentity: {
     alignItems: 'center',
-    flexDirection: 'row',
     gap: 14,
     width: '100%',
   },
-  copy: {
-    flex: 1,
-    gap: 4,
-    minWidth: 0,
+  profileHeroCopy: {
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 8,
+    width: '100%',
   },
-  chips: {
+  profileName: {
+    textAlign: 'center',
+  },
+  profileHandle: {
+    textAlign: 'center',
+  },
+  profileBio: {
+    maxWidth: 340,
+    textAlign: 'center',
+  },
+  profileStatsGrid: {
+    alignSelf: 'stretch',
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 10,
+    width: '100%',
+  },
+  profileStat: {
+    alignItems: 'center',
+    borderRadius: 18,
+    borderWidth: 1,
+    flexBasis: '47%',
+    flexDirection: 'row',
+    flexGrow: 1,
+    gap: 10,
+    minHeight: 92,
+    minWidth: 132,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+  },
+  profileStatIcon: {
+    alignItems: 'center',
+    borderRadius: 15,
+    flexShrink: 0,
+    height: 36,
+    justifyContent: 'center',
+    width: 36,
+  },
+  profileStatCopy: {
+    flex: 1,
+    gap: 3,
+    minWidth: 0,
+  },
+  profileStatValue: {
+    flexShrink: 1,
   },
   authActions: {
     gap: 10,

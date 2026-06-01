@@ -1,6 +1,9 @@
 import {
   formatActiveCircleCountLabel,
+  formatLongestStreakLabel,
   formatPersonalStreakLabel,
+  formatProfileStatValue,
+  formatTapInCountLabel,
   getProfileAvatarSource,
   getProfileInitials,
   loggedOutProfileBenefits,
@@ -9,6 +12,7 @@ import {
 import {useUserProfileStore} from '../src/store/profile-store';
 import type {UserProfile} from '../src/types/models';
 import {
+  calculateLongestPersonalDailyStreak,
   calculatePersonalDailyStreak,
   getDateKey,
 } from '../functions/src/profile/streak';
@@ -99,6 +103,12 @@ describe('profile display helpers', () => {
   it('formats real profile stats labels', () => {
     expect(formatActiveCircleCountLabel(1)).toBe('1 Circle');
     expect(formatActiveCircleCountLabel(3)).toBe('3 Circles');
+    expect(formatProfileStatValue(1234)).toBe('1,234');
+    expect(formatTapInCountLabel(1)).toBe('1 Tap In');
+    expect(formatTapInCountLabel(12)).toBe('12 Tap Ins');
+    expect(formatLongestStreakLabel(0)).toBe('No Streak Yet');
+    expect(formatLongestStreakLabel(1)).toBe('1 Day Best');
+    expect(formatLongestStreakLabel(3)).toBe('3 Days Best');
     expect(
       formatPersonalStreakLabel({
         hasTappedInToday: true,
@@ -204,6 +214,51 @@ describe('personal daily streak calculation', () => {
     expect(
       getDateKey(new Date('2026-05-07T03:00:00.000Z'), 'America/New_York'),
     ).toBe('2026-05-06');
+  });
+});
+
+describe('longest personal daily streak calculation', () => {
+  it('returns zero when there are no covered dates', () => {
+    expect(
+      calculateLongestPersonalDailyStreak({
+        checkInDateKeys: [],
+      }),
+    ).toBe(0);
+  });
+
+  it('deduplicates multiple tap ins on the same day', () => {
+    expect(
+      calculateLongestPersonalDailyStreak({
+        checkInDateKeys: [
+          '2026-05-07',
+          '2026-05-07',
+          '2026-05-06',
+          '2026-05-04',
+        ],
+      }),
+    ).toBe(2);
+  });
+
+  it('finds the longest run across gaps', () => {
+    expect(
+      calculateLongestPersonalDailyStreak({
+        checkInDateKeys: [
+          '2026-05-01',
+          '2026-05-03',
+          '2026-05-04',
+          '2026-05-05',
+          '2026-05-07',
+        ],
+      }),
+    ).toBe(3);
+  });
+
+  it('counts covered skip dates as streak continuity', () => {
+    expect(
+      calculateLongestPersonalDailyStreak({
+        checkInDateKeys: ['2026-05-05', '2026-05-06', '2026-05-07'],
+      }),
+    ).toBe(3);
   });
 });
 

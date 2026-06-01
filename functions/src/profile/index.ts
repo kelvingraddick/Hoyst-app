@@ -2,12 +2,18 @@ import type {QueryDocumentSnapshot} from 'firebase-admin/firestore';
 import {HttpsError, onCall} from 'firebase-functions/v2/https';
 
 import {db} from '../firebase';
-import {calculatePersonalDailyStreak, getDateKey} from './streak';
+import {
+  calculateLongestPersonalDailyStreak,
+  calculatePersonalDailyStreak,
+  getDateKey,
+} from './streak';
 
 export type ProfileSummary = {
   activeCircleCount: number;
   hasTappedInToday: boolean;
+  longestStreakDays: number;
   personalStreakDays: number;
+  totalTapIns: number;
 };
 
 async function requireCompletedProfile(uid?: string) {
@@ -27,12 +33,6 @@ async function requireCompletedProfile(uid?: string) {
 
 function getMembershipCircleId(snapshot: QueryDocumentSnapshot) {
   return snapshot.ref.parent.parent?.id;
-}
-
-function getCheckInCircleId(snapshot: QueryDocumentSnapshot) {
-  const dayRef = snapshot.ref.parent.parent;
-
-  return dayRef?.parent.parent?.id;
 }
 
 function getCheckInDateKey(
@@ -66,38 +66,42 @@ export const getProfileSummary = onCall(async request => {
       .filter((circleId): circleId is string => Boolean(circleId)),
   );
 
-  if (activeCircleIds.size === 0) {
-    return {
-      activeCircleCount: 0,
-      hasTappedInToday: false,
-      personalStreakDays: 0,
-    } satisfies ProfileSummary;
-  }
-
   const checkInsSnapshot = await db
     .collectionGroup('checkIns')
     .where('uid', '==', uid)
     .get();
-  const checkInDateKeys = checkInsSnapshot.docs
-    .filter(snapshot => {
-      const status = snapshot.data().status;
+  const coveredCheckInDateKeys: string[] = [];
+  let totalTapIns = 0;
 
-      return status === 'done' || status === 'skip';
-    })
-    .filter(snapshot => {
-      const circleId = getCheckInCircleId(snapshot);
+  checkInsSnapshot.docs.forEach(snapshot => {
+    const status = snapshot.data().status;
 
-      return Boolean(circleId && activeCircleIds.has(circleId));
-    })
-    .map(snapshot => getCheckInDateKey(snapshot, timezone))
-    .filter((dateKey): dateKey is string => Boolean(dateKey));
+    if (status === 'done') {
+      totalTapIns += 1;
+    }
+
+    if (status !== 'done' && status !== 'skip') {
+      return;
+    }
+
+    const dateKey = getCheckInDateKey(snapshot, timezone);
+
+    if (dateKey) {
+      coveredCheckInDateKeys.push(dateKey);
+    }
+  });
   const streak = calculatePersonalDailyStreak({
-    checkInDateKeys,
+    checkInDateKeys: coveredCheckInDateKeys,
     timezone,
+  });
+  const longestStreakDays = calculateLongestPersonalDailyStreak({
+    checkInDateKeys: coveredCheckInDateKeys,
   });
 
   return {
     activeCircleCount: activeCircleIds.size,
+    longestStreakDays,
+    totalTapIns,
     ...streak,
   } satisfies ProfileSummary;
 });

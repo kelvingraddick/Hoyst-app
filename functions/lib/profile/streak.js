@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.getDateKey = getDateKey;
 exports.getPreviousDateKey = getPreviousDateKey;
 exports.calculatePersonalDailyStreak = calculatePersonalDailyStreak;
+exports.calculateLongestPersonalDailyStreak = calculateLongestPersonalDailyStreak;
 function padDatePart(value) {
     return value.toString().padStart(2, '0');
 }
@@ -45,4 +46,19 @@ function calculatePersonalDailyStreak({ checkInDateKeys, now = new Date(), timez
         hasTappedInToday,
         personalStreakDays,
     };
+}
+function calculateLongestPersonalDailyStreak({ checkInDateKeys, }) {
+    const completedDateKeys = [...new Set(checkInDateKeys)].sort();
+    let currentStreakDays = 0;
+    let longestStreakDays = 0;
+    let previousDateKey;
+    completedDateKeys.forEach(dateKey => {
+        currentStreakDays =
+            previousDateKey && getPreviousDateKey(dateKey) === previousDateKey
+                ? currentStreakDays + 1
+                : 1;
+        longestStreakDays = Math.max(longestStreakDays, currentStreakDays);
+        previousDateKey = dateKey;
+    });
+    return longestStreakDays;
 }

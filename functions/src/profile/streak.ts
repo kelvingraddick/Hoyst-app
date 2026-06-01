@@ -9,6 +9,10 @@ export type PersonalDailyStreak = {
   personalStreakDays: number;
 };
 
+export type PersonalLongestDailyStreakInput = {
+  checkInDateKeys: Iterable<string>;
+};
+
 function padDatePart(value: number) {
   return value.toString().padStart(2, '0');
 }
@@ -65,4 +69,24 @@ export function calculatePersonalDailyStreak({
     hasTappedInToday,
     personalStreakDays,
   };
+}
+
+export function calculateLongestPersonalDailyStreak({
+  checkInDateKeys,
+}: PersonalLongestDailyStreakInput) {
+  const completedDateKeys = [...new Set(checkInDateKeys)].sort();
+  let currentStreakDays = 0;
+  let longestStreakDays = 0;
+  let previousDateKey: string | undefined;
+
+  completedDateKeys.forEach(dateKey => {
+    currentStreakDays =
+      previousDateKey && getPreviousDateKey(dateKey) === previousDateKey
+        ? currentStreakDays + 1
+        : 1;
+    longestStreakDays = Math.max(longestStreakDays, currentStreakDays);
+    previousDateKey = dateKey;
+  });
+
+  return longestStreakDays;
 }

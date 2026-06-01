@@ -2,7 +2,6 @@ import React, {useEffect, useState} from 'react';
 import {Alert, Pressable, Share, StyleSheet, View} from 'react-native';
 import {
   ArrowRight,
-  BellRing,
   Check,
   Clock3,
   Flame,
@@ -19,6 +18,7 @@ import {HoystChip} from '../../../design/components/HoystChip';
 import {HoystScreen} from '../../../design/components/HoystScreen';
 import {HoystText} from '../../../design/components/HoystText';
 import {LayeredAvatar} from '../../../design/components/LayeredAvatar';
+import {NudgeActionButton} from '../../../design/components/NudgeActionButton';
 import {CircleCategoryPill} from '../../../design/components/CircleCategoryIcon';
 import {TapInRingMark} from '../../../design/components/TapInRingMark';
 import {TapInPulseButton} from '../../../design/components/TapInPulseButton';
@@ -502,11 +502,7 @@ export function TapInPickerScreen({navigation}: Props): React.JSX.Element {
               : circle.viewerTodayStatus === 'skip'
               ? 'Grace skip used today'
               : 'Commitment complete';
-            const ActionIcon = canNudge
-              ? BellRing
-              : canShare
-              ? Send
-              : ArrowRight;
+            const ActionIcon = canShare ? Send : ArrowRight;
 
             return (
               <GlassPanel key={circle.id} style={styles.secondaryCard}>
@@ -528,43 +524,49 @@ export function TapInPickerScreen({navigation}: Props): React.JSX.Element {
                       {statusLabel}
                     </HoystText>
                   </View>
-                  <Pressable
-                    onPress={() => {
-                      if (canNudge) {
-                        nudgeCircle(circle);
-                        return;
-                      }
-
-                      if (canShare) {
-                        shareInvite(circle);
-                        return;
-                      }
-
-                      openCircle(circle.id);
-                    }}
-                    style={({pressed}) => [
-                      styles.secondaryAction,
-                      {
-                        backgroundColor: theme.actionSurface,
-                        borderColor: theme.actionBorder,
-                        opacity: pressed ? 0.9 : 1,
-                      },
-                    ]}>
-                    <ActionIcon
-                      color={theme.actionForeground}
-                      size={15}
-                      strokeWidth={2.2}
+                  {canNudge ? (
+                    <NudgeActionButton
+                      isLoading={isNudging}
+                      isSent={isNudged}
+                      label={actionLabel}
+                      onPress={() => nudgeCircle(circle)}
+                      size="compact"
+                      targetCount={nudgeTargetCount}
                     />
-                    <HoystText
-                      numberOfLines={1}
-                      style={[
-                        styles.secondaryActionLabel,
-                        {color: theme.actionForeground},
-                      ]}
-                      variant="button">
-                      {actionLabel}
-                    </HoystText>
-                  </Pressable>
+                  ) : (
+                    <Pressable
+                      onPress={() => {
+                        if (canShare) {
+                          shareInvite(circle);
+                          return;
+                        }
+
+                        openCircle(circle.id);
+                      }}
+                      style={({pressed}) => [
+                        styles.secondaryAction,
+                        {
+                          backgroundColor: theme.actionSurface,
+                          borderColor: theme.actionBorder,
+                          opacity: pressed ? 0.9 : 1,
+                        },
+                      ]}>
+                      <ActionIcon
+                        color={theme.actionForeground}
+                        size={15}
+                        strokeWidth={2.2}
+                      />
+                      <HoystText
+                        numberOfLines={1}
+                        style={[
+                          styles.secondaryActionLabel,
+                          {color: theme.actionForeground},
+                        ]}
+                        variant="button">
+                        {actionLabel}
+                      </HoystText>
+                    </Pressable>
+                  )}
                 </View>
                 <View style={styles.secondaryMeta}>
                   <CircleCategoryPill category={circle.category} uppercase />

@@ -3,7 +3,9 @@ import {firebaseFunctions} from '../../../lib/firebase/functions';
 export type ProfileSummary = {
   activeCircleCount: number;
   hasTappedInToday: boolean;
+  longestStreakDays: number;
   personalStreakDays: number;
+  totalTapIns: number;
 };
 
 export async function getProfileSummary() {

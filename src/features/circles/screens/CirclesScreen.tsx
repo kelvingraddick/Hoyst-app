@@ -11,7 +11,6 @@ import {Plus, Search, UsersRound} from 'lucide-react-native';
 import type {BottomTabScreenProps} from '@react-navigation/bottom-tabs';
 import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
 
-import {ActivityFeedCard} from '../../../design/components/ActivityFeedCard';
 import {GlassPanel} from '../../../design/components/GlassPanel';
 import {HoystButton} from '../../../design/components/HoystButton';
 import {HoystChip} from '../../../design/components/HoystChip';
@@ -41,12 +40,7 @@ import type {
   RootStackParamList,
 } from '../../../navigation/types';
 import {useSessionStore} from '../../../store/session-store';
-import type {
-  CircleActivityItem,
-  CircleManagementCard,
-  ExploreCircle,
-  InboxEvent,
-} from '../../../types/models';
+import type {CircleManagementCard, ExploreCircle} from '../../../types/models';
 import {
   createEmptyHomeData,
   getHomeCircleActionVariant,
@@ -62,22 +56,9 @@ import {
   getPublicCircleCategories,
 } from '../services/circles-screen-selectors';
 import {subscribeToPublicCircles} from '../services/public-circle-service';
-import {
-  markInboxEventRead,
-  subscribeToInboxEvents,
-} from '../../settings/services/notification-settings-service';
 
 type Props = BottomTabScreenProps<AppTabsParamList, 'Circles'>;
 type OverviewTone = 'blue' | 'green' | 'orange' | 'purple' | 'yellow';
-
-function getInitials(name: string) {
-  return name
-    .split(' ')
-    .filter(Boolean)
-    .slice(0, 2)
-    .map(part => part[0]?.toUpperCase() ?? '')
-    .join('');
-}
 
 function getToneForeground(
   theme: ReturnType<typeof useHoystTheme>,
@@ -126,26 +107,6 @@ function canInvite(circle: CircleManagementCard) {
     circle.inviteUrl &&
       (circle.viewerRole === 'owner' || circle.viewerRole === 'admin'),
   );
-}
-
-function mapInboxEventToActivity(event: InboxEvent): CircleActivityItem {
-  const actorName = event.actor?.displayName ?? event.title;
-
-  return {
-    actorAvatarUrl: event.actor?.avatarUrl,
-    actorInitials: getInitials(actorName) || 'HO',
-    actorName,
-    actionLabel: event.type === 'join_request' ? 'Review' : 'Update',
-    id: event.id,
-    message: event.body,
-    timestamp: event.createdAtLabel,
-    tone:
-      event.type === 'circle_at_risk' || event.type === 'tap_in_final_warning'
-        ? 'alert'
-        : event.type === 'join_approved' || event.type === 'member_joined'
-        ? 'success'
-        : 'pending',
-  };
 }
 
 function OverviewStat({
@@ -223,7 +184,8 @@ function DiscoverCircleCard({
   );
   const description = circle.matchCopy ?? circle.commitment;
   const supportingLabel = circle.matchCopy ? circle.commitment : undefined;
-  const seatsLabel = seatsOpen === 1 ? '1 seat open' : `${seatsOpen} seats open`;
+  const seatsLabel =
+    seatsOpen === 1 ? '1 seat open' : `${seatsOpen} seats open`;
 
   return (
     <Pressable
@@ -395,7 +357,11 @@ function DiscoverySectionCard({
 
         <View style={styles.discoverStats}>
           <View style={styles.statRow}>
-            <Search color={theme.accentForeground} size={17} strokeWidth={2.4} />
+            <Search
+              color={theme.accentForeground}
+              size={17}
+              strokeWidth={2.4}
+            />
             <HoystText tone="muted" variant="caption">
               {stats[0]}
             </HoystText>
@@ -429,7 +395,6 @@ export function CirclesScreen({navigation}: Props): React.JSX.Element {
     createEmptyHomeData(),
   );
   const [publicCircles, setPublicCircles] = useState<ExploreCircle[]>([]);
-  const [events, setEvents] = useState<InboxEvent[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [activeCategory, setActiveCategory] = useState('All');
   const [nudgedCircleIds, setNudgedCircleIds] = useState<Set<string>>(
@@ -462,18 +427,6 @@ export function CirclesScreen({navigation}: Props): React.JSX.Element {
     [],
   );
 
-  useEffect(() => {
-    if (!canLoad || !user?.uid) {
-      setEvents([]);
-      return undefined;
-    }
-
-    return subscribeToInboxEvents({
-      onEvents: setEvents,
-      uid: user.uid,
-    });
-  }, [canLoad, user?.uid]);
-
   const activeCircles = useMemo(
     () =>
       homeData.circles.filter(
@@ -501,7 +454,6 @@ export function CirclesScreen({navigation}: Props): React.JSX.Element {
   const pendingCount = homeData.circles.filter(
     circle => circle.viewerMembershipStatus === 'pending',
   ).length;
-  const companionUpdates = events.slice(0, 2).map(mapInboxEventToActivity);
   const hasActiveCircles = activeCircles.length > 0;
   const sourcePublicCircles =
     publicCircles.length > 0 ? publicCircles : exploreCircles;
@@ -614,24 +566,6 @@ export function CirclesScreen({navigation}: Props): React.JSX.Element {
     }
 
     openCircle(circle.id);
-  };
-
-  const openEvent = (event: InboxEvent) => {
-    markInboxEventRead(event.id).catch(() => undefined);
-
-    if (event.deeplink.screen === 'TapInComposer') {
-      rootNavigation?.navigate('TapInComposer', {
-        circleId: event.deeplink.circleId,
-        source: event.deeplink.source,
-      });
-      return;
-    }
-
-    if (event.deeplink.screen === 'CircleDetail') {
-      rootNavigation?.navigate('CircleDetail', {
-        circleId: event.deeplink.circleId,
-      });
-    }
   };
 
   const overviewSection = (
@@ -750,39 +684,17 @@ export function CirclesScreen({navigation}: Props): React.JSX.Element {
     </>
   );
 
-  const companionUpdatesSection = (
-    <>
-      <SectionHeader
-        description="What is happening in your circles."
-        title="Companion Updates"
-      />
-      {companionUpdates.length > 0 ? (
-        companionUpdates.map((item, index) => (
-          <Pressable key={item.id} onPress={() => openEvent(events[index])}>
-            <ActivityFeedCard item={item} />
-          </Pressable>
-        ))
-      ) : (
-        <GlassPanel>
-          <SectionHeader
-            description="Nudges, joins, and circle milestones will appear here."
-            title="No companion updates yet"
-          />
-        </GlassPanel>
-      )}
-    </>
-  );
-
   const startPanel = (
     <DiscoverySectionCard
       actionLabel="Create Circle"
       description="Browse public Circles below, or create a Circle around the habit you want to keep moving."
-      icon={
-        <Plus color={theme.accentForeground} size={28} strokeWidth={2.6} />
-      }
+      icon={<Plus color={theme.accentForeground} size={28} strokeWidth={2.6} />}
       metaLabels={['Find Circles', 'Start your own']}
       onActionPress={() => rootNavigation?.navigate('CreateCircle')}
-      stats={['Public Circles are ready to browse', 'Private rhythms start here']}
+      stats={[
+        'Public Circles are ready to browse',
+        'Private rhythms start here',
+      ]}
       supportingLabel="Find people already moving, or build the space you need."
       title="Find Circles or start your own"
     />
@@ -873,14 +785,21 @@ export function CirclesScreen({navigation}: Props): React.JSX.Element {
           actionLabel="Clear filters"
           description="Try a different search or switch categories to keep browsing."
           icon={
-            <Search color={theme.accentForeground} size={27} strokeWidth={2.5} />
+            <Search
+              color={theme.accentForeground}
+              size={27}
+              strokeWidth={2.5}
+            />
           }
           metaLabels={['No matches', 'Filters active']}
           onActionPress={() => {
             setActiveCategory('All');
             setSearchTerm('');
           }}
-          stats={['Search terms narrow the list', 'Categories can hide matches']}
+          stats={[
+            'Search terms narrow the list',
+            'Categories can hide matches',
+          ]}
           supportingLabel="Clearing filters brings every public Circle back into view."
           title="No Circles found"
         />
@@ -924,7 +843,6 @@ export function CirclesScreen({navigation}: Props): React.JSX.Element {
           {overviewSection}
           {needAttentionSection}
           {allCirclesSection}
-          {companionUpdatesSection}
           {discoverSection}
         </>
       ) : (
@@ -932,7 +850,6 @@ export function CirclesScreen({navigation}: Props): React.JSX.Element {
           {startPanel}
           {discoverSection}
           {allCirclesSection}
-          {companionUpdatesSection}
         </>
       )}
     </HoystScreen>

@@ -55,7 +55,6 @@ jest.mock('../src/store/profile-store', () => ({
 
 let mockHomeData: HomeData;
 let mockPublicCircles: ExploreCircle[];
-let mockInboxEvents: unknown[];
 
 jest.mock('../src/features/home/services/home-data-service', () => {
   return {
@@ -106,17 +105,6 @@ jest.mock('../src/features/circles/services/public-circle-service', () => ({
     return jest.fn();
   }),
 }));
-
-jest.mock(
-  '../src/features/settings/services/notification-settings-service',
-  () => ({
-    markInboxEventRead: jest.fn(),
-    subscribeToInboxEvents: jest.fn(({onEvents}) => {
-      onEvents(mockInboxEvents);
-      return jest.fn();
-    }),
-  }),
-);
 
 jest.mock('../src/features/circles/services/circle-service', () => ({
   nudgeCircleMembers: jest.fn(),
@@ -209,7 +197,6 @@ function renderScreen() {
 describe('CirclesScreen render paths', () => {
   beforeEach(() => {
     mockPublicCircles = [publicCircle({})];
-    mockInboxEvents = [];
   });
 
   it('renders management first and discovery later when an active circle exists', () => {
@@ -237,7 +224,7 @@ describe('CirclesScreen render paths', () => {
     expect(output).not.toContain('Nice work!');
     expect(output).toContain('Need Attention');
     expect(output).toContain('All Circles');
-    expect(output).toContain('Companion Updates');
+    expect(output).not.toContain('Companion Updates');
     expect(output).toContain('Discover Circles');
     expect(output).toContain('View Circle');
     expect(output.indexOf('Overview')).toBeLessThan(
@@ -257,6 +244,7 @@ describe('CirclesScreen render paths', () => {
     expect(output).toContain('Public Movers');
     expect(output).toContain('View Circle');
     expect(output).toContain('All Circles');
+    expect(output).not.toContain('Companion Updates');
     expect(output.indexOf('Discover Circles')).toBeLessThan(
       output.indexOf('All Circles'),
     );

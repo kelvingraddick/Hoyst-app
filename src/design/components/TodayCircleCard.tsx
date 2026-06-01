@@ -21,6 +21,7 @@ import {GlassPanel} from './GlassPanel';
 import {HoystChip} from './HoystChip';
 import {LayeredAvatar} from './LayeredAvatar';
 import {HoystText} from './HoystText';
+import {NudgeActionButton} from './NudgeActionButton';
 import {getPulseRingStateForCircle} from './pulse-ring-state';
 
 export type TodayCircleCardActionVariant = HomeCircleActionVariant;
@@ -430,7 +431,7 @@ export function TodayCircleCard({
             <AvatarPreview card={card} />
 
             <View style={styles.todayActionSlot}>
-              {actionLabel === 'Tap In' ? (
+              {actionVariant === 'check_in' ? (
                 <CircleCardTapInButton
                   label={actionLabel}
                   onPress={event => {
@@ -438,6 +439,18 @@ export function TodayCircleCard({
                     handleActionPress();
                   }}
                   ringState={pulseRingState}
+                />
+              ) : actionVariant === 'nudge' ? (
+                <NudgeActionButton
+                  isLoading={isNudging}
+                  isSent={isNudged}
+                  label={actionLabel}
+                  onPress={event => {
+                    event.stopPropagation();
+                    handleActionPress();
+                  }}
+                  size="card"
+                  targetCount={card.nudgeTargetCount ?? 0}
                 />
               ) : (
                 <Pressable

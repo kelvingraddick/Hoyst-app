@@ -18,10 +18,6 @@ async function requireCompletedProfile(uid) {
 function getMembershipCircleId(snapshot) {
     return snapshot.ref.parent.parent?.id;
 }
-function getCheckInCircleId(snapshot) {
-    const dayRef = snapshot.ref.parent.parent;
-    return dayRef?.parent.parent?.id;
-}
 function getCheckInDateKey(snapshot, timezone) {
     const data = snapshot.data();
     const createdAt = data.createdAt;
@@ -43,34 +39,36 @@ exports.getProfileSummary = (0, https_1.onCall)(async (request) => {
         .filter(snapshot => snapshot.data().status === 'active')
         .map(getMembershipCircleId)
         .filter((circleId) => Boolean(circleId)));
-    if (activeCircleIds.size === 0) {
-        return {
-            activeCircleCount: 0,
-            hasTappedInToday: false,
-            personalStreakDays: 0,
-        };
-    }
     const checkInsSnapshot = await firebase_1.db
         .collectionGroup('checkIns')
         .where('uid', '==', uid)
         .get();
-    const checkInDateKeys = checkInsSnapshot.docs
-        .filter(snapshot => {
+    const coveredCheckInDateKeys = [];
+    let totalTapIns = 0;
+    checkInsSnapshot.docs.forEach(snapshot => {
         const status = snapshot.data().status;
-        return status === 'done' || status === 'skip';
-    })
-        .filter(snapshot => {
-        const circleId = getCheckInCircleId(snapshot);
-        return Boolean(circleId && activeCircleIds.has(circleId));
-    })
-        .map(snapshot => getCheckInDateKey(snapshot, timezone))
-        .filter((dateKey) => Boolean(dateKey));
+        if (status === 'done') {
+            totalTapIns += 1;
+        }
+        if (status !== 'done' && status !== 'skip') {
+            return;
+        }
+        const dateKey = getCheckInDateKey(snapshot, timezone);
+        if (dateKey) {
+            coveredCheckInDateKeys.push(dateKey);
+        }
+    });
     const streak = (0, streak_1.calculatePersonalDailyStreak)({
-        checkInDateKeys,
+        checkInDateKeys: coveredCheckInDateKeys,
         timezone,
+    });
+    const longestStreakDays = (0, streak_1.calculateLongestPersonalDailyStreak)({
+        checkInDateKeys: coveredCheckInDateKeys,
     });
     return {
         activeCircleCount: activeCircleIds.size,
+        longestStreakDays,
+        totalTapIns,
         ...streak,
     };
 });

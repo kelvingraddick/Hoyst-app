@@ -15,6 +15,7 @@ import type {BottomTabNavigationProp} from '@react-navigation/bottom-tabs';
 import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import {useFocusEffect, useNavigation} from '@react-navigation/native';
 
+import {ActivityFeedCard} from '../../../design/components/ActivityFeedCard';
 import {BrandMark} from '../../../design/components/BrandMark';
 import {GlassPanel} from '../../../design/components/GlassPanel';
 import {HoystButton} from '../../../design/components/HoystButton';
@@ -62,7 +63,9 @@ import type {
 } from '../../../navigation/types';
 import {navigateToAuthWelcome} from '../../../navigation/auth-modal-navigation';
 import type {
+  CircleActivityItem,
   CircleManagementCard,
+  InboxEvent,
   MomentumSummary,
 } from '../../../types/models';
 import {useOnboardingStore} from '../../../store/onboarding-store';
@@ -76,6 +79,8 @@ import {
 } from '../../momentum/services/momentum-service';
 import {
   markAllInboxEventsRead,
+  markInboxEventRead,
+  subscribeToInboxEvents,
   subscribeToInboxUnreadCount,
 } from '../../settings/services/notification-settings-service';
 
@@ -206,6 +211,35 @@ function canInvite(circle: CircleManagementCard) {
     circle.inviteUrl &&
       (circle.viewerRole === 'owner' || circle.viewerRole === 'admin'),
   );
+}
+
+function getInitials(name: string) {
+  return name
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map(part => part[0]?.toUpperCase() ?? '')
+    .join('');
+}
+
+function mapInboxEventToActivity(event: InboxEvent): CircleActivityItem {
+  const actorName = event.actor?.displayName ?? event.title;
+
+  return {
+    actorAvatarUrl: event.actor?.avatarUrl,
+    actorInitials: getInitials(actorName) || 'HO',
+    actorName,
+    actionLabel: event.type === 'join_request' ? 'Review' : 'Update',
+    id: event.id,
+    message: event.body,
+    timestamp: event.createdAtLabel,
+    tone:
+      event.type === 'circle_at_risk' || event.type === 'tap_in_final_warning'
+        ? 'alert'
+        : event.type === 'join_approved' || event.type === 'member_joined'
+        ? 'success'
+        : 'pending',
+  };
 }
 
 function HeaderAction({
@@ -372,6 +406,7 @@ export function HomeScreen(): React.JSX.Element {
   );
   const [isLoadingHomeData, setIsLoadingHomeData] = useState(false);
   const [hasHomeDataError, setHasHomeDataError] = useState(false);
+  const [events, setEvents] = useState<InboxEvent[]>([]);
   const [unreadInboxCount, setUnreadInboxCount] = useState(0);
   const [nudgedCircleIds, setNudgedCircleIds] = useState<ReadonlySet<string>>(
     () => new Set(),
@@ -456,6 +491,18 @@ export function HomeScreen(): React.JSX.Element {
     });
   }, [isAuthenticatedHome, user?.uid]);
 
+  useEffect(() => {
+    if (!isAuthenticatedHome || !user?.uid) {
+      setEvents([]);
+      return undefined;
+    }
+
+    return subscribeToInboxEvents({
+      onEvents: setEvents,
+      uid: user.uid,
+    });
+  }, [isAuthenticatedHome, user?.uid]);
+
   const todayActionCircles = useMemo(
     () => getTodayAttentionCircles(homeData.circles),
     [homeData.circles],
@@ -529,6 +576,10 @@ export function HomeScreen(): React.JSX.Element {
     isAuthenticatedHome,
     showAccountPrompt,
   });
+  const companionUpdates = useMemo(
+    () => events.slice(0, 2).map(mapInboxEventToActivity),
+    [events],
+  );
 
   useEffect(() => {
     clearExpiredHomeGreetingCacheEntries().catch(() => undefined);
@@ -734,6 +785,24 @@ export function HomeScreen(): React.JSX.Element {
     }
 
     rootNavigation?.navigate('Inbox');
+  };
+
+  const openEvent = (event: InboxEvent) => {
+    markInboxEventRead(event.id).catch(() => undefined);
+
+    if (event.deeplink.screen === 'TapInComposer') {
+      rootNavigation?.navigate('TapInComposer', {
+        circleId: event.deeplink.circleId,
+        source: event.deeplink.source,
+      });
+      return;
+    }
+
+    if (event.deeplink.screen === 'CircleDetail') {
+      rootNavigation?.navigate('CircleDetail', {
+        circleId: event.deeplink.circleId,
+      });
+    }
   };
 
   return (
@@ -969,6 +1038,29 @@ export function HomeScreen(): React.JSX.Element {
             />
           </View>
         </GlassPanel>
+      ) : null}
+
+      {isAuthenticatedHome ? (
+        <View style={styles.circleSectionGroup}>
+          <SectionHeader
+            description="What is happening in your circles."
+            title="Companion Updates"
+          />
+          {companionUpdates.length > 0 ? (
+            companionUpdates.map((item, index) => (
+              <Pressable key={item.id} onPress={() => openEvent(events[index])}>
+                <ActivityFeedCard item={item} />
+              </Pressable>
+            ))
+          ) : (
+            <GlassPanel>
+              <SectionHeader
+                description="Nudges, joins, and circle milestones will appear here."
+                title="No companion updates yet"
+              />
+            </GlassPanel>
+          )}
+        </View>
       ) : null}
 
       {showCreateCircleButton ? (
