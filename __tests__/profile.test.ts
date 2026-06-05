@@ -16,6 +16,7 @@ import {
   calculatePersonalDailyStreak,
   getDateKey,
 } from '../functions/src/profile/streak';
+import {summarizeProfileCheckIns} from '../functions/src/profile';
 import {
   canUseSkipGrace,
   getRollingDateKeys,
@@ -30,6 +31,46 @@ const profile: UserProfile = {
   onboardingStatus: 'complete',
   timezone: 'America/New_York',
 };
+
+type ProfileCheckInSnapshot =
+  Parameters<typeof summarizeProfileCheckIns>[0]['checkInSnapshots'][number];
+
+function profileCheckInSnapshot({
+  circleId,
+  createdAt,
+  dateKey,
+  status,
+}: {
+  circleId: string;
+  createdAt?: string;
+  dateKey?: string;
+  status: string;
+}) {
+  const resolvedDateKey = dateKey ?? createdAt?.slice(0, 10) ?? '2026-05-07';
+
+  return {
+    data: () => ({
+      createdAt: createdAt
+        ? {
+            toDate: () => new Date(createdAt),
+          }
+        : undefined,
+      status,
+    }),
+    ref: {
+      parent: {
+        parent: {
+          id: resolvedDateKey,
+          parent: {
+            parent: {
+              id: circleId,
+            },
+          },
+        },
+      },
+    },
+  } as unknown as ProfileCheckInSnapshot;
+}
 
 describe('profile store', () => {
   beforeEach(() => {
@@ -259,6 +300,56 @@ describe('longest personal daily streak calculation', () => {
         checkInDateKeys: ['2026-05-05', '2026-05-06', '2026-05-07'],
       }),
     ).toBe(3);
+  });
+});
+
+describe('profile check-in summary helpers', () => {
+  it('keeps all-time totals while limiting current streak coverage to active circles', () => {
+    const summary = summarizeProfileCheckIns({
+      activeCircleIds: new Set(['active-circle']),
+      checkInSnapshots: [
+        profileCheckInSnapshot({
+          circleId: 'active-circle',
+          createdAt: '2026-05-07T12:00:00.000Z',
+          status: 'done',
+        }),
+        profileCheckInSnapshot({
+          circleId: 'old-circle',
+          createdAt: '2026-05-06T12:00:00.000Z',
+          status: 'done',
+        }),
+        profileCheckInSnapshot({
+          circleId: 'old-circle',
+          createdAt: '2026-05-05T12:00:00.000Z',
+          status: 'skip',
+        }),
+      ],
+      timezone: 'UTC',
+    });
+
+    expect(summary).toEqual({
+      activeCoveredCheckInDateKeys: ['2026-05-07'],
+      coveredCheckInDateKeys: ['2026-05-07', '2026-05-06', '2026-05-05'],
+      totalTapIns: 2,
+    });
+  });
+
+  it('falls back to the stored day key when createdAt is missing', () => {
+    const summary = summarizeProfileCheckIns({
+      activeCircleIds: new Set(['active-circle']),
+      checkInSnapshots: [
+        profileCheckInSnapshot({
+          circleId: 'active-circle',
+          dateKey: '2026-05-03',
+          status: 'done',
+        }),
+      ],
+      timezone: 'UTC',
+    });
+
+    expect(summary.coveredCheckInDateKeys).toEqual(['2026-05-03']);
+    expect(summary.activeCoveredCheckInDateKeys).toEqual(['2026-05-03']);
+    expect(summary.totalTapIns).toBe(1);
   });
 });
 

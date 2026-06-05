@@ -35,6 +35,12 @@ function getMembershipCircleId(snapshot: QueryDocumentSnapshot) {
   return snapshot.ref.parent.parent?.id;
 }
 
+function getCheckInCircleId(snapshot: QueryDocumentSnapshot) {
+  const dayRef = snapshot.ref.parent.parent;
+
+  return dayRef?.parent.parent?.id;
+}
+
 function getCheckInDateKey(
   snapshot: QueryDocumentSnapshot,
   timezone: string,
@@ -47,6 +53,52 @@ function getCheckInDateKey(
   }
 
   return snapshot.ref.parent.parent?.id;
+}
+
+export function summarizeProfileCheckIns({
+  activeCircleIds,
+  checkInSnapshots,
+  timezone,
+}: {
+  activeCircleIds: Set<string>;
+  checkInSnapshots: QueryDocumentSnapshot[];
+  timezone: string;
+}) {
+  const activeCoveredCheckInDateKeys: string[] = [];
+  const coveredCheckInDateKeys: string[] = [];
+  let totalTapIns = 0;
+
+  checkInSnapshots.forEach(snapshot => {
+    const status = snapshot.data().status;
+
+    if (status === 'done') {
+      totalTapIns += 1;
+    }
+
+    if (status !== 'done' && status !== 'skip') {
+      return;
+    }
+
+    const dateKey = getCheckInDateKey(snapshot, timezone);
+
+    if (!dateKey) {
+      return;
+    }
+
+    coveredCheckInDateKeys.push(dateKey);
+
+    const circleId = getCheckInCircleId(snapshot);
+
+    if (circleId && activeCircleIds.has(circleId)) {
+      activeCoveredCheckInDateKeys.push(dateKey);
+    }
+  });
+
+  return {
+    activeCoveredCheckInDateKeys,
+    coveredCheckInDateKeys,
+    totalTapIns,
+  };
 }
 
 export const getProfileSummary = onCall(async request => {
@@ -70,28 +122,17 @@ export const getProfileSummary = onCall(async request => {
     .collectionGroup('checkIns')
     .where('uid', '==', uid)
     .get();
-  const coveredCheckInDateKeys: string[] = [];
-  let totalTapIns = 0;
-
-  checkInsSnapshot.docs.forEach(snapshot => {
-    const status = snapshot.data().status;
-
-    if (status === 'done') {
-      totalTapIns += 1;
-    }
-
-    if (status !== 'done' && status !== 'skip') {
-      return;
-    }
-
-    const dateKey = getCheckInDateKey(snapshot, timezone);
-
-    if (dateKey) {
-      coveredCheckInDateKeys.push(dateKey);
-    }
+  const {
+    activeCoveredCheckInDateKeys,
+    coveredCheckInDateKeys,
+    totalTapIns,
+  } = summarizeProfileCheckIns({
+    activeCircleIds,
+    checkInSnapshots: checkInsSnapshot.docs,
+    timezone,
   });
   const streak = calculatePersonalDailyStreak({
-    checkInDateKeys: coveredCheckInDateKeys,
+    checkInDateKeys: activeCoveredCheckInDateKeys,
     timezone,
   });
   const longestStreakDays = calculateLongestPersonalDailyStreak({

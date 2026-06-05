@@ -1,6 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.getProfileSummary = void 0;
+exports.summarizeProfileCheckIns = summarizeProfileCheckIns;
 const https_1 = require("firebase-functions/v2/https");
 const firebase_1 = require("../firebase");
 const streak_1 = require("./streak");
@@ -18,6 +19,10 @@ async function requireCompletedProfile(uid) {
 function getMembershipCircleId(snapshot) {
     return snapshot.ref.parent.parent?.id;
 }
+function getCheckInCircleId(snapshot) {
+    const dayRef = snapshot.ref.parent.parent;
+    return dayRef?.parent.parent?.id;
+}
 function getCheckInDateKey(snapshot, timezone) {
     const data = snapshot.data();
     const createdAt = data.createdAt;
@@ -25,6 +30,34 @@ function getCheckInDateKey(snapshot, timezone) {
         return (0, streak_1.getDateKey)(createdAt.toDate(), timezone);
     }
     return snapshot.ref.parent.parent?.id;
+}
+function summarizeProfileCheckIns({ activeCircleIds, checkInSnapshots, timezone, }) {
+    const activeCoveredCheckInDateKeys = [];
+    const coveredCheckInDateKeys = [];
+    let totalTapIns = 0;
+    checkInSnapshots.forEach(snapshot => {
+        const status = snapshot.data().status;
+        if (status === 'done') {
+            totalTapIns += 1;
+        }
+        if (status !== 'done' && status !== 'skip') {
+            return;
+        }
+        const dateKey = getCheckInDateKey(snapshot, timezone);
+        if (!dateKey) {
+            return;
+        }
+        coveredCheckInDateKeys.push(dateKey);
+        const circleId = getCheckInCircleId(snapshot);
+        if (circleId && activeCircleIds.has(circleId)) {
+            activeCoveredCheckInDateKeys.push(dateKey);
+        }
+    });
+    return {
+        activeCoveredCheckInDateKeys,
+        coveredCheckInDateKeys,
+        totalTapIns,
+    };
 }
 exports.getProfileSummary = (0, https_1.onCall)(async (request) => {
     const { profile, uid } = await requireCompletedProfile(request.auth?.uid);
@@ -43,23 +76,13 @@ exports.getProfileSummary = (0, https_1.onCall)(async (request) => {
         .collectionGroup('checkIns')
         .where('uid', '==', uid)
         .get();
-    const coveredCheckInDateKeys = [];
-    let totalTapIns = 0;
-    checkInsSnapshot.docs.forEach(snapshot => {
-        const status = snapshot.data().status;
-        if (status === 'done') {
-            totalTapIns += 1;
-        }
-        if (status !== 'done' && status !== 'skip') {
-            return;
-        }
-        const dateKey = getCheckInDateKey(snapshot, timezone);
-        if (dateKey) {
-            coveredCheckInDateKeys.push(dateKey);
-        }
+    const { activeCoveredCheckInDateKeys, coveredCheckInDateKeys, totalTapIns, } = summarizeProfileCheckIns({
+        activeCircleIds,
+        checkInSnapshots: checkInsSnapshot.docs,
+        timezone,
     });
     const streak = (0, streak_1.calculatePersonalDailyStreak)({
-        checkInDateKeys: coveredCheckInDateKeys,
+        checkInDateKeys: activeCoveredCheckInDateKeys,
         timezone,
     });
     const longestStreakDays = (0, streak_1.calculateLongestPersonalDailyStreak)({
