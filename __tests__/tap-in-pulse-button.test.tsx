@@ -1,10 +1,11 @@
 import React from 'react';
 import {Pressable, StyleSheet} from 'react-native';
 import RNHapticFeedback from 'react-native-haptic-feedback';
+import {Ellipse} from 'react-native-svg';
 import renderer, {act} from 'react-test-renderer';
 
+import {HoystTapInMark} from '../src/design/components/HoystTapInMark';
 import {TapInPulseButton} from '../src/design/components/TapInPulseButton';
-import {TapInRingMark} from '../src/design/components/TapInRingMark';
 
 jest.mock('react-native-linear-gradient', () => {
   const MockReact = require('react');
@@ -28,7 +29,7 @@ describe('TapInPulseButton', () => {
     jest.clearAllMocks();
   });
 
-  it('passes ring state through and advances the interaction key on press', () => {
+  it('renders the Hoyst mark and advances the interaction key on press', () => {
     const onPress = jest.fn();
     let tree: renderer.ReactTestRenderer | undefined;
 
@@ -46,11 +47,14 @@ describe('TapInPulseButton', () => {
     const frame = tree!.root.findByProps({
       testID: 'tap-in-pulse-button-frame',
     });
-    let ring = tree!.root.findByType(TapInRingMark);
+    let mark = tree!.root.findByType(HoystTapInMark);
 
-    expect(ring.props.state).toBe('atRisk');
-    expect(ring.props.interactionKey).toBe(0);
-    expect(ring.props.isPressed).toBe(false);
+    expect(mark.props.size).toBe(30);
+    expect(mark.props.interactionKey).toBe(0);
+    expect(mark.props.isPressed).toBe(false);
+    expect(
+      tree!.root.findByProps({testID: 'hoyst-tap-in-mark-shadow-core'}).type,
+    ).toBe(Ellipse);
     expect(StyleSheet.flatten(frame.props.style)).toEqual(
       expect.objectContaining({
         backgroundColor: 'rgba(255, 255, 255, 0.96)',
@@ -65,10 +69,10 @@ describe('TapInPulseButton', () => {
       pressable.props.onPressIn();
     });
 
-    ring = tree!.root.findByType(TapInRingMark);
+    mark = tree!.root.findByType(HoystTapInMark);
 
-    expect(ring.props.interactionKey).toBe(1);
-    expect(ring.props.isPressed).toBe(true);
+    expect(mark.props.interactionKey).toBe(1);
+    expect(mark.props.isPressed).toBe(true);
     expect(RNHapticFeedback.trigger).toHaveBeenCalledWith('impactLight', {
       enableVibrateFallback: true,
       ignoreAndroidSystemSettings: false,
@@ -84,8 +88,8 @@ describe('TapInPulseButton', () => {
       pressable.props.onPressOut();
     });
 
-    ring = tree!.root.findByType(TapInRingMark);
-    expect(ring.props.isPressed).toBe(false);
+    mark = tree!.root.findByType(HoystTapInMark);
+    expect(mark.props.isPressed).toBe(false);
   });
 
   it('does not trigger haptics or interaction animation while disabled', () => {
@@ -103,11 +107,11 @@ describe('TapInPulseButton', () => {
       pressable.props.onPressIn();
     });
 
-    const ring = tree!.root.findByType(TapInRingMark);
+    const mark = tree!.root.findByType(HoystTapInMark);
 
     expect(pressable.props.disabled).toBe(true);
-    expect(ring.props.animated).toBe(false);
-    expect(ring.props.interactionKey).toBe(0);
+    expect(mark.props.animated).toBe(false);
+    expect(mark.props.interactionKey).toBe(0);
     expect(RNHapticFeedback.trigger).not.toHaveBeenCalled();
   });
 });

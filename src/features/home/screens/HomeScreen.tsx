@@ -1,37 +1,25 @@
-import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
-import {
-  Alert,
-  Animated,
-  Pressable,
-  ScrollView,
-  Share,
-  StyleSheet,
-  type StyleProp,
-  View,
-  type ViewStyle,
-} from 'react-native';
-import {Bell} from 'lucide-react-native';
+import React, {useCallback, useEffect, useMemo, useState} from 'react';
+import {Alert, Pressable, ScrollView, Share, StyleSheet, View} from 'react-native';
 import type {BottomTabNavigationProp} from '@react-navigation/bottom-tabs';
 import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import {useFocusEffect, useNavigation} from '@react-navigation/native';
 
 import {ActivityFeedCard} from '../../../design/components/ActivityFeedCard';
-import {BrandMark} from '../../../design/components/BrandMark';
+import {CircleSummaryRings} from '../../../design/components/CircleSummaryRings';
 import {GlassPanel} from '../../../design/components/GlassPanel';
+import {HomeHeroHeader, homeHeroPalettes} from '../../../design/components/HomeHeroHeader';
 import {HoystButton} from '../../../design/components/HoystButton';
-import {LayeredAvatar} from '../../../design/components/LayeredAvatar';
-import {HoystScreen} from '../../../design/components/HoystScreen';
 import {HoystText} from '../../../design/components/HoystText';
-import {MomentumStageIcon} from '../../../design/components/MomentumStageIcon';
-import {MomentumStatusPill} from '../../../design/components/MomentumStatusPill';
+import {SectionEyebrow} from '../../../design/components/SectionEyebrow';
 import {SectionHeader} from '../../../design/components/SectionHeader';
 import {TapInRingMark} from '../../../design/components/TapInRingMark';
 import {TodayCircleCard} from '../../../design/components/TodayCircleCard';
-import {brandColors} from '../../../design/tokens/colors';
+import {WeekProgressStrip} from '../../../design/components/WeekProgressStrip';
 import {actionMotion, actionShadow} from '../../../design/tokens/actions';
 import {radius} from '../../../design/tokens/radius';
 import {useHoystTheme} from '../../../design/theme/useHoystTheme';
 import {useProtectedAction} from '../../auth/hooks/useProtectedAction';
+import {getHomeAvatarBadgeKind, getHomeHeroCopy} from '../services/home-hero-copy';
 import {
   createEmptyHomeData,
   getHomeCircleActionVariant,
@@ -44,7 +32,6 @@ import {
   shouldShowHomeDataErrorPanel,
   subscribeToHomeData,
   type HomeData,
-  type HomeProgressCell,
 } from '../services/home-data-service';
 import {
   buildHomeGreetingCacheKey,
@@ -74,7 +61,6 @@ import {useSessionStore} from '../../../store/session-store';
 import {nudgeCircleMembers} from '../../circles/services/circle-service';
 import {
   buildMomentumSummaryFromHomeData,
-  formatOpportunityCount,
   subscribeToMomentumSummary,
 } from '../../momentum/services/momentum-service';
 import {
@@ -89,122 +75,6 @@ type HomeGreetingState = {
   headline: string;
   source: 'fallback' | 'gemini';
 };
-
-const MOMENTUM_ICON_SIZE = 54;
-
-function MomentumBars({percentage}: {percentage: number}) {
-  const theme = useHoystTheme();
-  const barHeights = [20, 27, 34, 41, 48, 55];
-  const clampedPercentage = Math.max(0, Math.min(100, percentage));
-  const activeBarCount =
-    clampedPercentage <= 0
-      ? 0
-      : Math.ceil((clampedPercentage / 100) * barHeights.length);
-
-  return (
-    <View accessibilityElementsHidden style={styles.momentumBars}>
-      {barHeights.map((height, index) => (
-        <View
-          key={height}
-          style={[
-            styles.momentumBar,
-            {
-              backgroundColor:
-                index < activeBarCount ? theme.success : theme.surfaceMuted,
-              height,
-            },
-          ]}
-        />
-      ))}
-    </View>
-  );
-}
-
-function getStreakCalendarDayStyle(
-  theme: ReturnType<typeof useHoystTheme>,
-  state: HomeProgressCell['state'],
-) {
-  if (state === 'done') {
-    return {
-      cell: {
-        backgroundColor: `${theme.success}14`,
-        borderColor: `${theme.successForeground}55`,
-      },
-      text: theme.successForeground,
-    };
-  }
-
-  if (state === 'missed') {
-    return {
-      cell: {
-        backgroundColor: `${theme.danger}14`,
-        borderColor: `${theme.dangerForeground}55`,
-      },
-      text: theme.dangerForeground,
-    };
-  }
-
-  if (state === 'today') {
-    return {
-      cell: {
-        backgroundColor: `${theme.accentSecondary}16`,
-        borderColor: `${theme.accentSecondaryForeground}80`,
-        borderStyle: 'dashed' as const,
-      },
-      text: theme.accentSecondaryForeground,
-    };
-  }
-
-  return {
-    cell: {
-      backgroundColor: theme.surfaceSoft,
-      borderColor: theme.border,
-    },
-    text: theme.textMuted,
-  };
-}
-
-function HomeStreakCalendar({
-  days,
-  streakDays,
-}: {
-  days: HomeProgressCell[];
-  streakDays: number;
-}) {
-  const theme = useHoystTheme();
-  const streakLabel = streakDays > 0 ? `${streakDays}d streak` : 'Start';
-
-  return (
-    <GlassPanel padding="compact" style={styles.streakCalendarPanel}>
-      <View style={styles.streakCalendarHeader}>
-        <HoystText tone="muted" variant="bodyStrong">
-          Last 7 days
-        </HoystText>
-        <HoystText style={styles.streakCalendarBadge} tone="muted">
-          {streakLabel}
-        </HoystText>
-      </View>
-      <View style={styles.streakCalendarGrid}>
-        {days.map(day => {
-          const stateStyle = getStreakCalendarDayStyle(theme, day.state);
-
-          return (
-            <View
-              accessibilityLabel={`${day.label}: ${day.state}`}
-              key={day.dateKey}
-              style={[styles.streakCalendarDay, stateStyle.cell]}>
-              <HoystText
-                style={[styles.streakCalendarDayText, {color: stateStyle.text}]}
-                variant="bodyStrong">
-                {day.label}
-              </HoystText>
-            </View>
-          );
-        })}
-      </View>
-    </GlassPanel>
-  );
-}
 
 function canInvite(circle: CircleManagementCard) {
   return Boolean(
@@ -242,34 +112,6 @@ function mapInboxEventToActivity(event: InboxEvent): CircleActivityItem {
   };
 }
 
-function HeaderAction({
-  children,
-  onPress,
-  style,
-}: {
-  children: React.ReactNode;
-  onPress?: () => void;
-  style?: StyleProp<ViewStyle>;
-}) {
-  const theme = useHoystTheme();
-
-  return (
-    <Pressable
-      onPress={onPress}
-      style={({pressed}) => [
-        styles.headerAction,
-        style,
-        {
-          backgroundColor: theme.surfaceSoft,
-          borderColor: theme.border,
-          opacity: pressed ? 0.92 : 1,
-        },
-      ]}>
-      {children}
-    </Pressable>
-  );
-}
-
 function getInboxBadgeText(unreadCount: number) {
   if (unreadCount <= 0) {
     return undefined;
@@ -287,116 +129,6 @@ function getInboxAccessibilityLabel(unreadCount: number) {
   const updateLabel = unreadCount === 1 ? 'update' : 'updates';
 
   return `Open Inbox, ${countLabel} unread ${updateLabel}`;
-}
-
-function InboxHeaderAction({
-  onPress,
-  unreadCount,
-}: {
-  onPress: () => void;
-  unreadCount: number;
-}) {
-  const theme = useHoystTheme();
-  const badgeText = getInboxBadgeText(unreadCount);
-
-  return (
-    <Pressable
-      accessibilityLabel={getInboxAccessibilityLabel(unreadCount)}
-      accessibilityRole="button"
-      hitSlop={8}
-      onPress={onPress}
-      style={({pressed}) => [
-        styles.inboxHeaderAction,
-        {
-          backgroundColor: theme.actionSurface,
-          borderColor: theme.actionBorder,
-          opacity: pressed ? actionMotion.pressedOpacity : 1,
-          shadowColor: theme.actionShadowColor,
-          shadowOpacity: theme.actionShadowOpacity,
-          transform: [{scale: pressed ? actionMotion.pressedScale : 1}],
-        },
-      ]}>
-      <Bell color={theme.actionForeground} size={25} strokeWidth={2.2} />
-      {badgeText ? (
-        <View style={styles.inboxBadge}>
-          <HoystText
-            allowFontScaling={false}
-            numberOfLines={1}
-            style={styles.inboxBadgeText}>
-            {badgeText}
-          </HoystText>
-        </View>
-      ) : null}
-    </Pressable>
-  );
-}
-
-function AnimatedHomeGreeting({headline}: {headline: string}) {
-  const opacity = useRef(new Animated.Value(0)).current;
-  const animationRef = useRef<Animated.CompositeAnimation | undefined>(
-    undefined,
-  );
-  const [displayedHeadline, setDisplayedHeadline] = useState(headline);
-
-  useEffect(() => {
-    let isActive = true;
-
-    animationRef.current?.stop();
-
-    if (headline === displayedHeadline) {
-      const fadeIn = Animated.timing(opacity, {
-        duration: 180,
-        toValue: 1,
-        useNativeDriver: true,
-      });
-
-      animationRef.current = fadeIn;
-      fadeIn.start();
-
-      return () => {
-        isActive = false;
-        fadeIn.stop();
-      };
-    }
-
-    const fadeOut = Animated.timing(opacity, {
-      duration: 140,
-      toValue: 0,
-      useNativeDriver: true,
-    });
-
-    animationRef.current = fadeOut;
-    fadeOut.start(({finished}) => {
-      if (!finished || !isActive) {
-        return;
-      }
-
-      setDisplayedHeadline(headline);
-      opacity.setValue(0);
-
-      const fadeIn = Animated.timing(opacity, {
-        duration: 180,
-        toValue: 1,
-        useNativeDriver: true,
-      });
-
-      animationRef.current = fadeIn;
-      fadeIn.start();
-    });
-
-    return () => {
-      isActive = false;
-      fadeOut.stop();
-    };
-  }, [displayedHeadline, headline, opacity]);
-
-  return (
-    <Animated.View style={{opacity}}>
-      <HoystText style={styles.homeGreetingHeadline} variant="headline">
-        {displayedHeadline}
-      </HoystText>
-    </Animated.View>
-  );
 }
 
 export function HomeScreen(): React.JSX.Element {
@@ -547,15 +279,20 @@ export function HomeScreen(): React.JSX.Element {
     isAuthenticatedHome &&
     !isLoadingHomeData &&
     (homeData.hasLoadedMemberships || hasHomeDataError);
-  const shouldHoldHomeGreeting =
-    isAuthenticatedHome && !activeHomeGreetingState;
-  const homeGreeting =
+  const bubbleText =
     activeHomeGreetingState?.headline ??
     (isAuthenticatedHome ? undefined : homeGreetingFallback);
   const initials = getProfileInitials(profile);
   const avatarSource = getProfileAvatarSource(profile, user?.photoURL);
   const momentumSummary =
     remoteMomentumSummary ?? buildMomentumSummaryFromHomeData(homeData);
+  const avatarBadgeKind = getHomeAvatarBadgeKind(events[0]?.type);
+  const heroCopy = getHomeHeroCopy({
+    dateKey: homeData.todayDateKey,
+    momentumStatus: momentumSummary.status,
+    streakDays: homeData.personalStreakDays,
+    timeWindow: homeGreetingContext.timeWindow,
+  });
   const showAccountPrompt = !isAuthenticatedHome;
   const showAuthenticatedEmptyState = shouldShowAuthenticatedHomeEmptyState({
     circleCount: homeData.circles.length,
@@ -580,6 +317,10 @@ export function HomeScreen(): React.JSX.Element {
     () => events.slice(0, 2).map(mapInboxEventToActivity),
     [events],
   );
+  const heroPalette = theme.isDark
+    ? homeHeroPalettes.dark
+    : homeHeroPalettes.light;
+  const sheetColor = theme.isDark ? theme.backgroundElevated : '#FFFFFF';
 
   useEffect(() => {
     clearExpiredHomeGreetingCacheEntries().catch(() => undefined);
@@ -655,14 +396,10 @@ export function HomeScreen(): React.JSX.Element {
     };
   }, [
     canGenerateHomeGreeting,
-    hasHomeDataError,
-    homeData.hasLoadedMemberships,
     homeGreetingContext,
     homeGreetingDateKey,
     homeGreetingFallback,
     homeGreetingRequestKey,
-    isAuthenticatedHome,
-    isLoadingHomeData,
   ]);
 
   const openAccountAuth = () => {
@@ -806,307 +543,246 @@ export function HomeScreen(): React.JSX.Element {
   };
 
   return (
-    <HoystScreen contentContainerStyle={styles.content}>
-      <View style={styles.topBar}>
-        <BrandMark isDark={theme.isDark} kind="logo" style={styles.logo} />
-        <View style={styles.topActions}>
-          <InboxHeaderAction
-            onPress={openInbox}
-            unreadCount={unreadInboxCount}
-          />
-          <HeaderAction
-            onPress={() => navigation.navigate('Profile')}
-            style={styles.avatarHeaderAction}>
-            <LayeredAvatar
-              initials={initials}
-              imageSource={avatarSource}
-              size={38}
-              state="done"
-            />
-          </HeaderAction>
-        </View>
-      </View>
-
-      <View style={styles.heroCopy}>
-        {homeGreeting ? (
-          <AnimatedHomeGreeting headline={homeGreeting} />
-        ) : shouldHoldHomeGreeting ? (
-          <View
-            accessibilityElementsHidden
-            importantForAccessibility="no-hide-descendants"
-            style={styles.homeGreetingPlaceholder}>
-            <View
-              style={[
-                styles.homeGreetingSkeletonLine,
-                {
-                  backgroundColor: theme.surfaceStrong,
-                  borderColor: theme.border,
-                },
-              ]}
-            />
-            <View
-              style={[
-                styles.homeGreetingSkeletonLineShort,
-                {
-                  backgroundColor: theme.surfaceStrong,
-                  borderColor: theme.border,
-                },
-              ]}
-            />
-          </View>
-        ) : null}
-        <HoystText tone="muted" variant="label">
-          {homeData.todayLabel}
-        </HoystText>
-      </View>
-
-      <View style={styles.momentumStack}>
-        <Pressable
-          accessibilityLabel={`Your momentum. ${momentumSummary.percentage}%. ${
-            momentumSummary.label
-          }. ${formatOpportunityCount(momentumSummary)}`}
-          accessibilityRole="button"
-          onPress={() => navigation.navigate('Momentum')}
-          style={({pressed}) => [
-            styles.momentumPanelPressable,
-            {
-              opacity: pressed ? actionMotion.pressedOpacity : 1,
-              transform: [{scale: pressed ? actionMotion.pressedScale : 1}],
-            },
-          ]}>
-          <GlassPanel padding="compact" style={styles.momentumPanel}>
-            <View style={styles.momentumPanelContent}>
-              <View style={styles.momentumStageIconWrap}>
-                <MomentumStageIcon
-                  status={momentumSummary.status}
-                  size={MOMENTUM_ICON_SIZE}
-                />
-              </View>
-              <View style={styles.momentumCopy}>
-                <HoystText
-                  numberOfLines={1}
-                  style={styles.momentumTitleText}
-                  tone="muted">
-                  Your momentum
-                </HoystText>
-                <View style={styles.momentumValueRow}>
-                  <HoystText style={styles.momentumPercent}>
-                    {momentumSummary.percentage}%
-                  </HoystText>
-                  <MomentumStatusPill
-                    label={momentumSummary.label}
-                    status={momentumSummary.status}
-                  />
-                </View>
-                <HoystText
-                  numberOfLines={2}
-                  style={styles.momentumMetaText}
-                  tone="muted">
-                  {formatOpportunityCount(momentumSummary)}
-                </HoystText>
-              </View>
-              <View style={styles.momentumTrendWrap}>
-                <MomentumBars percentage={momentumSummary.percentage} />
-              </View>
-            </View>
-          </GlassPanel>
-        </Pressable>
-
-        <HomeStreakCalendar
-          days={homeData.progressDays}
-          streakDays={homeData.personalStreakDays}
+    <View style={[styles.root, {backgroundColor: sheetColor}]}>
+      <ScrollView
+        bounces={false}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        style={{backgroundColor: heroPalette.background}}>
+        <HomeHeroHeader
+          avatarAccessibilityLabel={getInboxAccessibilityLabel(
+            unreadInboxCount,
+          )}
+          avatarSource={avatarSource}
+          badgeKind={avatarBadgeKind}
+          bubbleText={bubbleText}
+          copy={heroCopy}
+          initials={initials}
+          momentumPercent={momentumSummary.percentage}
+          momentumStatus={momentumSummary.status}
+          onAvatarPress={openInbox}
+          onMomentumPress={() => navigation.navigate('Momentum')}
+          unreadBadgeText={getInboxBadgeText(unreadInboxCount)}
         />
-      </View>
-
-      {showAccountPrompt ? (
-        <GlassPanel style={styles.emptyPanel}>
-          <SectionHeader
-            description={
-              isIncompleteProfile
-                ? 'Finish your handle and profile before circles and Tap Ins unlock.'
-                : 'Get started to save Progression, join Circles, and build your Tap In streak.'
-            }
-            title={
-              isIncompleteProfile
-                ? 'Complete your profile'
-                : 'Start making Progression'
-            }
-          />
-          <View style={styles.emptyActions}>
-            <HoystButton
-              label={isIncompleteProfile ? 'Complete profile' : 'Get started'}
-              onPress={openAccountAuth}
-            />
-            <HoystButton
-              label="Find circles"
-              onPress={() => navigation.navigate('Circles')}
-              variant="outline"
+        <View style={[styles.sheet, {backgroundColor: sheetColor}]}>
+          <View style={styles.stripSection}>
+            <SectionEyebrow>Recent activity and streak</SectionEyebrow>
+            <WeekProgressStrip
+              days={homeData.progressDays}
+              streakDays={homeData.personalStreakDays}
             />
           </View>
-        </GlassPanel>
-      ) : null}
 
-      {isAuthenticatedHome ? (
-        <View style={styles.circlesSection}>
-          <SectionHeader
-            description={
-              showAuthenticatedEmptyState
-                ? 'Create a Circle or find one in Circles to begin tracking real Tap Ins.'
-                : 'These circles need your attention for tap-in or nudging others.'
-            }
-            title="Today"
+          <CircleSummaryRings
+            contributionPercent={homeData.progressPercent}
+            momentumLabel={momentumSummary.label}
+            momentumPercent={momentumSummary.percentage}
+            momentumStatus={momentumSummary.status}
+            onPress={() => navigation.navigate('Momentum')}
+            streakDays={homeData.personalStreakDays}
           />
 
-          {todayActionCircles.length > 0 ? (
-            todayActionCircles.map(circle => (
-              <TodayCircleCard
-                card={circle}
-                isNudged={nudgedCircleIds.has(circle.id)}
-                isNudging={nudgingCircleIds.has(circle.id)}
-                key={circle.id}
-                onActionPress={() => handleCircleAction(circle)}
-                onCardPress={() => openCircleDetail(circle.id)}
-                variant="today"
-              />
-            ))
-          ) : !showAuthenticatedEmptyState ? (
+          {showAccountPrompt ? (
             <GlassPanel style={styles.emptyPanel}>
               <SectionHeader
-                description="No Tap In or Nudge needs your attention today."
-                title="Today is clear"
+                description={
+                  isIncompleteProfile
+                    ? 'Finish your handle and profile before circles and Tap Ins unlock.'
+                    : 'Get started to save Progression, join Circles, and build your Tap In streak.'
+                }
+                title={
+                  isIncompleteProfile
+                    ? 'Complete your profile'
+                    : 'Start making Progression'
+                }
+              />
+              <View style={styles.emptyActions}>
+                <HoystButton
+                  label={
+                    isIncompleteProfile ? 'Complete profile' : 'Get started'
+                  }
+                  onPress={openAccountAuth}
+                />
+                <HoystButton
+                  label="Find circles"
+                  onPress={() => navigation.navigate('Circles')}
+                  variant="outline"
+                />
+              </View>
+            </GlassPanel>
+          ) : null}
+
+          {isAuthenticatedHome ? (
+            <View style={styles.circlesSection}>
+              <SectionEyebrow>Circles need your attention</SectionEyebrow>
+
+              {todayActionCircles.length > 0 ? (
+                todayActionCircles.map(circle => (
+                  <TodayCircleCard
+                    card={circle}
+                    isNudged={nudgedCircleIds.has(circle.id)}
+                    isNudging={nudgingCircleIds.has(circle.id)}
+                    key={circle.id}
+                    onActionPress={() => handleCircleAction(circle)}
+                    onCardPress={() => openCircleDetail(circle.id)}
+                    variant="today"
+                  />
+                ))
+              ) : !showAuthenticatedEmptyState ? (
+                <GlassPanel style={styles.emptyPanel}>
+                  <SectionHeader
+                    description="No Tap In or Nudge needs your attention today."
+                    title="Today is clear"
+                  />
+                </GlassPanel>
+              ) : null}
+            </View>
+          ) : null}
+
+          {isAuthenticatedHome && upcomingActionCircles.length > 0 ? (
+            <View style={styles.circleSectionGroup}>
+              <SectionHeader
+                description="Circles that will need attention tomorrow or later this week."
+                title="Upcoming"
+              />
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={styles.upcomingScroll}
+                contentContainerStyle={styles.upcomingScrollContent}>
+                {upcomingActionCircles.map(circle => (
+                  <TodayCircleCard
+                    card={circle}
+                    isNudged={nudgedCircleIds.has(circle.id)}
+                    isNudging={nudgingCircleIds.has(circle.id)}
+                    key={circle.id}
+                    onActionPress={() => handleCircleAction(circle)}
+                    onCardPress={() => openCircleDetail(circle.id)}
+                    variant="upcoming"
+                  />
+                ))}
+              </ScrollView>
+            </View>
+          ) : null}
+
+          {isLoadingHomeData ? (
+            <GlassPanel style={styles.emptyPanel}>
+              <SectionHeader
+                description="Pulling your live Circle Progression from Hoyst."
+                title="Loading your circles"
               />
             </GlassPanel>
           ) : null}
-        </View>
-      ) : null}
 
-      {isAuthenticatedHome && upcomingActionCircles.length > 0 ? (
-        <View style={styles.circleSectionGroup}>
-          <SectionHeader
-            description="Circles that will need attention tomorrow or later this week."
-            title="Upcoming"
-          />
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            style={styles.upcomingScroll}
-            contentContainerStyle={styles.upcomingScrollContent}>
-            {upcomingActionCircles.map(circle => (
-              <TodayCircleCard
-                card={circle}
-                isNudged={nudgedCircleIds.has(circle.id)}
-                isNudging={nudgingCircleIds.has(circle.id)}
-                key={circle.id}
-                onActionPress={() => handleCircleAction(circle)}
-                onCardPress={() => openCircleDetail(circle.id)}
-                variant="upcoming"
-              />
-            ))}
-          </ScrollView>
-        </View>
-      ) : null}
-
-      {isLoadingHomeData ? (
-        <GlassPanel style={styles.emptyPanel}>
-          <SectionHeader
-            description="Pulling your live Circle Progression from Hoyst."
-            title="Loading your circles"
-          />
-        </GlassPanel>
-      ) : null}
-
-      {showHomeDataErrorPanel ? (
-        <GlassPanel style={styles.emptyPanel}>
-          <SectionHeader
-            description="Your account is connected, but Home could not load live circle data."
-            title="Could not load Home"
-          />
-        </GlassPanel>
-      ) : null}
-
-      {showAuthenticatedEmptyState ? (
-        <GlassPanel style={styles.emptyPanel}>
-          <View style={styles.emptyActions}>
-            <HoystButton
-              label="Find circles"
-              onPress={() => navigation.navigate('Circles')}
-            />
-            <HoystButton
-              label="Create Circle"
-              onPress={openCreateCircle}
-              variant="outline"
-            />
-          </View>
-        </GlassPanel>
-      ) : null}
-
-      {isAuthenticatedHome ? (
-        <View style={styles.circleSectionGroup}>
-          <SectionHeader
-            description="What is happening in your circles."
-            title="Companion Updates"
-          />
-          {companionUpdates.length > 0 ? (
-            companionUpdates.map((item, index) => (
-              <Pressable key={item.id} onPress={() => openEvent(events[index])}>
-                <ActivityFeedCard item={item} />
-              </Pressable>
-            ))
-          ) : (
-            <GlassPanel>
+          {showHomeDataErrorPanel ? (
+            <GlassPanel style={styles.emptyPanel}>
               <SectionHeader
-                description="Nudges, joins, and circle milestones will appear here."
-                title="No companion updates yet"
+                description="Your account is connected, but Home could not load live circle data."
+                title="Could not load Home"
               />
             </GlassPanel>
-          )}
-        </View>
-      ) : null}
+          ) : null}
 
-      {showCreateCircleButton ? (
-        <Pressable
-          accessibilityLabel="Create Circle"
-          hitSlop={8}
-          onPress={openCreateCircle}
-          style={({pressed}) => [
-            styles.createButtonPressable,
-            {
-              opacity: pressed ? actionMotion.pressedOpacity : 1,
-              shadowColor: theme.actionShadowColor,
-              shadowOpacity: theme.actionShadowOpacity,
-              transform: [{scale: pressed ? actionMotion.pressedScale : 1}],
-            },
-          ]}>
-          <View
-            style={[
-              styles.createButton,
-              {
-                backgroundColor: theme.actionSurface,
-                borderColor: theme.actionBorder,
-              },
-            ]}>
-            <View style={styles.createIcon}>
-              <TapInRingMark innerSize={19} outerSize={34} />
+          {showAuthenticatedEmptyState ? (
+            <GlassPanel style={styles.emptyPanel}>
+              <View style={styles.emptyActions}>
+                <HoystButton
+                  label="Find circles"
+                  onPress={() => navigation.navigate('Circles')}
+                />
+                <HoystButton
+                  label="Create Circle"
+                  onPress={openCreateCircle}
+                  variant="outline"
+                />
+              </View>
+            </GlassPanel>
+          ) : null}
+
+          {isAuthenticatedHome ? (
+            <View style={styles.circleSectionGroup}>
+              <SectionEyebrow>Companion updates</SectionEyebrow>
+              {companionUpdates.length > 0 ? (
+                companionUpdates.map((item, index) => (
+                  <Pressable
+                    key={item.id}
+                    onPress={() => openEvent(events[index])}>
+                    <ActivityFeedCard item={item} />
+                  </Pressable>
+                ))
+              ) : (
+                <GlassPanel>
+                  <SectionHeader
+                    description="Nudges, joins, and circle milestones will appear here."
+                    title="No companion updates yet"
+                  />
+                </GlassPanel>
+              )}
             </View>
-            <HoystText
-              numberOfLines={1}
-              style={[
-                styles.createButtonLabel,
-                {color: theme.actionForeground},
-              ]}
-              variant="button">
-              Create Circle
-            </HoystText>
-          </View>
-        </Pressable>
-      ) : null}
-    </HoystScreen>
+          ) : null}
+
+          {showCreateCircleButton ? (
+            <Pressable
+              accessibilityLabel="Create Circle"
+              hitSlop={8}
+              onPress={openCreateCircle}
+              style={({pressed}) => [
+                styles.createButtonPressable,
+                {
+                  opacity: pressed ? actionMotion.pressedOpacity : 1,
+                  shadowColor: theme.actionShadowColor,
+                  shadowOpacity: theme.actionShadowOpacity,
+                  transform: [{scale: pressed ? actionMotion.pressedScale : 1}],
+                },
+              ]}>
+              <View
+                style={[
+                  styles.createButton,
+                  {
+                    backgroundColor: theme.actionSurface,
+                    borderColor: theme.actionBorder,
+                  },
+                ]}>
+                <View style={styles.createIcon}>
+                  <TapInRingMark innerSize={19} outerSize={34} />
+                </View>
+                <HoystText
+                  numberOfLines={1}
+                  style={[
+                    styles.createButtonLabel,
+                    {color: theme.actionForeground},
+                  ]}
+                  variant="button">
+                  Create Circle
+                </HoystText>
+              </View>
+            </Pressable>
+          ) : null}
+        </View>
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  content: {
+  root: {
+    flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
+  },
+  sheet: {
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    flexGrow: 1,
+    gap: 24,
+    marginTop: -28,
     paddingBottom: 172,
+    paddingHorizontal: 20,
+    paddingTop: 18,
+  },
+  stripSection: {
+    gap: 12,
   },
   upcomingScroll: {
     marginHorizontal: -20,
@@ -1118,206 +794,8 @@ const styles = StyleSheet.create({
   circleSectionGroup: {
     gap: 12,
   },
-  topBar: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  logo: {
-    alignSelf: 'center',
-    height: 38,
-    width: 90,
-  },
-  topActions: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: 10,
-  },
-  headerAction: {
-    alignItems: 'center',
-    borderRadius: 22,
-    borderWidth: 1,
-    height: 44,
-    justifyContent: 'center',
-    width: 44,
-  },
-  avatarHeaderAction: {
-    transform: [{translateY: -4}],
-  },
-  inboxBadge: {
-    alignItems: 'center',
-    backgroundColor: brandColors.red,
-    borderColor: brandColors.white,
-    borderRadius: 11,
-    borderWidth: 2,
-    height: 22,
-    justifyContent: 'center',
-    minWidth: 22,
-    paddingHorizontal: 5,
-    position: 'absolute',
-    right: -8,
-    top: -8,
-  },
-  inboxBadgeText: {
-    color: brandColors.white,
-    fontSize: 12,
-    fontWeight: '800',
-    letterSpacing: 0,
-    lineHeight: 15,
-    textAlign: 'center',
-  },
-  inboxHeaderAction: {
-    alignItems: 'center',
-    borderRadius: 22,
-    borderWidth: 1,
-    elevation: 3,
-    height: 44,
-    justifyContent: 'center',
-    overflow: 'visible',
-    shadowOffset: {height: 4, width: 0},
-    shadowRadius: 10,
-    width: 44,
-  },
-  heroCopy: {
-    gap: 8,
-  },
-  homeGreetingHeadline: {
-    fontSize: 25,
-    letterSpacing: 0,
-    lineHeight: 29,
-  },
-  homeGreetingPlaceholder: {
-    gap: 8,
-    minHeight: 58,
-    paddingTop: 3,
-  },
-  homeGreetingSkeletonLine: {
-    borderRadius: 8,
-    borderWidth: 1,
-    height: 20,
-    opacity: 0.7,
-    width: '92%',
-  },
-  homeGreetingSkeletonLineShort: {
-    borderRadius: 8,
-    borderWidth: 1,
-    height: 20,
-    opacity: 0.5,
-    width: '64%',
-  },
-  momentumCopy: {
-    flex: 1,
-    gap: 4,
-    minWidth: 0,
-  },
-  momentumBar: {
-    borderRadius: radius.pill,
-    width: 7,
-  },
-  momentumBars: {
-    alignItems: 'flex-end',
-    flexDirection: 'row',
-    gap: 4,
-    height: 56,
-  },
-  momentumPanel: {
-    minHeight: 104,
-  },
-  momentumPanelContent: {
-    alignItems: 'center',
-    alignSelf: 'stretch',
-    flexDirection: 'row',
-    gap: 8,
-    justifyContent: 'space-between',
-  },
-  momentumPanelPressable: {
-    borderRadius: radius.lg,
-  },
-  momentumStack: {
-    gap: 10,
-  },
-  momentumPercent: {
-    fontSize: 26,
-    fontWeight: '800',
-    letterSpacing: 0,
-    lineHeight: 30,
-  },
-  momentumStageIconWrap: {
-    alignItems: 'center',
-    flexShrink: 0,
-    height: MOMENTUM_ICON_SIZE,
-    justifyContent: 'center',
-    marginRight: 4,
-    width: MOMENTUM_ICON_SIZE,
-  },
-  momentumTitleText: {
-    fontSize: 16,
-    fontWeight: '800',
-    letterSpacing: 0,
-    lineHeight: 21,
-  },
-  momentumMetaText: {
-    fontSize: 13,
-    fontWeight: '600',
-    letterSpacing: 0,
-    lineHeight: 17,
-  },
-  momentumTrendWrap: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    flexShrink: 0,
-    gap: 9,
-  },
-  momentumValueRow: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: 5,
-    minWidth: 0,
-  },
-  progressTitle: {
-    fontSize: 11,
-    fontWeight: '700',
-    lineHeight: 11,
-    letterSpacing: 1.4,
-    textTransform: 'uppercase',
-  },
-  streakCalendarBadge: {
-    fontSize: 13,
-    fontWeight: '800',
-    letterSpacing: 0,
-    lineHeight: 17,
-  },
-  streakCalendarDay: {
-    alignItems: 'center',
-    aspectRatio: 1,
-    borderRadius: 12,
-    borderWidth: 1.25,
-    flex: 1,
-    justifyContent: 'center',
-    minWidth: 0,
-  },
-  streakCalendarDayText: {
-    fontSize: 14,
-    lineHeight: 18,
-  },
-  streakCalendarGrid: {
-    flexDirection: 'row',
-    gap: 7,
-  },
-  streakCalendarHeader: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  streakCalendarPanel: {
-    gap: 14,
-    minHeight: 108,
-  },
   circlesSection: {
     gap: 14,
-  },
-  circlesHeader: {
-    gap: 8,
   },
   createButton: {
     alignItems: 'center',
@@ -1352,9 +830,6 @@ const styles = StyleSheet.create({
   },
   emptyActions: {
     gap: 12,
-  },
-  emptyCopy: {
-    gap: 8,
   },
   emptyPanel: {
     gap: 16,

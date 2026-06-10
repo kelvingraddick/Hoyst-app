@@ -20,12 +20,9 @@ import {HoystText} from '../../../design/components/HoystText';
 import {LayeredAvatar} from '../../../design/components/LayeredAvatar';
 import {NudgeActionButton} from '../../../design/components/NudgeActionButton';
 import {CircleCategoryPill} from '../../../design/components/CircleCategoryIcon';
-import {TapInRingMark} from '../../../design/components/TapInRingMark';
+import {HoystTapInMark} from '../../../design/components/HoystTapInMark';
 import {TapInPulseButton} from '../../../design/components/TapInPulseButton';
-import {
-  getPulseRingStateForCircle,
-  getPulseRingStateForCircles,
-} from '../../../design/components/pulse-ring-state';
+import {getPulseRingStateForCircle} from '../../../design/components/pulse-ring-state';
 import {radius} from '../../../design/tokens/radius';
 import {useHoystTheme} from '../../../design/theme/useHoystTheme';
 import type {RootStackParamList} from '../../../navigation/types';
@@ -135,7 +132,6 @@ export function TapInPickerScreen({navigation}: Props): React.JSX.Element {
   const doneCount = activeCircles.filter(
     circle => circle.viewerHasCheckedIn,
   ).length;
-  const heroPulseRingState = getPulseRingStateForCircles(activeCircles);
   const showLoadingState = isLoadingHomeData;
   const showDataErrorState =
     hasHomeDataError && !isLoadingHomeData && activeCircles.length === 0;
@@ -242,12 +238,7 @@ export function TapInPickerScreen({navigation}: Props): React.JSX.Element {
 
       <GlassPanel style={styles.heroPanel}>
         <View style={styles.heroIconWrap}>
-          <TapInRingMark
-            centerTreatment="state"
-            innerSize={56}
-            outerSize={100}
-            state={heroPulseRingState}
-          />
+          <HoystTapInMark size={100} />
         </View>
         <View style={styles.headerCopy}>
           <HoystText style={styles.centerText} variant="display">
@@ -417,7 +408,7 @@ export function TapInPickerScreen({navigation}: Props): React.JSX.Element {
       ) : showLoadingState ? (
         <GlassPanel style={styles.emptyPanel}>
           <View style={styles.emptyState}>
-            <TapInRingMark innerSize={34} outerSize={62} />
+            <HoystTapInMark size={62} />
             <HoystText style={styles.centerText} variant="title">
               Loading your circles
             </HoystText>
@@ -429,7 +420,7 @@ export function TapInPickerScreen({navigation}: Props): React.JSX.Element {
       ) : showDataErrorState ? (
         <GlassPanel style={styles.emptyPanel}>
           <View style={styles.emptyState}>
-            <TapInRingMark innerSize={34} outerSize={62} />
+            <HoystTapInMark size={62} />
             <HoystText style={styles.centerText} variant="title">
               Could not load Tap In
             </HoystText>
@@ -442,7 +433,7 @@ export function TapInPickerScreen({navigation}: Props): React.JSX.Element {
       ) : showNoActiveCirclesState ? (
         <GlassPanel style={styles.emptyPanel}>
           <View style={styles.emptyState}>
-            <TapInRingMark innerSize={34} outerSize={62} />
+            <HoystTapInMark size={62} />
             <HoystText style={styles.centerText} variant="title">
               No active circles yet
             </HoystText>
@@ -454,7 +445,7 @@ export function TapInPickerScreen({navigation}: Props): React.JSX.Element {
       ) : showAllTappedInState ? (
         <GlassPanel style={styles.emptyPanel}>
           <View style={styles.emptyState}>
-            <TapInRingMark innerSize={34} outerSize={62} />
+            <HoystTapInMark size={62} />
             <HoystText style={styles.centerText} variant="title">
               Your Commitments are complete
             </HoystText>

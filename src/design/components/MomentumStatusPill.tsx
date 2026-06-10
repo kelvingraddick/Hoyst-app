@@ -3,7 +3,7 @@ import {StyleSheet, View, type StyleProp, type ViewStyle} from 'react-native';
 
 import type {MomentumStatus} from '../../types/models';
 import {useHoystTheme} from '../theme/useHoystTheme';
-import {type HoystTheme} from '../tokens/colors';
+import {brandColors, type HoystTheme} from '../tokens/colors';
 import {radius} from '../tokens/radius';
 import {HoystText} from './HoystText';
 
@@ -42,6 +42,19 @@ export function getMomentumStatusPillPalette(
     backgroundColor: theme.surfaceHigh,
     color: theme.textMuted,
   };
+}
+
+export function getMomentumStatusVisualColor(
+  status: MomentumStatus,
+  theme: HoystTheme,
+) {
+  const palette = getMomentumStatusPillPalette(status, theme);
+
+  if (status === 'building_momentum') {
+    return brandColors.orange;
+  }
+
+  return palette.color;
 }
 
 export function MomentumStatusPill({

@@ -14,6 +14,7 @@ type MomentumStageIconProps = {
   size?: number;
   status: MomentumStatus;
   style?: StyleProp<ViewStyle>;
+  testID?: string;
 };
 
 const iconColor = '#FFA300';
@@ -178,6 +179,7 @@ export function MomentumStageIcon({
   size = 64,
   status,
   style,
+  testID,
 }: MomentumStageIconProps): React.JSX.Element {
   const sizeStyle = {
     borderRadius: size / 2,
@@ -186,7 +188,7 @@ export function MomentumStageIcon({
   };
 
   return (
-    <View style={[styles.wrap, sizeStyle, style]}>
+    <View style={[styles.wrap, sizeStyle, style]} testID={testID}>
       <Svg height={size * 0.72} viewBox="0 0 64 64" width={size * 0.72}>
         {renderStageIcon(status)}
       </Svg>

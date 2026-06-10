@@ -1,21 +1,24 @@
 import React from 'react';
-import {Pressable, View} from 'react-native';
+import {Pressable, StyleSheet} from 'react-native';
 import renderer, {act} from 'react-test-renderer';
 
 import {ActivityFeedCard} from '../src/design/components/ActivityFeedCard';
+import {GradientRing} from '../src/design/components/GradientRing';
+import {brandColors} from '../src/design/tokens/colors';
 import {HomeScreen} from '../src/features/home/screens/HomeScreen';
 import type {HomeData} from '../src/features/home/services/home-data-service';
 import {
   markInboxEventRead,
   subscribeToInboxEvents,
 } from '../src/features/settings/services/notification-settings-service';
-import type {InboxEvent} from '../src/types/models';
+import type {InboxEvent, MomentumSummary} from '../src/types/models';
 
 const mockNavigate = jest.fn();
 const mockRootNavigate = jest.fn();
 
 let mockHomeData: HomeData;
 let mockInboxEvents: InboxEvent[];
+let mockMomentumSummary: MomentumSummary;
 
 jest.mock('@react-native-community/blur', () => {
   const MockReact = require('react');
@@ -42,6 +45,7 @@ jest.mock('react-native-safe-area-context', () => {
   return {
     SafeAreaView: ({children, ...props}: {children?: React.ReactNode}) =>
       MockReact.createElement(MockView, props, children),
+    useSafeAreaInsets: () => ({bottom: 0, left: 0, right: 0, top: 0}),
   };
 });
 
@@ -181,16 +185,7 @@ jest.mock('../src/features/home/services/home-greeting-service', () => ({
 }));
 
 jest.mock('../src/features/momentum/services/momentum-service', () => ({
-  buildMomentumSummaryFromHomeData: jest.fn(() => ({
-    availableOpportunities: 0,
-    bestStreak: 0,
-    completedOpportunities: 0,
-    currentStreak: 0,
-    label: 'Getting started',
-    percentage: 0,
-    periodKey: '2026-05-26',
-    status: 'getting_started',
-  })),
+  buildMomentumSummaryFromHomeData: jest.fn(() => mockMomentumSummary),
   formatOpportunityCount: jest.fn(() => '0 opportunities'),
   subscribeToMomentumSummary: jest.fn(() => jest.fn()),
 }));
@@ -222,6 +217,22 @@ function homeData(): HomeData {
     progressPercent: 0,
     todayDateKey: '2026-05-26',
     todayLabel: 'Today',
+  };
+}
+
+function momentumSummary(
+  overrides: Partial<MomentumSummary> = {},
+): MomentumSummary {
+  return {
+    availableOpportunities: 0,
+    bestStreak: 0,
+    completedOpportunities: 0,
+    currentStreak: 0,
+    label: 'Getting started',
+    percentage: 0,
+    periodKey: '2026-05-26',
+    status: 'getting_started',
+    ...overrides,
   };
 }
 
@@ -261,6 +272,7 @@ describe('HomeScreen companion updates', () => {
     jest.clearAllMocks();
     mockHomeData = homeData();
     mockInboxEvents = [];
+    mockMomentumSummary = momentumSummary();
   });
 
   it('subscribes to inbox events and renders empty companion updates at the bottom', () => {
@@ -272,12 +284,12 @@ describe('HomeScreen companion updates', () => {
         uid: 'user-1',
       }),
     );
-    expect(output).toContain('Companion Updates');
+    expect(output).toContain('Companion updates');
     expect(output).toContain('No companion updates yet');
-    expect(output.indexOf('Companion Updates')).toBeGreaterThan(
+    expect(output.indexOf('Companion updates')).toBeGreaterThan(
       output.indexOf('Today is clear'),
     );
-    expect(output.indexOf('Companion Updates')).toBeLessThan(
+    expect(output.indexOf('Companion updates')).toBeLessThan(
       output.lastIndexOf('Create Circle'),
     );
   });
@@ -287,7 +299,7 @@ describe('HomeScreen companion updates', () => {
     const tree = renderScreenTree();
     const output = JSON.stringify(tree.toJSON());
 
-    expect(output).toContain('Companion Updates');
+    expect(output).toContain('Companion updates');
     expect(output).toContain('Ari Runner');
     expect(output).toContain('tapped in for Morning Movers.');
 
@@ -305,5 +317,73 @@ describe('HomeScreen companion updates', () => {
     expect(mockRootNavigate).toHaveBeenCalledWith('CircleDetail', {
       circleId: 'circle-1',
     });
+  });
+
+  it('uses the Momentum status palette and icon on Home momentum visuals', () => {
+    mockMomentumSummary = momentumSummary({
+      label: 'Building',
+      percentage: 35,
+      status: 'building_momentum',
+    });
+
+    const tree = renderScreenTree();
+    expect(
+      tree.root.findByProps({testID: 'home-momentum-stage-icon'}).props.status,
+    ).toBe('building_momentum');
+    expect(
+      tree.root.findByProps({testID: 'circle-summary-momentum-stage-icon'})
+        .props.status,
+    ).toBe('building_momentum');
+
+    const barFillStyle = StyleSheet.flatten(
+      tree.root.findByProps({testID: 'home-momentum-bar-fill'}).props.style,
+    );
+    const barKnobStyle = StyleSheet.flatten(
+      tree.root.findByProps({testID: 'home-momentum-bar-knob'}).props.style,
+    );
+    const contributionDiscStyle = StyleSheet.flatten(
+      tree.root.findByProps({testID: 'circle-summary-contribution-disc'}).props
+        .style,
+    );
+    const momentumDiscStyle = StyleSheet.flatten(
+      tree.root.findByProps({testID: 'circle-summary-momentum-disc'}).props
+        .style,
+    );
+    const streakDiscStyle = StyleSheet.flatten(
+      tree.root.findByProps({testID: 'circle-summary-streak-disc'}).props.style,
+    );
+    const contributionIcon = tree.root.findByProps({
+      testID: 'circle-summary-contribution-icon',
+    });
+    const streakIcon = tree.root.findByProps({
+      testID: 'circle-summary-streak-icon',
+    });
+
+    const rings = tree.root.findAllByType(GradientRing);
+
+    expect(barFillStyle.backgroundColor).toBe(brandColors.orange);
+    expect(rings[1].props.flatColor).toBe(brandColors.orange);
+    expect(contributionDiscStyle.backgroundColor).toBe('#E8F8EF');
+    expect(momentumDiscStyle.backgroundColor).toBe('#FFF3DF');
+    expect(streakDiscStyle.backgroundColor).toBe('#FFF3CF');
+    expect(barKnobStyle.backgroundColor).toBe('#FFF3DF');
+    expect(barKnobStyle.borderWidth).toBeUndefined();
+    expect(contributionIcon.props.height).toBe(33);
+    expect(contributionIcon.props.width).toBe(33);
+    expect(streakIcon.props.height).toBe(33);
+    expect(streakIcon.props.width).toBe(33);
+    const textLabels = tree.root
+      .findAll(node => typeof node.props.children === 'string')
+      .map(node => node.props.children);
+    expect(textLabels).toContain('Streak');
+    expect(textLabels).toContain('0 days');
+    expect(textLabels).not.toContain('Streak (0 Days!)');
+    const connectorStyle = StyleSheet.flatten(
+      tree.root.findByProps({testID: 'circle-summary-connector'}).props.style,
+    );
+
+    expect(connectorStyle.backgroundColor).toBe('#EEF1F5');
+    expect(connectorStyle.left).toBe('12%');
+    expect(connectorStyle.right).toBe('12%');
   });
 });

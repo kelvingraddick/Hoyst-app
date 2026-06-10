@@ -13,7 +13,7 @@ import {actionMotion, actionShadow, touchTarget} from '../tokens/actions';
 import {radius} from '../tokens/radius';
 import {useHoystTheme} from '../theme/useHoystTheme';
 import {HoystText} from './HoystText';
-import {TapInRingMark} from './TapInRingMark';
+import {HoystTapInMark} from './HoystTapInMark';
 import type {PulseRingState} from './pulse-ring-state';
 
 type TapInPulseButtonVariant = 'card' | 'primary' | 'reference';
@@ -34,7 +34,6 @@ const variantSpecs = {
     borderWidth: 1.5,
     gap: 8,
     height: 48,
-    iconInnerSize: 17,
     iconOuterSize: 30,
     labelSize: 14,
     labelLineHeight: 18,
@@ -45,7 +44,6 @@ const variantSpecs = {
     borderWidth: 1.8,
     gap: 10,
     height: 58,
-    iconInnerSize: 22,
     iconOuterSize: 40,
     labelSize: 16,
     labelLineHeight: 20,
@@ -56,7 +54,6 @@ const variantSpecs = {
     borderWidth: 1.8,
     gap: 12,
     height: 82,
-    iconInnerSize: 42,
     iconOuterSize: 72,
     labelSize: 20,
     labelLineHeight: 24,
@@ -70,7 +67,6 @@ export function TapInPulseButton({
   disabled = false,
   label = 'Tap In',
   onPress,
-  ringState = 'active',
   style,
   supportingText,
   variant = 'card',
@@ -140,14 +136,11 @@ export function TapInPulseButton({
               paddingHorizontal: spec.paddingHorizontal,
             },
           ]}>
-          <TapInRingMark
+          <HoystTapInMark
             animated={!disabled}
-            centerTreatment="state"
-            innerSize={spec.iconInnerSize}
             interactionKey={interactionKey}
             isPressed={isPressed}
-            outerSize={spec.iconOuterSize}
-            state={ringState}
+            size={spec.iconOuterSize}
           />
           <View
             style={[

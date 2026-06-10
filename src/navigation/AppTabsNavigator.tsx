@@ -11,25 +11,19 @@ import {
   type TabBarIconProps,
 } from '../design/components/TabBarIcons';
 
-import {TapInRingMark} from '../design/components/TapInRingMark';
-import {getPulseRingStateForCircles} from '../design/components/pulse-ring-state';
+import {HoystTapInMark} from '../design/components/HoystTapInMark';
 import {CirclesScreen} from '../features/circles/screens/CirclesScreen';
 import {HomeScreen} from '../features/home/screens/HomeScreen';
-import {
-  createEmptyHomeData,
-  subscribeToHomeData,
-  type HomeData,
-} from '../features/home/services/home-data-service';
 import {MomentumScreen} from '../features/momentum/screens/MomentumScreen';
 import {ProfileScreen} from '../features/profile/screens/ProfileScreen';
 import {useHoystTheme} from '../design/theme/useHoystTheme';
+import {brandColors} from '../design/tokens/colors';
 import {HoystTabBarBackground} from './components/HoystTabBarBackground';
 import {canResumePendingAction} from './pending-action-resume';
 import {navigateToAuthWelcome} from './auth-modal-navigation';
 import {getRootAuthPresentation} from './root-mode';
 import type {AppTabsParamList, RootStackParamList} from './types';
 import {useOnboardingStore} from '../store/onboarding-store';
-import {useUserProfileStore} from '../store/profile-store';
 import {useSessionStore} from '../store/session-store';
 
 const Tab = createBottomTabNavigator<AppTabsParamList>();
@@ -54,7 +48,6 @@ export function AppTabsNavigator({
 }: Props): React.JSX.Element {
   const theme = useHoystTheme();
   const status = useSessionStore(state => state.status);
-  const user = useSessionStore(state => state.user);
   const beginAuthFlow = useSessionStore(state => state.beginAuthFlow);
   const consumePendingAction = useSessionStore(
     state => state.consumePendingAction,
@@ -75,28 +68,14 @@ export function AppTabsNavigator({
     state => state.startOnboardingWizard,
   );
   const setCurrentStep = useOnboardingStore(state => state.setCurrentStep);
-  const profile = useUserProfileStore(state => state.profile);
-  const timezone = profile?.timezone ?? 'UTC';
-  const [tabHomeData, setTabHomeData] = useState<HomeData>(() =>
-    createEmptyHomeData(),
-  );
   const [tabPulseInteractionKey, setTabPulseInteractionKey] = useState(0);
   const didAutoPresentOnboardingRef = useRef(false);
-  const tabPulseRingState = getPulseRingStateForCircles(tabHomeData.circles);
-
-  useEffect(() => {
-    if (status !== 'authenticatedReady' || !user?.uid) {
-      setTabHomeData(createEmptyHomeData(timezone));
-      return undefined;
-    }
-
-    return subscribeToHomeData({
-      onData: setTabHomeData,
-      onError: () => setTabHomeData(createEmptyHomeData(timezone)),
-      timezone,
-      uid: user.uid,
-    });
-  }, [status, timezone, user?.uid]);
+  const inactiveIconPrimary = theme.isDark
+    ? brandColors.white
+    : brandColors.charcoal;
+  const inactiveIconSecondary = theme.isDark
+    ? brandColors.gray
+    : brandColors.graySoft;
 
   useEffect(() => {
     if (
@@ -188,7 +167,7 @@ export function AppTabsNavigator({
         sceneStyle: {
           backgroundColor: theme.background,
         },
-        tabBarActiveTintColor: theme.tabActiveForeground,
+        tabBarActiveTintColor: brandColors.blue,
         tabBarBackground: HoystTabBarBackground,
         tabBarHideOnKeyboard: true,
         tabBarIconStyle:
@@ -208,27 +187,27 @@ export function AppTabsNavigator({
         // React Navigation expects a render prop here, so the usual nested
         // component warning is noise for this specific API shape.
         // eslint-disable-next-line react/no-unstable-nested-components
-        tabBarIcon: ({color, focused}) => {
+        tabBarIcon: ({focused}) => {
           if (route.name === 'TapIn') {
             return (
-              <TapInRingMark
-                centerTreatment="state"
-                innerSize={46}
+              <HoystTapInMark
                 interactionKey={tabPulseInteractionKey}
-                outerSize={78}
-                state={tabPulseRingState}
+                size={78}
                 style={styles.tapInOffset}
               />
             );
           }
 
           const Icon = routeIcons[route.name as StandardTabName];
-          const iconSize = 26;
+          const iconSize = 28;
+          const iconColor = focused ? brandColors.blue : inactiveIconPrimary;
 
           return (
             <Icon
-              color={color}
-              fill={focused ? color : 'none'}
+              color={iconColor}
+              fill="none"
+              focused={focused}
+              secondaryColor={inactiveIconSecondary}
               size={iconSize}
               strokeWidth={focused ? 2.1 : 1.9}
             />
