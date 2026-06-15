@@ -105,4 +105,33 @@ describe('OpportunityCard', () => {
     expect(stopPropagation).toHaveBeenCalled();
     expect(onTapInPress).toHaveBeenCalled();
   });
+
+  it('keeps completed weekly commitments tappable on a new day', () => {
+    const onTapInPress = jest.fn();
+    let tree: renderer.ReactTestRenderer | undefined;
+
+    act(() => {
+      tree = renderer.create(
+        <OpportunityCard
+          card={circle({
+            commitmentCadence: 'weekly',
+            commitmentFrequency: {tapInsPerWeek: 2},
+            remainingCheckIns: 0,
+            state: 'done',
+            viewerHasCheckedIn: true,
+            viewerHasTappedInToday: false,
+            viewerRemainingTapIns: 0,
+            viewerTodayStatus: undefined,
+          })}
+          onTapInPress={onTapInPress}
+        />,
+      );
+    });
+
+    const output = JSON.stringify(tree!.toJSON());
+    const button = tree!.root.findByType(CircleCardTapInButton);
+
+    expect(output).toContain('Tap today');
+    expect(button.props.ringState).toBe('active');
+  });
 });

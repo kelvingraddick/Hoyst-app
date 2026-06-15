@@ -3,6 +3,7 @@ import {Pressable, StyleSheet, View} from 'react-native';
 import {ChevronRight, UsersRound} from 'lucide-react-native';
 
 import type {CircleManagementCard} from '../../types/models';
+import {canTapInToday} from '../../features/home/services/home-circle-actions';
 import {useHoystTheme} from '../theme/useHoystTheme';
 import {actionMotion} from '../tokens/actions';
 import {radius} from '../tokens/radius';
@@ -23,6 +24,12 @@ type OpportunityCardProps = {
 function getStatus(card: CircleManagementCard) {
   if (card.viewerMembershipStatus === 'pending') {
     return {label: 'Pending approval', tone: 'purple' as const};
+  }
+
+  if (canTapInToday(card)) {
+    return card.viewerHasCheckedIn
+      ? {label: 'Tap today', tone: 'green' as const}
+      : {label: 'Waiting on you', tone: 'orange' as const};
   }
 
   if (card.viewerHasCheckedIn) {
@@ -47,8 +54,7 @@ export function OpportunityCard({
   const status = getStatus(card);
   const categoryColor = getCircleCategoryForegroundColor(card.category, theme);
   const pulseRingState = getPulseRingStateForCircle(card);
-  const canTapIn =
-    !card.viewerHasCheckedIn && card.viewerMembershipStatus !== 'pending';
+  const canTapIn = canTapInToday(card);
 
   return (
     <Pressable

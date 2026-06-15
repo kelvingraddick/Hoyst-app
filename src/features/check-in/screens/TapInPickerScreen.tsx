@@ -30,6 +30,7 @@ import type {CircleManagementCard} from '../../../types/models';
 import {useUserProfileStore} from '../../../store/profile-store';
 import {useSessionStore} from '../../../store/session-store';
 import {
+  canTapInToday,
   createEmptyHomeData,
   subscribeToHomeData,
   type HomeData,
@@ -121,16 +122,16 @@ export function TapInPickerScreen({navigation}: Props): React.JSX.Element {
     circle => circle.viewerMembershipStatus !== 'pending',
   );
   const dueCircles = activeCircles
-    .filter(circle => !circle.viewerHasCheckedIn)
+    .filter(circle => canTapInToday(circle))
     .sort(sortDueCircles);
   const secondaryCircles = activeCircles.filter(
-    circle => circle.viewerHasCheckedIn,
+    circle => !canTapInToday(circle),
   );
   const atRiskCount = activeCircles.filter(
     circle => circle.state === 'risk',
   ).length;
   const doneCount = activeCircles.filter(
-    circle => circle.viewerHasCheckedIn,
+    circle => circle.viewerHasTappedInToday,
   ).length;
   const showLoadingState = isLoadingHomeData;
   const showDataErrorState =
@@ -249,9 +250,9 @@ export function TapInPickerScreen({navigation}: Props): React.JSX.Element {
           </HoystText>
         </View>
         <View style={styles.summaryChips}>
-          <HoystChip label={`${dueCircles.length} Need You`} tone="orange" />
+          <HoystChip label={`${dueCircles.length} Tap Today`} tone="orange" />
           <HoystChip label={`${atRiskCount} At Risk`} tone="purple" />
-          <HoystChip label={`${doneCount} Already In`} tone="green" />
+          <HoystChip label={`${doneCount} Covered Today`} tone="green" />
         </View>
       </GlassPanel>
 
@@ -259,7 +260,7 @@ export function TapInPickerScreen({navigation}: Props): React.JSX.Element {
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <HoystText tone="muted" variant="label">
-              Needs Your Tap In
+              Tap Today
             </HoystText>
             <HoystText tone="muted" variant="caption">
               {dueCircles.length} due
@@ -283,9 +284,11 @@ export function TapInPickerScreen({navigation}: Props): React.JSX.Element {
             const statusCopy =
               circle.state === 'risk'
                 ? 'Group streak at risk'
+                : circle.viewerHasCheckedIn
+                ? 'Commitment complete'
                 : getRemainingTapInsLabel(circle);
             const canTapInNow = !circle.viewerHasTappedInToday;
-            const actionLabel = canTapInNow ? 'Tap In' : 'View Circle';
+            const actionLabel = canTapInNow ? 'Tap In Today' : 'View Circle';
 
             return (
               <GlassPanel key={circle.id} style={styles.dueCard}>
@@ -447,11 +450,11 @@ export function TapInPickerScreen({navigation}: Props): React.JSX.Element {
           <View style={styles.emptyState}>
             <HoystTapInMark size={62} />
             <HoystText style={styles.centerText} variant="title">
-              Your Commitments are complete
+              Today is covered
             </HoystText>
             <HoystText style={styles.centerText} tone="muted">
-              Every active Circle has what it needs from you right now. You can
-              still keep Members moving below.
+              Every active Circle has today's Tap In covered. You can still
+              keep Members moving below.
             </HoystText>
           </View>
         </GlassPanel>
@@ -492,7 +495,7 @@ export function TapInPickerScreen({navigation}: Props): React.JSX.Element {
               ? getRemainingTapInsLabel(circle)
               : circle.viewerTodayStatus === 'skip'
               ? 'Grace skip used today'
-              : 'Commitment complete';
+              : 'Covered today';
             const ActionIcon = canShare ? Send : ArrowRight;
 
             return (

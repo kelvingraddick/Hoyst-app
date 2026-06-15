@@ -130,7 +130,14 @@ function DayBoltIcon({size = 18}: {size?: number}) {
         strokeLinejoin="round"
         strokeWidth={1}
       />
-      <Path d="m12.4 5.4-3.6 6h2.4" fill="none" opacity={0.65} stroke="#FFF3CD" strokeLinecap="round" strokeWidth={1.4} />
+      <Path
+        d="m12.4 5.4-3.6 6h2.4"
+        fill="none"
+        opacity={0.65}
+        stroke="#FFF3CD"
+        strokeLinecap="round"
+        strokeWidth={1.4}
+      />
     </Svg>
   );
 }
@@ -168,7 +175,14 @@ function TodayCoinBadge({size = 18}: {size?: number}) {
           <Stop offset="1" stopColor="#F57F17" />
         </LinearGradient>
       </Defs>
-      <Circle cx={12} cy={12} fill={`url(#${gradientId})`} r={11} stroke="#FFFFFF" strokeWidth={2} />
+      <Circle
+        cx={12}
+        cy={12}
+        fill={`url(#${gradientId})`}
+        r={11}
+        stroke="#FFFFFF"
+        strokeWidth={2}
+      />
       <Path
         d="M12 17V8.4M8.4 11.6 12 8l3.6 3.6"
         fill="none"
@@ -236,7 +250,9 @@ export function WeekProgressStrip({
         ))}
       </View>
       <View style={styles.streakCluster}>
-        <MomentumFlameIllustration size={30} />
+        <View style={styles.streakFlameFrame}>
+          <MomentumFlameIllustration size={30} />
+        </View>
         <HoystText
           allowFontScaling={false}
           style={[styles.streakCount, {color: streakColor}]}>
@@ -251,7 +267,7 @@ const styles = StyleSheet.create({
   strip: {
     alignItems: 'center',
     flexDirection: 'row',
-    gap: 8,
+    gap: 4,
   },
   daysRow: {
     flex: 1,
@@ -290,7 +306,10 @@ const styles = StyleSheet.create({
   streakCluster: {
     alignItems: 'center',
     flexDirection: 'row',
-    gap: 2,
+    gap: 0,
+  },
+  streakFlameFrame: {
+    marginRight: -3,
   },
   streakCount: {
     fontSize: 17,

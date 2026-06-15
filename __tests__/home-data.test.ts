@@ -2,6 +2,7 @@ jest.mock('@react-native-firebase/firestore', () => jest.fn());
 
 import {
   buildHomeDataFromCircles,
+  canTapInToday,
   createEmptyHomeData,
   getHomeFilterCounts,
   getHomeCircleActionVariant,
@@ -192,6 +193,52 @@ describe('home data mapping', () => {
         pending,
       ]).map(circle => circle.id),
     ).toEqual(['weekly-remaining', 'daily-tomorrow', 'pending-upcoming']);
+  });
+
+  it('keeps completed weekly and monthly commitments tappable on a new day', () => {
+    const weeklyCompleteNewDay = homeCard({
+      commitmentCadence: 'weekly',
+      commitmentFrequency: {tapInsPerWeek: 2},
+      id: 'weekly-complete-new-day',
+      progressLabel: 'Week · 100%',
+      progressPercent: 100,
+      remainingCheckIns: 0,
+      state: 'done',
+      title: 'Weekly Complete New Day',
+      viewerHasCheckedIn: true,
+      viewerHasTappedInToday: false,
+      viewerRemainingTapIns: 0,
+      viewerTodayStatus: undefined,
+    });
+    const monthlyCompleteNewDay = homeCard({
+      commitmentCadence: 'monthly',
+      commitmentFrequency: {opportunitiesPerPeriod: 4, tapInsPerWeek: 4},
+      id: 'monthly-complete-new-day',
+      progressLabel: 'Month · 100%',
+      progressPercent: 100,
+      remainingCheckIns: 0,
+      state: 'done',
+      title: 'Monthly Complete New Day',
+      viewerHasCheckedIn: true,
+      viewerHasTappedInToday: false,
+      viewerRemainingTapIns: 0,
+      viewerTodayStatus: undefined,
+    });
+
+    expect(canTapInToday(weeklyCompleteNewDay)).toBe(true);
+    expect(canTapInToday(monthlyCompleteNewDay)).toBe(true);
+    expect(getHomeCircleActionVariant(weeklyCompleteNewDay)).toBe('check_in');
+    expect(getHomeCircleActionVariant(monthlyCompleteNewDay)).toBe('check_in');
+    expect(
+      getTodayAttentionCircles([
+        weeklyCompleteNewDay,
+        monthlyCompleteNewDay,
+      ]).map(circle => circle.id),
+    ).toEqual(['monthly-complete-new-day', 'weekly-complete-new-day']);
+    expect(getUpcomingAttentionCircles([weeklyCompleteNewDay])).toEqual([]);
+    expect(matchesHomeCircleFilter(weeklyCompleteNewDay, 'needsYou')).toBe(
+      true,
+    );
   });
 
   it('maps active membership and today check-ins into a real Home card', () => {

@@ -19,8 +19,12 @@ import type {
   MemberRole,
   ProgressDayState,
 } from '../../../types/models';
-import {getHomeCircleActionVariant} from './home-circle-actions';
+import {
+  canTapInToday,
+  getHomeCircleActionVariant,
+} from './home-circle-actions';
 export {
+  canTapInToday,
   getHomeCircleActionVariant,
   type HomeCircleActionVariant,
 } from './home-circle-actions';
@@ -486,7 +490,7 @@ export function getHomeGreetingCircleSummary(
         return summary;
       }
 
-      if (!circle.viewerHasCheckedIn) {
+      if (canTapInToday(circle)) {
         summary.needsYouCount += 1;
       }
       if (circle.state === 'risk') {
@@ -925,7 +929,7 @@ export function getHomeCircleUrgencyRank(circle: CircleManagementCard) {
     return 6;
   }
 
-  const needsViewer = !circle.viewerHasCheckedIn;
+  const needsViewer = canTapInToday(circle);
   const isAtRisk = circle.state === 'risk';
   const hasPendingToday =
     circle.state !== 'done' && circle.remainingCheckIns > 0;
@@ -989,7 +993,7 @@ export function matchesHomeCircleFilter(
   }
 
   if (filter === 'needsYou') {
-    return !circle.viewerHasCheckedIn;
+    return canTapInToday(circle);
   }
   if (filter === 'atRisk') {
     return circle.state === 'risk';

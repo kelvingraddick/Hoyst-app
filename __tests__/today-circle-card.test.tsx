@@ -96,6 +96,38 @@ describe('TodayCircleCard', () => {
     expect(companionIcon.props.color).not.toBe(lightTheme.accentForeground);
   });
 
+  it('keeps a completed weekly commitment tappable on a new day', () => {
+    let tree: renderer.ReactTestRenderer | undefined;
+
+    act(() => {
+      tree = renderer.create(
+        <TodayCircleCard
+          card={circle({
+            commitmentCadence: 'weekly',
+            commitmentFrequency: {tapInsPerWeek: 2},
+            progressPercent: 100,
+            remainingCheckIns: 0,
+            state: 'done',
+            title: 'Weekly Complete',
+            viewerHasCheckedIn: true,
+            viewerHasTappedInToday: false,
+            viewerRemainingTapIns: 0,
+            viewerTodayStatus: undefined,
+          })}
+          onActionPress={jest.fn()}
+          onCardPress={jest.fn()}
+        />,
+      );
+    });
+
+    const output = JSON.stringify(tree!.toJSON());
+    const tapInButton = tree!.root.findByType(CircleCardTapInButton);
+
+    expect(output).toContain('Tap Today');
+    expect(tapInButton.props.label).toBe('Tap In');
+    expect(tapInButton.props.ringState).toBe('active');
+  });
+
   it('renders upcoming daily cards as compact next-action cards', () => {
     let tree: renderer.ReactTestRenderer | undefined;
 

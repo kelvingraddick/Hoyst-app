@@ -2,6 +2,17 @@ import type {CircleManagementCard} from '../../../types/models';
 
 export type HomeCircleActionVariant = 'check_in' | 'nudge' | 'share' | 'view';
 
+type TapInTodayInput = Pick<
+  CircleManagementCard,
+  'viewerHasTappedInToday' | 'viewerMembershipStatus'
+>;
+
+export function canTapInToday(circle: TapInTodayInput) {
+  return (
+    circle.viewerMembershipStatus === 'active' && !circle.viewerHasTappedInToday
+  );
+}
+
 export function getHomeCircleActionVariant(
   circle: CircleManagementCard,
 ): HomeCircleActionVariant {
@@ -14,7 +25,7 @@ export function getHomeCircleActionVariant(
     return 'view';
   }
 
-  if (!circle.viewerHasCheckedIn && !circle.viewerHasTappedInToday) {
+  if (canTapInToday(circle)) {
     return 'check_in';
   }
 

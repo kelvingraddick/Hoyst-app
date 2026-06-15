@@ -28,16 +28,21 @@ function getCurrentSlots(circle, now = new Date()) {
 function getSlotForDate(circle, dateKey, existingStatuses) {
     const slots = getCurrentSlots(circle);
     const availableSlots = slots.filter(slot => slot.availableDateKey <= dateKey);
-    const candidate = availableSlots.find(slot => {
+    const openSlot = availableSlots.find(slot => {
         const status = existingStatuses.get(slot.slotIndex);
         return status !== 'completed' && status !== 'skipped';
-    }) ??
-        availableSlots[availableSlots.length - 1] ??
-        slots[0];
-    if (!candidate) {
+    });
+    if (openSlot) {
+        return openSlot;
+    }
+    if (availableSlots.length > 0) {
+        return undefined;
+    }
+    const nextSlot = slots[0];
+    if (!nextSlot) {
         throw new https_1.HttpsError('failed-precondition', 'No opportunity is available for this commitment.');
     }
-    return candidate;
+    return nextSlot;
 }
 function mapOpportunitySnapshot(snapshot) {
     const data = snapshot.data();
@@ -131,6 +136,9 @@ async function recordTapInOpportunity({ checkInId, circle, circleId, dateKey, me
         snapshot.data()?.status,
     ]));
     const slot = getSlotForDate(circle, dateKey, existingStatuses);
+    if (!slot) {
+        return;
+    }
     const opportunityRef = userPrivateRef
         .collection('opportunities')
         .doc(getOpportunityId(circleId, slot.periodKey, slot.slotIndex));

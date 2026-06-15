@@ -57,7 +57,11 @@ import {
   recordTapInOpportunity,
   removeTapInOpportunity,
 } from '../functions/src/momentum';
-import {getDateKey} from '../functions/src/momentum/schedule';
+import {
+  getDateKey,
+  getOpportunitySlots,
+  normalizeCommitmentSchedule,
+} from '../functions/src/momentum/schedule';
 
 type Ref = {
   collection: (name: string) => Ref;
@@ -130,6 +134,12 @@ const circle = {
   title: 'Building Hoyst',
 };
 
+const weeklyCircle = {
+  ...circle,
+  commitmentCadence: 'weekly',
+  commitmentFrequency: {tapInsPerWeek: 2},
+};
+
 const profile = {
   displayName: 'Kelvin',
   handle: 'kelvin',
@@ -154,6 +164,39 @@ describe('momentum transaction ordering', () => {
     ).resolves.toBeUndefined();
 
     expectReadsBeforeWrites(calls);
+  });
+
+  it('does not overwrite momentum opportunities after the period target is covered', async () => {
+    const slots = getOpportunitySlots(normalizeCommitmentSchedule(weeklyCircle));
+    const snapshots = new Map<string, Record<string, unknown> | undefined>(
+      slots.map(slot => [
+        `userPrivate/user-1/opportunities/circle-1_${slot.periodKey}_${slot.slotIndex}`,
+        {
+          completionDateKey: slot.availableDateKey,
+          slotIndex: slot.slotIndex,
+          status: 'completed',
+        },
+      ]),
+    );
+    const {calls, transaction} = createReadBeforeWriteTransaction(snapshots);
+
+    await expect(
+      recordTapInOpportunity({
+        checkInId: 'user-1',
+        circle: weeklyCircle,
+        circleId: 'circle-1',
+        dateKey: '9999-12-31',
+        memberCount: 1,
+        profile,
+        status: 'done',
+        transaction: transaction as never,
+        uid: 'user-1',
+      }),
+    ).resolves.toBeUndefined();
+
+    expect(calls.every(call => call.startsWith('get:'))).toBe(true);
+    expect(transaction.set).not.toHaveBeenCalled();
+    expect(transaction.delete).not.toHaveBeenCalled();
   });
 
   it('removes Tap In opportunity reads before transaction writes', async () => {
@@ -181,5 +224,34 @@ describe('momentum transaction ordering', () => {
     ).resolves.toBeUndefined();
 
     expectReadsBeforeWrites(calls);
+  });
+
+  it('does not decrement momentum opportunities for surplus Tap In removal', async () => {
+    const slots = getOpportunitySlots(normalizeCommitmentSchedule(weeklyCircle));
+    const snapshots = new Map<string, Record<string, unknown> | undefined>(
+      slots.map(slot => [
+        `userPrivate/user-1/opportunities/circle-1_${slot.periodKey}_${slot.slotIndex}`,
+        {
+          completionDateKey: slot.availableDateKey,
+          slotIndex: slot.slotIndex,
+          status: 'completed',
+        },
+      ]),
+    );
+    const {calls, transaction} = createReadBeforeWriteTransaction(snapshots);
+
+    await expect(
+      removeTapInOpportunity({
+        circle: weeklyCircle,
+        circleId: 'circle-1',
+        dateKey: '9999-12-31',
+        transaction: transaction as never,
+        uid: 'user-1',
+      }),
+    ).resolves.toBeUndefined();
+
+    expect(calls.every(call => call.startsWith('get:'))).toBe(true);
+    expect(transaction.set).not.toHaveBeenCalled();
+    expect(transaction.delete).not.toHaveBeenCalled();
   });
 });

@@ -188,8 +188,10 @@ export function TapInComposerScreen({
       ? 'Group streak at risk'
       : detail.viewerTodayStatus === 'skip'
       ? 'Skipped today'
-      : detail.viewerHasCheckedIn
+      : detail.viewerHasTappedInToday
       ? 'Already tapped in'
+      : detail.viewerHasCheckedIn
+      ? 'Commitment complete'
       : detail.remainingCheckIns === 1
       ? `1 Tap In left ${remainingPeriodCopy}`
       : `${detail.remainingCheckIns ?? 0} Tap Ins left ${remainingPeriodCopy}`;

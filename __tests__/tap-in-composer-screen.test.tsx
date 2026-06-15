@@ -3,12 +3,13 @@ import renderer, {act} from 'react-test-renderer';
 
 import {TapInPulseButton} from '../src/design/components/TapInPulseButton';
 import {TapInComposerScreen} from '../src/features/check-in/screens/TapInComposerScreen';
+import type {CircleDetailModel} from '../src/types/models';
 
 const mockSubmitTapIn = jest.fn();
 const mockRemoveTapIn = jest.fn();
 const mockSubscribeToMemberCircleDetail = jest.fn();
 
-const mockDetail = {
+const baseMockDetail: CircleDetailModel = {
   activity: [],
   category: 'Fitness',
   commitment: 'Move for 30 minutes',
@@ -35,6 +36,7 @@ const mockDetail = {
   viewerRemainingTapIns: 2,
   viewerTodayStatus: 'rest',
 };
+let mockDetail: CircleDetailModel = {...baseMockDetail};
 
 jest.mock('@react-native-community/blur', () => {
   const MockReact = require('react');
@@ -139,6 +141,7 @@ function renderComposerScreen() {
 
 describe('TapInComposerScreen', () => {
   beforeEach(() => {
+    mockDetail = {...baseMockDetail};
     mockSubmitTapIn.mockResolvedValue({
       checkInId: 'user-1',
       dateKey: '2026-05-29',
@@ -182,5 +185,33 @@ describe('TapInComposerScreen', () => {
       status: 'done',
       streakLabel: '4d streak',
     });
+  });
+
+  it('allows a new daily Tap In after the weekly commitment is complete', async () => {
+    mockDetail = {
+      ...baseMockDetail,
+      completionRate: 100,
+      progressLabel: 'Week · 100%',
+      remainingCheckIns: 0,
+      state: 'done',
+      viewerHasCheckedIn: true,
+      viewerHasTappedInToday: false,
+      viewerRemainingTapIns: 0,
+      viewerTodayStatus: undefined,
+    };
+    let tree: renderer.ReactTestRenderer | undefined;
+
+    await act(async () => {
+      tree = renderComposerScreen();
+    });
+
+    const output = JSON.stringify(tree!.toJSON());
+    const confirmButton = tree!.root
+      .findAllByType(TapInPulseButton)
+      .find(button => button.props.label === 'Confirm Tap In');
+
+    expect(output).toContain('Commitment complete');
+    expect(confirmButton).toBeTruthy();
+    expect(confirmButton?.props.disabled).toBe(false);
   });
 });

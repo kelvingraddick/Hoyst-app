@@ -1,4 +1,5 @@
 import type {CircleManagementCard, CircleSummary} from '../../types/models';
+import {canTapInToday} from '../../features/home/services/home-circle-actions';
 
 export type PulseRingState = 'idle' | 'active' | 'atRisk' | 'streak';
 
@@ -21,7 +22,7 @@ export function getPulseRingStateForCircle(
     return 'atRisk';
   }
 
-  if (!circle.viewerHasCheckedIn && !circle.viewerHasTappedInToday) {
+  if (canTapInToday(circle)) {
     return 'active';
   }
 

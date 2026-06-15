@@ -3,6 +3,7 @@ import {TextInput} from 'react-native';
 import renderer, {act} from 'react-test-renderer';
 import {UsersRound} from 'lucide-react-native';
 
+import {CircleCardTapInButton} from '../src/design/components/CircleCardTapInButton';
 import {CirclesScreen} from '../src/features/circles/screens/CirclesScreen';
 import type {HomeData} from '../src/features/home/services/home-data-service';
 import type {CircleManagementCard, ExploreCircle} from '../src/types/models';
@@ -58,6 +59,11 @@ let mockPublicCircles: ExploreCircle[];
 
 jest.mock('../src/features/home/services/home-data-service', () => {
   return {
+    canTapInToday: jest.fn(
+      (circle: CircleManagementCard) =>
+        circle.viewerMembershipStatus === 'active' &&
+        !circle.viewerHasTappedInToday,
+    ),
     createEmptyHomeData: jest.fn(() => ({
       circles: [],
       hasLoadedMemberships: false,
@@ -74,7 +80,7 @@ jest.mock('../src/features/home/services/home-data-service', () => {
         return 'view';
       }
 
-      if (!circle.viewerHasCheckedIn && !circle.viewerHasTappedInToday) {
+      if (!circle.viewerHasTappedInToday) {
         return 'check_in';
       }
 
@@ -173,11 +179,10 @@ function homeData(circles: CircleManagementCard[]): HomeData {
   };
 }
 
-function renderScreenTree() {
+function renderScreenWithNavigation() {
+  const rootNavigate = jest.fn();
   const navigation = {
-    getParent: () => ({
-      navigate: jest.fn(),
-    }),
+    getParent: () => ({navigate: rootNavigate}),
   };
   let screen: renderer.ReactTestRenderer | undefined;
 
@@ -187,7 +192,11 @@ function renderScreenTree() {
     );
   });
 
-  return screen!;
+  return {rootNavigate, screen: screen!};
+}
+
+function renderScreenTree() {
+  return renderScreenWithNavigation().screen;
 }
 
 function renderScreen() {
@@ -259,6 +268,40 @@ describe('CirclesScreen render paths', () => {
         .findAllByType(UsersRound)
         .some(icon => icon.props.color === '#07763E'),
     ).toBe(true);
+  });
+
+  it('opens Tap In for a completed weekly commitment without today coverage', () => {
+    mockHomeData = homeData([
+      circle({
+        commitmentCadence: 'weekly',
+        commitmentFrequency: {tapInsPerWeek: 2},
+        id: 'weekly-complete-new-day',
+        progressPercent: 100,
+        remainingCheckIns: 0,
+        state: 'done',
+        title: 'Weekly Complete New Day',
+        viewerHasCheckedIn: true,
+        viewerHasTappedInToday: false,
+        viewerRemainingTapIns: 0,
+        viewerTodayStatus: undefined,
+      }),
+    ]);
+
+    const {rootNavigate, screen} = renderScreenWithNavigation();
+    const tapInButton = screen.root
+      .findAllByType(CircleCardTapInButton)
+      .find(button => button.props.label === 'Tap In');
+
+    expect(tapInButton).toBeTruthy();
+
+    act(() => {
+      tapInButton?.props.onPress({stopPropagation: jest.fn()});
+    });
+
+    expect(rootNavigate).toHaveBeenCalledWith('TapInComposer', {
+      circleId: 'weekly-complete-new-day',
+      source: 'tap_in',
+    });
   });
 
   it('renders a Today-style no-results discovery card', () => {

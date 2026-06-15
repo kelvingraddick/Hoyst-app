@@ -42,6 +42,7 @@ import type {
 import {useSessionStore} from '../../../store/session-store';
 import type {CircleManagementCard, ExploreCircle} from '../../../types/models';
 import {
+  canTapInToday,
   createEmptyHomeData,
   getHomeCircleActionVariant,
   sortHomeCircles,
@@ -437,7 +438,7 @@ export function CirclesScreen({navigation}: Props): React.JSX.Element {
   const needsAttention = useMemo(
     () =>
       sortHomeCircles(
-        activeCircles.filter(circle => !circle.viewerHasCheckedIn),
+        activeCircles.filter(circle => canTapInToday(circle)),
       ),
     [activeCircles],
   );

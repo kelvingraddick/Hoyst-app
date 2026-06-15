@@ -4,6 +4,7 @@ import {ChevronRight, UsersRound} from 'lucide-react-native';
 
 import type {CircleManagementCard} from '../../types/models';
 import {
+  canTapInToday,
   getHomeCircleActionVariant,
   type HomeCircleActionVariant,
 } from '../../features/home/services/home-circle-actions';
@@ -139,8 +140,12 @@ function getStatusLabel(card: CircleManagementCard) {
     return 'Skipped';
   }
 
+  if (canTapInToday(card)) {
+    return card.viewerHasCheckedIn ? 'Tap Today' : 'Needs You';
+  }
+
   if (!card.viewerHasCheckedIn) {
-    return card.viewerHasTappedInToday ? 'Tapped Today' : 'Needs You';
+    return 'Tapped Today';
   }
 
   return card.remainingCheckIns > 0 ? 'Others Needed' : 'Complete';
@@ -149,7 +154,11 @@ function getStatusLabel(card: CircleManagementCard) {
 function getStatusTone(
   statusLabel: string,
 ): React.ComponentProps<typeof HoystChip>['tone'] {
-  if (statusLabel === 'Complete' || statusLabel === 'Tapped Today') {
+  if (
+    statusLabel === 'Complete' ||
+    statusLabel === 'Tapped Today' ||
+    statusLabel === 'Tap Today'
+  ) {
     return 'green';
   }
 
@@ -230,6 +239,10 @@ export function TodayCircleCard({
   const fallbackContextLabel =
     card.viewerMembershipStatus === 'pending'
       ? 'Pending approval before Tap In unlocks.'
+      : canTapInToday(card)
+      ? card.viewerHasCheckedIn
+        ? 'Commitment complete, Tap In today'
+        : undefined
       : !card.viewerHasCheckedIn
       ? card.viewerHasTappedInToday
         ? viewerNeededLabel

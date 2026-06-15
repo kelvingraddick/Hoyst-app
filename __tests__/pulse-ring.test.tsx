@@ -218,6 +218,17 @@ describe('PulseRing', () => {
     expect(
       getPulseRingStateForCircle(
         circle({
+          remainingCheckIns: 0,
+          state: 'done',
+          viewerHasCheckedIn: true,
+          viewerHasTappedInToday: false,
+          viewerTodayStatus: undefined,
+        }),
+      ),
+    ).toBe('active');
+    expect(
+      getPulseRingStateForCircle(
+        circle({
           viewerHasCheckedIn: false,
           viewerMembershipStatus: 'pending',
         }),
