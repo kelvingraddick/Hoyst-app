@@ -236,7 +236,10 @@ export function HomeHeroHeader({
         <View
           style={[
             styles.bubble,
-            {backgroundColor: palette.bubble, shadowColor: theme.shadow},
+            {
+              backgroundColor: palette.bubble,
+              shadowColor: theme.shadow,
+            },
           ]}>
           {bubbleText ? (
             <BubbleText text={bubbleText} />

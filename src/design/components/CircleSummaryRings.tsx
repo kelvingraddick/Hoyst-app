@@ -1,11 +1,20 @@
 import React from 'react';
-import {Pressable, StyleSheet, View} from 'react-native';
+import {
+  Pressable,
+  StyleSheet,
+  View,
+  type StyleProp,
+  type ViewStyle,
+} from 'react-native';
+import LinearGradient from 'react-native-linear-gradient';
 import Svg, {Circle, G, Path} from 'react-native-svg';
 
 import type {MomentumStatus} from '../../types/models';
 import {brandColors} from '../tokens/colors';
 import {actionMotion} from '../tokens/actions';
+import {radius} from '../tokens/radius';
 import {useHoystTheme} from '../theme/useHoystTheme';
+import {GlassPanel} from './GlassPanel';
 import {GradientRing} from './GradientRing';
 import {HoystText} from './HoystText';
 import {MomentumStageIcon} from './MomentumStageIcon';
@@ -14,13 +23,14 @@ import {
   getMomentumStatusVisualColor,
 } from './MomentumStatusPill';
 
-const RING_SIZE = 96;
-const RING_STROKE = 9;
-const DISC_SIZE = 64;
+const RING_SIZE = 80;
+const RING_STROKE = 8;
+const DISC_SIZE = 52;
 const CONTRIBUTION_ICON_BACKGROUND = '#E8F8EF';
 const MOMENTUM_STAGE_ICON_BACKGROUND = '#FFF3DF';
 const STREAK_ICON_BACKGROUND = '#FFF3CF';
 const SUMMARY_ICON_ARTWORK_SIZE = 33;
+const MOMENTUM_STAGE_ICON_SIZE = 42;
 
 type CircleSummaryRingsProps = {
   contributionPercent: number;
@@ -28,6 +38,7 @@ type CircleSummaryRingsProps = {
   momentumPercent: number;
   momentumStatus: MomentumStatus;
   onPress?: () => void;
+  surfaceStyle?: StyleProp<ViewStyle>;
   streakDays: number;
 };
 
@@ -111,38 +122,37 @@ function StreakSummaryIcon({
 
 type RingStatVisual = {
   arc: string;
+  badgeBackground: string;
+  badgeForeground: string;
+  cardBackground: string;
+  cardBorder: string;
+  cardTint: string;
   disc: string;
+  shadowColor: string;
   trackDark: string;
   trackLight: string;
 };
 
-const ringVisuals: Record<'contribution' | 'streak', RingStatVisual> = {
-  contribution: {
-    arc: '#0E9B57',
-    disc: CONTRIBUTION_ICON_BACKGROUND,
-    trackDark: 'rgba(16,185,103,0.26)',
-    trackLight: '#CDEBDA',
-  },
-  streak: {
-    arc: '#F5A800',
-    disc: STREAK_ICON_BACKGROUND,
-    trackDark: 'rgba(255,196,0,0.26)',
-    trackLight: '#FFE9B3',
-  },
-};
-
-function RingStat({
+function RingStatCard({
+  accessibilityLabel,
+  badgeLabel,
+  badgeTestID,
   children,
+  discTestID,
+  onPress,
   progress,
-  subtitle,
+  surfaceStyle,
   title,
   visual,
-  discTestID,
 }: {
+  accessibilityLabel: string;
+  badgeLabel: string;
+  badgeTestID?: string;
   children: React.ReactNode;
   discTestID?: string;
+  onPress?: () => void;
   progress: number;
-  subtitle: string;
+  surfaceStyle?: StyleProp<ViewStyle>;
   title: string;
   visual: RingStatVisual;
 }) {
@@ -150,32 +160,86 @@ function RingStat({
   const discBorder = theme.isDark ? theme.backgroundElevated : '#FFFFFF';
 
   return (
-    <View style={styles.stat}>
-      <View style={styles.ringWrap}>
-        <GradientRing
-          flatColor={visual.arc}
-          progress={progress}
-          size={RING_SIZE}
-          strokeWidth={RING_STROKE}
-          trackColor={theme.isDark ? visual.trackDark : visual.trackLight}
-        />
-        <View pointerEvents="none" style={styles.discWrap}>
-          <View
-            testID={discTestID}
-            style={[
-              styles.disc,
-              {backgroundColor: visual.disc, borderColor: discBorder},
-            ]}>
-            {children}
+    <View style={styles.cardSlot}>
+      <Pressable
+        accessibilityLabel={accessibilityLabel}
+        accessibilityRole={onPress ? 'button' : undefined}
+        onPress={onPress}
+        style={({pressed}) =>
+          onPress && pressed
+            ? {
+                opacity: actionMotion.pressedOpacity,
+                transform: [{scale: actionMotion.pressedScale}],
+              }
+            : null
+        }>
+        <GlassPanel
+          padding="none"
+          style={[
+            styles.cardPanel,
+            {
+              backgroundColor: visual.cardBackground,
+              borderColor: visual.cardBorder,
+              shadowColor: visual.shadowColor,
+            },
+            surfaceStyle,
+          ]}>
+          <View style={styles.cardInner}>
+            <View pointerEvents="none" style={styles.gradientInset}>
+              <LinearGradient
+                colors={[visual.cardTint, 'rgba(255,255,255,0)']}
+                locations={[0, 0.72]}
+                start={{x: 0.5, y: 1}}
+                end={{x: 0.5, y: 0}}
+                style={StyleSheet.absoluteFill}
+              />
+            </View>
+            <HoystText
+              adjustsFontSizeToFit
+              numberOfLines={1}
+              style={styles.cardTitle}
+              tone="muted"
+              variant="label">
+              {title}
+            </HoystText>
+            <View style={styles.ringWrap}>
+              <GradientRing
+                flatColor={visual.arc}
+                progress={progress}
+                size={RING_SIZE}
+                strokeWidth={RING_STROKE}
+                trackColor={theme.isDark ? visual.trackDark : visual.trackLight}
+              />
+              <View pointerEvents="none" style={styles.discWrap}>
+                <View
+                  testID={discTestID}
+                  style={[
+                    styles.disc,
+                    {backgroundColor: visual.disc, borderColor: discBorder},
+                  ]}>
+                  {children}
+                </View>
+              </View>
+            </View>
+            <View
+              style={[
+                styles.badge,
+                {
+                  backgroundColor: visual.badgeBackground,
+                  borderColor: discBorder,
+                },
+              ]}>
+              <HoystText
+                allowFontScaling={false}
+                numberOfLines={1}
+                style={[styles.badgeLabel, {color: visual.badgeForeground}]}
+                testID={badgeTestID}>
+                {badgeLabel}
+              </HoystText>
+            </View>
           </View>
-        </View>
-      </View>
-      <HoystText numberOfLines={1} style={styles.statTitle}>
-        {title}
-      </HoystText>
-      <HoystText numberOfLines={2} style={styles.statSubtitle} tone="muted">
-        {subtitle}
-      </HoystText>
+        </GlassPanel>
+      </Pressable>
     </View>
   );
 }
@@ -194,6 +258,7 @@ export function CircleSummaryRings({
   momentumPercent,
   momentumStatus,
   onPress,
+  surfaceStyle,
   streakDays,
 }: CircleSummaryRingsProps): React.JSX.Element {
   const theme = useHoystTheme();
@@ -204,90 +269,134 @@ export function CircleSummaryRings({
     momentumStatus,
     theme,
   );
-  const connectorColor = theme.isDark ? theme.border : '#EEF1F5';
+  const streakProgress = Math.max(0, Math.min(1, streakDays / 7));
+  const streakDayLabel = streakDays === 1 ? 'Day' : 'Days';
+  const streakBadge = `${streakDays} ${streakDayLabel.toLowerCase()}`;
+
+  const contributionVisual: RingStatVisual = {
+    arc: '#0E9B57',
+    badgeBackground: '#E0F4E9',
+    badgeForeground: '#07763E',
+    cardBackground: theme.isDark ? 'rgba(16,185,103,0.08)' : '#FFFFFF',
+    cardBorder: theme.isDark
+      ? 'rgba(112,226,163,0.18)'
+      : 'rgba(16,185,103,0.12)',
+    cardTint: theme.isDark ? 'rgba(16,185,103,0.16)' : 'rgba(16,185,103,0.11)',
+    disc: CONTRIBUTION_ICON_BACKGROUND,
+    shadowColor: theme.isDark ? theme.shadow : 'rgba(7,118,62,0.22)',
+    trackDark: 'rgba(16,185,103,0.26)',
+    trackLight: '#CDEBDA',
+  };
   const momentumVisual: RingStatVisual = {
     arc: momentumVisualColor,
+    badgeBackground: momentumPalette.backgroundColor,
+    badgeForeground: momentumPalette.color,
+    cardBackground: theme.isDark ? momentumPalette.backgroundColor : '#FFFFFF',
+    cardBorder: theme.isDark
+      ? momentumPalette.backgroundColor
+      : `${momentumVisualColor}1F`,
+    cardTint: theme.isDark
+      ? `${momentumVisualColor}24`
+      : 'rgba(255,138,61,0.13)',
     disc: MOMENTUM_STAGE_ICON_BACKGROUND,
+    shadowColor: theme.isDark ? theme.shadow : `${momentumVisualColor}33`,
     trackDark: momentumPalette.backgroundColor,
     trackLight: momentumPalette.backgroundColor,
   };
-  const streakProgress = Math.max(0, Math.min(1, streakDays / 7));
-  const streakDayLabel = streakDays === 1 ? 'Day' : 'Days';
-  const streakSubtitle = `${streakDays} ${streakDayLabel.toLowerCase()}`;
+  const streakVisual: RingStatVisual = {
+    arc: '#F5A800',
+    badgeBackground: '#FFF1CC',
+    badgeForeground: '#C27400',
+    cardBackground: theme.isDark ? 'rgba(245,168,0,0.08)' : '#FFFFFF',
+    cardBorder: theme.isDark ? 'rgba(255,196,0,0.18)' : 'rgba(245,168,0,0.14)',
+    cardTint: theme.isDark ? 'rgba(245,168,0,0.18)' : 'rgba(245,168,0,0.12)',
+    disc: STREAK_ICON_BACKGROUND,
+    shadowColor: theme.isDark ? theme.shadow : 'rgba(194,116,0,0.22)',
+    trackDark: 'rgba(255,196,0,0.26)',
+    trackLight: '#FFE9B3',
+  };
 
   return (
-    <Pressable
-      accessibilityLabel={`Your circle summary. Contribution ${contribution}% complete. Momentum ${momentum}%, ${momentumLabel}. Streak ${streakDays} ${streakDayLabel.toLowerCase()}.`}
-      accessibilityRole="button"
-      onPress={onPress}
-      style={({pressed}) =>
-        onPress && pressed
-          ? {
-              opacity: actionMotion.pressedOpacity,
-              transform: [{scale: actionMotion.pressedScale}],
-            }
-          : null
-      }>
-      <View style={styles.row}>
-        <View
-          testID="circle-summary-connector"
-          style={[styles.connector, {backgroundColor: connectorColor}]}
+    <View style={styles.row}>
+      <RingStatCard
+        accessibilityLabel={`Contribution ${contribution}% complete.`}
+        badgeLabel={`${contribution}%`}
+        discTestID="circle-summary-contribution-disc"
+        onPress={onPress}
+        progress={contribution / 100}
+        surfaceStyle={surfaceStyle}
+        title="Contribution"
+        visual={contributionVisual}>
+        <ContributionSummaryIcon />
+      </RingStatCard>
+      <RingStatCard
+        accessibilityLabel={`Momentum ${momentum}%, ${momentumLabel}.`}
+        badgeLabel={momentumLabel}
+        discTestID="circle-summary-momentum-disc"
+        onPress={onPress}
+        progress={momentum / 100}
+        surfaceStyle={surfaceStyle}
+        title="Momentum"
+        visual={momentumVisual}>
+        <MomentumStageIcon
+          size={MOMENTUM_STAGE_ICON_SIZE}
+          status={momentumStatus}
+          testID="circle-summary-momentum-stage-icon"
         />
-        <RingStat
-          discTestID="circle-summary-contribution-disc"
-          progress={contribution / 100}
-          subtitle={`(${contribution}% complete!)`}
-          title="Contribution"
-          visual={ringVisuals.contribution}>
-          <ContributionSummaryIcon />
-        </RingStat>
-        <RingStat
-          discTestID="circle-summary-momentum-disc"
-          progress={momentum / 100}
-          subtitle={`(${momentumLabel})`}
-          title="Momentum"
-          visual={momentumVisual}>
-          <MomentumStageIcon
-            size={46}
-            status={momentumStatus}
-            testID="circle-summary-momentum-stage-icon"
-          />
-        </RingStat>
-        <RingStat
-          discTestID="circle-summary-streak-disc"
-          progress={streakProgress}
-          subtitle={streakSubtitle}
-          title="Streak"
-          visual={ringVisuals.streak}>
-          <StreakSummaryIcon />
-        </RingStat>
-      </View>
-    </Pressable>
+      </RingStatCard>
+      <RingStatCard
+        accessibilityLabel={`Streak ${streakDays} ${streakDayLabel.toLowerCase()}.`}
+        badgeLabel={streakBadge}
+        discTestID="circle-summary-streak-disc"
+        onPress={onPress}
+        progress={streakProgress}
+        surfaceStyle={surfaceStyle}
+        title="Streak"
+        visual={streakVisual}>
+        <StreakSummaryIcon />
+      </RingStatCard>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
-    gap: 4,
+    gap: 10,
   },
-  connector: {
-    borderRadius: 6,
-    height: 12,
-    left: '12%',
-    position: 'absolute',
-    right: '12%',
-    top: RING_SIZE / 2 - 6,
-  },
-  stat: {
-    alignItems: 'center',
+  cardSlot: {
     flex: 1,
-    gap: 3,
     minWidth: 0,
+  },
+  cardInner: {
+    alignItems: 'center',
+    overflow: 'hidden',
+    paddingBottom: 16,
+    paddingHorizontal: 6,
+    paddingTop: 13,
+    position: 'relative',
+  },
+  gradientInset: {
+    bottom: 1,
+    left: 1,
+    position: 'absolute',
+    right: 1,
+    top: 1,
+  },
+  cardPanel: {
+    elevation: 3,
+    shadowOffset: {height: 4, width: 0},
+    shadowOpacity: 0.5,
+    shadowRadius: 10,
+  },
+  cardTitle: {
+    letterSpacing: 0.4,
+    textAlign: 'center',
+    width: '100%',
   },
   ringWrap: {
     height: RING_SIZE,
-    marginBottom: 5,
+    marginTop: 8,
     width: RING_SIZE,
   },
   discWrap: {
@@ -304,16 +413,21 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     width: DISC_SIZE,
   },
-  statTitle: {
-    fontSize: 15,
-    fontWeight: '800',
-    letterSpacing: 0,
-    lineHeight: 19,
-    textAlign: 'center',
+  badge: {
+    borderRadius: radius.pill,
+    borderWidth: 1.5,
+    elevation: 3,
+    marginTop: -13,
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    shadowOffset: {height: 3, width: 0},
+    shadowOpacity: 0.16,
+    shadowRadius: 6,
+    zIndex: 2,
   },
-  statSubtitle: {
+  badgeLabel: {
     fontSize: 12.5,
-    fontWeight: '600',
+    fontWeight: '800',
     letterSpacing: 0,
     lineHeight: 16,
     textAlign: 'center',

@@ -1,5 +1,5 @@
 import React from 'react';
-import {StyleSheet, View} from 'react-native';
+import {StyleSheet, View, type StyleProp, type ViewStyle} from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
 import {Heart} from 'lucide-react-native';
 
@@ -12,10 +12,12 @@ import {HoystText} from './HoystText';
 
 type ActivityFeedCardProps = {
   item: CircleActivityItem;
+  style?: StyleProp<ViewStyle>;
 };
 
 export function ActivityFeedCard({
   item,
+  style,
 }: ActivityFeedCardProps): React.JSX.Element {
   const theme = useHoystTheme();
   const avatarTone =
@@ -26,7 +28,7 @@ export function ActivityFeedCard({
       : 'muted';
 
   return (
-    <GlassPanel>
+    <GlassPanel style={style}>
       <View style={styles.header}>
         <View style={styles.actorRow}>
           <HoystAvatar

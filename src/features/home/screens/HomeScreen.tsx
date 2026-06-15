@@ -1,5 +1,12 @@
 import React, {useCallback, useEffect, useMemo, useState} from 'react';
-import {Alert, Pressable, ScrollView, Share, StyleSheet, View} from 'react-native';
+import {
+  Alert,
+  Pressable,
+  ScrollView,
+  Share,
+  StyleSheet,
+  View,
+} from 'react-native';
 import type {BottomTabNavigationProp} from '@react-navigation/bottom-tabs';
 import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import {useFocusEffect, useNavigation} from '@react-navigation/native';
@@ -7,7 +14,10 @@ import {useFocusEffect, useNavigation} from '@react-navigation/native';
 import {ActivityFeedCard} from '../../../design/components/ActivityFeedCard';
 import {CircleSummaryRings} from '../../../design/components/CircleSummaryRings';
 import {GlassPanel} from '../../../design/components/GlassPanel';
-import {HomeHeroHeader, homeHeroPalettes} from '../../../design/components/HomeHeroHeader';
+import {
+  HomeHeroHeader,
+  homeHeroPalettes,
+} from '../../../design/components/HomeHeroHeader';
 import {HoystButton} from '../../../design/components/HoystButton';
 import {HoystText} from '../../../design/components/HoystText';
 import {SectionEyebrow} from '../../../design/components/SectionEyebrow';
@@ -19,7 +29,10 @@ import {actionMotion, actionShadow} from '../../../design/tokens/actions';
 import {radius} from '../../../design/tokens/radius';
 import {useHoystTheme} from '../../../design/theme/useHoystTheme';
 import {useProtectedAction} from '../../auth/hooks/useProtectedAction';
-import {getHomeAvatarBadgeKind, getHomeHeroCopy} from '../services/home-hero-copy';
+import {
+  getHomeAvatarBadgeKind,
+  getHomeHeroCopy,
+} from '../services/home-hero-copy';
 import {
   createEmptyHomeData,
   getHomeCircleActionVariant,
@@ -320,7 +333,11 @@ export function HomeScreen(): React.JSX.Element {
   const heroPalette = theme.isDark
     ? homeHeroPalettes.dark
     : homeHeroPalettes.light;
-  const sheetColor = theme.isDark ? theme.backgroundElevated : '#FFFFFF';
+  const sheetColor = theme.isDark ? theme.backgroundElevated : '#F7F6F2';
+  const homeCardLiftStyle = [
+    styles.homeCardLift,
+    {shadowColor: theme.isDark ? theme.shadow : '#0F172A'},
+  ];
 
   useEffect(() => {
     clearExpiredHomeGreetingCacheEntries().catch(() => undefined);
@@ -565,13 +582,13 @@ export function HomeScreen(): React.JSX.Element {
           unreadBadgeText={getInboxBadgeText(unreadInboxCount)}
         />
         <View style={[styles.sheet, {backgroundColor: sheetColor}]}>
-          <View style={styles.stripSection}>
-            <SectionEyebrow>Recent activity and streak</SectionEyebrow>
+          <GlassPanel padding="compact" style={homeCardLiftStyle}>
+            <SectionEyebrow>Your week</SectionEyebrow>
             <WeekProgressStrip
               days={homeData.progressDays}
               streakDays={homeData.personalStreakDays}
             />
-          </View>
+          </GlassPanel>
 
           <CircleSummaryRings
             contributionPercent={homeData.progressPercent}
@@ -579,6 +596,7 @@ export function HomeScreen(): React.JSX.Element {
             momentumPercent={momentumSummary.percentage}
             momentumStatus={momentumSummary.status}
             onPress={() => navigation.navigate('Momentum')}
+            surfaceStyle={homeCardLiftStyle}
             streakDays={homeData.personalStreakDays}
           />
 
@@ -617,17 +635,25 @@ export function HomeScreen(): React.JSX.Element {
               <SectionEyebrow>Circles need your attention</SectionEyebrow>
 
               {todayActionCircles.length > 0 ? (
-                todayActionCircles.map(circle => (
-                  <TodayCircleCard
-                    card={circle}
-                    isNudged={nudgedCircleIds.has(circle.id)}
-                    isNudging={nudgingCircleIds.has(circle.id)}
-                    key={circle.id}
-                    onActionPress={() => handleCircleAction(circle)}
-                    onCardPress={() => openCircleDetail(circle.id)}
-                    variant="today"
-                  />
-                ))
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  style={styles.attentionScroll}
+                  contentContainerStyle={styles.attentionScrollContent}>
+                  {todayActionCircles.map(circle => (
+                    <TodayCircleCard
+                      card={circle}
+                      isNudged={nudgedCircleIds.has(circle.id)}
+                      isNudging={nudgingCircleIds.has(circle.id)}
+                      key={circle.id}
+                      onActionPress={() => handleCircleAction(circle)}
+                      onCardPress={() => openCircleDetail(circle.id)}
+                      surfaceStyle={homeCardLiftStyle}
+                      useCategoryTintGradient
+                      variant="attention"
+                    />
+                  ))}
+                </ScrollView>
               ) : !showAuthenticatedEmptyState ? (
                 <GlassPanel style={styles.emptyPanel}>
                   <SectionHeader
@@ -658,6 +684,8 @@ export function HomeScreen(): React.JSX.Element {
                     key={circle.id}
                     onActionPress={() => handleCircleAction(circle)}
                     onCardPress={() => openCircleDetail(circle.id)}
+                    surfaceStyle={homeCardLiftStyle}
+                    useCategoryTintGradient
                     variant="upcoming"
                   />
                 ))}
@@ -707,7 +735,7 @@ export function HomeScreen(): React.JSX.Element {
                   <Pressable
                     key={item.id}
                     onPress={() => openEvent(events[index])}>
-                    <ActivityFeedCard item={item} />
+                    <ActivityFeedCard item={item} style={homeCardLiftStyle} />
                   </Pressable>
                 ))
               ) : (
@@ -775,14 +803,11 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
     flexGrow: 1,
-    gap: 24,
+    gap: 20,
     marginTop: -28,
     paddingBottom: 172,
     paddingHorizontal: 20,
     paddingTop: 18,
-  },
-  stripSection: {
-    gap: 12,
   },
   upcomingScroll: {
     marginHorizontal: -20,
@@ -791,11 +816,18 @@ const styles = StyleSheet.create({
     gap: 12,
     paddingHorizontal: 20,
   },
+  attentionScroll: {
+    marginHorizontal: -20,
+  },
+  attentionScrollContent: {
+    gap: 12,
+    paddingHorizontal: 20,
+  },
   circleSectionGroup: {
     gap: 12,
   },
   circlesSection: {
-    gap: 14,
+    gap: 6,
   },
   createButton: {
     alignItems: 'center',
@@ -833,5 +865,11 @@ const styles = StyleSheet.create({
   },
   emptyPanel: {
     gap: 16,
+  },
+  homeCardLift: {
+    elevation: 9,
+    shadowOffset: {height: 10, width: 0},
+    shadowOpacity: 0.13,
+    shadowRadius: 22,
   },
 });

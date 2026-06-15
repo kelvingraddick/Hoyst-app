@@ -378,12 +378,6 @@ describe('HomeScreen companion updates', () => {
     expect(textLabels).toContain('Streak');
     expect(textLabels).toContain('0 days');
     expect(textLabels).not.toContain('Streak (0 Days!)');
-    const connectorStyle = StyleSheet.flatten(
-      tree.root.findByProps({testID: 'circle-summary-connector'}).props.style,
-    );
-
-    expect(connectorStyle.backgroundColor).toBe('#EEF1F5');
-    expect(connectorStyle.left).toBe('12%');
-    expect(connectorStyle.right).toBe('12%');
+    expect(textLabels).toContain('Building');
   });
 });
