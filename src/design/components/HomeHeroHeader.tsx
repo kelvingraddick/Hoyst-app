@@ -381,8 +381,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   watermark: {
-    height: 300,
-    width: 300,
+    height: 450,
+    width: 450,
   },
   topRow: {
     alignItems: 'flex-start',
