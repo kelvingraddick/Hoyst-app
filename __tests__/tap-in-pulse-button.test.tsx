@@ -114,4 +114,32 @@ describe('TapInPulseButton', () => {
     expect(mark.props.interactionKey).toBe(0);
     expect(RNHapticFeedback.trigger).not.toHaveBeenCalled();
   });
+
+  it('renders a larger Hoyst mark for the hero variant', () => {
+    let tree: renderer.ReactTestRenderer | undefined;
+
+    act(() => {
+      tree = renderer.create(
+        <TapInPulseButton
+          label="Tap In"
+          supportingText="Log your progress this week"
+          variant="hero"
+        />,
+      );
+    });
+
+    const frame = tree!.root.findByProps({
+      testID: 'tap-in-pulse-button-frame',
+    });
+    const markWrap = tree!.root.findByProps({
+      testID: 'tap-in-pulse-button-mark-wrap',
+    });
+    const mark = tree!.root.findByType(HoystTapInMark);
+    const frameStyle = StyleSheet.flatten(frame.props.style);
+    const markWrapStyle = StyleSheet.flatten(markWrap.props.style);
+
+    expect(mark.props.size).toBe(58);
+    expect(frameStyle.height).toBe(64);
+    expect(markWrapStyle.transform).toEqual([{translateY: -8}]);
+  });
 });

@@ -199,15 +199,21 @@ function DayChip({day}: {day: HomeProgressCell}) {
   const theme = useHoystTheme();
   const visual = getDayChipVisual(theme.isDark, day.state);
   const weekdayLabel = getWeekdayLabel(day);
+  const shadowColor = theme.isDark ? theme.shadow : 'rgba(15,23,42,0.16)';
 
   return (
     <View
       accessibilityLabel={`${weekdayLabel}: ${day.state}`}
       style={styles.dayChipSlot}>
       <View
+        testID={`week-progress-${day.dateKey}-chip`}
         style={[
           styles.dayChip,
-          {backgroundColor: visual.background, borderColor: visual.border},
+          {
+            backgroundColor: visual.background,
+            borderColor: visual.border,
+            shadowColor,
+          },
         ]}>
         <HoystText
           allowFontScaling={false}
@@ -277,15 +283,21 @@ const styles = StyleSheet.create({
   dayChipSlot: {
     flex: 1,
     minWidth: 0,
+    position: 'relative',
   },
   dayChip: {
     alignItems: 'center',
     borderRadius: 13,
     borderWidth: 2,
+    elevation: 2,
     gap: 2,
     minHeight: 56,
     paddingBottom: 8,
     paddingTop: 6,
+    position: 'relative',
+    shadowOffset: {height: 2, width: 0},
+    shadowOpacity: 0.12,
+    shadowRadius: 5,
   },
   dayChipLabel: {
     fontSize: 13,

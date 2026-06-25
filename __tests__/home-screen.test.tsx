@@ -380,4 +380,36 @@ describe('HomeScreen companion updates', () => {
     expect(textLabels).not.toContain('Streak (0 Days!)');
     expect(textLabels).toContain('Building');
   });
+
+  it('renders Your week day chips with a subtle raised pill lift', () => {
+    mockHomeData = {
+      ...homeData(),
+      progressDays: [
+        {dateKey: '2026-05-24', label: '24', state: 'done'},
+        {dateKey: '2026-05-25', label: '25', state: 'missed'},
+        {dateKey: '2026-05-26', label: '26', state: 'today'},
+        {dateKey: '2026-05-27', label: '27', state: 'future'},
+      ],
+    };
+
+    const tree = renderScreenTree();
+    const doneChipStyle = StyleSheet.flatten(
+      tree.root.findByProps({testID: 'week-progress-2026-05-24-chip'}).props
+        .style,
+    );
+    const todayChipStyle = StyleSheet.flatten(
+      tree.root.findByProps({testID: 'week-progress-2026-05-26-chip'}).props
+        .style,
+    );
+
+    expect(doneChipStyle.minHeight).toBe(56);
+    expect(doneChipStyle.borderRadius).toBe(13);
+    expect(doneChipStyle.backgroundColor).toBe('#F0F9E8');
+    expect(doneChipStyle.borderColor).toBe('#85C45C');
+    expect(doneChipStyle.elevation).toBe(2);
+    expect(doneChipStyle.shadowOpacity).toBe(0.12);
+    expect(doneChipStyle.shadowRadius).toBe(5);
+    expect(todayChipStyle.backgroundColor).toBe('#FFF7E6');
+    expect(todayChipStyle.borderColor).toBe('#F4B64A');
+  });
 });

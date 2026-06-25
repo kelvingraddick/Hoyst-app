@@ -1,7 +1,9 @@
 import React from 'react';
-import {Pressable} from 'react-native';
+import {Pressable, StyleSheet} from 'react-native';
 import renderer, {act, type ReactTestInstance} from 'react-test-renderer';
 
+import {SectionEyebrowTrailing} from '../src/design/components/SectionEyebrow';
+import {TapInPulseButton} from '../src/design/components/TapInPulseButton';
 import {CircleDetailScreen} from '../src/features/circles/screens/CircleDetailScreen';
 import type {CircleDetailModel} from '../src/types/models';
 
@@ -38,6 +40,17 @@ jest.mock('react-native-linear-gradient', () => {
 
   return ({children, ...props}: {children?: React.ReactNode}) =>
     MockReact.createElement(View, props, children);
+});
+
+jest.mock('react-native-safe-area-context', () => {
+  const MockReact = require('react');
+  const {View: MockView} = require('react-native');
+
+  return {
+    SafeAreaView: ({children, ...props}: {children?: React.ReactNode}) =>
+      MockReact.createElement(MockView, props, children),
+    useSafeAreaInsets: () => ({bottom: 0, left: 0, right: 0, top: 0}),
+  };
 });
 
 jest.mock('react-native-haptic-feedback', () => ({
@@ -267,6 +280,9 @@ describe('CircleDetailScreen reference redesign', () => {
     const {tree} = renderScreen();
     const output = outputOf(tree);
 
+    expect(output.indexOf('Circle')).toBeLessThan(
+      output.indexOf('Morning Movers'),
+    );
     expect(output).toContain('Morning Movers');
     expect(output).toContain('FITNESS');
     expect(
@@ -274,10 +290,22 @@ describe('CircleDetailScreen reference redesign', () => {
     ).toBeTruthy();
     expect(output).toContain('Daily Task');
     expect(output).toContain('Move for 30 minutes');
+    expect(output.indexOf('Morning Movers')).toBeLessThan(
+      output.indexOf('Move for 30 minutes'),
+    );
+    expect(output.indexOf('Move for 30 minutes')).toBeLessThan(
+      output.indexOf('FITNESS'),
+    );
+    expect(output.indexOf('FITNESS')).toBeLessThan(
+      output.indexOf('Daily Task'),
+    );
+    expect(output.indexOf('Daily Task')).toBeLessThan(
+      output.indexOf('Needs You'),
+    );
     expect(output).toContain('Needs You');
-    expect(output).toContain('Companions');
+    expect(output).toContain('Circle Companions');
     expect(output).toContain('Progress today');
-    expect(output).not.toContain('Companions · Progress today');
+    expect(output).not.toContain('Circle Companions · Progress today');
     expect(output).not.toContain("Today's Progress");
     expect(output).toContain('Needed');
     expect(output).toContain('Done');
@@ -286,6 +314,40 @@ describe('CircleDetailScreen reference redesign', () => {
     expect(output).toContain('Pending');
     expect(output).toContain('Tap In');
     expect(output).toContain('Log your progress for today');
+    expect(output.indexOf('Log your progress for today')).toBeLessThan(
+      output.indexOf('Circle Companions'),
+    );
+    expect(output.indexOf('Circle Companions')).toBeLessThan(
+      output.indexOf('This week'),
+    );
+    expect(output.indexOf('Circle Companions')).toBeLessThan(
+      output.indexOf('Stats'),
+    );
+    expect(output.indexOf('Stats')).toBeLessThan(
+      output.indexOf('This week'),
+    );
+    expect(output.indexOf('This week')).toBeLessThan(
+      output.indexOf('Completion'),
+    );
+    expect(
+      tree.root
+        .findAllByType(TapInPulseButton)
+        .some(button => button.props.variant === 'hero'),
+    ).toBe(true);
+    expect(output).not.toContain('Invite companions');
+    expect(
+      StyleSheet.flatten(
+        tree.root.findByProps({testID: 'circle-detail-body-stack'}).props
+          .style,
+      ),
+    ).toEqual(expect.objectContaining({paddingTop: 8}));
+    const trailingLabels = tree.root
+      .findAllByType(SectionEyebrowTrailing)
+      .map(textContent);
+
+    expect(trailingLabels).toEqual(
+      expect.arrayContaining(['Progress today', 'This week']),
+    );
   });
 
   it('shows view and remove actions after today is counted', () => {
@@ -298,6 +360,7 @@ describe('CircleDetailScreen reference redesign', () => {
       viewerHasCheckedIn: true,
       viewerHasTappedInToday: true,
       viewerRemainingTapIns: 0,
+      viewerRole: 'owner',
       viewerTodayStatus: 'done',
     });
 
@@ -307,6 +370,9 @@ describe('CircleDetailScreen reference redesign', () => {
     expect(output).toContain('View Today');
     expect(output).toContain('Remove Tap In');
     expect(output).toContain('Tapped today');
+    expect(output.indexOf('Circle Tools')).toBeLessThan(
+      output.indexOf('Remove Tap In'),
+    );
   });
 
   it('keeps owner tools nested under manage', () => {
@@ -327,9 +393,12 @@ describe('CircleDetailScreen reference redesign', () => {
     const {tree} = renderScreen();
 
     expect(outputOf(tree)).toContain('Circle Tools');
-    expect(outputOf(tree)).toContain('Companions');
+    expect(outputOf(tree)).toContain('Circle Companions');
     expect(outputOf(tree)).toContain('Progress this week');
-    expect(outputOf(tree)).not.toContain('Companions · Progress this week');
+    expect(outputOf(tree)).toContain('Invite companions');
+    expect(outputOf(tree)).not.toContain(
+      'Circle Companions · Progress this week',
+    );
     expect(outputOf(tree)).toContain('Members');
     expect(outputOf(tree)).toContain('Leaderboard');
     expect(outputOf(tree)).toContain('Goals');
@@ -368,6 +437,12 @@ describe('CircleDetailScreen reference redesign', () => {
 
     expect(output).toContain('Send a Nudge');
     expect(output).toContain('1 Member to nudge');
+    expect(output.indexOf('Circle Companions')).toBeLessThan(
+      output.indexOf('Send a Nudge'),
+    );
+    expect(output.indexOf('Send a Nudge')).toBeLessThan(
+      output.indexOf('Stats'),
+    );
     expect(output).not.toContain('Send Nudge');
     expect(output).not.toContain('Invite');
   });
@@ -413,11 +488,10 @@ describe('CircleDetailScreen reference redesign', () => {
     const output = outputOf(tree);
 
     expect(output).toContain('Stats');
-    expect(output).toContain('Completion Rate');
+    expect(output).toContain('Completion');
     expect(output).toContain('60%');
-    expect(output).toContain('Today');
-    expect(output).toContain('Streaks');
-    expect(output).toContain('Active');
+    expect(output).toContain('Streak');
+    expect(output).toContain('3');
     expect(output).toContain('Members');
     expect(output).toContain('5/8');
   });

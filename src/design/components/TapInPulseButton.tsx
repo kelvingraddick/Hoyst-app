@@ -16,7 +16,7 @@ import {HoystText} from './HoystText';
 import {HoystTapInMark} from './HoystTapInMark';
 import type {PulseRingState} from './pulse-ring-state';
 
-type TapInPulseButtonVariant = 'card' | 'primary' | 'reference';
+type TapInPulseButtonVariant = 'card' | 'hero' | 'primary' | 'reference';
 
 type TapInPulseButtonProps = {
   accessibilityLabel?: string;
@@ -35,30 +35,52 @@ const variantSpecs = {
     gap: 8,
     height: 48,
     iconOuterSize: 30,
+    iconTranslateY: 0,
     labelSize: 14,
     labelLineHeight: 18,
     minWidth: 130,
+    paddingBottom: 0,
     paddingHorizontal: 16,
+    paddingTop: 0,
+  },
+  hero: {
+    borderWidth: 1.8,
+    gap: 11,
+    height: 64,
+    iconOuterSize: 58,
+    iconTranslateY: -8,
+    labelSize: 18,
+    labelLineHeight: 22,
+    minWidth: 172,
+    paddingBottom: 6,
+    paddingHorizontal: 14,
+    paddingTop: 0,
   },
   primary: {
     borderWidth: 1.8,
     gap: 10,
     height: 58,
     iconOuterSize: 40,
+    iconTranslateY: 0,
     labelSize: 16,
     labelLineHeight: 20,
     minWidth: 172,
+    paddingBottom: 0,
     paddingHorizontal: 20,
+    paddingTop: 0,
   },
   reference: {
     borderWidth: 1.8,
     gap: 12,
     height: 82,
     iconOuterSize: 72,
+    iconTranslateY: 0,
     labelSize: 20,
     labelLineHeight: 24,
     minWidth: 172,
+    paddingBottom: 0,
     paddingHorizontal: 12,
+    paddingTop: 0,
   },
 } as const;
 
@@ -133,15 +155,24 @@ export function TapInPulseButton({
               borderRadius: radius.pill,
               gap: spec.gap,
               height: spec.height - spec.borderWidth * 2,
+              paddingBottom: spec.paddingBottom,
               paddingHorizontal: spec.paddingHorizontal,
+              paddingTop: spec.paddingTop,
             },
           ]}>
-          <HoystTapInMark
-            animated={!disabled}
-            interactionKey={interactionKey}
-            isPressed={isPressed}
-            size={spec.iconOuterSize}
-          />
+          <View
+            style={[
+              styles.markWrap,
+              {transform: [{translateY: spec.iconTranslateY}]},
+            ]}
+            testID="tap-in-pulse-button-mark-wrap">
+            <HoystTapInMark
+              animated={!disabled}
+              interactionKey={interactionKey}
+              isPressed={isPressed}
+              size={spec.iconOuterSize}
+            />
+          </View>
           <View
             style={[
               styles.copy,
@@ -203,6 +234,9 @@ const styles = StyleSheet.create({
   },
   labelWithSupportingText: {
     textAlign: 'left',
+  },
+  markWrap: {
+    flexShrink: 0,
   },
   pressable: {
     flexShrink: 0,
