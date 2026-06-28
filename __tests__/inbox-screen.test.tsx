@@ -1,5 +1,5 @@
 import React from 'react';
-import {Pressable, View} from 'react-native';
+import {Pressable, StyleSheet, View} from 'react-native';
 import renderer, {act} from 'react-test-renderer';
 
 import {HoystChip} from '../src/design/components/HoystChip';
@@ -157,11 +157,37 @@ describe('InboxScreen', () => {
     const chips = tree.root.findAllByType(HoystChip);
 
     expect(chips.map(chip => chip.props)).toEqual([
-      expect.objectContaining({label: 'Tapped in', tone: 'green'}),
-      expect.objectContaining({label: 'At risk', tone: 'orange'}),
-      expect.objectContaining({label: 'Reminder', tone: 'yellow'}),
-      expect.objectContaining({label: 'Explore', tone: 'blue'}),
+      expect.objectContaining({
+        density: 'compact',
+        label: 'Tapped in',
+        tone: 'green',
+      }),
+      expect.objectContaining({
+        density: 'compact',
+        label: 'At risk',
+        tone: 'orange',
+      }),
+      expect.objectContaining({
+        density: 'compact',
+        label: 'Reminder',
+        tone: 'yellow',
+      }),
+      expect.objectContaining({
+        density: 'compact',
+        label: 'Explore',
+        tone: 'blue',
+      }),
     ]);
+
+    const firstChipLabel = tree.root
+      .findAllByType(HoystText)
+      .find(node => node.props.children === 'Tapped in');
+    const firstChipLabelStyle = StyleSheet.flatten(firstChipLabel?.props.style);
+
+    expect(firstChipLabelStyle).toMatchObject({
+      fontSize: 10,
+      lineHeight: 12,
+    });
 
     const output = JSON.stringify(tree.toJSON());
     expect(output).toContain('#07763E');
@@ -190,6 +216,8 @@ describe('InboxScreen', () => {
     const timestamp = tree.root
       .findAllByType(HoystText)
       .find(node => node.props.children === '11h ago');
+    const messageStyle = StyleSheet.flatten(message?.props.style);
+    const timestampStyle = StyleSheet.flatten(timestamp?.props.style);
 
     expect(unreadDots.length).toBeGreaterThan(0);
     expect(
@@ -200,9 +228,17 @@ describe('InboxScreen', () => {
     expect(message?.props.style).toEqual(
       expect.arrayContaining([expect.objectContaining({fontWeight: '700'})]),
     );
+    expect(messageStyle).toMatchObject({
+      fontSize: 14,
+      lineHeight: 19,
+    });
     expect(timestamp?.props.style).toEqual(
       expect.arrayContaining([expect.objectContaining({fontWeight: '700'})]),
     );
+    expect(timestampStyle).toMatchObject({
+      fontSize: 12,
+      lineHeight: 15,
+    });
     expect(markAllInboxEventsRead).toHaveBeenCalledTimes(1);
   });
 

@@ -46,6 +46,7 @@ const reviewJoinRequestSchema = zod_1.z.object({
 });
 const nudgeCircleMembersSchema = zod_1.z.object({
     circleId: zod_1.z.string().trim().min(1),
+    targetUid: zod_1.z.string().trim().min(1).optional(),
 });
 const leaveCircleSchema = zod_1.z.object({
     circleId: zod_1.z.string().trim().min(1),
@@ -590,6 +591,7 @@ exports.nudgeCircleMembers = (0, https_1.onCall)({ secrets: [notifications_1.one
             id: snapshot.id,
         })),
         requiredTapIns,
+        targetUid: input.targetUid,
         todayCoveredUids,
         viewerUid: uid,
     });

@@ -218,10 +218,14 @@ function InboxEventRow({
             ) : null}
           </View>
           <View style={styles.notificationCopy}>
-            <HoystText>
-              <HoystText style={styles.notificationLead}>{lead} </HoystText>
+            <HoystText style={styles.notificationCopyText}>
+              <HoystText
+                style={[styles.notificationCopyText, styles.notificationLead]}>
+                {lead}{' '}
+              </HoystText>
               <HoystText
                 style={[
+                  styles.notificationCopyText,
                   {color: visual.foregroundColor},
                   isUnread ? styles.notificationMessageUnread : undefined,
                 ]}>
@@ -229,17 +233,18 @@ function InboxEventRow({
               </HoystText>
             </HoystText>
             <HoystText
-              style={
-                isUnread
-                  ? [styles.notificationTimestampUnread, {color: theme.text}]
-                  : undefined
-              }
+              style={[
+                styles.notificationTimestamp,
+                isUnread ? styles.notificationTimestampUnread : undefined,
+                isUnread ? {color: theme.text} : undefined,
+              ]}
               tone="muted"
               variant="caption">
               {event.createdAtLabel}
             </HoystText>
           </View>
           <HoystChip
+            density="compact"
             label={getActionLabel(event)}
             style={styles.notificationChip}
             tone={visual.chipTone}
@@ -497,6 +502,10 @@ const styles = StyleSheet.create({
     gap: 4,
     minWidth: 0,
   },
+  notificationCopyText: {
+    fontSize: 14,
+    lineHeight: 19,
+  },
   notificationLead: {
     fontWeight: '800',
   },
@@ -513,6 +522,10 @@ const styles = StyleSheet.create({
   },
   notificationTimestampUnread: {
     fontWeight: '700',
+  },
+  notificationTimestamp: {
+    fontSize: 12,
+    lineHeight: 15,
   },
   notificationUnreadDot: {
     borderRadius: 4,

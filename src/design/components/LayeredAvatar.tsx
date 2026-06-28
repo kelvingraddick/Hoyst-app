@@ -13,6 +13,7 @@ import {getBrandAvatarRingSize} from './avatarRingSizing';
 import {HoystText} from './HoystText';
 
 type LayeredAvatarProps = {
+  chrome?: 'default' | 'minimal';
   imageSource?: ImageSourcePropType;
   imageUrl?: string;
   initials: string;
@@ -68,6 +69,7 @@ function getLayeredAvatarPalette(
 }
 
 export function LayeredAvatar({
+  chrome = 'default',
   imageSource,
   imageUrl,
   initials,
@@ -78,16 +80,32 @@ export function LayeredAvatar({
   const resolvedImageSource =
     imageSource ?? (imageUrl ? {uri: imageUrl} : undefined);
   const palette = getLayeredAvatarPalette(theme, state);
+  const isMinimalChrome = chrome === 'minimal';
   const isDone = state === 'done';
-  const glowSize = size + 6;
-  const outerSize = size + 2;
-  const innerSize = size - 2;
-  const frameSize = size - 8;
-  const imageSize = size - 10;
+  const glowSize = isMinimalChrome ? size : size + 6;
+  const outerSize = isMinimalChrome ? size : size + 2;
+  const innerSize = isMinimalChrome ? size : size - 2;
+  const frameSize = isMinimalChrome ? size - 2 : size - 8;
+  const imageSize = isMinimalChrome ? size - 4 : size - 10;
   const doneRingSize = getBrandAvatarRingSize(frameSize);
   const ringWidth = size >= 56 ? 1.5 : 1.2;
-  const stateRingWidth = isDone ? 0 : ringWidth;
-  const frameWidth = size >= 56 ? 1.4 : 1.2;
+  const stateRingWidth = isMinimalChrome || isDone ? 0 : ringWidth;
+  const frameWidth = isMinimalChrome
+    ? size >= 56
+      ? 2
+      : 1.6
+    : size >= 56
+    ? 1.4
+    : 1.2;
+  const frameBorderColor = isMinimalChrome
+    ? theme.isDark
+      ? 'rgba(255,255,255,0.88)'
+      : '#FFF3E7'
+    : palette.separator;
+  const frameBackgroundColor =
+    isMinimalChrome && resolvedImageSource
+      ? frameBorderColor
+      : palette.background;
 
   return (
     <View
@@ -112,7 +130,7 @@ export function LayeredAvatar({
             width: outerSize,
           },
         ]}>
-        {isDone ? (
+        {isDone && !isMinimalChrome ? (
           <Image
             source={getBrandRing()}
             style={[
@@ -136,11 +154,11 @@ export function LayeredAvatar({
             },
           ]}>
           <View
-            style={[
-              styles.frame,
-              {
-                backgroundColor: palette.background,
-                borderColor: palette.separator,
+          style={[
+            styles.frame,
+            {
+                backgroundColor: frameBackgroundColor,
+                borderColor: frameBorderColor,
                 borderRadius: frameSize / 2,
                 borderWidth: frameWidth,
                 height: frameSize,

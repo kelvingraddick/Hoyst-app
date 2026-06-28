@@ -725,13 +725,19 @@ export function HomeScreen(): React.JSX.Element {
 
           {isAuthenticatedHome ? (
             <View style={styles.circleSectionGroup}>
-              <SectionEyebrow>Companion updates</SectionEyebrow>
+              <SectionEyebrow style={styles.companionSectionLabel}>
+                Companion updates
+              </SectionEyebrow>
               {companionUpdates.length > 0 ? (
                 companionUpdates.map((item, index) => (
                   <Pressable
                     key={item.id}
                     onPress={() => openEvent(events[index])}>
-                    <ActivityFeedCard item={item} style={homeCardLiftStyle} />
+                    <ActivityFeedCard
+                      density="compact"
+                      item={item}
+                      style={homeCardLiftStyle}
+                    />
                   </Pressable>
                 ))
               ) : (
@@ -765,10 +771,7 @@ export function HomeScreen(): React.JSX.Element {
                   <View style={styles.createButtonCopy}>
                     <HoystText
                       numberOfLines={1}
-                      style={[
-                        styles.createButtonLabel,
-                        {color: theme.text},
-                      ]}
+                      style={[styles.createButtonLabel, {color: theme.text}]}
                       variant="button">
                       Create Circle
                     </HoystText>
@@ -842,6 +845,10 @@ const styles = StyleSheet.create({
   },
   circleSectionGroup: {
     gap: 12,
+  },
+  companionSectionLabel: {
+    fontSize: 11,
+    lineHeight: 13,
   },
   circlesSection: {
     gap: 14,

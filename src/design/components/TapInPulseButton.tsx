@@ -1,14 +1,17 @@
 import React from 'react';
 import {
   type GestureResponderEvent,
+  Image,
   Pressable,
   StyleSheet,
   View,
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
+import {ChevronRight} from 'lucide-react-native';
 
 import {triggerTapInPressHaptic} from '../../lib/haptics/tap-in-haptics';
+import {getBrandIcon} from '../brand/usage';
 import {actionMotion, actionShadow, touchTarget} from '../tokens/actions';
 import {radius} from '../tokens/radius';
 import {useHoystTheme} from '../theme/useHoystTheme';
@@ -44,16 +47,16 @@ const variantSpecs = {
     paddingTop: 0,
   },
   hero: {
-    borderWidth: 1.8,
-    gap: 11,
-    height: 64,
+    borderWidth: 1,
+    gap: 12,
+    height: 70,
     iconOuterSize: 58,
-    iconTranslateY: -8,
+    iconTranslateY: 0,
     labelSize: 18,
     labelLineHeight: 22,
     minWidth: 172,
-    paddingBottom: 6,
-    paddingHorizontal: 14,
+    paddingBottom: 0,
+    paddingHorizontal: 16,
     paddingTop: 0,
   },
   primary: {
@@ -98,6 +101,26 @@ export function TapInPulseButton({
   const [interactionKey, setInteractionKey] = React.useState(0);
   const spec = variantSpecs[variant];
   const hasSupportingText = Boolean(supportingText);
+  const isHeroVariant = variant === 'hero';
+  const frameBackgroundColor = isHeroVariant
+    ? theme.isDark
+      ? 'rgba(8,10,16,0.96)'
+      : '#15171D'
+    : theme.isDark
+    ? 'rgba(17, 20, 32, 0.9)'
+    : 'rgba(255, 255, 255, 0.96)';
+  const frameBorderColor = isHeroVariant
+    ? theme.isDark
+      ? 'rgba(255,255,255,0.08)'
+      : '#15171D'
+    : theme.actionBorder;
+  const labelColor = isHeroVariant ? '#FFFFFF' : theme.actionForeground;
+  const supportingTextColor = isHeroVariant
+    ? theme.isDark
+      ? '#AEB4C2'
+      : '#A9ADB7'
+    : theme.textMuted;
+  const frameBorderRadius = isHeroVariant ? radius.md : radius.pill;
 
   return (
     <Pressable
@@ -120,7 +143,7 @@ export function TapInPulseButton({
         styles.pressable,
         variant !== 'card' ? styles.elevatedPressable : undefined,
         {
-          borderRadius: radius.pill,
+          borderRadius: frameBorderRadius,
           height: spec.height,
           minHeight: Math.max(touchTarget.minimum, spec.height),
           minWidth: spec.minWidth,
@@ -138,11 +161,9 @@ export function TapInPulseButton({
         style={[
           styles.frame,
           {
-            backgroundColor: theme.isDark
-              ? 'rgba(17, 20, 32, 0.9)'
-              : 'rgba(255, 255, 255, 0.96)',
-            borderColor: theme.actionBorder,
-            borderRadius: radius.pill,
+            backgroundColor: frameBackgroundColor,
+            borderColor: frameBorderColor,
+            borderRadius: frameBorderRadius,
             borderWidth: spec.borderWidth,
             height: spec.height,
           },
@@ -152,7 +173,7 @@ export function TapInPulseButton({
           style={[
             styles.fill,
             {
-              borderRadius: radius.pill,
+              borderRadius: frameBorderRadius,
               gap: spec.gap,
               height: spec.height - spec.borderWidth * 2,
               paddingBottom: spec.paddingBottom,
@@ -166,12 +187,25 @@ export function TapInPulseButton({
               {transform: [{translateY: spec.iconTranslateY}]},
             ]}
             testID="tap-in-pulse-button-mark-wrap">
-            <HoystTapInMark
-              animated={!disabled}
-              interactionKey={interactionKey}
-              isPressed={isPressed}
-              size={spec.iconOuterSize}
-            />
+            {isHeroVariant ? (
+              <Image
+                accessibilityIgnoresInvertColors
+                resizeMode="contain"
+                source={getBrandIcon(true)}
+                style={{
+                  height: spec.iconOuterSize,
+                  width: spec.iconOuterSize,
+                }}
+                testID="tap-in-pulse-button-hero-logo"
+              />
+            ) : (
+              <HoystTapInMark
+                animated={!disabled}
+                interactionKey={interactionKey}
+                isPressed={isPressed}
+                size={spec.iconOuterSize}
+              />
+            )}
           </View>
           <View
             style={[
@@ -184,7 +218,7 @@ export function TapInPulseButton({
                 styles.label,
                 hasSupportingText ? styles.labelWithSupportingText : undefined,
                 {
-                  color: theme.actionForeground,
+                  color: labelColor,
                   fontSize: spec.labelSize,
                   lineHeight: spec.labelLineHeight,
                 },
@@ -193,11 +227,20 @@ export function TapInPulseButton({
               {label}
             </HoystText>
             {hasSupportingText ? (
-              <HoystText numberOfLines={1} tone="muted" variant="caption">
+              <HoystText
+                numberOfLines={1}
+                style={isHeroVariant ? {color: supportingTextColor} : undefined}
+                tone={isHeroVariant ? undefined : 'muted'}
+                variant="caption">
                 {supportingText}
               </HoystText>
             ) : null}
           </View>
+          {isHeroVariant ? (
+            <View style={styles.heroChevron}>
+              <ChevronRight color="#FFFFFF" size={22} strokeWidth={2.6} />
+            </View>
+          ) : null}
         </View>
       </View>
     </Pressable>
@@ -234,6 +277,15 @@ const styles = StyleSheet.create({
   },
   labelWithSupportingText: {
     textAlign: 'left',
+  },
+  heroChevron: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.14)',
+    borderRadius: 999,
+    flexShrink: 0,
+    height: 42,
+    justifyContent: 'center',
+    width: 42,
   },
   markWrap: {
     flexShrink: 0,

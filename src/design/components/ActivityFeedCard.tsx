@@ -11,21 +11,30 @@ import {HoystChip} from './HoystChip';
 import {HoystText} from './HoystText';
 
 type ActivityFeedCardProps = {
+  density?: 'compact' | 'regular';
   item: CircleActivityItem;
   style?: StyleProp<ViewStyle>;
 };
 
 export function ActivityFeedCard({
+  density = 'regular',
   item,
   style,
 }: ActivityFeedCardProps): React.JSX.Element {
   const theme = useHoystTheme();
+  const isCompact = density === 'compact';
   const avatarTone =
     item.tone === 'success'
       ? 'green'
       : item.tone === 'pending'
       ? 'purple'
       : 'muted';
+  const messageStyle =
+    item.tone === 'success'
+      ? {color: theme.successForeground}
+      : item.tone === 'pending'
+      ? {color: theme.accentSecondaryForeground}
+      : {color: theme.warningForeground};
 
   return (
     <GlassPanel style={style}>
@@ -40,26 +49,26 @@ export function ActivityFeedCard({
             useBrandRing={item.tone === 'success'}
           />
           <View style={styles.actorCopy}>
-            <HoystText>
+            <HoystText style={isCompact ? styles.compactCopy : undefined}>
               {item.actorName}{' '}
               <HoystText
-                style={
-                  item.tone === 'success'
-                    ? {color: theme.successForeground}
-                    : item.tone === 'pending'
-                    ? {color: theme.accentSecondaryForeground}
-                    : {color: theme.warningForeground}
-                }>
+                style={[
+                  isCompact ? styles.compactCopy : undefined,
+                  messageStyle,
+                ]}>
                 {item.message}
               </HoystText>
             </HoystText>
-            <HoystText tone="muted" variant="caption">
+            <HoystText
+              style={isCompact ? styles.compactTimestamp : undefined}
+              tone="muted"
+              variant="caption">
               {item.timestamp}
             </HoystText>
           </View>
         </View>
         {item.actionLabel ? (
-          <HoystChip label={item.actionLabel} tone="purple" />
+          <HoystChip density={density} label={item.actionLabel} tone="purple" />
         ) : (
           <Heart color={theme.textMuted} fill="transparent" size={16} />
         )}
@@ -91,6 +100,14 @@ const styles = StyleSheet.create({
   actorCopy: {
     flex: 1,
     gap: 4,
+  },
+  compactCopy: {
+    fontSize: 14,
+    lineHeight: 19,
+  },
+  compactTimestamp: {
+    fontSize: 12,
+    lineHeight: 15,
   },
   media: {
     borderRadius: 18,

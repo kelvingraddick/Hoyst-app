@@ -38,9 +38,14 @@ export function HeroIconButton({
       style={({pressed}) => [
         styles.iconButton,
         {
-          backgroundColor: theme.surfaceSoft,
-          borderColor: theme.border,
+          backgroundColor: theme.isDark
+            ? 'rgba(255,255,255,0.08)'
+            : '#F8F9FF',
+          borderColor: theme.isDark
+            ? 'rgba(255,255,255,0.10)'
+            : 'rgba(130,124,180,0.24)',
           opacity: pressed ? actionMotion.pressedOpacity : 1,
+          shadowColor: theme.isDark ? theme.shadow : 'rgba(68,64,120,0.32)',
           transform: [{scale: pressed ? actionMotion.pressedScale : 1}],
         },
       ]}>
@@ -146,6 +151,10 @@ export function ScreenHeroHeader({
           </HoystText>
         ) : null}
 
+        {primaryAction ? (
+          <View style={styles.primaryAction}>{primaryAction}</View>
+        ) : null}
+
         {progress ? (
           <View style={styles.progressBlock}>
             <View style={styles.progressLabelRow}>
@@ -172,9 +181,6 @@ export function ScreenHeroHeader({
               />
             </View>
           </View>
-        ) : null}
-        {primaryAction ? (
-          <View style={styles.primaryAction}>{primaryAction}</View>
         ) : null}
       </View>
     </View>
@@ -219,14 +225,18 @@ const styles = StyleSheet.create({
   },
   iconButton: {
     alignItems: 'center',
-    borderRadius: 22,
-    borderWidth: 1,
+    borderRadius: 18,
+    borderWidth: 1.5,
+    elevation: 7,
     height: 44,
     justifyContent: 'center',
+    shadowOffset: {height: 8, width: 0},
+    shadowOpacity: 0.28,
+    shadowRadius: 22,
     width: 44,
   },
   identityHero: {
-    gap: 16,
+    gap: 14,
   },
   identityTopRow: {
     alignItems: 'flex-start',
@@ -276,6 +286,6 @@ const styles = StyleSheet.create({
     height: 10,
   },
   primaryAction: {
-    marginTop: 2,
+    marginTop: 6,
   },
 });

@@ -15,7 +15,7 @@ import {radius} from '../tokens/radius';
 import {HoystText} from './HoystText';
 import {NudgeMark} from './NudgeMark';
 
-type NudgeActionButtonSize = 'card' | 'compact';
+type NudgeActionButtonSize = 'card' | 'compact' | 'mini';
 
 type NudgeActionButtonProps = {
   accessibilityLabel?: string;
@@ -52,6 +52,18 @@ const sizeSpecs = {
     minWidth: 104,
     paddingHorizontal: 12,
     showIcon: true,
+    strokeWidth: 5,
+  },
+  mini: {
+    fontSize: 14,
+    gap: 6,
+    height: 34,
+    iconSize: 14,
+    iconSlotSize: 16,
+    lineHeight: 18,
+    minWidth: 96,
+    paddingHorizontal: 12,
+    showIcon: false,
     strokeWidth: 5,
   },
 } as const;
@@ -101,11 +113,20 @@ export function NudgeActionButton({
 }: NudgeActionButtonProps): React.JSX.Element {
   const theme = useHoystTheme();
   const spec = sizeSpecs[size];
+  const isMini = size === 'mini';
   const isUnavailable = disabled || isLoading || isSent;
-  const backgroundColor = theme.isDark
+  const backgroundColor = isMini
+    ? theme.isDark
+      ? 'rgba(122,85,255,0.22)'
+      : 'rgba(122,85,255,0.14)'
+    : theme.isDark
     ? 'rgba(122,85,255,0.16)'
     : 'rgba(90,28,255,0.08)';
-  const borderColor = theme.isDark
+  const borderColor = isMini
+    ? theme.isDark
+      ? 'rgba(122,85,255,0.18)'
+      : 'rgba(122,85,255,0.04)'
+    : theme.isDark
     ? 'rgba(122,85,255,0.44)'
     : 'rgba(90,28,255,0.26)';
   const glowColor = theme.isDark
@@ -126,7 +147,9 @@ export function NudgeActionButton({
       style={({pressed}) => [
         styles.pressable,
         {
-          minHeight: Math.max(touchTarget.minimum, spec.height),
+          minHeight: isMini
+            ? spec.height
+            : Math.max(touchTarget.minimum, spec.height),
           minWidth: spec.minWidth,
           opacity: isUnavailable ? (isSent ? 0.88 : 0.58) : pressed ? 0.96 : 1,
           shadowColor: glowColor,

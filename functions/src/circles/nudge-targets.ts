@@ -13,23 +13,31 @@ export function getNudgeTargetUids({
   coveredCounts,
   members,
   requiredTapIns,
+  targetUid,
   todayCoveredUids,
   viewerUid,
 }: {
   coveredCounts: ReadonlyMap<string, number>;
   members: NudgeMemberCandidate[];
   requiredTapIns: number;
+  targetUid?: string;
   todayCoveredUids: ReadonlySet<string>;
   viewerUid: string;
 }) {
-  return members
+  const eligibleTargetUids = members
     .map(member => asOptionalString(member.data.uid) ?? member.id)
-    .filter(targetUid =>
+    .filter(candidateUid =>
       Boolean(
-        targetUid &&
-          targetUid !== viewerUid &&
-          !todayCoveredUids.has(targetUid) &&
-          (coveredCounts.get(targetUid) ?? 0) < requiredTapIns,
+        candidateUid &&
+          candidateUid !== viewerUid &&
+          !todayCoveredUids.has(candidateUid) &&
+          (coveredCounts.get(candidateUid) ?? 0) < requiredTapIns,
       ),
     );
+
+  if (!targetUid) {
+    return eligibleTargetUids;
+  }
+
+  return eligibleTargetUids.includes(targetUid) ? [targetUid] : [];
 }

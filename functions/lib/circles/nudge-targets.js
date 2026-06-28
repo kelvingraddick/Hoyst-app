@@ -6,11 +6,15 @@ function asOptionalString(value) {
         ? value.trim()
         : undefined;
 }
-function getNudgeTargetUids({ coveredCounts, members, requiredTapIns, todayCoveredUids, viewerUid, }) {
-    return members
+function getNudgeTargetUids({ coveredCounts, members, requiredTapIns, targetUid, todayCoveredUids, viewerUid, }) {
+    const eligibleTargetUids = members
         .map(member => asOptionalString(member.data.uid) ?? member.id)
-        .filter(targetUid => Boolean(targetUid &&
-        targetUid !== viewerUid &&
-        !todayCoveredUids.has(targetUid) &&
-        (coveredCounts.get(targetUid) ?? 0) < requiredTapIns));
+        .filter(candidateUid => Boolean(candidateUid &&
+        candidateUid !== viewerUid &&
+        !todayCoveredUids.has(candidateUid) &&
+        (coveredCounts.get(candidateUid) ?? 0) < requiredTapIns));
+    if (!targetUid) {
+        return eligibleTargetUids;
+    }
+    return eligibleTargetUids.includes(targetUid) ? [targetUid] : [];
 }

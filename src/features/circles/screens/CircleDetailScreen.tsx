@@ -14,25 +14,33 @@ import {
 import {
   ArrowLeft,
   Bell,
+  ChartColumnIncreasing,
   ChevronRight,
+  Crown,
   Globe2,
   LogOut,
   Lock,
   Pencil,
+  Settings2,
+  Target,
   Trash2,
+  UserCheck,
   UserPlus,
   UsersRound,
 } from 'lucide-react-native';
 import type {NativeStackScreenProps} from '@react-navigation/native-stack';
-import Svg, {Circle as SvgCircle, G, Path, Rect} from 'react-native-svg';
 
-import {CompanionRingRow} from '../../../design/components/CompanionRingRow';
+import {CircleCompanionGrid} from '../../../design/components/CircleCompanionGrid';
+import {
+  ContributionSummaryIcon,
+  StreakSummaryIcon,
+} from '../../../design/components/CircleSummaryRings';
+import {FrostedBackdrop} from '../../../design/components/FrostedBackdrop';
 import {GlassPanel} from '../../../design/components/GlassPanel';
 import {HoystButton} from '../../../design/components/HoystButton';
 import {HoystInput} from '../../../design/components/HoystInput';
 import {HoystScreen} from '../../../design/components/HoystScreen';
 import {HoystText} from '../../../design/components/HoystText';
-import {NudgeMark} from '../../../design/components/NudgeMark';
 import {
   CircleCategoryIcon,
   getCircleCategoryForegroundColor,
@@ -48,10 +56,9 @@ import {
 } from '../../../design/components/SectionEyebrow';
 import {SectionHeader} from '../../../design/components/SectionHeader';
 import {
-  StatRingCard,
-  type StatRingVisual,
+  StatBarCard,
   clampStatPercent,
-} from '../../../design/components/StatRingCard';
+} from '../../../design/components/StatBarCard';
 import {TapInPulseButton} from '../../../design/components/TapInPulseButton';
 import {WeekProgressStrip} from '../../../design/components/WeekProgressStrip';
 import {getPulseRingStateForCircle} from '../../../design/components/pulse-ring-state';
@@ -76,7 +83,11 @@ import {
   buildPublicCircleDetail,
   subscribeToMemberCircleDetail,
 } from '../../home/services/home-data-service';
-import type {CircleDetailModel, CircleSummary} from '../../../types/models';
+import type {
+  CircleDetailModel,
+  CircleMemberStatus,
+  CircleSummary,
+} from '../../../types/models';
 import type {RootStackParamList} from '../../../navigation/types';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'CircleDetail'>;
@@ -105,18 +116,18 @@ type CircleDetailArtworkAdjustment = {
   translateY?: number;
 };
 
-const STAT_ARTWORK_SIZE = 30;
-const TOOL_ARTWORK_SIZE = 27;
+const STAT_ARTWORK_SIZE = 26;
+const TOOL_ARTWORK_SIZE = 24;
 const ARTWORK_ICON_ADJUSTMENTS: Record<
   CircleDetailArtworkKind,
   CircleDetailArtworkAdjustment
 > = {
-  completion: {scale: 1.04, translateY: 1},
-  flame: {scale: 1.06, translateY: -1},
-  goals: {scale: 1.05, translateX: 0.5, translateY: 0.5},
-  leaderboard: {scale: 1.04, translateY: 0.5},
-  members: {scale: 1.08, translateY: 1},
-  settings: {scale: 1.04},
+  completion: {scale: 1},
+  flame: {scale: 1},
+  goals: {scale: 1, translateX: 0.5, translateY: 0.5},
+  leaderboard: {scale: 1, translateY: 0.5},
+  members: {scale: 1, translateY: 1},
+  settings: {scale: 1},
 };
 
 function getDetailStatusPill(
@@ -170,7 +181,7 @@ function getJoinModeLabel(detail: CircleDetailModel) {
 }
 
 function formatNudgeTargetCount(count: number) {
-  return count === 1 ? '1 Member to nudge' : `${count} Members to nudge`;
+  return count === 1 ? '1 member to nudge' : `${count} members to nudge`;
 }
 
 function TopBarButton({
@@ -223,6 +234,30 @@ function HeroTextPill({
         numberOfLines={1}
         style={[styles.heroPillLabel, {color: foregroundColor}]}
         variant="tiny">
+        {label}
+      </HoystText>
+    </View>
+  );
+}
+
+function HeroInlineMetaItem({
+  color,
+  icon,
+  label,
+}: {
+  color?: string;
+  icon: React.ReactNode;
+  label: string;
+}) {
+  const theme = useHoystTheme();
+
+  return (
+    <View style={styles.heroInlineMetaItem}>
+      <View style={styles.heroInlineMetaIcon}>{icon}</View>
+      <HoystText
+        numberOfLines={1}
+        style={[styles.heroInlineMetaLabel, {color: color ?? theme.textMuted}]}
+        variant="caption">
         {label}
       </HoystText>
     </View>
@@ -310,8 +345,10 @@ function CircleDetailArtworkIcon({
   size?: number;
 }) {
   const adjustment = ARTWORK_ICON_ADJUSTMENTS[kind];
-  const renderSvg = (children: React.ReactNode) => (
-    <View style={[styles.artworkIconFrame, {height: size, width: size}]}>
+  const renderIcon = (children: React.ReactNode) => (
+    <View
+      style={[styles.artworkIconFrame, {height: size, width: size}]}
+      testID={`circle-detail-artwork-${kind}`}>
       <View
         style={[
           styles.artworkIconContent,
@@ -323,111 +360,41 @@ function CircleDetailArtworkIcon({
             ],
           },
         ]}>
-        <Svg height={size} viewBox="0 0 64 64" width={size}>
-          {children}
-        </Svg>
+        {children}
       </View>
     </View>
   );
 
-  if (kind === 'members') {
-    return renderSvg(
-      <G>
-        <SvgCircle cx="25" cy="23" fill={`${color}55`} r="8" />
-        <SvgCircle cx="25" cy="23" fill={color} r="6.5" />
-        <SvgCircle cx="42" cy="25" fill={`${color}44`} r="7" />
-        <SvgCircle cx="42" cy="25" fill={color} r="5.7" />
-        <SvgCircle cx="14" cy="28" fill={`${color}40`} r="6" />
-        <SvgCircle cx="14" cy="28" fill={color} r="4.8" />
-        <Path
-          d="M10 49 C11.6 39.4 17.5 34.5 25 34.5 C32.5 34.5 38.4 39.4 40 49 Z"
-          fill={color}
-        />
-        <Path
-          d="M34 49 C35.1 41.2 39.6 37.1 45 37.1 C50.7 37.1 55.2 41.4 56.5 49 Z"
-          fill={`${color}C8`}
-        />
-        <Path
-          d="M4.5 49 C5.7 42.3 9.5 38.7 14.2 38.7 C18.7 38.7 22.5 42.4 23.4 49 Z"
-          fill={`${color}B8`}
-        />
-      </G>,
-    );
-  }
-
-  if (kind === 'leaderboard') {
-    return renderSvg(
-      <G>
-        <Rect fill={`${color}80`} height="20" rx="3" width="11" x="10" y="34" />
-        <Rect fill={color} height="31" rx="3" width="11" x="27" y="23" />
-        <Rect fill={`${color}C8`} height="42" rx="3" width="11" x="44" y="12" />
-        <Path
-          d="M10 54 H55"
-          stroke={color}
-          strokeLinecap="round"
-          strokeWidth="4"
-        />
-        <Path
-          d="M31 28 H35 M48 17 H52 M14 39 H18"
-          stroke="rgba(255,255,255,0.72)"
-          strokeLinecap="round"
-          strokeWidth="3"
-        />
-      </G>,
-    );
-  }
-
-  if (kind === 'goals') {
-    return renderSvg(
-      <G fill="none" stroke={color} strokeLinecap="round">
-        <SvgCircle cx="30" cy="34" r="20" strokeWidth="5" />
-        <SvgCircle cx="30" cy="34" r="12" strokeWidth="4" />
-        <SvgCircle cx="30" cy="34" fill={color} r="4" strokeWidth="0" />
-        <Path d="M42 22 L52 12" strokeWidth="5" />
-        <Path d="M51 12 L54 22 L44 19" strokeLinejoin="round" strokeWidth="4" />
-        <Path d="M42 22 L30 34" strokeWidth="4" />
-      </G>,
-    );
-  }
-
-  if (kind === 'settings') {
-    return renderSvg(
-      <G fill={color}>
-        <Path d="M36 8 L39 15.4 C41.1 16 43 16.8 44.7 18 L52 15 L57 24 L50.8 28.7 C51 29.8 51.1 30.9 51.1 32 C51.1 33.1 51 34.2 50.8 35.3 L57 40 L52 49 L44.7 46 C43 47.2 41.1 48 39 48.6 L36 56 H26 L23 48.6 C20.9 48 19 47.2 17.3 46 L10 49 L5 40 L11.2 35.3 C11 34.2 10.9 33.1 10.9 32 C10.9 30.9 11 29.8 11.2 28.7 L5 24 L10 15 L17.3 18 C19 16.8 20.9 16 23 15.4 L26 8 Z" />
-        <SvgCircle cx="31" cy="32" fill="rgba(255,255,255,0.86)" r="11" />
-        <SvgCircle cx="31" cy="32" fill={color} r="6" />
-      </G>,
+  if (kind === 'completion') {
+    return renderIcon(
+      <ContributionSummaryIcon
+        size={size}
+        testID="circle-detail-completion-icon"
+      />,
     );
   }
 
   if (kind === 'flame') {
-    return renderSvg(
-      <>
-        <Path
-          d="M31 56 C19 54 12 45.5 13.5 34.5 C14.5 26.5 19.5 20 25 15 C25 22 29 25 32 28 C36 22 36.5 15 34.5 8 C46 15 53 25.5 53 38 C53 48.5 44.5 56 31 56 Z"
-          fill={`${color}D8`}
-        />
-        <Path
-          d="M32 55 C25 53.5 21.5 48.5 22 42 C22.4 36.5 26 32.5 30 29 C30 34 33.2 36 35.5 39 C37.7 35.8 38.2 31.5 37.2 27.5 C43.5 32.5 47 38.2 46.5 44.5 C46 51.2 40.5 55 32 55 Z"
-          fill="rgba(255,255,255,0.78)"
-        />
-        <Path
-          d="M32 55 C27.8 53.6 26 50 27 46 C27.8 42.9 30.1 40.5 32.5 38.5 C32.4 42 35.5 44 37 47 C39.5 44 39.8 41 39.2 38 C43 41.3 44.6 45.3 43.4 49.3 C41.9 53.6 37.8 55.6 32 55 Z"
-          fill={color}
-        />
-      </>,
+    return renderIcon(
+      <StreakSummaryIcon size={size} testID="circle-detail-streak-icon" />,
     );
   }
 
-  return renderSvg(
-    <>
-      <G fill="none" stroke={color} strokeLinecap="round" strokeWidth="6">
-        <Path d="M18 34 A16 16 0 1 0 26 18" />
-        <Path d="M17 19 L25.5 18 L24.5 26.5" strokeLinejoin="round" />
-      </G>
-      <SvgCircle cx="32" cy="34" fill={`${color}18`} r="13" />
-    </>,
-  );
+  if (kind === 'leaderboard') {
+    return renderIcon(
+      <ChartColumnIncreasing color={color} size={size} strokeWidth={3} />,
+    );
+  }
+
+  if (kind === 'goals') {
+    return renderIcon(<Target color={color} size={size} strokeWidth={3} />);
+  }
+
+  if (kind === 'settings') {
+    return renderIcon(<Settings2 color={color} size={size} strokeWidth={3} />);
+  }
+
+  return renderIcon(<UsersRound color={color} size={size} strokeWidth={3} />);
 }
 
 function DashboardUtilityAction({
@@ -530,16 +497,29 @@ function TapInReferenceAction({
   );
 }
 
-function getProgressSectionSubtitle(detail: CircleDetailModel) {
+function getCompanionPeriodLabel(detail: CircleDetailModel) {
   if (detail.commitmentCadence === 'monthly') {
-    return 'Progress this month';
+    return 'this month';
   }
 
   if (detail.commitmentCadence === 'weekly') {
-    return 'Progress this week';
+    return 'this week';
   }
 
-  return 'Progress today';
+  return 'today';
+}
+
+function getCompanionProgressSubtitle(detail: CircleDetailModel) {
+  const activeMembers = detail.members.filter(
+    member => member.membershipStatus !== 'pending',
+  );
+  const doneCount = activeMembers.filter(
+    member => member.state === 'done',
+  ).length;
+
+  return `${doneCount} of ${activeMembers.length} ${getCompanionPeriodLabel(
+    detail,
+  )}`;
 }
 
 function CircleStatRings({
@@ -563,47 +543,6 @@ function CircleStatRings({
   const statsRangeLabel =
     detail.commitmentCadence === 'monthly' ? 'This month' : 'This week';
 
-  const completionVisual: StatRingVisual = {
-    arc: '#0E9B57',
-    badgeBackground: '#E0F4E9',
-    badgeForeground: '#07763E',
-    cardBackground: theme.isDark ? 'rgba(16,185,103,0.08)' : '#FFFFFF',
-    cardBorder: theme.isDark
-      ? 'rgba(112,226,163,0.18)'
-      : 'rgba(16,185,103,0.12)',
-    cardTint: theme.isDark ? 'rgba(16,185,103,0.16)' : 'rgba(16,185,103,0.11)',
-    disc: '#E8F8EF',
-    shadowColor: theme.isDark ? theme.shadow : 'rgba(7,118,62,0.22)',
-    trackDark: 'rgba(16,185,103,0.26)',
-    trackLight: '#CDEBDA',
-  };
-  const streakVisual: StatRingVisual = {
-    arc: '#F5A800',
-    badgeBackground: '#FFF1CC',
-    badgeForeground: '#C27400',
-    cardBackground: theme.isDark ? 'rgba(245,168,0,0.08)' : '#FFFFFF',
-    cardBorder: theme.isDark ? 'rgba(255,196,0,0.18)' : 'rgba(245,168,0,0.14)',
-    cardTint: theme.isDark ? 'rgba(245,168,0,0.18)' : 'rgba(245,168,0,0.12)',
-    disc: '#FFF3CF',
-    shadowColor: theme.isDark ? theme.shadow : 'rgba(194,116,0,0.22)',
-    trackDark: 'rgba(255,196,0,0.26)',
-    trackLight: '#FFE9B3',
-  };
-  const membersVisual: StatRingVisual = {
-    arc: '#7A55FF',
-    badgeBackground: '#ECE6FF',
-    badgeForeground: '#4B16F4',
-    cardBackground: theme.isDark ? 'rgba(122,85,255,0.10)' : '#FFFFFF',
-    cardBorder: theme.isDark
-      ? 'rgba(150,120,255,0.20)'
-      : 'rgba(90,28,255,0.12)',
-    cardTint: theme.isDark ? 'rgba(122,85,255,0.18)' : 'rgba(90,28,255,0.10)',
-    disc: '#EFEAFF',
-    shadowColor: theme.isDark ? theme.shadow : 'rgba(75,22,244,0.20)',
-    trackDark: 'rgba(122,85,255,0.26)',
-    trackLight: '#E4DBFF',
-  };
-
   return (
     <View style={styles.statRingsSection}>
       <View style={styles.statsTitleRow}>
@@ -614,47 +553,56 @@ function CircleStatRings({
         <WeekProgressStrip days={weekCells} streakDays={weekStreakDays} />
       </GlassPanel>
       <View style={styles.statRingsRow}>
-        <StatRingCard
+        <StatBarCard
           accessibilityLabel={`Completion ${completion}%.`}
-          badgeLabel={`${completion}%`}
-          discTestID="circle-stats-completion-disc"
+          barColor="#10B967"
+          chipColor="#E8F8EF"
+          chipTestID="circle-stats-completion-disc"
+          label="Completion"
           progress={completion / 100}
-          title="Completion"
-          visual={completionVisual}>
+          surfaceStyle={styles.statBarCardSurface}
+          trackColor="rgba(16,185,103,0.2)"
+          value={`${completion}%`}>
           <CircleDetailArtworkIcon
             color={theme.successForeground}
             kind="completion"
             size={STAT_ARTWORK_SIZE}
           />
-        </StatRingCard>
-        <StatRingCard
+        </StatBarCard>
+        <StatBarCard
           accessibilityLabel={`Streak ${streakValue} ${
             streakValue === 1 ? 'day' : 'days'
           }.`}
-          badgeLabel={String(streakValue)}
-          discTestID="circle-stats-streak-disc"
+          barColor="#FF8A3D"
+          chipColor="#FFE1D2"
+          chipTestID="circle-stats-streak-disc"
+          label="Streak"
           progress={streakProgress}
-          title="Streak"
-          visual={streakVisual}>
+          surfaceStyle={styles.statBarCardSurface}
+          trackColor="rgba(255,138,61,0.22)"
+          value={String(streakValue)}>
           <CircleDetailArtworkIcon
             color={theme.warningForeground}
             kind="flame"
             size={STAT_ARTWORK_SIZE}
           />
-        </StatRingCard>
-        <StatRingCard
+        </StatBarCard>
+        <StatBarCard
           accessibilityLabel={`Members ${detail.memberCount} of ${maxSize}.`}
-          badgeLabel={`${detail.memberCount}/${detail.maxSize}`}
-          discTestID="circle-stats-members-disc"
+          barColor="#7A55FF"
+          chipColor="#ECE6FF"
+          chipTestID="circle-stats-members-disc"
+          label="Members"
           progress={memberProgress}
-          title="Members"
-          visual={membersVisual}>
+          surfaceStyle={styles.statBarCardSurface}
+          trackColor="rgba(122,85,255,0.22)"
+          value={`${detail.memberCount}/${maxSize}`}>
           <CircleDetailArtworkIcon
             color={theme.accentSecondaryForeground}
             kind="members"
             size={STAT_ARTWORK_SIZE}
           />
-        </StatRingCard>
+        </StatBarCard>
       </View>
     </View>
   );
@@ -701,10 +649,12 @@ function NudgePanel({
         style={[
           styles.nudgePanelFrame,
           {
-            backgroundColor: theme.backgroundElevated,
+            backgroundColor: theme.isDark
+              ? 'rgba(122,85,255,0.16)'
+              : 'rgba(122,85,255,0.11)',
             borderColor: theme.isDark
-              ? theme.borderStrong
-              : 'rgba(16,24,40,0.18)',
+              ? 'rgba(170,145,255,0.28)'
+              : 'rgba(122,85,255,0.24)',
           },
         ]}>
         <View style={styles.nudgePanelContent}>
@@ -713,17 +663,19 @@ function NudgePanel({
               styles.nudgeMarkWrap,
               {
                 backgroundColor: theme.isDark
-                  ? 'rgba(122,85,255,0.18)'
-                  : 'rgba(90,28,255,0.10)',
+                  ? 'rgba(122,85,255,0.22)'
+                  : 'rgba(122,85,255,0.12)',
               },
             ]}>
-            <NudgeMark color={foregroundColor} size={23} strokeWidth={5} />
+            <UserCheck color={foregroundColor} size={23} strokeWidth={2.7} />
             <View
               style={[
                 styles.nudgeCountBadge,
                 {
                   backgroundColor: foregroundColor,
-                  borderColor: theme.backgroundElevated,
+                  borderColor: theme.isDark
+                    ? 'rgba(18,20,34,0.98)'
+                    : 'rgba(255,255,255,0.96)',
                 },
               ]}>
               <HoystText style={styles.nudgeCountBadgeText} variant="tiny">
@@ -746,8 +698,8 @@ function NudgePanel({
               styles.nudgeActionIcon,
               {
                 backgroundColor: theme.isDark
-                  ? 'rgba(122,85,255,0.18)'
-                  : 'rgba(90,28,255,0.10)',
+                  ? 'rgba(122,85,255,0.20)'
+                  : 'rgba(122,85,255,0.12)',
               },
             ]}>
             <ChevronRight color={foregroundColor} size={17} strokeWidth={2.5} />
@@ -804,40 +756,42 @@ function MemberToolTile({
 }) {
   const theme = useHoystTheme();
   const toneColors = getToolTileToneColors(tone, theme);
+  const subtitleColor = theme.isDark ? '#AEB4C2' : '#9491B2';
   const content = (
-    <View
+    <GlassPanel
+      padding="none"
       style={[
         styles.memberToolTileInner,
         {
-          backgroundColor: theme.surfaceStrong,
-          borderColor: theme.border,
-          shadowColor: theme.shadow,
+          borderColor: theme.glassBorder,
         },
       ]}>
-      <View
-        style={[
-          styles.memberToolIcon,
-          {backgroundColor: toneColors.backgroundColor},
-        ]}>
-        {icon}
+      <View style={styles.memberToolTileContent}>
+        <View
+          style={[
+            styles.memberToolIcon,
+            {backgroundColor: toneColors.backgroundColor},
+          ]}>
+          {icon}
+        </View>
+        <View style={styles.memberToolCopy}>
+          <HoystText
+            adjustsFontSizeToFit
+            minimumFontScale={0.82}
+            numberOfLines={1}
+            style={styles.memberToolTitle}>
+            {title}
+          </HoystText>
+          <HoystText
+            adjustsFontSizeToFit
+            minimumFontScale={0.82}
+            numberOfLines={1}
+            style={[styles.memberToolSubtitle, {color: subtitleColor}]}>
+            {subtitle}
+          </HoystText>
+        </View>
       </View>
-      <View style={styles.memberToolCopy}>
-        <HoystText
-          adjustsFontSizeToFit
-          minimumFontScale={0.82}
-          numberOfLines={1}
-          style={styles.memberToolTitle}>
-          {title}
-        </HoystText>
-        <HoystText
-          adjustsFontSizeToFit
-          minimumFontScale={0.82}
-          numberOfLines={1}
-          style={[styles.memberToolSubtitle, {color: theme.textMuted}]}>
-          {subtitle}
-        </HoystText>
-      </View>
-    </View>
+    </GlassPanel>
   );
 
   if (!onPress) {
@@ -1041,6 +995,12 @@ export function CircleDetailScreen({
   }, [navigation]);
   const [nudged, setNudged] = useState(false);
   const [isNudging, setIsNudging] = useState(false);
+  const [nudgedMemberIds, setNudgedMemberIds] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
+  const [nudgingMemberIds, setNudgingMemberIds] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
   const [reviewingRequestId, setReviewingRequestId] = useState<string>();
   const [joinRequested, setJoinRequested] = useState(false);
   const [isJoining, setIsJoining] = useState(false);
@@ -1085,6 +1045,13 @@ export function CircleDetailScreen({
       [],
     [detail?.members],
   );
+
+  useEffect(() => {
+    setNudged(false);
+    setNudgedMemberIds(new Set());
+    setNudgingMemberIds(new Set());
+  }, [detail?.id]);
+
   useEffect(() => {
     return subscribeToPublicCircle(route.params.circleId, setPublicCircle, () =>
       setPublicCircle(undefined),
@@ -1230,6 +1197,12 @@ export function CircleDetailScreen({
   const roleOrJoinLabel = isMemberCircle
     ? getRoleLabel(detail)
     : getJoinModeLabel(detail);
+  const roleMetaColor =
+    detail.viewerRole === 'owner'
+      ? theme.warningForeground
+      : detail.viewerRole === 'admin'
+      ? theme.accentSecondaryForeground
+      : theme.textMuted;
   const tapInSupportingText = canRemoveTodayCheckIn
     ? "Review today's Tap In"
     : detail.commitmentCadence === 'monthly'
@@ -1241,6 +1214,12 @@ export function CircleDetailScreen({
     detail.category,
     theme,
   );
+  const categoryVisual = getCircleCategoryVisual(detail.category);
+  const categoryBackdropAccent = theme.isDark
+    ? categoryVisual.accentLight
+    : categoryVisual.accentColor;
+  const heroMetaColor = theme.isDark ? '#B9BED2' : '#817FA2';
+  const heroMetaIconColor = theme.isDark ? '#AEB4C2' : '#9693B8';
   const detailStatusPillPalette = detailStatusPill
     ? getHeroStatusPillPalette(detailStatusPill.tone, theme)
     : undefined;
@@ -1271,6 +1250,21 @@ export function CircleDetailScreen({
     navigation.navigate('Inbox');
   };
 
+  const openTapInComposer = () => {
+    requireAccount(
+      {
+        circleId: detail.id,
+        source: 'circle_detail',
+        type: 'tapIn',
+      },
+      () =>
+        navigation.navigate('TapInComposer', {
+          circleId: detail.id,
+          source: 'circle_detail',
+        }),
+    );
+  };
+
   const handleSendNudge = () => {
     if (isNudging) {
       return;
@@ -1280,6 +1274,13 @@ export function CircleDetailScreen({
     nudgeCircleMembers(detail.id)
       .then(result => {
         setNudged(true);
+        if (result.nudged > 0) {
+          setNudgedMemberIds(current => {
+            const next = new Set(current);
+            nudgeTargetMembers.forEach(member => next.add(member.id));
+            return next;
+          });
+        }
         Alert.alert(
           'Nudge sent',
           result.nudged > 0
@@ -1294,6 +1295,49 @@ export function CircleDetailScreen({
         );
       })
       .finally(() => setIsNudging(false));
+  };
+
+  const handleSendMemberNudge = (member: CircleMemberStatus) => {
+    if (nudgedMemberIds.has(member.id) || nudgingMemberIds.has(member.id)) {
+      return;
+    }
+
+    setNudgingMemberIds(current => {
+      const next = new Set(current);
+      next.add(member.id);
+      return next;
+    });
+
+    nudgeCircleMembers(detail.id, member.id)
+      .then(result => {
+        if (result.nudged > 0) {
+          setNudgedMemberIds(current => {
+            const next = new Set(current);
+            next.add(member.id);
+            return next;
+          });
+          Alert.alert('Nudge sent', `${member.name} was nudged.`);
+          return;
+        }
+
+        Alert.alert(
+          'Nudge not sent',
+          `${member.name} is covered or not eligible for a nudge right now.`,
+        );
+      })
+      .catch(error => {
+        Alert.alert(
+          'Nudge failed',
+          (error as {message?: string}).message ?? 'Could not send a nudge.',
+        );
+      })
+      .finally(() => {
+        setNudgingMemberIds(current => {
+          const next = new Set(current);
+          next.delete(member.id);
+          return next;
+        });
+      });
   };
 
   const handleRemoveTodayCheckIn = async () => {
@@ -1470,7 +1514,10 @@ export function CircleDetailScreen({
     ) : undefined;
 
   return (
-    <HoystScreen contentContainerStyle={styles.content} padded={false}>
+    <HoystScreen
+      background={<FrostedBackdrop topAccentColor={categoryBackdropAccent} />}
+      contentContainerStyle={styles.content}
+      padded={false}>
       <View style={styles.detailStack}>
         <ScreenHeroHeader
           actions={
@@ -1495,7 +1542,11 @@ export function CircleDetailScreen({
           }
           icon={
             <View testID="circle-detail-title-category-icon">
-              <CircleCategoryIcon category={detail.category} size={52} />
+              <CircleCategoryIcon
+                category={detail.category}
+                shape="roundedSquare"
+                size={52}
+              />
             </View>
           }
           description={<HeroTaskDescription commitment={detail.commitment} />}
@@ -1521,46 +1572,47 @@ export function CircleDetailScreen({
                   style={styles.heroIdentityPill}
                 />
               ) : null}
-              <HeroTextPill
-                backgroundColor={theme.surfaceHigh}
-                foregroundColor={theme.textMuted}
-                icon={
-                  detail.privacy === 'private' ? (
-                    <Lock
-                      color={theme.textSubtle}
-                      size={13}
-                      strokeWidth={2.1}
+              <View style={styles.heroInlineMetaRow}>
+                <HeroInlineMetaItem
+                  color={heroMetaColor}
+                  icon={
+                    detail.privacy === 'private' ? (
+                      <Lock
+                        color={heroMetaIconColor}
+                        size={15}
+                        strokeWidth={2.2}
+                      />
+                    ) : (
+                      <Globe2
+                        color={heroMetaIconColor}
+                        size={15}
+                        strokeWidth={2.2}
+                      />
+                    )
+                  }
+                  label={privacyLabel}
+                />
+                <View style={styles.heroInlineMetaDot} />
+                <HeroInlineMetaItem
+                  color={heroMetaColor}
+                  icon={
+                    <UsersRound
+                      color={heroMetaIconColor}
+                      size={15}
+                      strokeWidth={2.2}
                     />
-                  ) : (
-                    <Globe2
-                      color={theme.textSubtle}
-                      size={13}
-                      strokeWidth={2.1}
-                    />
-                  )
-                }
-                label={privacyLabel}
-                style={styles.heroIdentityPill}
-              />
-              <HeroTextPill
-                backgroundColor={theme.surfaceHigh}
-                foregroundColor={theme.textMuted}
-                icon={
-                  <UsersRound
-                    color={theme.textSubtle}
-                    size={13}
-                    strokeWidth={2.1}
-                  />
-                }
-                label={`${detail.memberCount}/${detail.maxSize}`}
-                style={styles.heroIdentityPill}
-              />
-              <HeroTextPill
-                backgroundColor={theme.surfaceHigh}
-                foregroundColor={theme.textMuted}
-                label={roleOrJoinLabel}
-                style={styles.heroIdentityPill}
-              />
+                  }
+                  label={`${detail.memberCount}/${detail.maxSize}`}
+                />
+                <View style={styles.heroInlineMetaDot} />
+                <HeroInlineMetaItem
+                  color={roleMetaColor}
+                  icon={
+                    <Crown color={roleMetaColor} size={15} strokeWidth={2.2} />
+                  }
+                  label={roleOrJoinLabel}
+                />
+              </View>
             </>
           }
           navTitle="Circle"
@@ -1569,20 +1621,7 @@ export function CircleDetailScreen({
             isMemberCircle ? (
               <TapInReferenceAction
                 label={tapInPrimaryActionLabel}
-                onPress={() =>
-                  requireAccount(
-                    {
-                      circleId: detail.id,
-                      source: 'circle_detail',
-                      type: 'tapIn',
-                    },
-                    () =>
-                      navigation.navigate('TapInComposer', {
-                        circleId: detail.id,
-                        source: 'circle_detail',
-                      }),
-                  )
-                }
+                onPress={openTapInComposer}
                 ringState={tapInPulseRingState}
                 supportingText={tapInSupportingText}
                 variant="hero"
@@ -1599,7 +1638,8 @@ export function CircleDetailScreen({
         />
 
         <View style={styles.bodyStack} testID="circle-detail-body-stack">
-          <CompanionRingRow
+          <CircleCompanionGrid
+            canTapInViewer={isMemberCircle && !canRemoveTodayCheckIn}
             footerAction={companionFooterAction}
             inviteAction={
               canInvite
@@ -1610,7 +1650,13 @@ export function CircleDetailScreen({
                 : undefined
             }
             members={detail.members}
-            subtitle={getProgressSectionSubtitle(detail)}
+            nudgedMemberIds={nudgedMemberIds}
+            nudgingMemberIds={nudgingMemberIds}
+            onNudgeMember={isMemberCircle ? handleSendMemberNudge : undefined}
+            onTapInViewer={openTapInComposer}
+            subtitle={getCompanionProgressSubtitle(detail)}
+            tapInRingState={tapInPulseRingState}
+            viewerUid={user?.uid}
           />
 
           {!isMemberCircle ? (
@@ -1865,6 +1911,39 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     minWidth: 104,
   },
+  heroInlineMetaDot: {
+    backgroundColor: 'rgba(142,147,176,0.42)',
+    borderRadius: 2,
+    height: 4,
+    width: 4,
+  },
+  heroInlineMetaIcon: {
+    alignItems: 'center',
+    height: 17,
+    justifyContent: 'center',
+    width: 17,
+  },
+  heroInlineMetaItem: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 6,
+    minWidth: 0,
+  },
+  heroInlineMetaLabel: {
+    flexShrink: 1,
+    fontSize: 13,
+    fontWeight: '500',
+    letterSpacing: 0,
+    lineHeight: 17,
+  },
+  heroInlineMetaRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 9,
+    paddingHorizontal: 2,
+    width: '100%',
+  },
   heroPillIcon: {
     alignItems: 'center',
     height: 14,
@@ -1893,6 +1972,9 @@ const styles = StyleSheet.create({
   statRingsRow: {
     flexDirection: 'row',
     gap: 10,
+  },
+  statBarCardSurface: {
+    minHeight: 132,
   },
   topBar: {
     alignItems: 'center',
@@ -1926,14 +2008,14 @@ const styles = StyleSheet.create({
   },
   heroTaskPrimary: {
     flexShrink: 1,
-    fontSize: 16,
-    fontWeight: '500',
+    fontSize: 15,
+    fontWeight: '600',
     letterSpacing: 0,
-    lineHeight: 22,
+    lineHeight: 20,
   },
   nudgePanel: {
     alignSelf: 'stretch',
-    borderRadius: radius.pill,
+    borderRadius: radius.md,
     elevation: 3,
     overflow: 'hidden',
     shadowOffset: {height: 8, width: 0},
@@ -1943,38 +2025,38 @@ const styles = StyleSheet.create({
   },
   nudgePanelFrame: {
     alignSelf: 'stretch',
-    borderRadius: radius.pill,
+    borderRadius: radius.md,
     borderWidth: 1.5,
-    minHeight: 66,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
+    minHeight: 74,
+    paddingHorizontal: 16,
+    paddingVertical: 9,
     width: '100%',
   },
   nudgePanelContent: {
     alignItems: 'center',
     flexDirection: 'row',
-    gap: 11,
-    minHeight: 48,
+    gap: 15,
+    minHeight: 54,
     width: '100%',
   },
   nudgeActionIcon: {
     alignItems: 'center',
     borderRadius: radius.pill,
-    height: 30,
+    height: 36,
     justifyContent: 'center',
-    width: 30,
+    width: 36,
   },
   nudgeCountBadge: {
     alignItems: 'center',
     borderRadius: radius.pill,
     borderWidth: 1.5,
-    bottom: 0,
+    top: -7,
     height: 18,
     justifyContent: 'center',
     minWidth: 18,
     paddingHorizontal: 4,
     position: 'absolute',
-    right: 0,
+    right: -7,
   },
   nudgeCountBadgeText: {
     color: '#FFFFFF',
@@ -1989,24 +2071,24 @@ const styles = StyleSheet.create({
   },
   nudgeMarkWrap: {
     alignItems: 'center',
-    borderRadius: radius.pill,
-    height: 42,
+    borderRadius: 16,
+    height: 54,
     justifyContent: 'center',
     position: 'relative',
-    width: 42,
+    width: 54,
   },
   nudgeSubtitle: {
-    fontSize: 12,
+    fontSize: 14,
     fontWeight: '600',
     letterSpacing: 0,
-    lineHeight: 16,
-    opacity: 0.76,
+    lineHeight: 18,
+    opacity: 0.88,
   },
   nudgeTitle: {
-    fontSize: 15,
+    fontSize: 18,
     fontWeight: '800',
     letterSpacing: 0,
-    lineHeight: 19,
+    lineHeight: 22,
   },
   memberToolsSection: {
     gap: 12,
@@ -2020,11 +2102,11 @@ const styles = StyleSheet.create({
   },
   memberToolIcon: {
     alignItems: 'center',
-    borderRadius: radius.pill,
+    borderRadius: 16,
     flexShrink: 0,
-    height: 44,
+    height: 46,
     justifyContent: 'center',
-    width: 44,
+    width: 46,
   },
   memberToolCopy: {
     flex: 1,
@@ -2038,7 +2120,7 @@ const styles = StyleSheet.create({
     lineHeight: 16,
   },
   memberToolTile: {
-    borderRadius: radius.md,
+    borderRadius: radius.lg,
     width: '48.8%',
     minWidth: 0,
   },
@@ -2046,18 +2128,18 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   memberToolTileInner: {
-    alignItems: 'center',
-    borderRadius: radius.md,
+    borderRadius: radius.lg,
     borderWidth: 1,
-    elevation: 2,
+    minHeight: 78,
+    width: '100%',
+  },
+  memberToolTileContent: {
+    alignItems: 'center',
     flexDirection: 'row',
     gap: 10,
     minHeight: 78,
     paddingHorizontal: 12,
     paddingVertical: 11,
-    shadowOffset: {height: 7, width: 0},
-    shadowOpacity: 0.08,
-    shadowRadius: 14,
     width: '100%',
   },
   memberToolTitle: {

@@ -1,9 +1,10 @@
 import React from 'react';
-import {Pressable, StyleSheet} from 'react-native';
+import {Image, Pressable, StyleSheet} from 'react-native';
 import RNHapticFeedback from 'react-native-haptic-feedback';
 import {Ellipse} from 'react-native-svg';
 import renderer, {act} from 'react-test-renderer';
 
+import {getBrandIcon} from '../src/design/brand/usage';
 import {HoystTapInMark} from '../src/design/components/HoystTapInMark';
 import {TapInPulseButton} from '../src/design/components/TapInPulseButton';
 
@@ -134,12 +135,20 @@ describe('TapInPulseButton', () => {
     const markWrap = tree!.root.findByProps({
       testID: 'tap-in-pulse-button-mark-wrap',
     });
-    const mark = tree!.root.findByType(HoystTapInMark);
+    const logo = tree!.root.findByProps({
+      testID: 'tap-in-pulse-button-hero-logo',
+    });
     const frameStyle = StyleSheet.flatten(frame.props.style);
     const markWrapStyle = StyleSheet.flatten(markWrap.props.style);
+    const logoStyle = StyleSheet.flatten(logo.props.style);
 
-    expect(mark.props.size).toBe(58);
-    expect(frameStyle.height).toBe(64);
-    expect(markWrapStyle.transform).toEqual([{translateY: -8}]);
+    expect(logo.type).toBe(Image);
+    expect(logo.props.source).toBe(getBrandIcon(true));
+    expect(logoStyle.height).toBe(58);
+    expect(logoStyle.width).toBe(58);
+    expect(frameStyle.height).toBe(70);
+    expect(frameStyle.borderRadius).toBe(20);
+    expect(frameStyle.backgroundColor).toBe('#15171D');
+    expect(markWrapStyle.transform).toEqual([{translateY: 0}]);
   });
 });

@@ -172,7 +172,11 @@ describe('Circles screen selectors', () => {
 
   it('filters public circles by category and search text', () => {
     const circles = [
-      publicCircle({category: 'Fitness', id: 'fitness', title: 'Morning Movers'}),
+      publicCircle({
+        category: 'Fitness',
+        id: 'fitness',
+        title: 'Morning Movers',
+      }),
       publicCircle({
         category: 'Deep Work',
         commitment: 'Ship one focus block',
@@ -230,6 +234,42 @@ describe('circle nudge targeting', () => {
           {data: {uid: 'phil-uid'}, id: 'phil-uid'},
         ],
         requiredTapIns: 1,
+        todayCoveredUids: new Set(['ava-uid']),
+        viewerUid: 'phil-uid',
+      }),
+    ).toEqual([]);
+  });
+
+  it('narrows nudges to the requested eligible target uid', () => {
+    expect(
+      getNudgeTargetUids({
+        coveredCounts: new Map([
+          ['kelvin-uid', 0],
+          ['ava-uid', 0],
+        ]),
+        members: [
+          {data: {uid: 'kelvin-uid'}, id: 'kelvin-uid'},
+          {data: {uid: 'ava-uid'}, id: 'ava-uid'},
+          {data: {uid: 'phil-uid'}, id: 'phil-uid'},
+        ],
+        requiredTapIns: 1,
+        targetUid: 'ava-uid',
+        todayCoveredUids: new Set(),
+        viewerUid: 'phil-uid',
+      }),
+    ).toEqual(['ava-uid']);
+  });
+
+  it('returns no target when the requested uid is not eligible', () => {
+    expect(
+      getNudgeTargetUids({
+        coveredCounts: new Map([['ava-uid', 0]]),
+        members: [
+          {data: {uid: 'ava-uid'}, id: 'ava-uid'},
+          {data: {uid: 'phil-uid'}, id: 'phil-uid'},
+        ],
+        requiredTapIns: 1,
+        targetUid: 'ava-uid',
         todayCoveredUids: new Set(['ava-uid']),
         viewerUid: 'phil-uid',
       }),

@@ -15,6 +15,7 @@ import {SafeAreaView} from 'react-native-safe-area-context';
 import {useHoystTheme} from '../theme/useHoystTheme';
 
 type HoystScreenProps = PropsWithChildren<{
+  background?: React.ReactNode;
   contentContainerStyle?: StyleProp<ViewStyle>;
   keyboardAvoiding?: boolean;
   keyboardDismissMode?: ScrollViewProps['keyboardDismissMode'];
@@ -25,6 +26,7 @@ type HoystScreenProps = PropsWithChildren<{
 }>;
 
 export function HoystScreen({
+  background,
   contentContainerStyle,
   children,
   keyboardAvoiding = false,
@@ -54,7 +56,13 @@ export function HoystScreen({
   );
 
   return (
-    <SafeAreaView style={[styles.safeArea, {backgroundColor: theme.background}]}>
+    <SafeAreaView
+      style={[styles.safeArea, {backgroundColor: theme.background}]}>
+      {background ? (
+        <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+          {background}
+        </View>
+      ) : null}
       {keyboardAvoiding ? (
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}

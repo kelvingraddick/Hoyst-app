@@ -130,4 +130,18 @@ describe('circle service', () => {
     expect(mockHttpsCallable).toHaveBeenCalledWith('nudgeCircleMembers');
     expect(mockCallable).toHaveBeenCalledWith({circleId: 'circle-1'});
   });
+
+  it('passes a target uid for per-member nudges', async () => {
+    mockCallable.mockResolvedValueOnce({data: {nudged: 1}});
+
+    await expect(nudgeCircleMembers('circle-1', 'user-2')).resolves.toEqual({
+      nudged: 1,
+    });
+
+    expect(mockHttpsCallable).toHaveBeenCalledWith('nudgeCircleMembers');
+    expect(mockCallable).toHaveBeenCalledWith({
+      circleId: 'circle-1',
+      targetUid: 'user-2',
+    });
+  });
 });

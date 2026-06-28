@@ -59,19 +59,45 @@ function useGradientId(name: string) {
 
 type FrostedBackdropProps = {
   style?: StyleProp<ViewStyle>;
+  topAccentColor?: string;
 };
+
+export function getFrostedBackdropBlobs({
+  isDark,
+  topAccentColor,
+}: {
+  isDark: boolean;
+  topAccentColor?: string;
+}): readonly Blob[] {
+  const blobs = isDark ? frostedBackdropDarkBlobs : frostedBackdropLightBlobs;
+
+  if (!topAccentColor) {
+    return blobs;
+  }
+
+  return [
+    {
+      ...blobs[0],
+      color: topAccentColor,
+      opacity: isDark ? 0.34 : 0.58,
+    },
+    ...blobs.slice(1),
+  ];
+}
 
 // Full-bleed background for frosted-glass screens: a flat themed base wash
 // plus four soft color glows. Render it behind the screen content (absolute
 // fill) so glass surfaces have something colorful to blur.
 export function FrostedBackdrop({
   style,
+  topAccentColor,
 }: FrostedBackdropProps): React.JSX.Element {
   const theme = useHoystTheme();
   const gradientPrefix = useGradientId('blob');
-  const blobs = theme.isDark
-    ? frostedBackdropDarkBlobs
-    : frostedBackdropLightBlobs;
+  const blobs = getFrostedBackdropBlobs({
+    isDark: theme.isDark,
+    topAccentColor,
+  });
   // Blobs read brighter on the pale light canvas; dim them on dark so they
   // glow rather than glare.
   const blobOpacityScale = theme.isDark ? 0.7 : 1;

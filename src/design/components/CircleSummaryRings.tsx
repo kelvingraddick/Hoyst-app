@@ -27,15 +27,17 @@ type CircleSummaryRingsProps = {
   streakDays: number;
 };
 
-function ContributionSummaryIcon({
+export function ContributionSummaryIcon({
   size = SUMMARY_ICON_ARTWORK_SIZE,
+  testID = 'circle-summary-contribution-icon',
 }: {
   size?: number;
+  testID?: string;
 }) {
   return (
     <Svg
       height={size}
-      testID="circle-summary-contribution-icon"
+      testID={testID}
       viewBox="0 0 64 64"
       width={size}>
       <G>
@@ -89,15 +91,17 @@ function ContributionSummaryIcon({
   );
 }
 
-function StreakSummaryIcon({
+export function StreakSummaryIcon({
   size = SUMMARY_ICON_ARTWORK_SIZE,
+  testID = 'circle-summary-streak-icon',
 }: {
   size?: number;
+  testID?: string;
 }) {
   return (
     <Svg
       height={size}
-      testID="circle-summary-streak-icon"
+      testID={testID}
       viewBox="0 0 64 64"
       width={size}>
       <G>

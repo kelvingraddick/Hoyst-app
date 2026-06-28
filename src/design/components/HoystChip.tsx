@@ -7,12 +7,14 @@ import {radius} from '../tokens/radius';
 import {HoystText} from './HoystText';
 
 type HoystChipProps = {
+  density?: 'compact' | 'regular';
   label: string;
   style?: StyleProp<ViewStyle>;
   tone?: 'blue' | 'green' | 'neutral' | 'orange' | 'purple' | 'yellow';
 };
 
 export function HoystChip({
+  density = 'regular',
   label,
   style,
   tone = 'neutral',
@@ -50,7 +52,11 @@ export function HoystChip({
     <View
       style={[styles.base, {backgroundColor: palette.backgroundColor}, style]}>
       <HoystText
-        style={{color: palette.color, textAlign: 'center'}}
+        style={[
+          styles.label,
+          {color: palette.color},
+          density === 'compact' ? styles.compactLabel : undefined,
+        ]}
         variant="tiny">
         {label}
       </HoystText>
@@ -66,5 +72,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 10,
     paddingVertical: 7,
+  },
+  compactLabel: {
+    fontSize: 10,
+    lineHeight: 12,
+  },
+  label: {
+    textAlign: 'center',
   },
 });

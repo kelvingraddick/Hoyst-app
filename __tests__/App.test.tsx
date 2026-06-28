@@ -4,7 +4,10 @@ import {
   frostedBlobColors,
   getHoystThemeColors,
 } from '../src/design/tokens/colors';
-import {frostedBackdropLightBlobs} from '../src/design/components/FrostedBackdrop';
+import {
+  frostedBackdropLightBlobs,
+  getFrostedBackdropBlobs,
+} from '../src/design/components/FrostedBackdrop';
 import {gradients} from '../src/design/tokens/gradients';
 
 jest.mock('../src/store/settings-store', () => ({
@@ -92,6 +95,23 @@ describe('Hoyst design tokens', () => {
         r: 0.43,
       },
     ]);
+  });
+
+  it('can tint the top backdrop blob without changing Home defaults', () => {
+    const tintedBlobs = getFrostedBackdropBlobs({
+      isDark: false,
+      topAccentColor: brandColors.blue,
+    });
+
+    expect(frostedBackdropLightBlobs[0].color).toBe(
+      frostedBackdropColors.purple,
+    );
+    expect(tintedBlobs[0]).toEqual({
+      ...frostedBackdropLightBlobs[0],
+      color: brandColors.blue,
+      opacity: 0.58,
+    });
+    expect(tintedBlobs.slice(1)).toEqual(frostedBackdropLightBlobs.slice(1));
   });
 
   it('defines the six-stop spectrum ring gradient', () => {

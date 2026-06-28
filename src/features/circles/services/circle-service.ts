@@ -92,9 +92,12 @@ export async function reviewJoinRequest({
   return result.data as {status: 'approved' | 'declined'};
 }
 
-export async function nudgeCircleMembers(circleId: string) {
+export async function nudgeCircleMembers(circleId: string, targetUid?: string) {
   const callable = firebaseFunctions().httpsCallable('nudgeCircleMembers');
-  const result = await callable({circleId});
+  const result = await callable({
+    circleId,
+    ...(targetUid ? {targetUid} : {}),
+  });
   return result.data as {nudged: number};
 }
 

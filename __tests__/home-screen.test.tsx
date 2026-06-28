@@ -5,6 +5,7 @@ import renderer, {act} from 'react-test-renderer';
 import {ActivityFeedCard} from '../src/design/components/ActivityFeedCard';
 import {FrostedBackdrop} from '../src/design/components/FrostedBackdrop';
 import {GlassPanel} from '../src/design/components/GlassPanel';
+import {SectionEyebrow} from '../src/design/components/SectionEyebrow';
 import {brandColors} from '../src/design/tokens/colors';
 import {HomeScreen} from '../src/features/home/screens/HomeScreen';
 import type {HomeData} from '../src/features/home/services/home-data-service';
@@ -472,6 +473,18 @@ describe('HomeScreen companion updates', () => {
     expect(output).toContain('Companion updates');
     expect(output).toContain('Ari Runner');
     expect(output).toContain('tapped in for Morning Movers.');
+
+    const companionLabel = tree.root
+      .findAllByType(SectionEyebrow)
+      .find(node => node.props.children === 'Companion updates');
+    const companionLabelStyle = StyleSheet.flatten(companionLabel?.props.style);
+    const companionCard = tree.root.findByType(ActivityFeedCard);
+
+    expect(companionLabelStyle).toMatchObject({
+      fontSize: 11,
+      lineHeight: 13,
+    });
+    expect(companionCard.props.density).toBe('compact');
 
     const eventPressable = tree.root
       .findAllByType(Pressable)
