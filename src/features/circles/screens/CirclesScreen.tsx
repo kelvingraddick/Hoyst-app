@@ -202,6 +202,7 @@ function DiscoverCircleCard({
             <View style={styles.titleCluster}>
               <CircleCategoryIcon
                 category={circle.category}
+                shape="roundedSquare"
                 size={34}
                 style={styles.categoryTitleIcon}
               />
@@ -437,9 +438,7 @@ export function CirclesScreen({navigation}: Props): React.JSX.Element {
   );
   const needsAttention = useMemo(
     () =>
-      sortHomeCircles(
-        activeCircles.filter(circle => canTapInToday(circle)),
-      ),
+      sortHomeCircles(activeCircles.filter(circle => canTapInToday(circle))),
     [activeCircles],
   );
   const allCircles = useMemo(

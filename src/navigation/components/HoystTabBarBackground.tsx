@@ -15,15 +15,15 @@ export function HoystTabBarBackground(): React.JSX.Element {
         styles.clip,
         {
           backgroundColor: theme.isDark
-            ? 'rgba(20, 22, 32, 0.84)'
-            : 'rgba(255, 255, 255, 0.86)',
+            ? 'rgba(20, 22, 32, 0.6)'
+            : 'rgba(255, 255, 255, 0.6)',
         },
       ]}>
       {Platform.OS === 'ios' ? (
         <BlurView
-          blurAmount={30}
+          blurAmount={28}
           blurType={theme.isDark ? 'dark' : 'light'}
-          reducedTransparencyFallbackColor={theme.surfaceStrong}
+          reducedTransparencyFallbackColor={theme.glassSurfaceStrong}
           style={StyleSheet.absoluteFill}
         />
       ) : null}
@@ -36,9 +36,9 @@ export function HoystTabBarBackground(): React.JSX.Element {
                 'rgba(255, 255, 255, 0.02)',
               ]
             : [
-                'rgba(255, 255, 255, 0.96)',
-                'rgba(255, 255, 255, 0.8)',
-                'rgba(255, 255, 255, 0.7)',
+                'rgba(255, 255, 255, 0.72)',
+                'rgba(255, 255, 255, 0.5)',
+                'rgba(255, 255, 255, 0.4)',
               ]
         }
         end={{x: 0.5, y: 1}}
@@ -51,9 +51,7 @@ export function HoystTabBarBackground(): React.JSX.Element {
           StyleSheet.absoluteFill,
           styles.innerBorder,
           {
-            borderColor: theme.isDark
-              ? 'rgba(255, 255, 255, 0.14)'
-              : 'rgba(16, 24, 40, 0.08)',
+            borderColor: theme.glassBorder,
           },
         ]}
       />
@@ -62,9 +60,7 @@ export function HoystTabBarBackground(): React.JSX.Element {
         style={[
           styles.topSheen,
           {
-            backgroundColor: theme.isDark
-              ? 'rgba(255, 255, 255, 0.1)'
-              : 'rgba(255, 255, 255, 0.74)',
+            backgroundColor: theme.glassHighlight,
           },
         ]}
       />

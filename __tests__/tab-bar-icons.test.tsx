@@ -48,6 +48,19 @@ function getStrokeColors(tree: renderer.ReactTestRenderer) {
     .map(node => node.props.stroke);
 }
 
+function getVisibleGlyphColors(tree: renderer.ReactTestRenderer) {
+  return tree.root
+    .findAllByType(Path)
+    .concat(tree.root.findAllByType(Circle))
+    .flatMap(node => [node.props.fill, node.props.stroke])
+    .filter(
+      color =>
+        typeof color === 'string' &&
+        color !== 'none' &&
+        color !== 'transparent',
+    );
+}
+
 describe('TabBarIcons', () => {
   it('renders every tab icon at the same visible size', () => {
     icons.forEach(({Component}) => {
@@ -60,13 +73,43 @@ describe('TabBarIcons', () => {
     });
   });
 
-  it('uses primary and secondary strokes for inactive icons', () => {
+  it('uses the primary stroke color for inactive icons', () => {
     icons.forEach(({Component}) => {
       const tree = renderIcon(Component);
       const strokes = getStrokeColors(tree);
 
       expect(strokes).toContain('#111827');
-      expect(strokes).toContain('#6C748C');
+    });
+  });
+
+  it('renders the Circles icon as three linked ring outlines', () => {
+    const tree = renderIcon(CirclesTabIcon);
+    const rings = tree.root.findAllByType(Circle);
+
+    expect(rings).toHaveLength(3);
+    expect(rings.map(ring => ring.props.fill)).toEqual([
+      'none',
+      'none',
+      'none',
+    ]);
+    expect(rings.map(ring => ring.props.stroke)).toEqual([
+      '#111827',
+      '#111827',
+      '#111827',
+    ]);
+    expect(rings.map(ring => ring.props.r)).toEqual([5.25, 5.25, 5.25]);
+  });
+
+  it('can render inactive icons in one gray color', () => {
+    icons.forEach(({Component}) => {
+      const tree = renderIcon(Component, {
+        color: brandColors.graySoft,
+        secondaryColor: brandColors.graySoft,
+      });
+
+      expect(new Set(getVisibleGlyphColors(tree))).toEqual(
+        new Set([brandColors.graySoft]),
+      );
     });
   });
 
@@ -85,18 +128,29 @@ describe('TabBarIcons', () => {
     });
   });
 
-  it('keeps the new icons line-based without selected fills', () => {
+  it('tints every selected glyph element (fill or stroke) with the active color', () => {
     icons.forEach(({Component}) => {
       const tree = renderIcon(Component, {
         color: brandColors.blue,
         focused: true,
       });
-      const filledShapes = tree.root
-        .findAllByType(Path)
-        .concat(tree.root.findAllByType(Circle))
-        .filter(node => node.props.fill && node.props.fill !== 'none');
+      const colors = getVisibleGlyphColors(tree);
 
-      expect(filledShapes).toHaveLength(0);
+      expect(colors.length).toBeGreaterThan(0);
+      expect(new Set(colors)).toEqual(new Set([brandColors.blue]));
     });
+  });
+
+  it('keeps the selected Home icon line-based without fills', () => {
+    const tree = renderIcon(HomeTabIcon, {
+      color: brandColors.blue,
+      focused: true,
+    });
+    const filledShapes = tree.root
+      .findAllByType(Path)
+      .concat(tree.root.findAllByType(Circle))
+      .filter(node => node.props.fill && node.props.fill !== 'none');
+
+    expect(filledShapes).toHaveLength(0);
   });
 });

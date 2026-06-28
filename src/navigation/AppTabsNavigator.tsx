@@ -70,10 +70,7 @@ export function AppTabsNavigator({
   const setCurrentStep = useOnboardingStore(state => state.setCurrentStep);
   const [tabPulseInteractionKey, setTabPulseInteractionKey] = useState(0);
   const didAutoPresentOnboardingRef = useRef(false);
-  const inactiveIconPrimary = theme.isDark
-    ? brandColors.white
-    : brandColors.charcoal;
-  const inactiveIconSecondary = theme.isDark
+  const inactiveIconColor = theme.isDark
     ? brandColors.gray
     : brandColors.graySoft;
 
@@ -200,14 +197,14 @@ export function AppTabsNavigator({
 
           const Icon = routeIcons[route.name as StandardTabName];
           const iconSize = 28;
-          const iconColor = focused ? brandColors.blue : inactiveIconPrimary;
+          const iconColor = focused ? brandColors.blue : inactiveIconColor;
 
           return (
             <Icon
               color={iconColor}
               fill="none"
               focused={focused}
-              secondaryColor={inactiveIconSecondary}
+              secondaryColor={iconColor}
               size={iconSize}
               strokeWidth={focused ? 2.1 : 1.9}
             />

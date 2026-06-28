@@ -38,6 +38,7 @@ export type CircleCategoryVisual = {
 
 type CircleCategoryIconProps = {
   category: string;
+  shape?: 'circle' | 'roundedSquare';
   size?: number;
   style?: StyleProp<ViewStyle>;
 };
@@ -443,14 +444,24 @@ function renderCategoryArtwork(visual: CircleCategoryVisual) {
   return <GeneralArtwork visual={visual} />;
 }
 
+function getBackplateRadius(
+  size: number,
+  shape: NonNullable<CircleCategoryIconProps['shape']>,
+) {
+  return shape === 'roundedSquare'
+    ? Math.min(14, Math.round(size * 0.3))
+    : size / 2;
+}
+
 export function CircleCategoryIcon({
   category,
+  shape = 'circle',
   size = 38,
   style,
 }: CircleCategoryIconProps): React.JSX.Element {
   const visual = getCircleCategoryVisual(category);
   const sizeStyle = {
-    borderRadius: size / 2,
+    borderRadius: getBackplateRadius(size, shape),
     height: size,
     width: size,
   };

@@ -1,9 +1,12 @@
 import React from 'react';
+import {StyleSheet} from 'react-native';
 import renderer, {act} from 'react-test-renderer';
 import {UsersRound} from 'lucide-react-native';
 
 import {CircleCardTapInButton} from '../src/design/components/CircleCardTapInButton';
+import {CircleCategoryIcon} from '../src/design/components/CircleCategoryIcon';
 import {GradientRing} from '../src/design/components/GradientRing';
+import {GlassPanel} from '../src/design/components/GlassPanel';
 import {TodayCircleCard} from '../src/design/components/TodayCircleCard';
 import {getHoystThemeColors} from '../src/design/tokens/colors';
 import type {CircleManagementCard} from '../src/types/models';
@@ -218,5 +221,131 @@ describe('TodayCircleCard', () => {
     expect(output).toContain('Pending Circle');
     expect(output).toContain('Pending approval');
     expect(output).toContain('Approval needed before Tap In unlocks.');
+  });
+
+  it('renders attention cards as peek-width category-accented action cards', () => {
+    const onActionPress = jest.fn();
+    const stopPropagation = jest.fn();
+    let tree: renderer.ReactTestRenderer | undefined;
+
+    act(() => {
+      tree = renderer.create(
+        <TodayCircleCard
+          card={circle({
+            category: 'Wellness',
+            commitment: 'Sleep 8 hours in a day',
+            completionRate: 29,
+            members: [
+              {
+                id: 'member-1',
+                initials: 'AR',
+                name: 'Ari Runner',
+                state: 'done',
+              },
+            ],
+            progressPercent: 29,
+            title: 'Sleep 8 Hours',
+          })}
+          onActionPress={onActionPress}
+          onCardPress={jest.fn()}
+          variant="attention"
+        />,
+      );
+    });
+
+    const output = JSON.stringify(tree!.toJSON());
+    const panelStyle = StyleSheet.flatten(
+      tree!.root.findByType(GlassPanel).props.style,
+    );
+    const tapInButton = tree!.root.findByProps({
+      testID: 'attention-tap-in-button',
+    });
+    const categoryColor = '#5A1CFF';
+    const tapInButtonSurface = tapInButton.find(node => {
+      const flattenedStyle = StyleSheet.flatten(node.props.style);
+
+      return flattenedStyle?.minHeight === 42;
+    });
+    const tapInButtonSurfaceStyle = StyleSheet.flatten(
+      tapInButtonSurface.props.style,
+    );
+    const categoryAccentNodes = tree!.root.findAll(node => {
+      const flattenedStyle = StyleSheet.flatten(node.props.style);
+
+      return flattenedStyle?.backgroundColor === categoryColor;
+    });
+    const iconBackplate = tree!.root.find(node => {
+      const flattenedStyle = StyleSheet.flatten(node.props.style);
+
+      return (
+        flattenedStyle?.backgroundColor === '#F0ECFF' &&
+        flattenedStyle.height === 36 &&
+        flattenedStyle.width === 36
+      );
+    });
+    const iconBackplateStyle = StyleSheet.flatten(iconBackplate.props.style);
+    const descriptionNode = tree!.root.find(node => {
+      return node.props.children === 'Sleep 8 hours in a day';
+    });
+    const metricNode = tree!.root.find(node => {
+      return node.props.children === '29% complete today';
+    });
+    const descriptionStyle = StyleSheet.flatten(descriptionNode.props.style);
+    const metricStyle = StyleSheet.flatten(metricNode.props.style);
+    const peekWidthNodes = tree!.root.findAll(node => {
+      const flattenedStyle = StyleSheet.flatten(node.props.style);
+
+      return flattenedStyle?.width === 300;
+    });
+    const gradientNodes = tree!.root.findAll(node => {
+      return Array.isArray(node.props.colors);
+    });
+
+    expect(output).toContain('Sleep 8 hours in a day');
+    expect(output).toContain('WELLNESS');
+    expect(output).toContain('29% complete today');
+    expect(output).not.toContain('Needs You');
+    expect(output).not.toContain('1 companion already showed up');
+    expect(iconBackplateStyle.borderRadius).toBe(11);
+    expect(iconBackplateStyle.borderRadius).not.toBe(18);
+    expect(descriptionStyle.fontWeight).toBe('600');
+    expect(metricStyle.fontWeight).toBe('500');
+    expect(gradientNodes).toHaveLength(0);
+    expect(peekWidthNodes.length).toBeGreaterThan(1);
+    expect(panelStyle.width).toBe(300);
+    expect(tapInButtonSurfaceStyle.backgroundColor).toBe(categoryColor);
+    expect(tapInButtonSurfaceStyle.shadowColor).toBe(categoryColor);
+    expect(categoryAccentNodes.length).toBeGreaterThan(0);
+    expect(output).toContain('Tap In');
+
+    act(() => {
+      tapInButton.props.onPress({stopPropagation});
+    });
+
+    expect(stopPropagation).toHaveBeenCalledTimes(1);
+    expect(onActionPress).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps category icons circular by default', () => {
+    let tree: renderer.ReactTestRenderer | undefined;
+
+    act(() => {
+      tree = renderer.create(
+        <CircleCategoryIcon category="Wellness" size={36} />,
+      );
+    });
+
+    const iconBackplate = tree!.root.find(node => {
+      const flattenedStyle = StyleSheet.flatten(node.props.style);
+
+      return (
+        flattenedStyle?.backgroundColor === '#F0ECFF' &&
+        flattenedStyle.height === 36 &&
+        flattenedStyle.width === 36
+      );
+    });
+    const iconBackplateStyle = StyleSheet.flatten(iconBackplate.props.style);
+
+    expect(iconBackplateStyle.borderRadius).toBe(18);
   });
 });

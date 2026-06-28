@@ -1,5 +1,5 @@
 import React from 'react';
-import {TextInput} from 'react-native';
+import {StyleSheet, TextInput} from 'react-native';
 import renderer, {act} from 'react-test-renderer';
 import {UsersRound} from 'lucide-react-native';
 
@@ -268,6 +268,26 @@ describe('CirclesScreen render paths', () => {
         .findAllByType(UsersRound)
         .some(icon => icon.props.color === '#07763E'),
     ).toBe(true);
+  });
+
+  it('uses rounded-square category icon backplates in discover cards', () => {
+    mockHomeData = homeData([]);
+    const tree = renderScreenTree();
+    const iconBackplates = tree.root.findAll(node => {
+      const flattenedStyle = StyleSheet.flatten(node.props.style);
+
+      return (
+        flattenedStyle?.backgroundColor === '#E7F8EF' &&
+        flattenedStyle.height === 34 &&
+        flattenedStyle.width === 34
+      );
+    });
+    const iconBackplateStyle = StyleSheet.flatten(
+      iconBackplates[0]?.props.style,
+    );
+
+    expect(iconBackplates.length).toBeGreaterThan(0);
+    expect(iconBackplateStyle.borderRadius).toBe(10);
   });
 
   it('opens Tap In for a completed weekly commitment without today coverage', () => {

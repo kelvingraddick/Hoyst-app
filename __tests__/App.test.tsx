@@ -1,5 +1,16 @@
-import {brandColors, getHoystThemeColors} from '../src/design/tokens/colors';
+import {
+  brandColors,
+  frostedBackdropColors,
+  frostedBlobColors,
+  getHoystThemeColors,
+} from '../src/design/tokens/colors';
+import {frostedBackdropLightBlobs} from '../src/design/components/FrostedBackdrop';
 import {gradients} from '../src/design/tokens/gradients';
+
+jest.mock('../src/store/settings-store', () => ({
+  useSettingsStore: (selector: (state: {appearance: 'light'}) => unknown) =>
+    selector({appearance: 'light'}),
+}));
 
 function hexToRgb(hex: string) {
   const normalizedHex = hex.replace('#', '');
@@ -35,8 +46,66 @@ describe('Hoyst design tokens', () => {
     expect(brandColors.orange).toBe('#FF8A3D');
   });
 
+  it('keeps saturated accent blob colors separate from backdrop washes', () => {
+    expect(frostedBlobColors).toEqual({
+      purple: '#7C6FF0',
+      green: '#22A565',
+      orange: '#F97316',
+      blue: '#2F6FED',
+    });
+    expect(frostedBackdropColors).toEqual({
+      purple: '#C8C2FF',
+      mint: '#C7EBDD',
+      peach: '#FFDCD2',
+      blue: '#DCE6FF',
+    });
+  });
+
+  it('matches the light Home backdrop blob layout to the reference', () => {
+    expect(frostedBackdropLightBlobs).toEqual([
+      {
+        color: frostedBackdropColors.purple,
+        cx: 0.12,
+        cy: 0.27,
+        opacity: 0.64,
+        r: 0.38,
+      },
+      {
+        color: frostedBackdropColors.mint,
+        cx: 0.82,
+        cy: 0.43,
+        opacity: 0.68,
+        r: 0.39,
+      },
+      {
+        color: frostedBackdropColors.peach,
+        cx: 0.22,
+        cy: 0.59,
+        opacity: 0.66,
+        r: 0.37,
+      },
+      {
+        color: frostedBackdropColors.blue,
+        cx: 0.84,
+        cy: 0.77,
+        opacity: 0.72,
+        r: 0.43,
+      },
+    ]);
+  });
+
   it('defines the six-stop spectrum ring gradient', () => {
     expect(gradients.primaryRing).toHaveLength(6);
+  });
+
+  it('keeps dark glass tokens light enough for translucent Home sections', () => {
+    const theme = getHoystThemeColors('dark');
+
+    expect(theme.glassSurface).toBe('rgba(18,20,34,0.38)');
+    expect(theme.glassSurfaceStrong).toBe('rgba(28,30,46,0.64)');
+    expect(theme.glassBorder).toBe('rgba(255,255,255,0.20)');
+    expect(theme.glassHighlight).toBe('rgba(255,255,255,0.18)');
+    expect(theme.glassChipBorder).toBe('rgba(255,255,255,0.18)');
   });
 
   it('keeps light-mode foreground tokens readable on app surfaces', () => {

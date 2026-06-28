@@ -10,14 +10,13 @@ import {
 import type {BottomTabNavigationProp} from '@react-navigation/bottom-tabs';
 import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import {useFocusEffect, useNavigation} from '@react-navigation/native';
+import {Plus} from 'lucide-react-native';
 
 import {ActivityFeedCard} from '../../../design/components/ActivityFeedCard';
 import {CircleSummaryRings} from '../../../design/components/CircleSummaryRings';
+import {FrostedBackdrop} from '../../../design/components/FrostedBackdrop';
 import {GlassPanel} from '../../../design/components/GlassPanel';
-import {
-  HomeHeroHeader,
-  homeHeroPalettes,
-} from '../../../design/components/HomeHeroHeader';
+import {HomeHeroHeader} from '../../../design/components/HomeHeroHeader';
 import {HoystButton} from '../../../design/components/HoystButton';
 import {HoystText} from '../../../design/components/HoystText';
 import {SectionEyebrow} from '../../../design/components/SectionEyebrow';
@@ -25,8 +24,7 @@ import {SectionHeader} from '../../../design/components/SectionHeader';
 import {TapInRingMark} from '../../../design/components/TapInRingMark';
 import {TodayCircleCard} from '../../../design/components/TodayCircleCard';
 import {WeekProgressStrip} from '../../../design/components/WeekProgressStrip';
-import {actionMotion, actionShadow} from '../../../design/tokens/actions';
-import {radius} from '../../../design/tokens/radius';
+import {actionMotion} from '../../../design/tokens/actions';
 import {useHoystTheme} from '../../../design/theme/useHoystTheme';
 import {useProtectedAction} from '../../auth/hooks/useProtectedAction';
 import {
@@ -146,6 +144,7 @@ function getInboxAccessibilityLabel(unreadCount: number) {
 
 export function HomeScreen(): React.JSX.Element {
   const theme = useHoystTheme();
+  const createButtonSubtitleColor = theme.isDark ? '#C9D0E1' : '#687386';
   const [homeData, setHomeData] = useState<HomeData>(() =>
     createEmptyHomeData(),
   );
@@ -330,13 +329,9 @@ export function HomeScreen(): React.JSX.Element {
     () => events.slice(0, 2).map(mapInboxEventToActivity),
     [events],
   );
-  const heroPalette = theme.isDark
-    ? homeHeroPalettes.dark
-    : homeHeroPalettes.light;
-  const sheetColor = theme.isDark ? theme.backgroundElevated : '#F7F6F2';
   const homeCardLiftStyle = [
     styles.homeCardLift,
-    {shadowColor: theme.isDark ? theme.shadow : '#0F172A'},
+    {shadowColor: theme.glassShadow},
   ];
 
   useEffect(() => {
@@ -560,12 +555,13 @@ export function HomeScreen(): React.JSX.Element {
   };
 
   return (
-    <View style={[styles.root, {backgroundColor: sheetColor}]}>
+    <View style={[styles.root, {backgroundColor: theme.background}]}>
+      <FrostedBackdrop />
       <ScrollView
         bounces={false}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
-        style={{backgroundColor: heroPalette.background}}>
+        style={styles.scroll}>
         <HomeHeroHeader
           avatarAccessibilityLabel={getInboxAccessibilityLabel(
             unreadInboxCount,
@@ -581,9 +577,8 @@ export function HomeScreen(): React.JSX.Element {
           onMomentumPress={() => navigation.navigate('Momentum')}
           unreadBadgeText={getInboxBadgeText(unreadInboxCount)}
         />
-        <View style={[styles.sheet, {backgroundColor: sheetColor}]}>
-          <GlassPanel padding="compact" style={homeCardLiftStyle}>
-            <SectionEyebrow>Your week</SectionEyebrow>
+        <View style={styles.sheet}>
+          <GlassPanel padding="regular" style={homeCardLiftStyle}>
             <WeekProgressStrip
               days={homeData.progressDays}
               streakDays={homeData.personalStreakDays}
@@ -639,6 +634,7 @@ export function HomeScreen(): React.JSX.Element {
                   horizontal
                   showsHorizontalScrollIndicator={false}
                   style={styles.attentionScroll}
+                  testID="home-attention-scroll"
                   contentContainerStyle={styles.attentionScrollContent}>
                   {todayActionCircles.map(circle => (
                     <TodayCircleCard
@@ -752,38 +748,59 @@ export function HomeScreen(): React.JSX.Element {
           {showCreateCircleButton ? (
             <Pressable
               accessibilityLabel="Create Circle"
+              accessibilityRole="button"
               hitSlop={8}
               onPress={openCreateCircle}
               style={({pressed}) => [
                 styles.createButtonPressable,
                 {
                   opacity: pressed ? actionMotion.pressedOpacity : 1,
-                  shadowColor: theme.actionShadowColor,
-                  shadowOpacity: theme.actionShadowOpacity,
                   transform: [{scale: pressed ? actionMotion.pressedScale : 1}],
                 },
               ]}>
-              <View
-                style={[
-                  styles.createButton,
-                  {
-                    backgroundColor: theme.actionSurface,
-                    borderColor: theme.actionBorder,
-                  },
-                ]}>
-                <View style={styles.createIcon}>
-                  <TapInRingMark innerSize={19} outerSize={34} />
+              <GlassPanel
+                padding="none"
+                style={[styles.createButton, homeCardLiftStyle]}>
+                <View style={styles.createButtonInner}>
+                  <View style={styles.createButtonCopy}>
+                    <HoystText
+                      numberOfLines={1}
+                      style={[
+                        styles.createButtonLabel,
+                        {color: theme.text},
+                      ]}
+                      variant="button">
+                      Create Circle
+                    </HoystText>
+                    <HoystText
+                      numberOfLines={1}
+                      style={[
+                        styles.createButtonSubtitle,
+                        {color: createButtonSubtitleColor},
+                      ]}
+                      variant="caption">
+                      Start a new accountability crew
+                    </HoystText>
+                  </View>
+                  <View
+                    style={[
+                      styles.createActionOrb,
+                      {
+                        backgroundColor: theme.surfaceSoft,
+                        borderColor: theme.borderStrong,
+                      },
+                    ]}>
+                    <View style={styles.createRingStack}>
+                      <TapInRingMark innerSize={18} outerSize={34} />
+                      <View
+                        pointerEvents="none"
+                        style={styles.createCenteredPlus}>
+                        <Plus color={theme.text} size={15} strokeWidth={3} />
+                      </View>
+                    </View>
+                  </View>
                 </View>
-                <HoystText
-                  numberOfLines={1}
-                  style={[
-                    styles.createButtonLabel,
-                    {color: theme.actionForeground},
-                  ]}
-                  variant="button">
-                  Create Circle
-                </HoystText>
-              </View>
+              </GlassPanel>
             </Pressable>
           ) : null}
         </View>
@@ -796,18 +813,18 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
   },
+  scroll: {
+    backgroundColor: 'transparent',
+  },
   scrollContent: {
     flexGrow: 1,
   },
   sheet: {
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
     flexGrow: 1,
     gap: 20,
-    marginTop: -28,
     paddingBottom: 172,
-    paddingHorizontal: 20,
-    paddingTop: 18,
+    paddingHorizontal: 22,
+    paddingTop: 14,
   },
   upcomingScroll: {
     marginHorizontal: -20,
@@ -817,48 +834,72 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   attentionScroll: {
-    marginHorizontal: -20,
+    marginHorizontal: -22,
   },
   attentionScrollContent: {
     gap: 12,
-    paddingHorizontal: 20,
+    paddingHorizontal: 22,
   },
   circleSectionGroup: {
     gap: 12,
   },
   circlesSection: {
-    gap: 6,
+    gap: 14,
   },
   createButton: {
-    alignItems: 'center',
-    borderRadius: radius.md,
-    borderWidth: 1,
-    flexDirection: 'row',
-    gap: 7,
-    justifyContent: 'center',
-    minHeight: 68,
-    overflow: 'hidden',
-    paddingHorizontal: 24,
     width: '100%',
   },
+  createButtonCopy: {
+    flex: 1,
+    gap: 4,
+  },
+  createButtonInner: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 16,
+    justifyContent: 'space-between',
+    minHeight: 72,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+  },
   createButtonLabel: {
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: '800',
-    lineHeight: 21,
+    lineHeight: 20,
+  },
+  createButtonSubtitle: {
+    fontSize: 13,
+    lineHeight: 17,
   },
   createButtonPressable: {
     alignSelf: 'stretch',
-    borderRadius: radius.md,
-    elevation: actionShadow.elevation,
-    shadowOffset: actionShadow.offset,
-    shadowRadius: actionShadow.compactRadius,
     width: '100%',
   },
-  createIcon: {
+  createActionOrb: {
     alignItems: 'center',
-    height: 44,
+    borderRadius: 999,
+    borderWidth: 1,
+    height: 48,
     justifyContent: 'center',
-    width: 44,
+    width: 48,
+  },
+  createRingStack: {
+    alignItems: 'center',
+    height: 34,
+    justifyContent: 'center',
+    position: 'relative',
+    width: 34,
+  },
+  createCenteredPlus: {
+    alignItems: 'center',
+    bottom: 0,
+    height: 34,
+    justifyContent: 'center',
+    left: 0,
+    position: 'absolute',
+    right: 0,
+    top: 0,
+    width: 34,
   },
   emptyActions: {
     gap: 12,

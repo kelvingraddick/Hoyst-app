@@ -1,24 +1,34 @@
 import React from 'react';
-import {Pressable, StyleSheet} from 'react-native';
+import {Pressable, ScrollView, StyleSheet} from 'react-native';
 import renderer, {act} from 'react-test-renderer';
 
 import {ActivityFeedCard} from '../src/design/components/ActivityFeedCard';
-import {GradientRing} from '../src/design/components/GradientRing';
+import {FrostedBackdrop} from '../src/design/components/FrostedBackdrop';
+import {GlassPanel} from '../src/design/components/GlassPanel';
 import {brandColors} from '../src/design/tokens/colors';
 import {HomeScreen} from '../src/features/home/screens/HomeScreen';
 import type {HomeData} from '../src/features/home/services/home-data-service';
+import {getTodayAttentionCircles} from '../src/features/home/services/home-data-service';
 import {
   markInboxEventRead,
   subscribeToInboxEvents,
 } from '../src/features/settings/services/notification-settings-service';
-import type {InboxEvent, MomentumSummary} from '../src/types/models';
+import type {
+  CircleManagementCard,
+  InboxEvent,
+  MomentumSummary,
+} from '../src/types/models';
 
 const mockNavigate = jest.fn();
 const mockRootNavigate = jest.fn();
+const mockRequireAccount = jest.fn(
+  (_pendingAction: unknown, onReady: () => void) => onReady(),
+);
 
 let mockHomeData: HomeData;
 let mockInboxEvents: InboxEvent[];
 let mockMomentumSummary: MomentumSummary;
+let mockAppearance: 'dark' | 'light' = 'light';
 
 jest.mock('@react-native-community/blur', () => {
   const MockReact = require('react');
@@ -87,8 +97,9 @@ jest.mock('../src/design/components/MomentumStageIcon', () => {
 });
 
 jest.mock('../src/store/settings-store', () => ({
-  useSettingsStore: (selector: (state: {appearance: 'light'}) => unknown) =>
-    selector({appearance: 'light'}),
+  useSettingsStore: (
+    selector: (state: {appearance: 'dark' | 'light'}) => unknown,
+  ) => selector({appearance: mockAppearance}),
 }));
 
 jest.mock('../src/store/session-store', () => ({
@@ -128,8 +139,7 @@ jest.mock('../src/store/onboarding-store', () => ({
 }));
 
 jest.mock('../src/features/auth/hooks/useProtectedAction', () => ({
-  useProtectedAction: () => (_pendingAction: unknown, onReady: () => void) =>
-    onReady(),
+  useProtectedAction: () => mockRequireAccount,
 }));
 
 jest.mock('../src/navigation/auth-modal-navigation', () => ({
@@ -253,6 +263,37 @@ function inboxEvent(overrides: Partial<InboxEvent> = {}): InboxEvent {
   };
 }
 
+function attentionCircle(
+  overrides: Partial<CircleManagementCard> = {},
+): CircleManagementCard {
+  return {
+    category: 'Wellness',
+    commitment: 'Sleep 8 hours in a day',
+    commitmentCadence: 'daily',
+    commitmentFrequency: {tapInsPerWeek: 7},
+    completionRate: 0,
+    id: 'circle-attention',
+    inviteUrl: 'https://example.com/invite',
+    joinMode: 'open',
+    maxSize: 8,
+    memberCount: 1,
+    members: [],
+    privacy: 'public',
+    progressPercent: 0,
+    remainingCheckIns: 1,
+    state: 'active',
+    streakDays: 0,
+    streakLabel: 'Start today',
+    title: 'Sleep 8 Hours',
+    viewerHasCheckedIn: false,
+    viewerHasTappedInToday: false,
+    viewerMembershipStatus: 'active',
+    viewerRole: 'member',
+    viewerTodayStatus: undefined,
+    ...overrides,
+  };
+}
+
 function renderScreenTree() {
   let screen: renderer.ReactTestRenderer | undefined;
 
@@ -273,6 +314,8 @@ describe('HomeScreen companion updates', () => {
     mockHomeData = homeData();
     mockInboxEvents = [];
     mockMomentumSummary = momentumSummary();
+    mockAppearance = 'light';
+    (getTodayAttentionCircles as jest.Mock).mockReturnValue([]);
   });
 
   it('subscribes to inbox events and renders empty companion updates at the bottom', () => {
@@ -292,6 +335,133 @@ describe('HomeScreen companion updates', () => {
     expect(output.indexOf('Companion updates')).toBeLessThan(
       output.lastIndexOf('Create Circle'),
     );
+  });
+
+  it('renders the create circle mini card and keeps the protected action flow', () => {
+    const tree = renderScreenTree();
+    const output = JSON.stringify(tree.toJSON());
+
+    expect(output).toContain('Create Circle');
+    expect(output).toContain('Start a new accountability crew');
+
+    const createCircleCard = tree.root.findByProps({
+      accessibilityLabel: 'Create Circle',
+    });
+
+    expect(createCircleCard.props.accessibilityRole).toBe('button');
+
+    act(() => {
+      createCircleCard.props.onPress();
+    });
+
+    expect(mockRequireAccount).toHaveBeenCalledWith(
+      {type: 'createCircle'},
+      expect.any(Function),
+    );
+    expect(mockRootNavigate).toHaveBeenCalledWith('CreateCircle');
+  });
+
+  it('renders the frosted backdrop behind glass Home sections', () => {
+    const tree = renderScreenTree();
+
+    expect(tree.root.findAllByType(FrostedBackdrop)).toHaveLength(1);
+    expect(tree.root.findAllByType(GlassPanel).length).toBeGreaterThanOrEqual(
+      6,
+    );
+  });
+
+  it('uses a thinner dark blur material with a translucent tint on Home glass sections', () => {
+    mockAppearance = 'dark';
+
+    const tree = renderScreenTree();
+    const glassBlur = tree.root.findAllByProps({testID: 'glass-panel-blur'});
+    const glassTint = tree.root.findAllByProps({testID: 'glass-panel-tint'});
+
+    expect(glassBlur.length).toBeGreaterThanOrEqual(6);
+    expect(glassTint.length).toBeGreaterThanOrEqual(6);
+    glassBlur.forEach(node => {
+      expect(node.props.blurType).toBe('thinMaterialDark');
+    });
+    glassTint.forEach(node => {
+      expect(StyleSheet.flatten(node.props.style).backgroundColor).toBe(
+        'rgba(18,20,34,0.38)',
+      );
+    });
+  });
+
+  it('lifts the hero bubble and avatar while preserving the avatar border', () => {
+    const tree = renderScreenTree();
+    const bubbleSurfaceStyle = StyleSheet.flatten(
+      tree.root.findByProps({testID: 'home-hero-bubble-surface'}).props.style,
+    );
+    const avatarSurfaceStyle = StyleSheet.flatten(
+      tree.root.findByProps({testID: 'home-hero-avatar-surface'}).props.style,
+    );
+    const avatarFrameStyle = StyleSheet.flatten(
+      tree.root.findByProps({testID: 'home-hero-avatar-frame'}).props.style,
+    );
+    const largeTailDotStyle = StyleSheet.flatten(
+      tree.root.findByProps({testID: 'home-hero-tail-dot-large'}).props.style,
+    );
+    const smallTailDotStyle = StyleSheet.flatten(
+      tree.root.findByProps({testID: 'home-hero-tail-dot-small'}).props.style,
+    );
+    const avatarButton = tree.root.findByProps({
+      accessibilityLabel: 'Open Inbox, 1 unread update',
+    });
+
+    expect(bubbleSurfaceStyle.elevation).toBe(4);
+    expect(bubbleSurfaceStyle.shadowOffset).toEqual({height: 7, width: 0});
+    expect(bubbleSurfaceStyle.shadowOpacity).toBe(0.72);
+    expect(bubbleSurfaceStyle.shadowRadius).toBe(18);
+    expect(avatarSurfaceStyle.elevation).toBe(4);
+    expect(avatarSurfaceStyle.shadowOffset).toEqual({height: 6, width: 0});
+    expect(avatarSurfaceStyle.shadowOpacity).toBe(0.72);
+    expect(avatarSurfaceStyle.shadowRadius).toBe(14);
+    expect(avatarFrameStyle.borderWidth).toBe(1);
+    expect(avatarFrameStyle.borderColor).toBe('rgba(255,255,255,0.92)');
+    expect(largeTailDotStyle.backgroundColor).toBe('rgba(255,255,255,0.6)');
+    expect(largeTailDotStyle.borderWidth).toBe(1);
+    expect(largeTailDotStyle.borderColor).toBe('rgba(255,255,255,0)');
+    expect(largeTailDotStyle.elevation).toBe(4);
+    expect(largeTailDotStyle.shadowOffset).toEqual({height: 6, width: 0});
+    expect(largeTailDotStyle.shadowOpacity).toBe(0.64);
+    expect(largeTailDotStyle.shadowRadius).toBe(12);
+    expect(smallTailDotStyle.backgroundColor).toBe('rgba(255,255,255,0.6)');
+    expect(smallTailDotStyle.borderWidth).toBe(1);
+    expect(smallTailDotStyle.borderColor).toBe('rgba(255,255,255,0)');
+    expect(smallTailDotStyle.elevation).toBe(3);
+    expect(smallTailDotStyle.shadowOffset).toEqual({height: 5, width: 0});
+    expect(smallTailDotStyle.shadowOpacity).toBe(0.58);
+    expect(smallTailDotStyle.shadowRadius).toBe(10);
+    expect(avatarButton.props.accessibilityRole).toBe('button');
+  });
+
+  it('keeps the hero tail dots visible in dark mode', () => {
+    mockAppearance = 'dark';
+
+    const tree = renderScreenTree();
+    const largeTailDotStyle = StyleSheet.flatten(
+      tree.root.findByProps({testID: 'home-hero-tail-dot-large'}).props.style,
+    );
+    const smallTailDotStyle = StyleSheet.flatten(
+      tree.root.findByProps({testID: 'home-hero-tail-dot-small'}).props.style,
+    );
+
+    expect(largeTailDotStyle.backgroundColor).toBe('rgba(74,77,116,0.78)');
+    expect(largeTailDotStyle.borderColor).toBe('rgba(255,255,255,0.20)');
+    expect(largeTailDotStyle.borderWidth).toBe(1);
+    expect(largeTailDotStyle.height).toBe(12);
+    expect(largeTailDotStyle.width).toBe(12);
+    expect(largeTailDotStyle.elevation).toBe(4);
+    expect(largeTailDotStyle.shadowOpacity).toBe(0.64);
+    expect(smallTailDotStyle.backgroundColor).toBe('rgba(74,77,116,0.78)');
+    expect(smallTailDotStyle.borderColor).toBe('rgba(255,255,255,0.20)');
+    expect(smallTailDotStyle.borderWidth).toBe(1);
+    expect(smallTailDotStyle.height).toBe(7);
+    expect(smallTailDotStyle.width).toBe(7);
+    expect(smallTailDotStyle.elevation).toBe(3);
+    expect(smallTailDotStyle.shadowOpacity).toBe(0.58);
   });
 
   it('renders recent companion updates and opens their deeplink', () => {
@@ -355,14 +525,23 @@ describe('HomeScreen companion updates', () => {
     const contributionIcon = tree.root.findByProps({
       testID: 'circle-summary-contribution-icon',
     });
+    const contributionSideLeft = tree.root.findByProps({
+      testID: 'circle-summary-contribution-side-left',
+    });
+    const contributionSideRight = tree.root.findByProps({
+      testID: 'circle-summary-contribution-side-right',
+    });
+    const contributionBadge = tree.root.findByProps({
+      testID: 'circle-summary-contribution-badge',
+    });
+    const contributionCheck = tree.root.findByProps({
+      testID: 'circle-summary-contribution-check',
+    });
     const streakIcon = tree.root.findByProps({
       testID: 'circle-summary-streak-icon',
     });
 
-    const rings = tree.root.findAllByType(GradientRing);
-
     expect(barFillStyle.backgroundColor).toBe(brandColors.orange);
-    expect(rings[1].props.flatColor).toBe(brandColors.orange);
     expect(contributionDiscStyle.backgroundColor).toBe('#E8F8EF');
     expect(momentumDiscStyle.backgroundColor).toBe('#FFF3DF');
     expect(streakDiscStyle.backgroundColor).toBe('#FFF3CF');
@@ -370,6 +549,15 @@ describe('HomeScreen companion updates', () => {
     expect(barKnobStyle.borderWidth).toBeUndefined();
     expect(contributionIcon.props.height).toBe(33);
     expect(contributionIcon.props.width).toBe(33);
+    expect(contributionSideLeft.props.y).toBe(23);
+    expect(contributionSideLeft.props.height).toBe(25);
+    expect(contributionSideRight.props.y).toBe(23);
+    expect(contributionSideRight.props.height).toBe(25);
+    expect(contributionBadge.props.y).toBe(17);
+    expect(contributionBadge.props.height).toBe(34);
+    expect(contributionBadge.props.fill).toBe(brandColors.green);
+    expect(contributionCheck.props.stroke).toBe('#FFFFFF');
+    expect(contributionCheck.props.strokeWidth).toBe(3.8);
     expect(streakIcon.props.height).toBe(33);
     expect(streakIcon.props.width).toBe(33);
     const textLabels = tree.root
@@ -381,7 +569,7 @@ describe('HomeScreen companion updates', () => {
     expect(textLabels).toContain('Building');
   });
 
-  it('renders Your week day chips with a subtle raised pill lift', () => {
+  it('renders Your week day circles with state-based frosted styling', () => {
     mockHomeData = {
       ...homeData(),
       progressDays: [
@@ -401,15 +589,47 @@ describe('HomeScreen companion updates', () => {
       tree.root.findByProps({testID: 'week-progress-2026-05-26-chip'}).props
         .style,
     );
+    const futureChipStyle = StyleSheet.flatten(
+      tree.root.findByProps({testID: 'week-progress-2026-05-27-chip'}).props
+        .style,
+    );
 
-    expect(doneChipStyle.minHeight).toBe(56);
-    expect(doneChipStyle.borderRadius).toBe(13);
-    expect(doneChipStyle.backgroundColor).toBe('#F0F9E8');
-    expect(doneChipStyle.borderColor).toBe('#85C45C');
-    expect(doneChipStyle.elevation).toBe(2);
-    expect(doneChipStyle.shadowOpacity).toBe(0.12);
-    expect(doneChipStyle.shadowRadius).toBe(5);
-    expect(todayChipStyle.backgroundColor).toBe('#FFF7E6');
-    expect(todayChipStyle.borderColor).toBe('#F4B64A');
+    expect(doneChipStyle.height).toBe(32);
+    expect(doneChipStyle.width).toBe(32);
+    expect(doneChipStyle.borderRadius).toBe(16);
+    expect(doneChipStyle.backgroundColor).toBe('#22A565');
+    expect(doneChipStyle.borderWidth).toBe(0);
+    expect(todayChipStyle.backgroundColor).toBe('rgba(245,166,35,0.16)');
+    expect(todayChipStyle.borderColor).toBe('#F5A623');
+    expect(todayChipStyle.borderWidth).toBe(2);
+    expect(futureChipStyle.backgroundColor).toBe('rgba(226,232,240,0.72)');
+    expect(futureChipStyle.borderColor).toBe('rgba(148,163,184,0.42)');
+    expect(futureChipStyle.borderWidth).toBe(1.25);
+  });
+
+  it('renders Home attention circles as horizontal peek cards with title spacing', () => {
+    (getTodayAttentionCircles as jest.Mock).mockReturnValue([
+      attentionCircle(),
+    ]);
+    mockHomeData = {
+      ...homeData(),
+      circles: [attentionCircle()],
+      membershipCount: 1,
+    };
+
+    const tree = renderScreenTree();
+    const output = JSON.stringify(tree.toJSON());
+    const attentionScroll = tree.root.findByProps({
+      testID: 'home-attention-scroll',
+    });
+    const attentionSectionStyle = StyleSheet.flatten(
+      attentionScroll.parent?.props.style,
+    );
+
+    expect(output).toContain('Sleep 8 Hours');
+    expect(output).toContain('Sleep 8 hours in a day');
+    expect(attentionScroll.type).toBe(ScrollView);
+    expect(attentionScroll.props.horizontal).toBe(true);
+    expect(attentionSectionStyle.gap).toBe(14);
   });
 });

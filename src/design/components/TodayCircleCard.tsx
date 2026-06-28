@@ -2,11 +2,11 @@ import React from 'react';
 import {
   Pressable,
   StyleSheet,
+  useWindowDimensions,
   View,
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
-import LinearGradient from 'react-native-linear-gradient';
 import {ChevronRight, UsersRound} from 'lucide-react-native';
 
 import type {CircleManagementCard} from '../../types/models';
@@ -34,6 +34,10 @@ import {NudgeActionButton} from './NudgeActionButton';
 import {getPulseRingStateForCircle} from './pulse-ring-state';
 
 export type TodayCircleCardActionVariant = HomeCircleActionVariant;
+
+const ATTENTION_CARD_MAX_WIDTH = 300;
+const ATTENTION_CARD_MIN_WIDTH = 284;
+const ATTENTION_CARD_SIDE_INSET = 76;
 
 type TodayCircleCardProps = {
   card: CircleManagementCard;
@@ -224,47 +228,6 @@ function AvatarPreview({card}: {card: CircleManagementCard}) {
   );
 }
 
-function CardProgressRail({
-  color,
-  progress,
-}: {
-  color: string;
-  progress: number;
-}) {
-  const theme = useHoystTheme();
-  const percent = Math.max(
-    0,
-    Math.min(100, Number.isFinite(progress) ? progress : 0),
-  );
-  const knobLeft = Math.max(6, Math.min(94, percent));
-  const trackColor = theme.isDark ? 'rgba(255,255,255,0.12)' : '#EEF1F5';
-  const knobBackground = theme.isDark ? theme.backgroundElevated : '#FFFFFF';
-
-  return (
-    <View style={styles.railLayout}>
-      <View style={[styles.railTrack, {backgroundColor: trackColor}]}>
-        <View
-          style={[
-            styles.railFill,
-            {backgroundColor: color, width: `${percent}%`},
-          ]}
-        />
-      </View>
-      <View
-        style={[
-          styles.railKnob,
-          {
-            backgroundColor: knobBackground,
-            left: `${knobLeft}%`,
-            shadowColor: theme.shadow,
-          },
-        ]}>
-        <View style={[styles.railKnobDot, {backgroundColor: color}]} />
-      </View>
-    </View>
-  );
-}
-
 export function TodayCircleCard({
   card,
   isNudged = false,
@@ -276,7 +239,12 @@ export function TodayCircleCard({
   variant = 'today',
 }: TodayCircleCardProps): React.JSX.Element {
   const theme = useHoystTheme();
+  const {width: windowWidth} = useWindowDimensions();
   const completionRate = card.completionRate ?? card.progressPercent;
+  const clampedCompletionRate = Math.max(
+    0,
+    Math.min(100, Number.isFinite(completionRate) ? completionRate : 0),
+  );
   const progressTone = getProgressTone(theme, completionRate);
   const categoryVisual = getCircleCategoryVisual(card.category);
   const categoryColor = getCircleCategoryForegroundColor(card.category, theme);
@@ -333,25 +301,13 @@ export function TodayCircleCard({
     isNudging,
   });
   const pulseRingState = getPulseRingStateForCircle(card);
+  const attentionCardWidth = Math.min(
+    ATTENTION_CARD_MAX_WIDTH,
+    Math.max(ATTENTION_CARD_MIN_WIDTH, windowWidth - ATTENTION_CARD_SIDE_INSET),
+  );
   const handleActionPress = () => {
     onActionPress();
   };
-  const categoryGradientTint = theme.isDark
-    ? `${categoryVisual.accentDark}28`
-    : `${categoryVisual.accentColor}1A`;
-  const categoryGradientFade = 'rgba(255,255,255,0)';
-  const categoryGradientLayer = (
-    <View pointerEvents="none" style={styles.gradientInset}>
-      <LinearGradient
-        colors={[categoryGradientTint, categoryGradientFade]}
-        locations={[0, 0.7]}
-        start={{x: 0.5, y: 0}}
-        end={{x: 0.5, y: 1}}
-        style={StyleSheet.absoluteFill}
-      />
-    </View>
-  );
-
   const actionSlot =
     actionVariant === 'check_in' ? (
       <CircleCardTapInButton
@@ -403,16 +359,51 @@ export function TodayCircleCard({
       </Pressable>
     );
 
+  const attentionActionSlot =
+    actionVariant === 'check_in' ? (
+      <Pressable
+        accessibilityLabel={actionLabel}
+        accessibilityRole="button"
+        onPress={event => {
+          event.stopPropagation();
+          handleActionPress();
+        }}
+        style={({pressed}) => [
+          styles.attentionTapInPressable,
+          {
+            opacity: pressed ? actionMotion.pressedOpacity : 1,
+            transform: [{scale: pressed ? actionMotion.pressedScale : 1}],
+          },
+        ]}
+        testID="attention-tap-in-button">
+        <View
+          style={[
+            styles.attentionTapInButton,
+            {
+              backgroundColor: categoryColor,
+              shadowColor: categoryColor,
+            },
+          ]}>
+          <HoystText style={styles.attentionTapInLabel} variant="button">
+            {actionLabel}
+          </HoystText>
+          <ChevronRight
+            color={theme.onPurpleAccent}
+            size={18}
+            strokeWidth={2.6}
+          />
+        </View>
+      </Pressable>
+    ) : (
+      actionSlot
+    );
+
   if (variant === 'attention') {
-    const attentionCardBase = theme.isDark
-      ? `${categoryVisual.accentDark}10`
-      : '#FFFFFF';
     const attentionCardBorder = theme.isDark
       ? `${categoryVisual.accentLight}2E`
-      : `${categoryVisual.accentColor}24`;
-    const attentionCardShadow = theme.isDark
-      ? theme.shadow
-      : `${categoryVisual.accentDark}2B`;
+      : theme.glassBorder;
+    const attentionCardShadow = theme.glassShadow;
+    const attentionPeriodCopy = getPeriodCopy(card);
 
     return (
       <Pressable
@@ -420,6 +411,7 @@ export function TodayCircleCard({
         style={({pressed}) => [
           styles.cardPressable,
           styles.attentionPressable,
+          {width: attentionCardWidth},
           {opacity: pressed ? 0.94 : 1},
         ]}>
         <GlassPanel
@@ -427,60 +419,73 @@ export function TodayCircleCard({
           style={[
             styles.attentionCard,
             {
-              backgroundColor: attentionCardBase,
               borderColor: attentionCardBorder,
               shadowColor: attentionCardShadow,
             },
             surfaceStyle,
+            {width: attentionCardWidth},
           ]}>
           <View style={styles.attentionContent}>
-            {categoryGradientLayer}
             <View style={styles.attentionHeader}>
-              <View style={styles.titleCluster}>
+              <View style={styles.attentionTitleCluster}>
                 <CircleCategoryIcon
                   category={card.category}
-                  size={46}
+                  shape="roundedSquare"
+                  size={36}
                   style={styles.categoryTitleIcon}
                 />
-                <HoystText numberOfLines={2} style={styles.attentionTitle}>
-                  {card.title}
-                </HoystText>
+                <View style={styles.attentionTitleCopy}>
+                  <HoystText numberOfLines={1} style={styles.attentionTitle}>
+                    {card.title}
+                  </HoystText>
+                  <HoystText
+                    numberOfLines={1}
+                    style={[styles.attentionCategory, {color: categoryColor}]}>
+                    {categoryVisual.label.toUpperCase()}
+                  </HoystText>
+                </View>
               </View>
-              <HoystChip label={statusLabel} tone={statusTone} />
             </View>
 
-            <CircleCategoryPill category={card.category} />
+            <View style={styles.attentionCopyStack}>
+              <HoystText
+                numberOfLines={1}
+                style={styles.attentionDescription}
+                tone="muted"
+                variant="caption">
+                {description}
+              </HoystText>
 
-            <HoystText numberOfLines={2} tone="muted" variant="caption">
-              {description}
-            </HoystText>
-
-            <View style={styles.statRow}>
-              <UsersRound color={categoryColor} size={17} strokeWidth={2.4} />
-              <HoystText tone="muted" variant="caption">
-                {shownUpLabel}
+              <HoystText
+                numberOfLines={1}
+                style={styles.attentionMetricText}
+                tone="muted"
+                variant="caption">
+                {`${clampedCompletionRate}% complete ${attentionPeriodCopy}`}
               </HoystText>
             </View>
 
-            <View style={styles.attentionProgress}>
-              <View style={styles.attentionProgressLabels}>
-                <HoystText tone="muted" variant="caption">
-                  {`Tapped in ${getPeriodCopy(card)}`}
-                </HoystText>
-                <HoystText
-                  style={[styles.attentionPercent, {color: categoryColor}]}>
-                  {`${completionRate}%`}
-                </HoystText>
-              </View>
-              <CardProgressRail
-                color={categoryColor}
-                progress={completionRate}
+            <View
+              style={[
+                styles.attentionRailTrack,
+                {backgroundColor: `${categoryVisual.accentColor}22`},
+              ]}>
+              <View
+                style={[
+                  styles.attentionRailFill,
+                  {
+                    backgroundColor: categoryColor,
+                    width: `${clampedCompletionRate}%`,
+                  },
+                ]}
               />
             </View>
 
             <View style={styles.attentionFooter}>
               <AvatarPreview card={card} />
-              <View style={styles.attentionActionSlot}>{actionSlot}</View>
+              <View style={styles.attentionActionSlot}>
+                {attentionActionSlot}
+              </View>
             </View>
           </View>
         </GlassPanel>
@@ -492,7 +497,7 @@ export function TodayCircleCard({
     const upcomingSupportingCopy = getUpcomingSupportingCopy(card);
     const upcomingCardBorder = theme.isDark
       ? `${categoryVisual.accentLight}24`
-      : `${categoryVisual.accentColor}1F`;
+      : theme.glassBorder;
 
     return (
       <Pressable
@@ -508,10 +513,8 @@ export function TodayCircleCard({
             styles.upcomingCard,
             useCategoryTintGradient
               ? {
-                  backgroundColor: theme.isDark
-                    ? `${categoryVisual.accentDark}10`
-                    : '#FFFFFF',
                   borderColor: upcomingCardBorder,
+                  shadowColor: theme.glassShadow,
                 }
               : undefined,
             surfaceStyle,
@@ -522,10 +525,10 @@ export function TodayCircleCard({
                 ? styles.upcomingGradientContent
                 : styles.upcomingContent
             }>
-            {useCategoryTintGradient ? categoryGradientLayer : null}
             <View style={styles.upcomingBody}>
               <CircleCategoryIcon
                 category={card.category}
+                shape="roundedSquare"
                 size={52}
                 style={styles.categoryTitleIcon}
               />
@@ -569,6 +572,7 @@ export function TodayCircleCard({
             <View style={styles.titleCluster}>
               <CircleCategoryIcon
                 category={card.category}
+                shape="roundedSquare"
                 size={30}
                 style={styles.categoryTitleIcon}
               />
@@ -626,6 +630,7 @@ export function TodayCircleCard({
               <View style={styles.titleCluster}>
                 <CircleCategoryIcon
                   category={card.category}
+                  shape="roundedSquare"
                   size={34}
                   style={styles.categoryTitleIcon}
                 />
@@ -721,13 +726,6 @@ const styles = StyleSheet.create({
   },
   cardPressable: {
     borderRadius: radius.lg,
-  },
-  gradientInset: {
-    bottom: 1,
-    left: 1,
-    position: 'absolute',
-    right: 1,
-    top: 1,
   },
   categoryTitleIcon: {
     flexShrink: 0,
@@ -868,17 +866,16 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   attentionPressable: {
-    width: 300,
+    flexShrink: 0,
   },
   attentionCard: {
-    elevation: 3,
-    shadowOffset: {height: 4, width: 0},
-    shadowOpacity: 0.5,
-    shadowRadius: 10,
-    width: 300,
+    elevation: 9,
+    shadowOffset: {height: 10, width: 0},
+    shadowOpacity: 0.13,
+    shadowRadius: 22,
   },
   attentionContent: {
-    gap: 12,
+    gap: 10,
     overflow: 'hidden',
     padding: 16,
     position: 'relative',
@@ -889,72 +886,94 @@ const styles = StyleSheet.create({
     gap: 8,
     justifyContent: 'space-between',
   },
-  attentionTitle: {
-    flexShrink: 1,
-    fontSize: 19,
-    fontWeight: '800',
-    letterSpacing: 0,
-    lineHeight: 23,
+  attentionTitleCluster: {
+    alignItems: 'center',
+    flex: 1,
+    flexDirection: 'row',
+    gap: 8,
     minWidth: 0,
   },
-  attentionProgress: {
-    gap: 7,
+  attentionTitleCopy: {
+    flex: 1,
+    gap: 2,
+    minWidth: 0,
   },
-  attentionProgressLabels: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  attentionPercent: {
-    fontSize: 14,
+  attentionTitle: {
+    flexShrink: 1,
+    fontSize: 17,
     fontWeight: '800',
     letterSpacing: 0,
+    lineHeight: 21,
+    minWidth: 0,
+  },
+  attentionCategory: {
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 0.9,
+    lineHeight: 15,
+  },
+  attentionCopyStack: {
+    gap: 6,
+    marginTop: 1,
+  },
+  attentionDescription: {
+    fontSize: 14,
+    fontWeight: '600',
+    letterSpacing: 0,
     lineHeight: 18,
+    minWidth: 0,
+  },
+  attentionMetricText: {
+    fontSize: 14,
+    fontWeight: '500',
+    letterSpacing: 0,
+    lineHeight: 18,
+    minWidth: 0,
+  },
+  attentionRailTrack: {
+    borderRadius: 4,
+    height: 5,
+    overflow: 'hidden',
+    width: '100%',
+  },
+  attentionRailFill: {
+    borderRadius: 4,
+    height: 5,
   },
   attentionFooter: {
     alignItems: 'center',
     flexDirection: 'row',
     gap: 10,
     justifyContent: 'space-between',
-    minHeight: 48,
+    minHeight: 46,
   },
   attentionActionSlot: {
     alignItems: 'flex-end',
     flexShrink: 0,
     justifyContent: 'center',
-    minHeight: 48,
+    minHeight: 46,
   },
-  railLayout: {
-    height: 22,
-    justifyContent: 'center',
-  },
-  railTrack: {
-    borderRadius: 5,
-    height: 10,
-    overflow: 'hidden',
-    width: '100%',
-  },
-  railFill: {
-    borderRadius: 5,
-    height: 10,
-  },
-  railKnob: {
+  attentionTapInButton: {
     alignItems: 'center',
-    borderRadius: 10,
-    elevation: 3,
-    height: 20,
+    borderRadius: radius.pill,
+    elevation: 6,
+    flexDirection: 'row',
+    gap: 4,
     justifyContent: 'center',
-    marginLeft: -10,
-    position: 'absolute',
-    shadowOffset: {height: 2, width: 0},
+    minHeight: 42,
+    minWidth: 112,
+    paddingHorizontal: 18,
+    shadowOffset: {height: 6, width: 0},
     shadowOpacity: 0.28,
-    shadowRadius: 5,
-    top: 1,
-    width: 20,
+    shadowRadius: 12,
   },
-  railKnobDot: {
-    borderRadius: 4,
-    height: 8,
-    width: 8,
+  attentionTapInLabel: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '800',
+    lineHeight: 20,
+  },
+  attentionTapInPressable: {
+    flexShrink: 0,
   },
 });

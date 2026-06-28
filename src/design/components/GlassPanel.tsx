@@ -20,6 +20,10 @@ type GlassPanelProps = PropsWithChildren<{
   variant?: 'card' | 'nav' | 'panel';
 }>;
 
+// Frosted glass surface (v4). A live BlurView with a translucent tint overlay
+// so the FrostedBackdrop color blobs still refract through the card, finished
+// with a bright top-edge highlight and a soft violet drop shadow. Restyled here
+// once so every glass surface in the app inherits the new look.
 export function GlassPanel({
   children,
   padding = 'regular',
@@ -40,8 +44,9 @@ export function GlassPanel({
         styles.container,
         variant === 'nav' ? shadows.floating : shadows.soft,
         {
-          backgroundColor: theme.surface,
-          borderColor: theme.border,
+          backgroundColor: 'transparent',
+          borderColor: theme.glassBorder,
+          shadowColor: theme.glassShadow,
         },
         variant === 'panel' ? styles.panel : undefined,
         variant === 'nav' ? styles.nav : undefined,
@@ -50,8 +55,9 @@ export function GlassPanel({
       {Platform.OS === 'ios' ? (
         <BlurView
           blurAmount={glass.blurAmount}
-          blurType={theme.isDark ? 'dark' : 'light'}
-          reducedTransparencyFallbackColor={theme.surfaceStrong}
+          blurType={theme.isDark ? 'thinMaterialDark' : 'light'}
+          reducedTransparencyFallbackColor={theme.glassSurfaceStrong}
+          testID="glass-panel-blur"
           style={StyleSheet.absoluteFill}
         />
       ) : (
@@ -60,7 +66,7 @@ export function GlassPanel({
           style={[
             StyleSheet.absoluteFill,
             {
-              backgroundColor: theme.tint,
+              backgroundColor: theme.glassSurfaceStrong,
             },
           ]}
         />
@@ -69,10 +75,27 @@ export function GlassPanel({
         pointerEvents="none"
         style={[
           StyleSheet.absoluteFill,
+          {
+            backgroundColor: theme.glassSurface,
+          },
+        ]}
+        testID="glass-panel-tint"
+      />
+      <View
+        pointerEvents="none"
+        style={[
+          StyleSheet.absoluteFill,
           styles.highlight,
           {
-            borderColor: theme.border,
+            borderColor: theme.glassBorder,
           },
+        ]}
+      />
+      <View
+        pointerEvents="none"
+        style={[
+          styles.topSheen,
+          {backgroundColor: theme.glassHighlight},
         ]}
       />
       <View style={contentStyle}>{children}</View>
@@ -106,5 +129,13 @@ const styles = StyleSheet.create({
   },
   panel: {
     borderRadius: 28,
+  },
+  topSheen: {
+    borderRadius: 999,
+    height: glass.highlightHeight,
+    left: 16,
+    position: 'absolute',
+    right: 16,
+    top: 0.5,
   },
 });

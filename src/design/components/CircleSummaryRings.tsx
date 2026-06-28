@@ -1,26 +1,21 @@
 import React from 'react';
 import {StyleSheet, View, type StyleProp, type ViewStyle} from 'react-native';
-import Svg, {Circle, G, Path} from 'react-native-svg';
+import Svg, {G, Path, Rect} from 'react-native-svg';
 
 import type {MomentumStatus} from '../../types/models';
-import {brandColors} from '../tokens/colors';
+import {brandColors, frostedBlobColors} from '../tokens/colors';
 import {useHoystTheme} from '../theme/useHoystTheme';
 import {MomentumStageIcon} from './MomentumStageIcon';
 import {
-  getMomentumStatusPillPalette,
   getMomentumStatusVisualColor,
 } from './MomentumStatusPill';
-import {
-  StatRingCard,
-  type StatRingVisual,
-  clampStatPercent,
-} from './StatRingCard';
+import {StatBarCard, clampStatPercent} from './StatBarCard';
 
-const CONTRIBUTION_ICON_BACKGROUND = '#E8F8EF';
-const MOMENTUM_STAGE_ICON_BACKGROUND = '#FFF3DF';
-const STREAK_ICON_BACKGROUND = '#FFF3CF';
+const CONTRIBUTION_CHIP_BACKGROUND = '#E8F8EF';
+const MOMENTUM_CHIP_BACKGROUND = '#FFF3DF';
+const STREAK_CHIP_BACKGROUND = '#FFF3CF';
 const SUMMARY_ICON_ARTWORK_SIZE = 33;
-const MOMENTUM_STAGE_ICON_SIZE = 42;
+const MOMENTUM_STAGE_ICON_SIZE = 38;
 
 type CircleSummaryRingsProps = {
   contributionPercent: number;
@@ -44,30 +39,50 @@ function ContributionSummaryIcon({
       viewBox="0 0 64 64"
       width={size}>
       <G>
-        <Circle cx={32} cy={17} fill={brandColors.green} r={9} />
-        <Circle cx={18} cy={27} fill="#0E9B57" opacity={0.86} r={7} />
-        <Circle cx={46} cy={27} fill="#0E9B57" opacity={0.86} r={7} />
-        <Path
-          d="M16 54c.8-11.6 7-18.5 16-18.5S47.2 42.4 48 54v2H16v-2Z"
+        <Rect
+          fill="#0E9B57"
+          height={25}
+          opacity={0.58}
+          rx={7}
+          testID="circle-summary-contribution-side-left"
+          width={12}
+          x={10}
+          y={23}
+        />
+        <Rect
           fill={brandColors.green}
+          height={34}
+          rx={8}
+          testID="circle-summary-contribution-badge"
+          width={14}
+          x={25}
+          y={17}
         />
-        <Path
-          d="M6 55c.8-8.8 5.9-14 13.2-14 3.4 0 6.3 1.1 8.5 3.1-2.4 2.9-3.8 6.5-4.3 10.9H6Z"
+        <Rect
           fill="#0E9B57"
-          opacity={0.62}
+          height={25}
+          opacity={0.58}
+          rx={7}
+          testID="circle-summary-contribution-side-right"
+          width={12}
+          x={42}
+          y={23}
         />
         <Path
-          d="M40.6 55c-.5-4.4-1.9-8-4.3-10.9 2.2-2 5.1-3.1 8.5-3.1 7.3 0 12.4 5.2 13.2 14H40.6Z"
-          fill="#0E9B57"
-          opacity={0.62}
+          d="M24.5 55h15"
+          fill="none"
+          stroke={brandColors.green}
+          strokeLinecap="round"
+          strokeWidth={5}
         />
         <Path
-          d="M25 44.5 32 50.6l7-6.1"
+          d="M27.6 34.2 31.1 37.8 37.4 30.6"
           fill="none"
           stroke="#FFFFFF"
           strokeLinecap="round"
           strokeLinejoin="round"
-          strokeWidth={4.4}
+          strokeWidth={3.8}
+          testID="circle-summary-contribution-check"
         />
       </G>
     </Svg>
@@ -110,6 +125,8 @@ function StreakSummaryIcon({
   );
 }
 
+// Home metric row, restyled to the v4 flat frosted stat cards. Reuses the
+// existing contribution / momentum / streak artwork inside tinted chips.
 export function CircleSummaryRings({
   contributionPercent,
   momentumLabel,
@@ -122,97 +139,59 @@ export function CircleSummaryRings({
   const theme = useHoystTheme();
   const contribution = clampStatPercent(contributionPercent);
   const momentum = clampStatPercent(momentumPercent);
-  const momentumPalette = getMomentumStatusPillPalette(momentumStatus, theme);
   const momentumVisualColor = getMomentumStatusVisualColor(
     momentumStatus,
     theme,
   );
   const streakProgress = Math.max(0, Math.min(1, streakDays / 7));
-  const streakDayLabel = streakDays === 1 ? 'Day' : 'Days';
-  const streakBadge = `${streakDays} ${streakDayLabel.toLowerCase()}`;
-
-  const contributionVisual: StatRingVisual = {
-    arc: '#0E9B57',
-    badgeBackground: '#E0F4E9',
-    badgeForeground: '#07763E',
-    cardBackground: theme.isDark ? 'rgba(16,185,103,0.08)' : '#FFFFFF',
-    cardBorder: theme.isDark
-      ? 'rgba(112,226,163,0.18)'
-      : 'rgba(16,185,103,0.12)',
-    cardTint: theme.isDark ? 'rgba(16,185,103,0.16)' : 'rgba(16,185,103,0.11)',
-    disc: CONTRIBUTION_ICON_BACKGROUND,
-    shadowColor: theme.isDark ? theme.shadow : 'rgba(7,118,62,0.22)',
-    trackDark: 'rgba(16,185,103,0.26)',
-    trackLight: '#CDEBDA',
-  };
-  const momentumVisual: StatRingVisual = {
-    arc: momentumVisualColor,
-    badgeBackground: momentumPalette.backgroundColor,
-    badgeForeground: momentumPalette.color,
-    cardBackground: theme.isDark ? momentumPalette.backgroundColor : '#FFFFFF',
-    cardBorder: theme.isDark
-      ? momentumPalette.backgroundColor
-      : `${momentumVisualColor}1F`,
-    cardTint: theme.isDark
-      ? `${momentumVisualColor}24`
-      : 'rgba(255,138,61,0.13)',
-    disc: MOMENTUM_STAGE_ICON_BACKGROUND,
-    shadowColor: theme.isDark ? theme.shadow : `${momentumVisualColor}33`,
-    trackDark: momentumPalette.backgroundColor,
-    trackLight: momentumPalette.backgroundColor,
-  };
-  const streakVisual: StatRingVisual = {
-    arc: '#F5A800',
-    badgeBackground: '#FFF1CC',
-    badgeForeground: '#C27400',
-    cardBackground: theme.isDark ? 'rgba(245,168,0,0.08)' : '#FFFFFF',
-    cardBorder: theme.isDark ? 'rgba(255,196,0,0.18)' : 'rgba(245,168,0,0.14)',
-    cardTint: theme.isDark ? 'rgba(245,168,0,0.18)' : 'rgba(245,168,0,0.12)',
-    disc: STREAK_ICON_BACKGROUND,
-    shadowColor: theme.isDark ? theme.shadow : 'rgba(194,116,0,0.22)',
-    trackDark: 'rgba(255,196,0,0.26)',
-    trackLight: '#FFE9B3',
-  };
 
   return (
     <View style={styles.row}>
-      <StatRingCard
+      <StatBarCard
         accessibilityLabel={`Contribution ${contribution}% complete.`}
-        badgeLabel={`${contribution}%`}
-        discTestID="circle-summary-contribution-disc"
+        barColor={frostedBlobColors.green}
+        chipColor={CONTRIBUTION_CHIP_BACKGROUND}
+        chipTestID="circle-summary-contribution-disc"
+        label="Contribution"
         onPress={onPress}
         progress={contribution / 100}
         surfaceStyle={surfaceStyle}
-        title="Contribution"
-        visual={contributionVisual}>
+        trackColor="rgba(34,165,101,0.2)"
+        value={`${contribution}%`}>
         <ContributionSummaryIcon />
-      </StatRingCard>
-      <StatRingCard
+      </StatBarCard>
+      <StatBarCard
         accessibilityLabel={`Momentum ${momentum}%, ${momentumLabel}.`}
-        badgeLabel={momentumLabel}
-        discTestID="circle-summary-momentum-disc"
+        barColor={momentumVisualColor}
+        chipColor={MOMENTUM_CHIP_BACKGROUND}
+        chipTestID="circle-summary-momentum-disc"
+        label="Momentum"
         onPress={onPress}
         progress={momentum / 100}
         surfaceStyle={surfaceStyle}
-        title="Momentum"
-        visual={momentumVisual}>
+        trackColor={`${momentumVisualColor}33`}
+        value={momentumLabel}>
         <MomentumStageIcon
           size={MOMENTUM_STAGE_ICON_SIZE}
           status={momentumStatus}
           testID="circle-summary-momentum-stage-icon"
         />
-      </StatRingCard>
-      <StatRingCard
-        accessibilityLabel={`Streak ${streakDays} ${streakDayLabel.toLowerCase()}.`}
-        badgeLabel={streakBadge}
-        discTestID="circle-summary-streak-disc"
+      </StatBarCard>
+      <StatBarCard
+        accessibilityLabel={`Streak ${streakDays} ${
+          streakDays === 1 ? 'day' : 'days'
+        }.`}
+        barColor={frostedBlobColors.orange}
+        chipColor={STREAK_CHIP_BACKGROUND}
+        chipTestID="circle-summary-streak-disc"
+        label="Streak"
         onPress={onPress}
         progress={streakProgress}
         surfaceStyle={surfaceStyle}
-        title="Streak"
-        visual={streakVisual}>
+        trackColor="rgba(249,115,22,0.2)"
+        value={`${streakDays} ${streakDays === 1 ? 'day' : 'days'}`}>
         <StreakSummaryIcon />
-      </StatRingCard>
+      </StatBarCard>
     </View>
   );
 }
@@ -220,6 +199,6 @@ export function CircleSummaryRings({
 const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
-    gap: 10,
+    gap: 11,
   },
 });

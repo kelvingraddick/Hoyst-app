@@ -2,12 +2,14 @@ import React, {useEffect, useRef, useState} from 'react';
 import {
   Animated,
   Image,
+  Platform,
   Pressable,
   StyleSheet,
   View,
   type ImageSourcePropType,
 } from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
+import {BlurView} from '@react-native-community/blur';
 import Svg, {Defs, G, LinearGradient, Path, Stop} from 'react-native-svg';
 
 import type {HomeAvatarBadgeKind} from '../../features/home/services/home-hero-copy';
@@ -19,37 +21,40 @@ import {useHoystTheme} from '../theme/useHoystTheme';
 import {BrandMark} from './BrandMark';
 import {HoystText} from './HoystText';
 import {MomentumStageIcon} from './MomentumStageIcon';
-import {
-  getMomentumStatusPillPalette,
-  getMomentumStatusVisualColor,
-} from './MomentumStatusPill';
+import {getMomentumStatusVisualColor} from './MomentumStatusPill';
 
-const AVATAR_SIZE = 56;
-const BADGE_SIZE = 26;
-const BAR_HEIGHT = 13;
-const KNOB_SIZE = 40;
+const AVATAR_SIZE = 46;
+const BADGE_SIZE = 24;
+const BAR_HEIGHT = 10;
+const KNOB_SIZE = 34;
 const MOMENTUM_STAGE_ICON_BACKGROUND = '#FFF3DF';
 
 export const homeHeroPalettes = {
   light: {
-    background: '#F0EFEC',
-    bubble: '#FFFFFF',
-    bubbleText: '#1C2536',
-    subline: '#1B87D8',
-    track: '#E2E1DE',
-    avatarRing: '#FFFFFF',
-    avatarFallback: '#E5EBF3',
-    watermarkOpacity: 0.05,
+    background: brandColors.backgroundLight,
+    bubble: 'rgba(255,255,255,0.6)',
+    bubbleText: '#16181D',
+    bubbleSubtle: '#5B5B86',
+    subline: brandColors.blueVivid,
+    track: 'rgba(124,111,240,0.18)',
+    avatarRing: 'rgba(255,255,255,0.6)',
+    avatarFallback: 'rgba(255,255,255,0.4)',
+    avatarInitial: brandColors.blueVivid,
+    tailDot: 'rgba(255,255,255,0.6)',
+    tailDotBorder: 'rgba(255,255,255,0)',
   },
   dark: {
     background: brandColors.backgroundDark,
-    bubble: '#151827',
+    bubble: 'rgba(26,27,44,0.6)',
     bubbleText: '#E8ECF5',
+    bubbleSubtle: '#9292B4',
     subline: brandColors.blue,
-    track: '#222638',
-    avatarRing: '#1E2434',
-    avatarFallback: '#222B3F',
-    watermarkOpacity: 0.06,
+    track: 'rgba(124,111,240,0.24)',
+    avatarRing: 'rgba(40,42,64,0.6)',
+    avatarFallback: 'rgba(60,62,90,0.5)',
+    avatarInitial: brandColors.purpleBright,
+    tailDot: 'rgba(74,77,116,0.78)',
+    tailDotBorder: 'rgba(255,255,255,0.20)',
   },
 } as const;
 
@@ -78,6 +83,23 @@ const badgeVisuals: Record<
 
 function useGradientId(name: string) {
   return `${React.useId().replace(/[^a-zA-Z0-9]/g, '')}-${name}`;
+}
+
+function FrostedFill({radius}: {radius: number}) {
+  const theme = useHoystTheme();
+
+  if (Platform.OS !== 'ios') {
+    return null;
+  }
+
+  return (
+    <BlurView
+      blurAmount={18}
+      blurType={theme.isDark ? 'dark' : 'light'}
+      reducedTransparencyFallbackColor={theme.glassSurfaceStrong}
+      style={[StyleSheet.absoluteFill, {borderRadius: radius}]}
+    />
+  );
 }
 
 function AvatarBadgeIcon({kind}: {kind: HomeAvatarBadgeKind}) {
@@ -212,63 +234,76 @@ export function HomeHeroHeader({
     Math.min(100, Number.isFinite(momentumPercent) ? momentumPercent : 0),
   );
   const knobPercent = Math.max(5, Math.min(95, clampedPercent));
-  const momentumPalette = getMomentumStatusPillPalette(momentumStatus, theme);
   const momentumVisualColor = getMomentumStatusVisualColor(
     momentumStatus,
     theme,
   );
 
   return (
-    <View
-      style={[
-        styles.header,
-        {backgroundColor: palette.background, paddingTop: insets.top + 12},
-      ]}>
-      <View pointerEvents="none" style={styles.watermarkLayer}>
-        <BrandMark
-          isDark={theme.isDark}
-          kind="icon"
-          style={[styles.watermark, {opacity: palette.watermarkOpacity}]}
-        />
-      </View>
-
+    <View style={[styles.header, {paddingTop: insets.top + 10}]}>
       <View style={styles.topRow}>
         <View
+          testID="home-hero-bubble-surface"
           style={[
-            styles.bubble,
+            styles.bubbleSurface,
             {
-              backgroundColor: palette.bubble,
-              shadowColor: theme.shadow,
+              shadowColor: theme.glassShadow,
             },
           ]}>
-          {bubbleText ? (
-            <BubbleText text={bubbleText} />
-          ) : (
-            <View
-              accessibilityElementsHidden
-              importantForAccessibility="no-hide-descendants"
-              style={styles.bubbleSkeleton}>
+          <View
+            style={[
+              styles.bubble,
+              {
+                backgroundColor: palette.bubble,
+                borderColor: theme.glassBorder,
+              },
+            ]}>
+            <FrostedFill radius={18} />
+            {bubbleText ? (
+              <BubbleText text={bubbleText} />
+            ) : (
               <View
-                style={[
-                  styles.bubbleSkeletonLine,
-                  {backgroundColor: palette.track},
-                ]}
-              />
-              <View
-                style={[
-                  styles.bubbleSkeletonLineShort,
-                  {backgroundColor: palette.track},
-                ]}
-              />
-            </View>
-          )}
+                accessibilityElementsHidden
+                importantForAccessibility="no-hide-descendants"
+                style={styles.bubbleSkeleton}>
+                <View
+                  style={[
+                    styles.bubbleSkeletonLine,
+                    {backgroundColor: palette.track},
+                  ]}
+                />
+                <View
+                  style={[
+                    styles.bubbleSkeletonLineShort,
+                    {backgroundColor: palette.track},
+                  ]}
+                />
+              </View>
+            )}
+          </View>
         </View>
         <View style={styles.bubbleTail}>
           <View
-            style={[styles.tailDotLarge, {backgroundColor: palette.bubble}]}
+            testID="home-hero-tail-dot-large"
+            style={[
+              styles.tailDotLarge,
+              {
+                backgroundColor: palette.tailDot,
+                borderColor: palette.tailDotBorder,
+                shadowColor: theme.glassShadow,
+              },
+            ]}
           />
           <View
-            style={[styles.tailDotSmall, {backgroundColor: palette.bubble}]}
+            testID="home-hero-tail-dot-small"
+            style={[
+              styles.tailDotSmall,
+              {
+                backgroundColor: palette.tailDot,
+                borderColor: palette.tailDotBorder,
+                shadowColor: theme.glassShadow,
+              },
+            ]}
           />
         </View>
         <Pressable
@@ -281,22 +316,46 @@ export function HomeHeroHeader({
             {opacity: pressed ? 0.92 : 1},
           ]}>
           <View
+            testID="home-hero-avatar-surface"
             style={[
-              styles.avatarRing,
-              {backgroundColor: palette.avatarRing, shadowColor: theme.shadow},
+              styles.avatarSurface,
+              {
+                shadowColor: theme.glassShadow,
+              },
             ]}>
             <View
               style={[
-                styles.avatarFrame,
-                {backgroundColor: palette.avatarFallback},
+                styles.avatarRing,
+                {
+                  backgroundColor: palette.avatarRing,
+                  borderColor: theme.glassBorder,
+                },
               ]}>
-              {avatarSource ? (
-                <Image source={avatarSource} style={styles.avatarImage} />
-              ) : (
-                <HoystText style={styles.avatarInitials} variant="bodyStrong">
-                  {initials}
-                </HoystText>
-              )}
+              <FrostedFill radius={(AVATAR_SIZE + 6) / 2} />
+              <View
+                testID="home-hero-avatar-frame"
+                style={[
+                  styles.avatarFrame,
+                  {
+                    backgroundColor: palette.avatarFallback,
+                    borderColor: theme.isDark
+                      ? 'rgba(255,255,255,0.18)'
+                      : 'rgba(255,255,255,0.92)',
+                  },
+                ]}>
+                {avatarSource ? (
+                  <Image source={avatarSource} style={styles.avatarImage} />
+                ) : (
+                  <HoystText
+                    style={[
+                      styles.avatarInitials,
+                      {color: palette.avatarInitial},
+                    ]}
+                    variant="bodyStrong">
+                    {initials}
+                  </HoystText>
+                )}
+              </View>
             </View>
           </View>
           <View style={styles.statusBadge}>
@@ -318,7 +377,9 @@ export function HomeHeroHeader({
       <BrandMark isDark={theme.isDark} kind="logo" style={styles.logo} />
 
       <View style={styles.copyBlock}>
-        <HoystText style={styles.headline}>{copy.headline}</HoystText>
+        <HoystText style={[styles.headline, {color: theme.text}]}>
+          {copy.headline}
+        </HoystText>
         <HoystText style={[styles.subline, {color: palette.subline}]}>
           {copy.subline}
         </HoystText>
@@ -354,11 +415,11 @@ export function HomeHeroHeader({
               {
                 backgroundColor: MOMENTUM_STAGE_ICON_BACKGROUND,
                 left: `${knobPercent}%`,
-                shadowColor: theme.shadow,
+                shadowColor: theme.glassShadow,
               },
             ]}>
             <MomentumStageIcon
-              size={30}
+              size={26}
               status={momentumStatus}
               testID="home-momentum-stage-icon"
             />
@@ -371,40 +432,36 @@ export function HomeHeroHeader({
 
 const styles = StyleSheet.create({
   header: {
-    overflow: 'hidden',
-    paddingBottom: 39,
-    paddingHorizontal: 20,
-  },
-  watermarkLayer: {
-    ...StyleSheet.absoluteFillObject,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  watermark: {
-    height: 450,
-    width: 450,
+    paddingBottom: 0,
+    paddingHorizontal: 22,
   },
   topRow: {
     alignItems: 'flex-start',
     flexDirection: 'row',
-    justifyContent: 'flex-end',
+    justifyContent: 'flex-start',
+  },
+  bubbleSurface: {
+    elevation: 4,
+    flex: 1,
+    flexShrink: 1,
+    minWidth: 0,
+    shadowOffset: {height: 7, width: 0},
+    shadowOpacity: 0.72,
+    shadowRadius: 18,
   },
   bubble: {
     borderRadius: 18,
-    elevation: 3,
-    flexShrink: 1,
-    maxWidth: 250,
-    paddingHorizontal: 14,
-    paddingVertical: 11,
-    shadowOffset: {height: 4, width: 0},
-    shadowOpacity: 0.5,
-    shadowRadius: 10,
+    borderBottomLeftRadius: 6,
+    borderWidth: 1,
+    overflow: 'hidden',
+    paddingHorizontal: 15,
+    paddingVertical: 12,
   },
   bubbleText: {
-    fontSize: 14.5,
+    fontSize: 15,
     fontWeight: '600',
     letterSpacing: 0,
-    lineHeight: 19,
+    lineHeight: 20,
   },
   bubbleSkeleton: {
     gap: 6,
@@ -428,49 +485,70 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 4,
     marginHorizontal: 5,
-    marginTop: 23,
+    marginTop: 22,
   },
   tailDotLarge: {
-    borderRadius: 6.5,
-    height: 13,
-    width: 13,
+    borderRadius: 6,
+    borderWidth: 1,
+    elevation: 4,
+    height: 12,
+    shadowOffset: {height: 6, width: 0},
+    shadowOpacity: 0.64,
+    shadowRadius: 12,
+    width: 12,
   },
   tailDotSmall: {
     borderRadius: 4,
-    height: 8,
-    marginTop: 9,
-    width: 8,
+    borderWidth: 1,
+    elevation: 3,
+    height: 7,
+    marginTop: 8,
+    shadowOffset: {height: 5, width: 0},
+    shadowOpacity: 0.58,
+    shadowRadius: 10,
+    width: 7,
   },
   avatarCluster: {
-    height: AVATAR_SIZE + 8,
-    width: AVATAR_SIZE + 8,
+    height: AVATAR_SIZE + 6,
+    width: AVATAR_SIZE + 6,
+  },
+  avatarSurface: {
+    alignItems: 'center',
+    elevation: 4,
+    height: AVATAR_SIZE + 6,
+    justifyContent: 'center',
+    shadowOffset: {height: 6, width: 0},
+    shadowOpacity: 0.72,
+    shadowRadius: 14,
+    width: AVATAR_SIZE + 6,
   },
   avatarRing: {
     alignItems: 'center',
-    borderRadius: (AVATAR_SIZE + 8) / 2,
-    elevation: 3,
-    height: AVATAR_SIZE + 8,
+    borderRadius: (AVATAR_SIZE + 6) / 2,
+    borderWidth: 1,
+    height: AVATAR_SIZE + 6,
     justifyContent: 'center',
-    shadowOffset: {height: 4, width: 0},
-    shadowOpacity: 0.4,
-    shadowRadius: 9,
-    width: AVATAR_SIZE + 8,
+    overflow: 'hidden',
+    width: AVATAR_SIZE + 6,
   },
   avatarFrame: {
     alignItems: 'center',
     borderRadius: AVATAR_SIZE / 2,
+    borderWidth: 1,
     height: AVATAR_SIZE,
     justifyContent: 'center',
     overflow: 'hidden',
     width: AVATAR_SIZE,
   },
   avatarImage: {
-    height: AVATAR_SIZE,
+    borderRadius: (AVATAR_SIZE - 2) / 2,
+    height: AVATAR_SIZE - 2,
     resizeMode: 'cover',
-    width: AVATAR_SIZE,
+    width: AVATAR_SIZE - 2,
   },
   avatarInitials: {
     fontSize: 18,
+    fontWeight: '700',
   },
   statusBadge: {
     position: 'absolute',
@@ -486,10 +564,9 @@ const styles = StyleSheet.create({
     bottom: -3,
     height: 22,
     justifyContent: 'center',
-    minWidth: 22,
-    paddingHorizontal: 5,
     position: 'absolute',
     right: -3,
+    width: 22,
   },
   unreadBadgeText: {
     color: brandColors.white,
@@ -500,28 +577,29 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   logo: {
-    alignSelf: 'center',
-    height: 56,
-    marginTop: 10,
-    width: 134,
+    alignSelf: 'flex-start',
+    height: 40,
+    marginLeft: -3,
+    marginTop: 22,
+    width: 86,
   },
   copyBlock: {
-    gap: 4,
+    gap: 6,
     marginTop: 12,
   },
   headline: {
-    fontSize: 21,
+    fontSize: 26,
     fontWeight: '800',
-    letterSpacing: 0,
-    lineHeight: 26,
-    textAlign: 'center',
+    letterSpacing: -0.4,
+    lineHeight: 30,
+    textAlign: 'left',
   },
   subline: {
     fontSize: 15,
     fontWeight: '700',
     letterSpacing: 0,
     lineHeight: 20,
-    textAlign: 'center',
+    textAlign: 'left',
   },
   barLayout: {
     height: KNOB_SIZE + 6,
@@ -534,13 +612,11 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   barFill: {
-    backgroundColor: brandColors.orangeStrong,
     borderRadius: BAR_HEIGHT / 2,
     height: BAR_HEIGHT,
   },
   barKnob: {
     alignItems: 'center',
-    backgroundColor: MOMENTUM_STAGE_ICON_BACKGROUND,
     borderRadius: KNOB_SIZE / 2,
     elevation: 3,
     height: KNOB_SIZE,
@@ -548,7 +624,7 @@ const styles = StyleSheet.create({
     marginLeft: -KNOB_SIZE / 2,
     position: 'absolute',
     shadowOffset: {height: 3, width: 0},
-    shadowOpacity: 0.35,
+    shadowOpacity: 0.9,
     shadowRadius: 8,
     top: 3,
     width: KNOB_SIZE,
