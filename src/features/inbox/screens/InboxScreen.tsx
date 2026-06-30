@@ -97,7 +97,10 @@ function getInboxVisual(
     };
   }
 
-  if (event.type === 'circle_discovery_suggestion') {
+  if (
+    event.type === 'circle_discovery_suggestion' ||
+    event.type === 'evening_summary'
+  ) {
     return {
       avatarTone: 'muted',
       chipTone: 'blue',
@@ -172,6 +175,9 @@ function getActionLabel(event: InboxEvent) {
   }
   if (event.type === 'circle_discovery_suggestion') {
     return 'Explore';
+  }
+  if (event.type === 'evening_summary') {
+    return 'Recap';
   }
   return event.type === 'join_approved' || event.type === 'member_joined'
     ? 'Joined'

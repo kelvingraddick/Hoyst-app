@@ -1043,13 +1043,6 @@ export function CircleDetailScreen({
       ) ?? [],
     [detail?.members, user?.uid],
   );
-  const pendingJoinRequests = useMemo(
-    () =>
-      detail?.members.filter(member => member.membershipStatus === 'pending') ??
-      [],
-    [detail?.members],
-  );
-
   useEffect(() => {
     setNudged(false);
     setNudgedMemberIds(new Set());
@@ -1173,6 +1166,7 @@ export function CircleDetailScreen({
     : 'Tap In';
   const tapInPulseRingState = getPulseRingStateForCircle(detail);
   const canDeleteCircle = isMemberCircle && detail.viewerRole === 'owner';
+  const canReviewJoinRequests = canDeleteCircle;
   const canLeaveCircle =
     Boolean(detail.viewerRole) && detail.viewerRole !== 'owner';
   const leaveActionLabel = isPendingMembership
@@ -1494,6 +1488,33 @@ export function CircleDetailScreen({
     }
   };
 
+  const openReviewJoinRequestSheet = (member: CircleMemberStatus) => {
+    if (reviewingRequestId) {
+      return;
+    }
+
+    Alert.alert(
+      'Review join request',
+      `Approve or deny ${member.name}'s request to join ${detail.title}?`,
+      [
+        {style: 'cancel', text: 'Cancel'},
+        {
+          onPress: () => {
+            handleReviewJoinRequest(member.id, false).catch(() => undefined);
+          },
+          style: 'destructive',
+          text: 'Deny',
+        },
+        {
+          onPress: () => {
+            handleReviewJoinRequest(member.id, true).catch(() => undefined);
+          },
+          text: 'Approve',
+        },
+      ],
+    );
+  };
+
   const removeTapInAction = canRemoveTodayCheckIn ? (
     <DashboardUtilityAction
       icon={
@@ -1657,7 +1678,11 @@ export function CircleDetailScreen({
             nudgedMemberIds={nudgedMemberIds}
             nudgingMemberIds={nudgingMemberIds}
             onNudgeMember={isMemberCircle ? handleSendMemberNudge : undefined}
+            onReviewPendingMember={
+              canReviewJoinRequests ? openReviewJoinRequestSheet : undefined
+            }
             onTapInViewer={openTapInComposer}
+            reviewingPendingMemberId={reviewingRequestId}
             subtitle={getCompanionProgressSubtitle(detail)}
             tapInRingState={tapInPulseRingState}
             viewerUid={user?.uid}
@@ -1740,53 +1765,6 @@ export function CircleDetailScreen({
               {removeTapInAction}
               {isOwnerToolsExpanded ? (
                 <View style={styles.ownerToolsActions}>
-                  {pendingJoinRequests.length > 0 ? (
-                    <View style={styles.joinRequestStack}>
-                      {pendingJoinRequests.map(member => (
-                        <View
-                          key={member.id}
-                          style={[
-                            styles.joinRequestRow,
-                            {
-                              backgroundColor: theme.surfaceSoft,
-                              borderColor: theme.borderStrong,
-                            },
-                          ]}>
-                          <View style={styles.joinRequestCopy}>
-                            <HoystText variant="bodyStrong">
-                              {member.name}
-                            </HoystText>
-                            <HoystText tone="muted" variant="caption">
-                              Wants to join
-                            </HoystText>
-                          </View>
-                          <View style={styles.joinRequestActions}>
-                            <HoystButton
-                              disabled={reviewingRequestId === member.id}
-                              label="Decline"
-                              onPress={() => {
-                                handleReviewJoinRequest(member.id, false).catch(
-                                  () => undefined,
-                                );
-                              }}
-                              style={styles.joinRequestButton}
-                              variant="outline"
-                            />
-                            <HoystButton
-                              disabled={reviewingRequestId === member.id}
-                              label="Approve"
-                              onPress={() => {
-                                handleReviewJoinRequest(member.id, true).catch(
-                                  () => undefined,
-                                );
-                              }}
-                              style={styles.joinRequestButton}
-                            />
-                          </View>
-                        </View>
-                      ))}
-                    </View>
-                  ) : null}
                   <DashboardUtilityAction
                     icon={
                       <Pencil color={theme.text} size={17} strokeWidth={2.2} />
@@ -2158,28 +2136,6 @@ const styles = StyleSheet.create({
   ownerToolsActions: {
     gap: 8,
     paddingTop: 2,
-  },
-  joinRequestActions: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  joinRequestButton: {
-    flex: 1,
-  },
-  joinRequestCopy: {
-    flex: 1,
-    gap: 2,
-  },
-  joinRequestRow: {
-    alignItems: 'center',
-    borderRadius: radius.md,
-    borderWidth: StyleSheet.hairlineWidth,
-    flexDirection: 'row',
-    gap: 10,
-    padding: 10,
-  },
-  joinRequestStack: {
-    gap: 8,
   },
   dashboardUtilityPressable: {
     alignSelf: 'stretch',

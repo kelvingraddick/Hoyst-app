@@ -55,7 +55,8 @@ jest.mock(
 
     return {
       HttpsError: MockHttpsError,
-      onCall: (handler: unknown) => handler,
+      onCall: (optionsOrHandler: unknown, maybeHandler?: unknown) =>
+        maybeHandler ?? optionsOrHandler,
     };
   },
   {virtual: true},
@@ -70,24 +71,28 @@ jest.mock(
 );
 
 import {
+  buildEveningSummaryCopy,
   buildOneSignalPushPayload,
   canShareCircleOutsideMembers,
+  formatNotificationCircleTitle,
   getCompanionFeedTargetsFromMemberships,
   getCompanionMilestoneEvents,
   getCircleAtRiskNotificationBody,
   getDiscoveryInactivityEligibility,
   getJoinRequestNotificationDedupeKey,
   getNudgeNotificationDedupeKey,
-  getNotificationCopyVariantIndex,
   getNotificationPreferenceEnabled,
   getReminderEligibility,
   getRoutineNotificationEligibility,
+  getSameDayImmediateCoverageCircleIds,
   markInboxEventsRead,
+  repairPushSubscription,
   resolveNotificationCopy,
+  shouldIncludeInEveningSummary,
 } from '../functions/src/notifications';
 
-describe('notification copy rotation', () => {
-  it('selects stable copy from the dedupe key', () => {
+describe('notification copy', () => {
+  it('uses stable label-like copy for repeated notification types', () => {
     const first = resolveNotificationCopy({
       context: {actorName: 'Ava', circleTitle: 'Hydration Circle'},
       dedupeKey: 'nudge_circle-1_2026-05-29_user-1',
@@ -95,13 +100,34 @@ describe('notification copy rotation', () => {
     });
     const second = resolveNotificationCopy({
       context: {actorName: 'Ava', circleTitle: 'Hydration Circle'},
-      dedupeKey: 'nudge_circle-1_2026-05-29_user-1',
+      dedupeKey: 'different_dedupe_key',
       type: 'nudge',
     });
 
     expect(second).toEqual(first);
     expect(first.body).toContain('Ava');
-    expect(first.copyVariant).toMatch(/^nudge_[0-4]$/);
+    expect(first.title).toBe('Nudge');
+    expect(first.copyVariant).toBe('nudge');
+  });
+
+  it('quotes and truncates long circle names for notification copy', () => {
+    expect(formatNotificationCircleTitle('STOP eating heavy after 9PM')).toBe(
+      '"STOP eating heavy a..."',
+    );
+
+    expect(
+      resolveNotificationCopy({
+        context: {
+          circleTitle: 'STOP eating heavy after 9PM',
+          periodCopy: 'today',
+        },
+        dedupeKey: 'tap_in_final_circle-1_2026-06-30_user-1',
+        type: 'tap_in_final_warning',
+      }),
+    ).toMatchObject({
+      body: '2 hours left for "STOP eating heavy a...".',
+      title: 'Final Tap In warning',
+    });
   });
 
   it('supports the new notification purposes', () => {
@@ -117,6 +143,7 @@ describe('notification copy rotation', () => {
       'member_due_prompt',
       'circle_nudge_prompt',
       'circle_discovery_suggestion',
+      'evening_summary',
     ] as const;
 
     newTypes.forEach(type => {
@@ -127,6 +154,7 @@ describe('notification copy rotation', () => {
           discoveryCategory: 'Fitness',
           discoveryCircleTitle: 'Morning Miles',
           periodCopy: 'this week',
+          summaryBody: '3 updates across 2 circles: 2 Tap Ins, 1 completion.',
           targetCount: 2,
         },
         dedupeKey: `${type}_example`,
@@ -135,25 +163,8 @@ describe('notification copy rotation', () => {
 
       expect(copy.title.length).toBeGreaterThan(0);
       expect(copy.body.length).toBeGreaterThan(0);
-      expect(copy.copyVariant).toMatch(new RegExp(`^${type}_[0-4]$`));
+      expect(copy.copyVariant).toBe(type);
     });
-  });
-
-  it('keeps variant indexes in range', () => {
-    expect(
-      getNotificationCopyVariantIndex({
-        dedupeKey: 'event-1',
-        type: 'circle_complete',
-        variantCount: 5,
-      }),
-    ).toBeGreaterThanOrEqual(0);
-    expect(
-      getNotificationCopyVariantIndex({
-        dedupeKey: 'event-1',
-        type: 'circle_complete',
-        variantCount: 5,
-      }),
-    ).toBeLessThan(5);
   });
 });
 
@@ -355,6 +366,87 @@ describe('discovery inactivity eligibility', () => {
   });
 });
 
+describe('evening activity recap', () => {
+  const dateKey = '2026-06-30';
+  const timezone = 'UTC';
+
+  it('summarizes deferred non-urgent activity with predictable copy', () => {
+    expect(
+      buildEveningSummaryCopy([
+        {
+          circleId: 'circle-1',
+          createdAt: new Date('2026-06-30T18:00:00.000Z'),
+          push: {status: 'deferred'},
+          type: 'companion_tapped_in',
+        },
+        {
+          circleId: 'circle-1',
+          createdAt: new Date('2026-06-30T18:05:00.000Z'),
+          push: {status: 'deferred'},
+          type: 'companion_tapped_in',
+        },
+        {
+          circleId: 'circle-2',
+          createdAt: new Date('2026-06-30T18:10:00.000Z'),
+          push: {status: 'deferred'},
+          type: 'circle_complete',
+        },
+      ]),
+    ).toEqual({
+      body: '3 updates across 2 circles: 2 Tap Ins, 1 completion.',
+      title: 'Hoyst evening recap',
+    });
+  });
+
+  it('includes deferred social activity unless an urgent same-day push covered that circle', () => {
+    const urgentCoverage = getSameDayImmediateCoverageCircleIds({
+      dateKey,
+      events: [
+        {
+          circleId: 'circle-1',
+          createdAt: new Date('2026-06-30T22:00:00.000Z'),
+          push: {status: 'sent'},
+          type: 'tap_in_final_warning',
+        },
+        {
+          circleId: 'circle-2',
+          createdAt: new Date('2026-06-30T17:00:00.000Z'),
+          push: {status: 'deferred'},
+          type: 'companion_tapped_in',
+        },
+      ],
+      timezone,
+    });
+
+    expect(
+      shouldIncludeInEveningSummary({
+        coveredCircleIds: urgentCoverage,
+        dateKey,
+        event: {
+          circleId: 'circle-1',
+          createdAt: new Date('2026-06-30T18:00:00.000Z'),
+          push: {status: 'deferred'},
+          type: 'companion_tapped_in',
+        },
+        timezone,
+      }),
+    ).toBe(false);
+    expect(
+      shouldIncludeInEveningSummary({
+        coveredCircleIds: urgentCoverage,
+        dateKey,
+        event: {
+          circleId: 'circle-2',
+          createdAt: new Date('2026-06-30T18:00:00.000Z'),
+          push: {status: 'deferred'},
+          type: 'circle_complete',
+        },
+        timezone,
+      }),
+    ).toBe(true);
+  });
+});
+
 describe('notification reminder eligibility', () => {
   it('allows active members with due Tap Ins and enabled reminders', () => {
     expect(
@@ -448,14 +540,14 @@ describe('circle at-risk notification copy', () => {
         commitmentCadence: 'daily',
         remainingCount: 1,
       }),
-    ).toBe('Hydration Circle needs 1 more Tap In today.');
+    ).toBe('"Hydration Circle" needs 1 more Tap In today.');
     expect(
       getCircleAtRiskNotificationBody({
         circleTitle: 'Maker Mornings',
         commitmentCadence: 'weekly',
         remainingCount: 2,
       }),
-    ).toBe('Maker Mornings needs 2 more Tap Ins this week.');
+    ).toBe('"Maker Mornings" needs 2 more Tap Ins this week.');
   });
 });
 
@@ -534,6 +626,130 @@ describe('OneSignal push payload', () => {
       ios_badgeType: 'Increase',
       target_channel: 'push',
     });
+  });
+});
+
+describe('repair push subscription callable', () => {
+  const invokeRepairPushSubscription = repairPushSubscription as unknown as (
+    request: {
+      auth?: {uid: string};
+      data?: unknown;
+    },
+  ) => Promise<{repaired: boolean; status: string}>;
+  const originalFetch = global.fetch;
+  const originalOneSignalAppId = process.env.ONESIGNAL_APP_ID;
+  const originalOneSignalRestApiKey = process.env.ONESIGNAL_REST_API_KEY;
+
+  beforeEach(() => {
+    global.fetch = jest.fn();
+    process.env.ONESIGNAL_APP_ID = 'onesignal-app-id';
+    process.env.ONESIGNAL_REST_API_KEY = 'onesignal-rest-key';
+  });
+
+  afterEach(() => {
+    global.fetch = originalFetch;
+
+    if (originalOneSignalAppId === undefined) {
+      delete process.env.ONESIGNAL_APP_ID;
+    } else {
+      process.env.ONESIGNAL_APP_ID = originalOneSignalAppId;
+    }
+
+    if (originalOneSignalRestApiKey === undefined) {
+      delete process.env.ONESIGNAL_REST_API_KEY;
+    } else {
+      process.env.ONESIGNAL_REST_API_KEY = originalOneSignalRestApiKey;
+    }
+  });
+
+  it('patches a disabled OneSignal subscription linked to the signed-in user', async () => {
+    (global.fetch as jest.Mock)
+      .mockResolvedValueOnce({
+        json: async () => ({
+          subscriptions: [
+            {
+              app_version: '1.0',
+              device_os: '26.5.1',
+              enabled: false,
+              id: 'subscription-1',
+              notification_types: -19,
+              sdk: '050213',
+              token: 'token-1',
+              type: 'iOSPush',
+            },
+          ],
+        }),
+        ok: true,
+        status: 200,
+      })
+      .mockResolvedValueOnce({
+        json: async () => ({}),
+        ok: true,
+        status: 200,
+      });
+
+    await expect(
+      invokeRepairPushSubscription({
+        auth: {uid: 'user-1'},
+        data: {subscriptionId: 'subscription-1', token: 'token-1'},
+      }),
+    ).resolves.toEqual({repaired: true, status: 'repaired'});
+
+    expect(global.fetch).toHaveBeenNthCalledWith(
+      1,
+      'https://api.onesignal.com/apps/onesignal-app-id/users/by/external_id/user-1',
+      {
+        headers: {
+          Authorization: 'Key onesignal-rest-key',
+          'Content-Type': 'application/json',
+        },
+        method: 'GET',
+      },
+    );
+    expect(global.fetch).toHaveBeenNthCalledWith(
+      2,
+      'https://api.onesignal.com/apps/onesignal-app-id/subscriptions/subscription-1',
+      expect.objectContaining({
+        headers: {
+          Authorization: 'Key onesignal-rest-key',
+          'Content-Type': 'application/json',
+        },
+        method: 'PATCH',
+      }),
+    );
+    expect(
+      JSON.parse((global.fetch as jest.Mock).mock.calls[1][1].body),
+    ).toEqual({
+      subscription: {
+        app_version: '1.0',
+        device_os: '26.5.1',
+        enabled: true,
+        notification_types: 31,
+        sdk: '050213',
+        token: 'token-1',
+      },
+    });
+  });
+
+  it('rejects a subscription id that is not linked to the signed-in user', async () => {
+    (global.fetch as jest.Mock).mockResolvedValueOnce({
+      json: async () => ({
+        subscriptions: [{id: 'other-subscription', token: 'token-1'}],
+      }),
+      ok: true,
+      status: 200,
+    });
+
+    await expect(
+      invokeRepairPushSubscription({
+        auth: {uid: 'user-1'},
+        data: {subscriptionId: 'subscription-1', token: 'token-1'},
+      }),
+    ).rejects.toMatchObject({
+      code: 'permission-denied',
+      message: 'Push subscription is not linked to this user.',
+    });
+    expect(global.fetch).toHaveBeenCalledTimes(1);
   });
 });
 

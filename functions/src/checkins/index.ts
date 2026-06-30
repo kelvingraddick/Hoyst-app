@@ -338,6 +338,7 @@ async function processTapInSideEffectsForCheckIn({
     await Promise.all(
       circleCompleteTargetUids.map(targetUid =>
         notifyCircleComplete({
+          actorUid: uid,
           circleId,
           circleTitle,
           commitmentCadence,

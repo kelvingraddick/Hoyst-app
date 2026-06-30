@@ -1,5 +1,5 @@
 import React from 'react';
-import {Pressable, StyleSheet, Text} from 'react-native';
+import {Alert, Pressable, StyleSheet, Text} from 'react-native';
 import renderer, {act, type ReactTestInstance} from 'react-test-renderer';
 
 import {FrostedBackdrop} from '../src/design/components/FrostedBackdrop';
@@ -24,6 +24,12 @@ let mockPublicDetail: CircleDetailModel | undefined;
 let mockSessionState: {
   status: 'authenticatedReady' | 'guest';
   user?: {providerIds: string[]; uid: string};
+};
+let alertSpy: jest.SpyInstance;
+
+type AlertButton = {
+  onPress?: () => void;
+  text?: string;
 };
 
 jest.mock('@react-native-community/blur', () => {
@@ -308,8 +314,35 @@ function pressByLabel(tree: renderer.ReactTestRenderer, label: string) {
   });
 }
 
+function getLatestAlertButtons(title: string): AlertButton[] {
+  const calls = alertSpy.mock.calls.filter(call => call[0] === title);
+  const latestCall = calls[calls.length - 1];
+  const buttons = latestCall?.[2] as AlertButton[] | undefined;
+
+  if (!buttons) {
+    throw new Error(`Could not find alert buttons for ${title}`);
+  }
+
+  return buttons;
+}
+
+function pressAlertButton(title: string, buttonText: string) {
+  const button = getLatestAlertButtons(title).find(
+    item => item.text === buttonText,
+  );
+
+  if (!button) {
+    throw new Error(`Could not find alert button ${buttonText}`);
+  }
+
+  act(() => {
+    button.onPress?.();
+  });
+}
+
 describe('CircleDetailScreen reference redesign', () => {
   beforeEach(() => {
+    alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
     mockMemberDetail = detail();
     mockPublicDetail = undefined;
     mockSessionState = {
@@ -326,6 +359,7 @@ describe('CircleDetailScreen reference redesign', () => {
   });
 
   afterEach(() => {
+    alertSpy.mockRestore();
     jest.clearAllMocks();
   });
 
@@ -400,6 +434,7 @@ describe('CircleDetailScreen reference redesign', () => {
     expect(output).toContain('Skipped');
     expect(output).toContain('Missed');
     expect(output).toContain('Pending');
+    expect(output).not.toContain('Review');
     expect(output).toContain('Tap In');
     expect(output).toContain('Log your progress for today');
     expect(output.indexOf('Log your progress for today')).toBeLessThan(
@@ -565,6 +600,7 @@ describe('CircleDetailScreen reference redesign', () => {
     expect(outputOf(tree)).toContain('Leaderboard');
     expect(outputOf(tree)).toContain('Goals');
     expect(outputOf(tree)).toContain('Settings');
+    expect(outputOf(tree)).toContain('Review');
     expect(outputOf(tree)).not.toContain('Edit Circle');
     const toolSubtitle = tree.root
       .findAllByType(Text)
@@ -576,9 +612,112 @@ describe('CircleDetailScreen reference redesign', () => {
     pressByLabel(tree, 'Settings');
 
     const output = outputOf(tree);
-    expect(output).toContain('Wants to join');
+    expect(output).not.toContain('Wants to join');
     expect(output).toContain('Edit Circle');
     expect(output).toContain('Delete Circle');
+  });
+
+  it('opens the pending request review sheet from the companion card', () => {
+    mockMemberDetail = detail({
+      members: [
+        {
+          id: 'requester-1',
+          initials: 'JR',
+          membershipStatus: 'pending',
+          name: 'Jordan',
+          state: 'pending',
+        },
+      ],
+      viewerRole: 'owner',
+    });
+
+    const {tree} = renderScreen();
+    const reviewButton = tree.root.findByProps({
+      accessibilityLabel: "Review Jordan's join request",
+    });
+
+    act(() => {
+      reviewButton.props.onPress();
+    });
+
+    expect(alertSpy).toHaveBeenCalledWith(
+      'Review join request',
+      "Approve or deny Jordan's request to join Morning Movers?",
+      expect.arrayContaining([
+        expect.objectContaining({text: 'Cancel'}),
+        expect.objectContaining({style: 'destructive', text: 'Deny'}),
+        expect.objectContaining({text: 'Approve'}),
+      ]),
+    );
+  });
+
+  it('approves a pending request from the companion card sheet', async () => {
+    mockMemberDetail = detail({
+      members: [
+        {
+          id: 'requester-1',
+          initials: 'JR',
+          membershipStatus: 'pending',
+          name: 'Jordan',
+          state: 'pending',
+        },
+      ],
+      viewerRole: 'owner',
+    });
+
+    const {tree} = renderScreen();
+    const reviewButton = tree.root.findByProps({
+      accessibilityLabel: "Review Jordan's join request",
+    });
+
+    act(() => {
+      reviewButton.props.onPress();
+    });
+    pressAlertButton('Review join request', 'Approve');
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(mockReviewJoinRequest).toHaveBeenCalledWith({
+      approved: true,
+      circleId: 'circle-1',
+      requesterId: 'requester-1',
+    });
+  });
+
+  it('denies a pending request from the companion card sheet', async () => {
+    mockMemberDetail = detail({
+      members: [
+        {
+          id: 'requester-1',
+          initials: 'JR',
+          membershipStatus: 'pending',
+          name: 'Jordan',
+          state: 'pending',
+        },
+      ],
+      viewerRole: 'owner',
+    });
+    mockReviewJoinRequest.mockResolvedValueOnce({status: 'declined'});
+
+    const {tree} = renderScreen();
+    const reviewButton = tree.root.findByProps({
+      accessibilityLabel: "Review Jordan's join request",
+    });
+
+    act(() => {
+      reviewButton.props.onPress();
+    });
+    pressAlertButton('Review join request', 'Deny');
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(mockReviewJoinRequest).toHaveBeenCalledWith({
+      approved: false,
+      circleId: 'circle-1',
+      requesterId: 'requester-1',
+    });
   });
 
   it('shows secondary nudge action only when targets exist', () => {

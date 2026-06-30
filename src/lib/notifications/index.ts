@@ -2,6 +2,7 @@ import {OneSignal, LogLevel} from 'react-native-onesignal';
 import type {NavigationContainerRef} from '@react-navigation/native';
 
 import {env} from '../../config/env';
+import {firebaseFunctions} from '../firebase/functions';
 import type {RootStackParamList} from '../../navigation/types';
 
 type NotificationClickEvent = {
@@ -14,7 +15,9 @@ let initialized = false;
 let navigationRef: NavigationContainerRef<RootStackParamList> | undefined;
 let pushUserId: string | undefined;
 let requestedPermissionDuringSession = false;
+let lastServerRepairAttemptAt = 0;
 let warnedMissingAppId = false;
+const serverRepairThrottleMs = 5 * 60 * 1000;
 
 async function optInWithAvailablePermission({
   requestPermissionIfPossible = false,
@@ -113,7 +116,7 @@ function handlePermissionChange(granted: boolean) {
     return;
   }
 
-  syncPushSubscription().catch(() => undefined);
+  syncPushSubscription({forceServerRepair: true}).catch(() => undefined);
 }
 
 function getOneSignalAppId() {
@@ -168,12 +171,17 @@ export async function identifyPushUser(uid: string): Promise<void> {
   }
 
   pushUserId = uid;
-  await syncPushSubscription({requestPermissionIfPossible: true});
+  await syncPushSubscription({
+    forceServerRepair: true,
+    requestPermissionIfPossible: true,
+  });
 }
 
 export async function syncPushSubscription({
+  forceServerRepair = false,
   requestPermissionIfPossible = false,
 }: {
+  forceServerRepair?: boolean;
   requestPermissionIfPossible?: boolean;
 } = {}): Promise<boolean> {
   initializePushNotifications();
@@ -187,7 +195,57 @@ export async function syncPushSubscription({
     requestPermissionIfPossible,
   });
 
+  if (syncResult.optInAttempted) {
+    await repairServerPushSubscription({force: forceServerRepair});
+  }
+
   return syncResult.optInAttempted;
+}
+
+async function repairServerPushSubscription({
+  force = false,
+}: {
+  force?: boolean;
+} = {}) {
+  if (!pushUserId) {
+    return false;
+  }
+
+  const [subscriptionId, token] = await Promise.all([
+    OneSignal.User.pushSubscription.getIdAsync().catch(() => undefined),
+    OneSignal.User.pushSubscription.getTokenAsync().catch(() => undefined),
+  ]);
+
+  const safeSubscriptionId = asString(subscriptionId);
+  const safeToken = asString(token);
+
+  if (!safeSubscriptionId || !safeToken) {
+    return false;
+  }
+
+  const now = Date.now();
+  if (!force && now - lastServerRepairAttemptAt < serverRepairThrottleMs) {
+    return false;
+  }
+
+  lastServerRepairAttemptAt = now;
+
+  try {
+    const callable = firebaseFunctions().httpsCallable(
+      'repairPushSubscription',
+    );
+    await callable({
+      subscriptionId: safeSubscriptionId,
+      token: safeToken,
+    });
+    return true;
+  } catch (error) {
+    if (__DEV__) {
+      console.warn('Push subscription server repair failed.', error);
+    }
+
+    return false;
+  }
 }
 
 export async function clearPushUser(): Promise<void> {
@@ -227,6 +285,7 @@ export async function requestPushNotificationPermission(): Promise<boolean> {
 
   if (granted) {
     OneSignal.User.pushSubscription.optIn();
+    await repairServerPushSubscription({force: true});
   }
 
   return granted;

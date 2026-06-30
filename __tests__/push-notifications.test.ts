@@ -3,14 +3,22 @@ function loadNotificationsModule({
   hasPermission = true,
   oneSignalAppId = 'test-onesignal-app-id',
   permissionRequestGranted = hasPermission,
+  pushToken = 'push-token',
+  subscriptionId = 'subscription-id',
 }: {
   canRequestPermission?: boolean;
   hasPermission?: boolean;
   oneSignalAppId?: string;
   permissionRequestGranted?: boolean;
+  pushToken?: string;
+  subscriptionId?: string;
 } = {}) {
   jest.resetModules();
 
+  const mockRepairPushSubscription = jest
+    .fn()
+    .mockResolvedValue({data: {repaired: false, status: 'already-enabled'}});
+  const mockHttpsCallable = jest.fn(() => mockRepairPushSubscription);
   const mockOneSignal = {
     Debug: {
       setLogLevel: jest.fn(),
@@ -25,9 +33,9 @@ function loadNotificationsModule({
     },
     User: {
       pushSubscription: {
-        getIdAsync: jest.fn().mockResolvedValue('subscription-id'),
+        getIdAsync: jest.fn().mockResolvedValue(subscriptionId),
         getOptedInAsync: jest.fn().mockResolvedValue(hasPermission),
-        getTokenAsync: jest.fn().mockResolvedValue('push-token'),
+        getTokenAsync: jest.fn().mockResolvedValue(pushToken),
         optIn: jest.fn(),
       },
     },
@@ -46,9 +54,16 @@ function loadNotificationsModule({
       ONESIGNAL_APP_ID: oneSignalAppId,
     },
   }));
+  jest.doMock('../src/lib/firebase/functions', () => ({
+    firebaseFunctions: jest.fn(() => ({
+      httpsCallable: mockHttpsCallable,
+    })),
+  }));
 
   return {
+    mockHttpsCallable,
     mockOneSignal,
+    mockRepairPushSubscription,
     notifications: require('../src/lib/notifications'),
   };
 }
@@ -57,12 +72,14 @@ describe('push notification subscription repair', () => {
   afterEach(() => {
     jest.dontMock('react-native-onesignal');
     jest.dontMock('react-native-config');
+    jest.dontMock('../src/lib/firebase/functions');
   });
 
   it('logs in and opts into OneSignal when the device already has OS permission', async () => {
-    const {mockOneSignal, notifications} = loadNotificationsModule({
-      hasPermission: true,
-    });
+    const {mockOneSignal, mockRepairPushSubscription, notifications} =
+      loadNotificationsModule({
+        hasPermission: true,
+      });
 
     await notifications.identifyPushUser('user-1');
 
@@ -72,26 +89,33 @@ describe('push notification subscription repair', () => {
     expect(mockOneSignal.login).toHaveBeenCalledWith('user-1');
     expect(mockOneSignal.Notifications.getPermissionAsync).toHaveBeenCalled();
     expect(mockOneSignal.User.pushSubscription.optIn).toHaveBeenCalledTimes(1);
+    expect(mockRepairPushSubscription).toHaveBeenCalledWith({
+      subscriptionId: 'subscription-id',
+      token: 'push-token',
+    });
   });
 
   it('does not opt in during login when OS permission is not granted', async () => {
-    const {mockOneSignal, notifications} = loadNotificationsModule({
-      hasPermission: false,
-    });
+    const {mockOneSignal, mockRepairPushSubscription, notifications} =
+      loadNotificationsModule({
+        hasPermission: false,
+      });
 
     await notifications.identifyPushUser('user-1');
 
     expect(mockOneSignal.login).toHaveBeenCalledWith('user-1');
     expect(mockOneSignal.User.pushSubscription.optIn).not.toHaveBeenCalled();
     expect(mockOneSignal.Notifications.requestPermission).not.toHaveBeenCalled();
+    expect(mockRepairPushSubscription).not.toHaveBeenCalled();
   });
 
   it('requests OS permission during login repair when iOS can still prompt', async () => {
-    const {mockOneSignal, notifications} = loadNotificationsModule({
-      canRequestPermission: true,
-      hasPermission: false,
-      permissionRequestGranted: true,
-    });
+    const {mockOneSignal, mockRepairPushSubscription, notifications} =
+      loadNotificationsModule({
+        canRequestPermission: true,
+        hasPermission: false,
+        permissionRequestGranted: true,
+      });
 
     await notifications.identifyPushUser('user-1');
 
@@ -100,6 +124,10 @@ describe('push notification subscription repair', () => {
       true,
     );
     expect(mockOneSignal.User.pushSubscription.optIn).toHaveBeenCalledTimes(1);
+    expect(mockRepairPushSubscription).toHaveBeenCalledWith({
+      subscriptionId: 'subscription-id',
+      token: 'push-token',
+    });
   });
 
   it('reuses the same quiet opt-in repair when permission is requested later', async () => {
@@ -118,18 +146,21 @@ describe('push notification subscription repair', () => {
   });
 
   it('repairs the subscription when the app explicitly syncs an identified user', async () => {
-    const {mockOneSignal, notifications} = loadNotificationsModule({
-      hasPermission: true,
-    });
+    const {mockOneSignal, mockRepairPushSubscription, notifications} =
+      loadNotificationsModule({
+        hasPermission: true,
+      });
 
     await notifications.identifyPushUser('user-1');
     mockOneSignal.login.mockClear();
     mockOneSignal.User.pushSubscription.optIn.mockClear();
+    mockRepairPushSubscription.mockClear();
 
     await expect(notifications.syncPushSubscription()).resolves.toBe(true);
 
     expect(mockOneSignal.login).toHaveBeenCalledWith('user-1');
     expect(mockOneSignal.User.pushSubscription.optIn).toHaveBeenCalledTimes(1);
+    expect(mockRepairPushSubscription).not.toHaveBeenCalled();
   });
 
   it('registers a OneSignal permission change repair listener', async () => {

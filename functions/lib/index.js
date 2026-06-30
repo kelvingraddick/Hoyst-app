@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.healthcheck = exports.materializeMomentumOpportunities = exports.backfillMomentumOpportunities = exports.getProfileSummary = exports.generateHomeGreeting = exports.updateCircle = exports.reviewJoinRequest = exports.nudgeCircleMembers = exports.leaveCircle = exports.joinCircle = exports.deleteCircle = exports.createCircle = exports.submitTapIn = exports.removeTapIn = exports.processTapInSideEffects = exports.deleteAccount = exports.completeProfile = exports.updateNotificationSettings = exports.sendRoutineEngagementNotifications = exports.sendMiddayTapInReminders = exports.sendFinalTapInWarnings = exports.notificationModules = exports.markInboxEventRead = exports.markInboxEventsRead = exports.emailModules = void 0;
+exports.healthcheck = exports.materializeMomentumOpportunities = exports.backfillMomentumOpportunities = exports.getProfileSummary = exports.generateHomeGreeting = exports.updateCircle = exports.reviewJoinRequest = exports.nudgeCircleMembers = exports.leaveCircle = exports.joinCircle = exports.deleteCircle = exports.createCircle = exports.submitTapIn = exports.removeTapIn = exports.processTapInSideEffects = exports.deleteAccount = exports.completeProfile = exports.updateNotificationSettings = exports.sendRoutineEngagementNotifications = exports.sendMiddayTapInReminders = exports.sendFinalTapInWarnings = exports.sendEveningActivityRecaps = exports.repairPushSubscription = exports.notificationModules = exports.markInboxEventRead = exports.markInboxEventsRead = exports.emailModules = void 0;
 const https_1 = require("firebase-functions/v2/https");
 var emails_1 = require("./emails");
 Object.defineProperty(exports, "emailModules", { enumerable: true, get: function () { return emails_1.emailModules; } });
@@ -8,6 +8,8 @@ var notifications_1 = require("./notifications");
 Object.defineProperty(exports, "markInboxEventsRead", { enumerable: true, get: function () { return notifications_1.markInboxEventsRead; } });
 Object.defineProperty(exports, "markInboxEventRead", { enumerable: true, get: function () { return notifications_1.markInboxEventRead; } });
 Object.defineProperty(exports, "notificationModules", { enumerable: true, get: function () { return notifications_1.notificationModules; } });
+Object.defineProperty(exports, "repairPushSubscription", { enumerable: true, get: function () { return notifications_1.repairPushSubscription; } });
+Object.defineProperty(exports, "sendEveningActivityRecaps", { enumerable: true, get: function () { return notifications_1.sendEveningActivityRecaps; } });
 Object.defineProperty(exports, "sendFinalTapInWarnings", { enumerable: true, get: function () { return notifications_1.sendFinalTapInWarnings; } });
 Object.defineProperty(exports, "sendMiddayTapInReminders", { enumerable: true, get: function () { return notifications_1.sendMiddayTapInReminders; } });
 Object.defineProperty(exports, "sendRoutineEngagementNotifications", { enumerable: true, get: function () { return notifications_1.sendRoutineEngagementNotifications; } });

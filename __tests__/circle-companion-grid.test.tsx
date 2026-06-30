@@ -233,5 +233,92 @@ describe('CircleCompanionGrid', () => {
         .findAllByType(Pressable)
         .some(node => textContent(node).includes('Tap In')),
     ).toBe(true);
+    expect(output).not.toContain('Review');
+  });
+
+  it('shows pending request review without replacing active nudge actions', () => {
+    const onNudgeMember = jest.fn();
+    const onReviewPendingMember = jest.fn();
+    const pendingRequest = member(
+      'requester-1',
+      'Penny',
+      'pending',
+      'pending',
+    );
+    const members = [member('user-2', 'Ari', 'pending'), pendingRequest];
+    const tree = renderGrid(members, {
+      onNudgeMember,
+      onReviewPendingMember,
+    });
+    const output = outputOf(tree);
+
+    expect(output).toContain('Nudge');
+    expect(output).toContain('Review');
+    expect(
+      tree.root.findAllByProps({
+        accessibilityLabel: "Review Ari's join request",
+      }),
+    ).toHaveLength(0);
+
+    const reviewButton = tree.root.findByProps({
+      accessibilityLabel: "Review Penny's join request",
+    });
+    act(() => {
+      reviewButton.props.onPress();
+    });
+
+    expect(onReviewPendingMember).toHaveBeenCalledWith(pendingRequest);
+  });
+
+  it('keeps pending request cards read-only without a review handler', () => {
+    const tree = renderGrid([
+      member('requester-1', 'Penny', 'pending', 'pending'),
+    ]);
+    const output = outputOf(tree);
+
+    expect(output).toContain('Pending');
+    expect(output).not.toContain('Review');
+    expect(
+      tree.root.findAllByProps({
+        accessibilityLabel: "Review Penny's join request",
+      }),
+    ).toHaveLength(0);
+  });
+
+  it('marks the pending request review action busy while reviewing', () => {
+    const tree = renderGrid(
+      [member('requester-1', 'Penny', 'pending', 'pending')],
+      {
+        onReviewPendingMember: jest.fn(),
+        reviewingPendingMemberId: 'requester-1',
+      },
+    );
+    const reviewButton = tree.root.findByProps({
+      accessibilityLabel: "Reviewing Penny's join request",
+    });
+
+    expect(outputOf(tree)).toContain('Reviewing');
+    expect(reviewButton.props.accessibilityState).toEqual({
+      busy: true,
+      disabled: true,
+    });
+  });
+
+  it('keeps the pending viewer name label readable inside the card', () => {
+    const tree = renderGrid(
+      [member('viewer-uid', 'Kelvin', 'pending', 'pending')],
+      {
+        viewerUid: 'viewer-uid',
+      },
+    );
+    const nameLabel = tree.root.findByProps({
+      testID: 'circle-companion-member-name-viewer-uid',
+    });
+    const nameStyle = StyleSheet.flatten(nameLabel.props.style);
+
+    expect(textContent(nameLabel)).toBe('Kelvin · You');
+    expect(nameStyle.fontSize).toBeGreaterThanOrEqual(13);
+    expect(nameStyle.width).toBe('100%');
+    expect(nameLabel.props.minimumFontScale).toBeGreaterThanOrEqual(0.82);
   });
 });

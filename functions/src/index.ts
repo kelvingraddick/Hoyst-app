@@ -5,6 +5,8 @@ export {
   markInboxEventsRead,
   markInboxEventRead,
   notificationModules,
+  repairPushSubscription,
+  sendEveningActivityRecaps,
   sendFinalTapInWarnings,
   sendMiddayTapInReminders,
   sendRoutineEngagementNotifications,

@@ -234,7 +234,8 @@ const commitmentCadenceOptions: OnboardingOption<CommitmentCadence>[] = [
   },
   {
     accent: 'orange',
-    description: 'Each member covers a set number of scheduled days each month.',
+    description:
+      'Each member covers a set number of scheduled days each month.',
     id: 'monthly',
     label: 'Monthly',
   },
@@ -720,7 +721,9 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
       ? starterCircleDraft.joinMode
       : 'request_to_join';
   const starterCircleTitle =
-    typeof starterCircleDraft.title === 'string' ? starterCircleDraft.title : '';
+    typeof starterCircleDraft.title === 'string'
+      ? starterCircleDraft.title
+      : '';
   const starterCircleCommitment =
     typeof starterCircleDraft.commitment === 'string'
       ? starterCircleDraft.commitment
@@ -1052,9 +1055,7 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
     nextStep();
   };
 
-  const selectStarterCircleCadence = (
-    commitmentCadence: CommitmentCadence,
-  ) => {
+  const selectStarterCircleCadence = (commitmentCadence: CommitmentCadence) => {
     setStarterCircleField('commitmentCadence', commitmentCadence);
     setStarterCircleField(
       'commitmentFrequency',
@@ -1509,9 +1510,9 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
             />
             <PreviewRow
               accent="purple"
-              detail="Only important updates like requests, joins, nudges, and circles at risk."
+              detail="Urgent alerts right away, companion activity in an evening recap."
               icon={Shield}
-              label="Circle alerts"
+              label="Quieter updates"
             />
           </View>
         ) : null}

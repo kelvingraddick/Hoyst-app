@@ -151,6 +151,7 @@ export type InboxEventType =
   | 'companion_skipped'
   | 'companion_streak_milestone'
   | 'companion_tapped_in'
+  | 'evening_summary'
   | 'join_approved'
   | 'join_declined'
   | 'join_request'

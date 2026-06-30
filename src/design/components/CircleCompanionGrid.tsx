@@ -38,7 +38,9 @@ type CircleCompanionGridProps = {
   nudgedMemberIds?: ReadonlySet<string>;
   nudgingMemberIds?: ReadonlySet<string>;
   onNudgeMember?: (member: CircleMemberStatus) => void;
+  onReviewPendingMember?: (member: CircleMemberStatus) => void;
   onTapInViewer?: () => void;
+  reviewingPendingMemberId?: string;
   subtitle: string;
   tapInRingState?: PulseRingState;
   title?: string;
@@ -258,6 +260,66 @@ function MemberTapInButton({
   );
 }
 
+function MemberReviewButton({
+  isLoading,
+  memberName,
+  onPress,
+}: {
+  isLoading: boolean;
+  memberName: string;
+  onPress: () => void;
+}): React.JSX.Element {
+  const theme = useHoystTheme();
+
+  return (
+    <Pressable
+      accessibilityLabel={
+        isLoading
+          ? `Reviewing ${memberName}'s join request`
+          : `Review ${memberName}'s join request`
+      }
+      accessibilityRole="button"
+      accessibilityState={{busy: isLoading, disabled: isLoading}}
+      disabled={isLoading}
+      onPress={isLoading ? undefined : onPress}
+      style={({pressed}) => [
+        styles.memberReviewPressable,
+        {
+          opacity: isLoading ? 0.58 : pressed ? actionMotion.pressedOpacity : 1,
+          shadowColor: theme.accentSecondaryForeground,
+          transform: [
+            {scale: pressed && !isLoading ? actionMotion.pressedScale : 1},
+          ],
+        },
+      ]}>
+      <View
+        style={[
+          styles.memberReviewFill,
+          {
+            backgroundColor: theme.isDark
+              ? 'rgba(122,85,255,0.22)'
+              : 'rgba(122,85,255,0.14)',
+            borderColor: theme.isDark
+              ? 'rgba(122,85,255,0.18)'
+              : 'rgba(122,85,255,0.04)',
+          },
+        ]}>
+        <HoystText
+          adjustsFontSizeToFit
+          minimumFontScale={0.84}
+          numberOfLines={1}
+          style={[
+            styles.memberReviewLabel,
+            {color: theme.accentSecondaryForeground},
+          ]}
+          variant="button">
+          {isLoading ? 'Reviewing' : 'Review'}
+        </HoystText>
+      </View>
+    </Pressable>
+  );
+}
+
 function CompanionMemberCard({
   canTapInViewer,
   cardWidth,
@@ -265,7 +327,9 @@ function CompanionMemberCard({
   nudgedMemberIds,
   nudgingMemberIds,
   onNudgeMember,
+  onReviewPendingMember,
   onTapInViewer,
+  reviewingPendingMemberId,
   viewerUid,
 }: {
   canTapInViewer: boolean;
@@ -274,7 +338,9 @@ function CompanionMemberCard({
   nudgedMemberIds: ReadonlySet<string>;
   nudgingMemberIds: ReadonlySet<string>;
   onNudgeMember?: (member: CircleMemberStatus) => void;
+  onReviewPendingMember?: (member: CircleMemberStatus) => void;
   onTapInViewer?: () => void;
+  reviewingPendingMemberId?: string;
   viewerUid?: string;
 }) {
   const theme = useHoystTheme();
@@ -288,8 +354,11 @@ function CompanionMemberCard({
     member.state === 'pending' &&
     Boolean(onNudgeMember);
   const showViewerTapIn = isViewer && canTapInViewer && Boolean(onTapInViewer);
+  const canReview =
+    member.membershipStatus === 'pending' && Boolean(onReviewPendingMember);
   const isNudging = nudgingMemberIds.has(member.id);
   const isNudged = nudgedMemberIds.has(member.id);
+  const isReviewing = reviewingPendingMemberId === member.id;
 
   return (
     <GlassPanel
@@ -307,7 +376,8 @@ function CompanionMemberCard({
             adjustsFontSizeToFit
             minimumFontScale={0.82}
             numberOfLines={1}
-            style={styles.memberName}>
+            style={styles.memberName}
+            testID={`circle-companion-member-name-${member.id}`}>
             {displayName}
           </HoystText>
           <HoystText
@@ -321,6 +391,12 @@ function CompanionMemberCard({
         </View>
         {showViewerTapIn && onTapInViewer ? (
           <MemberTapInButton onPress={onTapInViewer} />
+        ) : canReview && onReviewPendingMember ? (
+          <MemberReviewButton
+            isLoading={isReviewing}
+            memberName={member.name}
+            onPress={() => onReviewPendingMember(member)}
+          />
         ) : canNudge ? (
           <NudgeActionButton
             isLoading={isNudging}
@@ -438,7 +514,9 @@ function SlotCard({
   nudgedMemberIds,
   nudgingMemberIds,
   onNudgeMember,
+  onReviewPendingMember,
   onTapInViewer,
+  reviewingPendingMemberId,
   slot,
   viewerUid,
 }: {
@@ -447,7 +525,9 @@ function SlotCard({
   nudgedMemberIds: ReadonlySet<string>;
   nudgingMemberIds: ReadonlySet<string>;
   onNudgeMember?: (member: CircleMemberStatus) => void;
+  onReviewPendingMember?: (member: CircleMemberStatus) => void;
   onTapInViewer?: () => void;
+  reviewingPendingMemberId?: string;
   slot: CompanionSlot;
   viewerUid?: string;
 }) {
@@ -465,7 +545,9 @@ function SlotCard({
       nudgedMemberIds={nudgedMemberIds}
       nudgingMemberIds={nudgingMemberIds}
       onNudgeMember={onNudgeMember}
+      onReviewPendingMember={onReviewPendingMember}
       onTapInViewer={onTapInViewer}
+      reviewingPendingMemberId={reviewingPendingMemberId}
       viewerUid={viewerUid}
     />
   );
@@ -479,7 +561,9 @@ export function CircleCompanionGrid({
   nudgedMemberIds = new Set(),
   nudgingMemberIds = new Set(),
   onNudgeMember,
+  onReviewPendingMember,
   onTapInViewer,
+  reviewingPendingMemberId,
   subtitle,
   title = 'Circle Companions',
   viewerUid,
@@ -528,7 +612,9 @@ export function CircleCompanionGrid({
                     nudgedMemberIds={nudgedMemberIds}
                     nudgingMemberIds={nudgingMemberIds}
                     onNudgeMember={onNudgeMember}
+                    onReviewPendingMember={onReviewPendingMember}
                     onTapInViewer={onTapInViewer}
+                    reviewingPendingMemberId={reviewingPendingMemberId}
                     slot={slot}
                     viewerUid={viewerUid}
                   />
@@ -550,7 +636,9 @@ export function CircleCompanionGrid({
                 nudgedMemberIds={nudgedMemberIds}
                 nudgingMemberIds={nudgingMemberIds}
                 onNudgeMember={onNudgeMember}
+                onReviewPendingMember={onReviewPendingMember}
                 onTapInViewer={onTapInViewer}
+                reviewingPendingMemberId={reviewingPendingMemberId}
                 slot={slot}
                 viewerUid={viewerUid}
               />
@@ -665,9 +753,11 @@ const styles = StyleSheet.create({
     minHeight: 148,
     paddingHorizontal: 10,
     paddingVertical: 12,
+    width: '100%',
   },
   memberCopy: {
     alignItems: 'center',
+    alignSelf: 'stretch',
     gap: 2,
     minWidth: 0,
     width: '100%',
@@ -679,6 +769,36 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     maxWidth: '100%',
     textAlign: 'center',
+    width: '100%',
+  },
+  memberReviewFill: {
+    alignItems: 'center',
+    borderRadius: radius.pill,
+    borderWidth: 1.4,
+    height: 34,
+    justifyContent: 'center',
+    minWidth: 96,
+    overflow: 'hidden',
+    paddingHorizontal: 12,
+  },
+  memberReviewLabel: {
+    fontSize: 14,
+    fontWeight: '800',
+    letterSpacing: 0,
+    lineHeight: 18,
+    minWidth: 0,
+    textAlign: 'center',
+  },
+  memberReviewPressable: {
+    alignSelf: 'center',
+    borderRadius: radius.pill,
+    elevation: 5,
+    flexShrink: 0,
+    maxWidth: 140,
+    minWidth: 96,
+    shadowOffset: {height: 8, width: 0},
+    shadowOpacity: 0.18,
+    shadowRadius: 12,
   },
   memberStatus: {
     fontSize: 10.5,

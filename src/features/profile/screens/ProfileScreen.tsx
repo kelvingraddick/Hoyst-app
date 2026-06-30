@@ -239,10 +239,7 @@ function ProfileHeroStat({
           variant="subtitle">
           {value}
         </HoystText>
-        <HoystText
-          numberOfLines={1}
-          style={{color}}
-          variant="caption">
+        <HoystText numberOfLines={1} style={{color}} variant="caption">
           {label}
         </HoystText>
         <HoystText numberOfLines={1} tone="muted" variant="tiny">
@@ -723,7 +720,9 @@ export function ProfileScreen({navigation}: Props): React.JSX.Element {
     setIsAppearanceModalVisible(false);
   };
   const requestPushPermissions = async () => {
-    const granted = await requestPushNotificationPermission().catch(() => false);
+    const granted = await requestPushNotificationPermission().catch(
+      () => false,
+    );
 
     if (!granted) {
       Alert.alert(
@@ -1017,7 +1016,7 @@ export function ProfileScreen({navigation}: Props): React.JSX.Element {
             trailingKind="switch"
           />
           <SettingsRow
-            detail="Companion Tap Ins, completions, joins, and requests."
+            detail="Evening recaps for Tap Ins, completions, joins, and milestones."
             icon={UsersRound}
             iconTone="green"
             title="Companion activity"
