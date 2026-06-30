@@ -1,6 +1,6 @@
 import React from 'react';
 import {StyleSheet, View} from 'react-native';
-import Svg, {Path} from 'react-native-svg';
+import Svg, {Circle, Path} from 'react-native-svg';
 
 import type {HomeProgressCell} from '../../features/home/services/home-data-service';
 import type {ProgressDayState} from '../../types/models';
@@ -10,8 +10,15 @@ import {MomentumFlameIllustration} from './MomentumIllustrations';
 import {SectionEyebrow} from './SectionEyebrow';
 
 type WeekProgressStripProps = {
-  days: HomeProgressCell[];
-  streakDays: number;
+  days: WeekProgressDay[];
+  showStreak?: boolean;
+  streakDays?: number;
+  title?: string;
+};
+
+type WeekProgressDay = HomeProgressCell & {
+  coveredCount?: number;
+  totalCount?: number;
 };
 
 type DayCircleVisual = {
@@ -25,7 +32,7 @@ const WEEKDAY_LABELS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'] as const;
 
 // progressDays labels are day-of-month ("03"); the strip shows weekday names
 // like the reference design, derived from the cell's date key.
-function getWeekdayLabel(day: HomeProgressCell) {
+function getWeekdayLabel(day: WeekProgressDay) {
   const date = new Date(`${day.dateKey}T12:00:00`);
 
   if (Number.isNaN(date.getTime())) {
@@ -38,12 +45,22 @@ function getWeekdayLabel(day: HomeProgressCell) {
 function getDayCircleVisual(
   isDark: boolean,
   state: ProgressDayState,
+  isPartial = false,
 ): DayCircleVisual {
   if (state === 'done') {
     return {
       background: '#22A565',
       border: 'rgba(34,165,101,0.5)',
       borderWidth: 0,
+      label: isDark ? '#4BE083' : '#1E8A55',
+    };
+  }
+
+  if (isPartial) {
+    return {
+      background: isDark ? 'rgba(34,165,101,0.16)' : 'rgba(34,165,101,0.12)',
+      border: isDark ? 'rgba(75,224,131,0.62)' : 'rgba(34,165,101,0.46)',
+      borderWidth: 1.5,
       label: isDark ? '#4BE083' : '#1E8A55',
     };
   }
@@ -72,6 +89,38 @@ function getDayCircleVisual(
     borderWidth: isDark ? 1 : 1.25,
     label: isDark ? '#8D96AD' : '#9A9ABC',
   };
+}
+
+function getPartialProgress(day: WeekProgressDay) {
+  if (
+    typeof day.coveredCount !== 'number' ||
+    typeof day.totalCount !== 'number' ||
+    day.totalCount <= 0
+  ) {
+    return undefined;
+  }
+
+  const progress = day.coveredCount / day.totalCount;
+
+  return progress > 0 && progress < 1 ? progress : undefined;
+}
+
+function getDayAccessibilityLabel(day: WeekProgressDay, weekdayLabel: string) {
+  if (
+    typeof day.coveredCount === 'number' &&
+    typeof day.totalCount === 'number'
+  ) {
+    const progressLabel =
+      day.coveredCount >= day.totalCount && day.totalCount > 0
+        ? 'complete'
+        : day.coveredCount > 0
+        ? 'partial'
+        : 'empty';
+
+    return `${weekdayLabel}: ${progressLabel}, ${day.coveredCount} of ${day.totalCount} completed`;
+  }
+
+  return `${weekdayLabel}: ${day.state}`;
 }
 
 function DayCheckIcon({size = 15}: {size?: number}) {
@@ -134,14 +183,62 @@ function TodayArrowBadge({size = 17}: {size?: number}) {
   );
 }
 
-function DayCell({day}: {day: HomeProgressCell}) {
+function DayPartialRing({
+  dateKey,
+  progress,
+  size = 22,
+}: {
+  dateKey: string;
+  progress: number;
+  size?: number;
+}) {
+  const radius = 8.5;
+  const circumference = 2 * Math.PI * radius;
+  const dashOffset = circumference * (1 - progress);
+
+  return (
+    <Svg
+      height={size}
+      testID={`week-progress-${dateKey}-partial-ring`}
+      viewBox="0 0 24 24"
+      width={size}>
+      <Circle
+        cx={12}
+        cy={12}
+        fill="none"
+        r={radius}
+        stroke="rgba(34,165,101,0.22)"
+        strokeWidth={3.2}
+      />
+      <Circle
+        cx={12}
+        cy={12}
+        fill="none"
+        r={radius}
+        stroke="#22A565"
+        strokeDasharray={`${circumference} ${circumference}`}
+        strokeDashoffset={dashOffset}
+        strokeLinecap="round"
+        strokeWidth={3.2}
+        transform="rotate(-90 12 12)"
+      />
+    </Svg>
+  );
+}
+
+function DayCell({day}: {day: WeekProgressDay}) {
   const theme = useHoystTheme();
-  const visual = getDayCircleVisual(theme.isDark, day.state);
+  const partialProgress = getPartialProgress(day);
+  const visual = getDayCircleVisual(
+    theme.isDark,
+    day.state,
+    partialProgress !== undefined,
+  );
   const weekdayLabel = getWeekdayLabel(day);
 
   return (
     <View
-      accessibilityLabel={`${weekdayLabel}: ${day.state}`}
+      accessibilityLabel={getDayAccessibilityLabel(day, weekdayLabel)}
       style={styles.dayCell}>
       <HoystText
         allowFontScaling={false}
@@ -163,6 +260,8 @@ function DayCell({day}: {day: HomeProgressCell}) {
           ]}>
           {day.state === 'done' ? (
             <DayCheckIcon />
+          ) : partialProgress !== undefined ? (
+            <DayPartialRing dateKey={day.dateKey} progress={partialProgress} />
           ) : day.state === 'today' ? (
             <DayBoltIcon />
           ) : day.state === 'missed' ? (
@@ -206,15 +305,19 @@ function StreakPill({streakDays}: {streakDays: number}) {
 // a row of seven soft day circles. Render inside a GlassPanel.
 export function WeekProgressStrip({
   days,
-  streakDays,
+  showStreak = true,
+  streakDays = 0,
+  title = 'Your last 7 days',
 }: WeekProgressStripProps): React.JSX.Element {
+  const accessibilityLabel = showStreak
+    ? `Last 7 days, ${streakDays} day streak`
+    : title;
+
   return (
-    <View
-      accessibilityLabel={`Last 7 days, ${streakDays} day streak`}
-      style={styles.strip}>
+    <View accessibilityLabel={accessibilityLabel} style={styles.strip}>
       <View style={styles.header}>
-        <SectionEyebrow>Your last 7 days</SectionEyebrow>
-        <StreakPill streakDays={streakDays} />
+        <SectionEyebrow>{title}</SectionEyebrow>
+        {showStreak ? <StreakPill streakDays={streakDays} /> : null}
       </View>
       <View style={styles.daysRow}>
         {days.map(day => (

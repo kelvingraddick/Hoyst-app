@@ -117,6 +117,14 @@ export type CircleProgressDay = {
   state: ProgressDayState;
 };
 
+export type CircleGroupProgressDay = {
+  coveredCount: number;
+  dateKey: string;
+  label: string;
+  state: ProgressDayState;
+  totalCount: number;
+};
+
 export type CircleActivityItem = {
   id: string;
   actorName: string;
@@ -128,6 +136,7 @@ export type CircleActivityItem = {
   timestamp: string;
   actionLabel?: string;
   imageVariant?: 'workout' | 'none';
+  mediaImageUrl?: string;
 };
 
 export type InboxEventType =
@@ -135,6 +144,12 @@ export type InboxEventType =
   | 'circle_complete'
   | 'circle_discovery_suggestion'
   | 'circle_nudge_prompt'
+  | 'companion_achievement_unlocked'
+  | 'companion_circle_created'
+  | 'companion_circle_joined'
+  | 'companion_momentum_level_up'
+  | 'companion_skipped'
+  | 'companion_streak_milestone'
   | 'companion_tapped_in'
   | 'join_approved'
   | 'join_declined'
@@ -161,8 +176,10 @@ export type InboxEvent = {
   circleId?: string;
   createdAtLabel: string;
   deeplink: InboxDeeplink;
+  feedCategory?: 'companion';
   id: string;
   isRead: boolean;
+  mediaImageUrl?: string;
   title: string;
   type: InboxEventType;
 };
@@ -234,6 +251,7 @@ export type ExploreCircle = CircleSummary & {
 export type CircleDetailModel = CircleSummary & {
   commitmentLabel: string;
   completionRate: number;
+  groupProgressDays?: CircleGroupProgressDay[];
   memberCount: number;
   maxSize: number;
   monthProgress: CircleProgressDay[];

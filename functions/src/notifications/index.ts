@@ -31,6 +31,12 @@ export type NotificationType =
   | 'circle_complete'
   | 'circle_discovery_suggestion'
   | 'circle_nudge_prompt'
+  | 'companion_achievement_unlocked'
+  | 'companion_circle_created'
+  | 'companion_circle_joined'
+  | 'companion_momentum_level_up'
+  | 'companion_skipped'
+  | 'companion_streak_milestone'
   | 'companion_tapped_in'
   | 'join_approved'
   | 'join_declined'
@@ -61,6 +67,8 @@ export type CreateNotificationInput = {
   dedupeKey?: string;
   deeplink: NotificationDeeplink;
   deliveryPriority?: 'immediate' | 'routine';
+  feedCategory?: 'companion';
+  mediaImageUrl?: string | null;
   preferenceKey: NotificationPreferenceKey;
   pushData?: Record<string, string>;
   routineTimezone?: string;
@@ -126,6 +134,47 @@ export type ReminderCandidate = {
   uid: string;
 };
 
+export type CompanionFeedTarget = {
+  canViewMedia: boolean;
+  uid: string;
+};
+
+export type CompanionFeedSourceCircle = {
+  joinMode?: unknown;
+  privacy?: unknown;
+};
+
+export type CompanionMomentumStatus =
+  | 'getting_started'
+  | 'building_momentum'
+  | 'strong_momentum'
+  | 'peak_momentum';
+
+export type CompanionMomentumSummary = {
+  bestStreak?: unknown;
+  currentStreak?: unknown;
+  label?: unknown;
+  percentage?: unknown;
+  status?: unknown;
+};
+
+export type CompanionMilestoneEvent =
+  | {
+      achievementTitle: string;
+      key: string;
+      type: 'companion_achievement_unlocked';
+    }
+  | {
+      key: string;
+      momentumLabel: string;
+      type: 'companion_momentum_level_up';
+    }
+  | {
+      key: string;
+      streakDays: number;
+      type: 'companion_streak_milestone';
+    };
+
 const notificationSettingsSchema = z.object({
   circleActivity: z.boolean().optional(),
   circleRisk: z.boolean().optional(),
@@ -160,6 +209,19 @@ const routineSpacingMs = 6 * 60 * 60 * 1000;
 const routineDailyLimit = 2;
 const discoverySpacingMs = 7 * 24 * 60 * 60 * 1000;
 const discoveryInactivityMs = 3 * 24 * 60 * 60 * 1000;
+const companionAchievementCatalog = [
+  {key: '7-days-straight', threshold: 7, title: '7 Days Straight'},
+  {key: '10-day-streak', threshold: 10, title: '10 Day Streak'},
+  {key: '20-day-streak', threshold: 20, title: '20 Day Streak'},
+  {key: '30-day-streak', threshold: 30, title: '30 Day Streak'},
+  {key: '50-taps', threshold: 50, title: '50 Taps'},
+] as const;
+const milestoneStatuses: CompanionMomentumStatus[] = [
+  'getting_started',
+  'building_momentum',
+  'strong_momentum',
+  'peak_momentum',
+];
 
 function asString(value: unknown, fallback = '') {
   return typeof value === 'string' && value.trim().length > 0
@@ -173,23 +235,175 @@ function asOptionalString(value: unknown) {
     : undefined;
 }
 
+function asNumber(value: unknown, fallback = 0) {
+  return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
+}
+
+function normalizeMomentumStatus(
+  value: unknown,
+): CompanionMomentumStatus | undefined {
+  return value === 'getting_started' ||
+    value === 'building_momentum' ||
+    value === 'strong_momentum' ||
+    value === 'peak_momentum'
+    ? value
+    : undefined;
+}
+
+function getMomentumStatusLabel(status: CompanionMomentumStatus) {
+  if (status === 'peak_momentum') {
+    return 'Peak';
+  }
+
+  if (status === 'strong_momentum') {
+    return 'Strong';
+  }
+
+  if (status === 'building_momentum') {
+    return 'Building';
+  }
+
+  return 'Getting Started';
+}
+
+function getMomentumStatusRank(status: CompanionMomentumStatus | undefined) {
+  return status ? milestoneStatuses.indexOf(status) : -1;
+}
+
+export function canShareCircleOutsideMembers(
+  circle: CompanionFeedSourceCircle | undefined,
+) {
+  return circle?.privacy === 'public' && circle?.joinMode !== 'invite_only';
+}
+
+export function getCompanionFeedTargetsFromMemberships({
+  actorUid,
+  sharedMemberUids,
+  sourceCircle,
+  sourceMemberUids,
+}: {
+  actorUid: string;
+  sharedMemberUids: string[];
+  sourceCircle?: CompanionFeedSourceCircle;
+  sourceMemberUids: string[];
+}): CompanionFeedTarget[] {
+  const targets = new Map<string, CompanionFeedTarget>();
+  const sourceMemberUidSet = new Set(sourceMemberUids.filter(Boolean));
+  const canShareOutsideMembers = canShareCircleOutsideMembers(sourceCircle);
+
+  sourceMemberUidSet.forEach(uid => {
+    if (uid && uid !== actorUid) {
+      targets.set(uid, {canViewMedia: true, uid});
+    }
+  });
+
+  if (canShareOutsideMembers) {
+    sharedMemberUids.forEach(uid => {
+      if (uid && uid !== actorUid && !targets.has(uid)) {
+        targets.set(uid, {canViewMedia: true, uid});
+      }
+    });
+  }
+
+  return Array.from(targets.values());
+}
+
+function getStreakMilestonesCrossed({
+  currentStreak,
+  priorStreak,
+}: {
+  currentStreak: number;
+  priorStreak: number;
+}) {
+  const fixedMilestones = [3, 7, 14, 30];
+  const recurringMilestones =
+    currentStreak > 30
+      ? Array.from(
+          {length: Math.floor(currentStreak / 30) - 1},
+          (_, index) => (index + 2) * 30,
+        )
+      : [];
+
+  return [...fixedMilestones, ...recurringMilestones].filter(
+    milestone => priorStreak < milestone && currentStreak >= milestone,
+  );
+}
+
+export function getCompanionMilestoneEvents({
+  priorSummary,
+  summary,
+}: {
+  priorSummary?: CompanionMomentumSummary;
+  summary: CompanionMomentumSummary;
+}): CompanionMilestoneEvent[] {
+  const priorBestStreak = asNumber(priorSummary?.bestStreak, 0);
+  const bestStreak = asNumber(summary.bestStreak, 0);
+  const priorCurrentStreak = asNumber(priorSummary?.currentStreak, 0);
+  const currentStreak = asNumber(summary.currentStreak, 0);
+  const priorStatus = normalizeMomentumStatus(priorSummary?.status);
+  const status = normalizeMomentumStatus(summary.status);
+  const events: CompanionMilestoneEvent[] = [];
+
+  companionAchievementCatalog.forEach(achievement => {
+    if (
+      priorBestStreak < achievement.threshold &&
+      bestStreak >= achievement.threshold
+    ) {
+      events.push({
+        achievementTitle: achievement.title,
+        key: achievement.key,
+        type: 'companion_achievement_unlocked',
+      });
+    }
+  });
+
+  getStreakMilestonesCrossed({
+    currentStreak,
+    priorStreak: priorCurrentStreak,
+  }).forEach(streakDays => {
+    events.push({
+      key: `${streakDays}-day-streak`,
+      streakDays,
+      type: 'companion_streak_milestone',
+    });
+  });
+
+  if (
+    status &&
+    getMomentumStatusRank(status) > getMomentumStatusRank(priorStatus)
+  ) {
+    events.push({
+      key: status,
+      momentumLabel:
+        asOptionalString(summary.label) ?? getMomentumStatusLabel(status),
+      type: 'companion_momentum_level_up',
+    });
+  }
+
+  return events;
+}
+
 function sanitizeEventId(value: string) {
   return value.replace(/[^A-Za-z0-9_.-]/g, '_').slice(0, 500);
 }
 
 export type NotificationCopyContext = {
+  achievementTitle?: string;
   actorName?: string;
   circleTitle?: string;
   discoveryCategory?: string;
   discoveryCircleTitle?: string;
+  momentumLabel?: string;
   periodCopy?: string;
   remainingCount?: number;
+  streakDays?: number;
   targetCount?: number;
 };
 
-type NotificationCopyTemplate = (
-  context: NotificationCopyContext,
-) => {body: string; title: string};
+type NotificationCopyTemplate = (context: NotificationCopyContext) => {
+  body: string;
+  title: string;
+};
 
 function hashString(value: string) {
   let hash = 0;
@@ -218,6 +432,19 @@ function getPeriodCopy(context: NotificationCopyContext) {
   return context.periodCopy ?? 'this period';
 }
 
+function getAchievementTitle(context: NotificationCopyContext) {
+  return context.achievementTitle ?? 'a new achievement';
+}
+
+function getMomentumLabelCopy(context: NotificationCopyContext) {
+  return context.momentumLabel ?? 'a new momentum level';
+}
+
+function getStreakDaysCopy(context: NotificationCopyContext) {
+  const streakDays = Math.max(1, Math.round(context.streakDays ?? 1));
+  return `${streakDays}-day streak`;
+}
+
 const notificationCopyCatalog: Record<
   NotificationType,
   NotificationCopyTemplate[]
@@ -236,15 +463,17 @@ const notificationCopyCatalog: Record<
       title: 'Close to complete',
     }),
     context => ({
-      body: `${getCircleTitle(context)} needs a little help: ${getTapInCountLabel(
+      body: `${getCircleTitle(
+        context,
+      )} needs a little help: ${getTapInCountLabel(
         context.remainingCount,
       )} left ${getPeriodCopy(context)}.`,
       title: 'Progression needs help',
     }),
     context => ({
-      body: `${getTapInCountLabel(context.remainingCount)} can protect ${getCircleTitle(
-        context,
-      )} ${getPeriodCopy(context)}.`,
+      body: `${getTapInCountLabel(
+        context.remainingCount,
+      )} can protect ${getCircleTitle(context)} ${getPeriodCopy(context)}.`,
       title: 'Almost there',
     }),
     context => ({
@@ -262,9 +491,9 @@ const notificationCopyCatalog: Record<
       title: 'Circle complete',
     }),
     context => ({
-      body: `Everyone came through for ${getCircleTitle(context)} ${getPeriodCopy(
+      body: `Everyone came through for ${getCircleTitle(
         context,
-      )}.`,
+      )} ${getPeriodCopy(context)}.`,
       title: 'All tapped in',
     }),
     context => ({
@@ -288,15 +517,21 @@ const notificationCopyCatalog: Record<
   ],
   circle_discovery_suggestion: [
     context => ({
-      body: `${context.discoveryCircleTitle ?? 'A public circle'} could help you restart your rhythm.`,
+      body: `${
+        context.discoveryCircleTitle ?? 'A public circle'
+      } could help you restart your rhythm.`,
       title: 'Find a new circle',
     }),
     context => ({
-      body: `A ${context.discoveryCategory ?? 'Hoyst'} circle is open when you are ready to jump back in.`,
+      body: `A ${
+        context.discoveryCategory ?? 'Hoyst'
+      } circle is open when you are ready to jump back in.`,
       title: 'A fresh circle is waiting',
     }),
     context => ({
-      body: `${context.discoveryCircleTitle ?? 'A new circle'} might be a good place to build momentum again.`,
+      body: `${
+        context.discoveryCircleTitle ?? 'A new circle'
+      } might be a good place to build momentum again.`,
       title: 'Restart with a circle',
     }),
     context => ({
@@ -306,41 +541,229 @@ const notificationCopyCatalog: Record<
       title: 'Explore a circle',
     }),
     context => ({
-      body: `When you are ready, ${context.discoveryCircleTitle ?? 'a Hoyst circle'} can help you get moving again.`,
+      body: `When you are ready, ${
+        context.discoveryCircleTitle ?? 'a Hoyst circle'
+      } can help you get moving again.`,
       title: 'Ready for a reset?',
     }),
   ],
   circle_nudge_prompt: [
     context => ({
-      body: `${getCircleTitle(context)} could use a nudge for ${context.targetCount ?? 1} companion${
-        (context.targetCount ?? 1) === 1 ? '' : 's'
-      }.`,
+      body: `${getCircleTitle(context)} could use a nudge for ${
+        context.targetCount ?? 1
+      } companion${(context.targetCount ?? 1) === 1 ? '' : 's'}.`,
       title: 'Help the circle move',
     }),
     context => ({
-      body: `You are covered in ${getCircleTitle(context)}. A quick nudge could help the rest catch up.`,
+      body: `You are covered in ${getCircleTitle(
+        context,
+      )}. A quick nudge could help the rest catch up.`,
       title: 'Send a teammate a nudge',
     }),
     context => ({
-      body: `${getCircleTitle(context)} is close. Your nudge could help finish the job.`,
+      body: `${getCircleTitle(
+        context,
+      )} is close. Your nudge could help finish the job.`,
       title: 'Keep the circle together',
     }),
     context => ({
-      body: `A companion in ${getCircleTitle(context)} still has room to Tap In.`,
+      body: `A companion in ${getCircleTitle(
+        context,
+      )} still has room to Tap In.`,
       title: 'Someone might need a nudge',
     }),
     context => ({
-      body: `You can help ${getCircleTitle(context)} stay on track with one quick nudge.`,
+      body: `You can help ${getCircleTitle(
+        context,
+      )} stay on track with one quick nudge.`,
       title: 'Circle needs a boost',
+    }),
+  ],
+  companion_achievement_unlocked: [
+    context => ({
+      body: `${getActorName(context)} unlocked ${getAchievementTitle(
+        context,
+      )}.`,
+      title: 'Achievement unlocked',
+    }),
+    context => ({
+      body: `${getAchievementTitle(context)} is now on ${getActorName(
+        context,
+      )}'s board.`,
+      title: 'New achievement',
+    }),
+    context => ({
+      body: `${getActorName(context)} earned ${getAchievementTitle(context)}.`,
+      title: 'Companion achievement',
+    }),
+    context => ({
+      body: `${getActorName(context)} hit ${getAchievementTitle(context)}.`,
+      title: 'Milestone unlocked',
+    }),
+    context => ({
+      body: `${getActorName(context)} added ${getAchievementTitle(
+        context,
+      )} to their progress.`,
+      title: 'Progress milestone',
+    }),
+  ],
+  companion_circle_created: [
+    context => ({
+      body: `${getActorName(context)} created ${getCircleTitle(context)}.`,
+      title: 'New circle created',
+    }),
+    context => ({
+      body: `${getActorName(context)} started ${getCircleTitle(context)}.`,
+      title: 'A companion started a circle',
+    }),
+    context => ({
+      body: `${getCircleTitle(context)} is a new circle from ${getActorName(
+        context,
+      )}.`,
+      title: 'New companion circle',
+    }),
+    context => ({
+      body: `${getActorName(context)} opened ${getCircleTitle(
+        context,
+      )} for Progression.`,
+      title: 'Circle opened',
+    }),
+    context => ({
+      body: `${getActorName(
+        context,
+      )} made a new place to Tap In: ${getCircleTitle(context)}.`,
+      title: 'Fresh circle',
+    }),
+  ],
+  companion_circle_joined: [
+    context => ({
+      body: `${getActorName(context)} joined ${getCircleTitle(context)}.`,
+      title: 'A companion joined',
+    }),
+    context => ({
+      body: `${getCircleTitle(context)} has ${getActorName(
+        context,
+      )} in the circle now.`,
+      title: 'Circle grew',
+    }),
+    context => ({
+      body: `${getActorName(context)} took a seat in ${getCircleTitle(
+        context,
+      )}.`,
+      title: 'New circle companion',
+    }),
+    context => ({
+      body: `${getActorName(context)} is now part of ${getCircleTitle(
+        context,
+      )}.`,
+      title: 'Companion joined',
+    }),
+    context => ({
+      body: `${getCircleTitle(context)} welcomed ${getActorName(context)}.`,
+      title: 'Member joined',
+    }),
+  ],
+  companion_momentum_level_up: [
+    context => ({
+      body: `${getActorName(context)} reached ${getMomentumLabelCopy(
+        context,
+      )} momentum.`,
+      title: 'Momentum level up',
+    }),
+    context => ({
+      body: `${getActorName(context)} moved into ${getMomentumLabelCopy(
+        context,
+      )} momentum.`,
+      title: 'Momentum rising',
+    }),
+    context => ({
+      body: `${getMomentumLabelCopy(
+        context,
+      )} momentum is live for ${getActorName(context)}.`,
+      title: 'New momentum level',
+    }),
+    context => ({
+      body: `${getActorName(context)} leveled up to ${getMomentumLabelCopy(
+        context,
+      )} momentum.`,
+      title: 'Companion leveled up',
+    }),
+    context => ({
+      body: `${getActorName(context)} built their way to ${getMomentumLabelCopy(
+        context,
+      )} momentum.`,
+      title: 'Momentum milestone',
+    }),
+  ],
+  companion_skipped: [
+    context => ({
+      body: `${getActorName(context)} used a skip for ${getCircleTitle(
+        context,
+      )}.`,
+      title: 'A companion used a skip',
+    }),
+    context => ({
+      body: `${getActorName(context)} kept ${getCircleTitle(
+        context,
+      )} covered with a skip.`,
+      title: 'Skip used',
+    }),
+    context => ({
+      body: `${getCircleTitle(context)} has a skip from ${getActorName(
+        context,
+      )}.`,
+      title: 'Circle still covered',
+    }),
+    context => ({
+      body: `${getActorName(context)} used grace in ${getCircleTitle(
+        context,
+      )}.`,
+      title: 'Grace skip',
+    }),
+    context => ({
+      body: `${getActorName(context)} protected the rhythm in ${getCircleTitle(
+        context,
+      )} with a skip.`,
+      title: 'Rhythm protected',
+    }),
+  ],
+  companion_streak_milestone: [
+    context => ({
+      body: `${getActorName(context)} reached a ${getStreakDaysCopy(context)}.`,
+      title: 'Streak milestone',
+    }),
+    context => ({
+      body: `${getActorName(context)} is on a ${getStreakDaysCopy(context)}.`,
+      title: 'Streak rising',
+    }),
+    context => ({
+      body: `${getStreakDaysCopy(context)} for ${getActorName(context)}.`,
+      title: 'Companion streak',
+    }),
+    context => ({
+      body: `${getActorName(context)} kept the streak alive for ${
+        context.streakDays ?? 1
+      } days.`,
+      title: 'New streak milestone',
+    }),
+    context => ({
+      body: `${getActorName(context)} just hit a ${getStreakDaysCopy(
+        context,
+      )}.`,
+      title: 'Streak unlocked',
     }),
   ],
   companion_tapped_in: [
     context => ({
-      body: `${getActorName(context)} tapped in for ${getCircleTitle(context)}.`,
+      body: `${getActorName(context)} tapped in for ${getCircleTitle(
+        context,
+      )}.`,
       title: 'A companion tapped in',
     }),
     context => ({
-      body: `${getActorName(context)} just moved ${getCircleTitle(context)} forward.`,
+      body: `${getActorName(context)} just moved ${getCircleTitle(
+        context,
+      )} forward.`,
       title: 'Progress in your circle',
     }),
     context => ({
@@ -348,11 +771,15 @@ const notificationCopyCatalog: Record<
       title: 'Your circle is moving',
     }),
     context => ({
-      body: `${getCircleTitle(context)} has a fresh Tap In from ${getActorName(context)}.`,
+      body: `${getCircleTitle(context)} has a fresh Tap In from ${getActorName(
+        context,
+      )}.`,
       title: 'New Tap In',
     }),
     context => ({
-      body: `${getActorName(context)} kept the momentum going in ${getCircleTitle(context)}.`,
+      body: `${getActorName(
+        context,
+      )} kept the momentum going in ${getCircleTitle(context)}.`,
       title: 'Momentum update',
     }),
   ],
@@ -384,7 +811,9 @@ const notificationCopyCatalog: Record<
       title: 'Request declined',
     }),
     context => ({
-      body: `${getCircleTitle(context)} was not opened this time. You can explore another circle.`,
+      body: `${getCircleTitle(
+        context,
+      )} was not opened this time. You can explore another circle.`,
       title: 'Join request update',
     }),
     context => ({
@@ -392,25 +821,35 @@ const notificationCopyCatalog: Record<
       title: 'Circle request closed',
     }),
     context => ({
-      body: `${getCircleTitle(context)} declined the request. There are other circles to explore.`,
+      body: `${getCircleTitle(
+        context,
+      )} declined the request. There are other circles to explore.`,
       title: 'Not this circle',
     }),
     context => ({
-      body: `Your ${getCircleTitle(context)} request was reviewed and declined.`,
+      body: `Your ${getCircleTitle(
+        context,
+      )} request was reviewed and declined.`,
       title: 'Request reviewed',
     }),
   ],
   join_request: [
     context => ({
-      body: `${getActorName(context)} requested to join ${getCircleTitle(context)}.`,
+      body: `${getActorName(context)} requested to join ${getCircleTitle(
+        context,
+      )}.`,
       title: 'New join request',
     }),
     context => ({
-      body: `${getActorName(context)} wants to join ${getCircleTitle(context)}.`,
+      body: `${getActorName(context)} wants to join ${getCircleTitle(
+        context,
+      )}.`,
       title: 'Review a request',
     }),
     context => ({
-      body: `${getCircleTitle(context)} has a new request from ${getActorName(context)}.`,
+      body: `${getCircleTitle(context)} has a new request from ${getActorName(
+        context,
+      )}.`,
       title: 'Someone wants in',
     }),
     context => ({
@@ -418,25 +857,35 @@ const notificationCopyCatalog: Record<
       title: 'Circle request waiting',
     }),
     context => ({
-      body: `${getActorName(context)} is asking for a seat in ${getCircleTitle(context)}.`,
+      body: `${getActorName(context)} is asking for a seat in ${getCircleTitle(
+        context,
+      )}.`,
       title: 'Join request',
     }),
   ],
   member_due_prompt: [
     context => ({
-      body: `${getCircleTitle(context)} still needs your Tap In ${getPeriodCopy(context)}.`,
+      body: `${getCircleTitle(context)} still needs your Tap In ${getPeriodCopy(
+        context,
+      )}.`,
       title: 'Your circle needs you',
     }),
     context => ({
-      body: `You can still help ${getCircleTitle(context)} keep Progression moving.`,
+      body: `You can still help ${getCircleTitle(
+        context,
+      )} keep Progression moving.`,
       title: 'Tap In when ready',
     }),
     context => ({
-      body: `${getCircleTitle(context)} has room for your Tap In ${getPeriodCopy(context)}.`,
+      body: `${getCircleTitle(
+        context,
+      )} has room for your Tap In ${getPeriodCopy(context)}.`,
       title: 'A Tap In is open',
     }),
     context => ({
-      body: `Your spot in ${getCircleTitle(context)} is still waiting ${getPeriodCopy(context)}.`,
+      body: `Your spot in ${getCircleTitle(
+        context,
+      )} is still waiting ${getPeriodCopy(context)}.`,
       title: 'Keep your spot covered',
     }),
     context => ({
@@ -450,15 +899,21 @@ const notificationCopyCatalog: Record<
       title: 'New circle member',
     }),
     context => ({
-      body: `${getCircleTitle(context)} has a new companion: ${getActorName(context)}.`,
+      body: `${getCircleTitle(context)} has a new companion: ${getActorName(
+        context,
+      )}.`,
       title: 'Someone joined',
     }),
     context => ({
-      body: `${getActorName(context)} is now part of ${getCircleTitle(context)}.`,
+      body: `${getActorName(context)} is now part of ${getCircleTitle(
+        context,
+      )}.`,
       title: 'Circle grew',
     }),
     context => ({
-      body: `${getActorName(context)} took a seat in ${getCircleTitle(context)}.`,
+      body: `${getActorName(context)} took a seat in ${getCircleTitle(
+        context,
+      )}.`,
       title: 'New companion',
     }),
     context => ({
@@ -468,19 +923,27 @@ const notificationCopyCatalog: Record<
   ],
   nudge: [
     context => ({
-      body: `${getActorName(context)} nudged you in ${getCircleTitle(context)}.`,
+      body: `${getActorName(context)} nudged you in ${getCircleTitle(
+        context,
+      )}.`,
       title: 'Tap In nudge',
     }),
     context => ({
-      body: `${getActorName(context)} sent a nudge from ${getCircleTitle(context)}.`,
+      body: `${getActorName(context)} sent a nudge from ${getCircleTitle(
+        context,
+      )}.`,
       title: 'Nudge from your circle',
     }),
     context => ({
-      body: `${getCircleTitle(context)} got a nudge from ${getActorName(context)}.`,
+      body: `${getCircleTitle(context)} got a nudge from ${getActorName(
+        context,
+      )}.`,
       title: 'A companion nudged you',
     }),
     context => ({
-      body: `${getActorName(context)} is keeping ${getCircleTitle(context)} moving.`,
+      body: `${getActorName(context)} is keeping ${getCircleTitle(
+        context,
+      )} moving.`,
       title: 'Your circle checked in',
     }),
     context => ({
@@ -494,7 +957,9 @@ const notificationCopyCatalog: Record<
       title: '2 hours left',
     }),
     context => ({
-      body: `${getCircleTitle(context)} is closing soon. Tap In while there is still time.`,
+      body: `${getCircleTitle(
+        context,
+      )} is closing soon. Tap In while there is still time.`,
       title: 'Last call',
     }),
     context => ({
@@ -506,7 +971,9 @@ const notificationCopyCatalog: Record<
       title: 'Still time',
     }),
     context => ({
-      body: `Final reminder for ${getCircleTitle(context)}. Keep the Commitment covered.`,
+      body: `Final reminder for ${getCircleTitle(
+        context,
+      )}. Keep the Commitment covered.`,
       title: 'Final Tap In reminder',
     }),
   ],
@@ -524,7 +991,9 @@ const notificationCopyCatalog: Record<
       title: 'Midday check-in',
     }),
     context => ({
-      body: `${getCircleTitle(context)} has a Tap In waiting when you have a minute.`,
+      body: `${getCircleTitle(
+        context,
+      )} has a Tap In waiting when you have a minute.`,
       title: 'Your circle is waiting',
     }),
     context => ({
@@ -672,7 +1141,10 @@ export function getRoutineNotificationEligibility({
     return {eligible: false, reason: 'routine-spacing'};
   }
 
-  if (routineDateKey === localDateKey && routineSentCount >= routineDailyLimit) {
+  if (
+    routineDateKey === localDateKey &&
+    routineSentCount >= routineDailyLimit
+  ) {
     return {eligible: false, reason: 'routine-daily-limit'};
   }
 
@@ -752,7 +1224,9 @@ function getCommitmentMonthDateKeys(timezone: string, now = new Date()) {
     timeZone: timezone,
     year: 'numeric',
   }).formatToParts(now);
-  const year = Number(parts.find(part => part.type === 'year')?.value ?? '1970');
+  const year = Number(
+    parts.find(part => part.type === 'year')?.value ?? '1970',
+  );
   const month = Number(parts.find(part => part.type === 'month')?.value ?? '1');
   const dayCount = new Date(Date.UTC(year, month, 0)).getUTCDate();
 
@@ -798,6 +1272,59 @@ function buildActor(data?: DocumentData): NotificationActor | undefined {
   };
 }
 
+async function getActiveCircleMemberUids(circleId: string) {
+  const snapshot = await db
+    .collection('circles')
+    .doc(circleId)
+    .collection('members')
+    .where('status', '==', 'active')
+    .get();
+
+  return snapshot.docs
+    .map(doc => asOptionalString(doc.data().uid) ?? doc.id)
+    .filter(Boolean);
+}
+
+async function getActorActiveCircleIds(actorUid: string) {
+  const snapshot = await db
+    .collectionGroup('members')
+    .where('uid', '==', actorUid)
+    .get();
+
+  return snapshot.docs
+    .filter(doc => doc.data().status === 'active')
+    .map(doc => doc.ref.parent.parent?.id)
+    .filter((circleId): circleId is string => Boolean(circleId));
+}
+
+export async function resolveCompanionFeedTargets({
+  actorUid,
+  circle,
+  circleId,
+}: {
+  actorUid: string;
+  circle?: CompanionFeedSourceCircle;
+  circleId: string;
+}) {
+  const sourceMemberUids = await getActiveCircleMemberUids(circleId);
+  const sharedMemberUids = canShareCircleOutsideMembers(circle)
+    ? (
+        await Promise.all(
+          Array.from(new Set(await getActorActiveCircleIds(actorUid))).map(
+            activeCircleId => getActiveCircleMemberUids(activeCircleId),
+          ),
+        )
+      ).flat()
+    : [];
+
+  return getCompanionFeedTargetsFromMemberships({
+    actorUid,
+    sharedMemberUids,
+    sourceCircle: circle,
+    sourceMemberUids,
+  });
+}
+
 function isPreferenceEnabled(
   notificationSettings: Record<string, unknown> | undefined,
   key: NotificationPreferenceKey,
@@ -809,9 +1336,7 @@ function isPreferenceEnabled(
   }
 
   if (
-    (key === 'circleRisk' ||
-      key === 'nudges' ||
-      key === 'socialActivity') &&
+    (key === 'circleRisk' || key === 'nudges' || key === 'socialActivity') &&
     typeof notificationSettings?.circleActivity === 'boolean'
   ) {
     return notificationSettings.circleActivity;
@@ -1014,6 +1539,8 @@ export async function createInboxEvent({
   dedupeKey,
   deeplink,
   deliveryPriority = 'immediate',
+  feedCategory,
+  mediaImageUrl,
   preferenceKey,
   pushData,
   routineTimezone = 'UTC',
@@ -1063,6 +1590,8 @@ export async function createInboxEvent({
     copyVariant: copyVariant ?? null,
     createdAt: FieldValue.serverTimestamp(),
     deeplink,
+    feedCategory: feedCategory ?? null,
+    mediaImageUrl: mediaImageUrl ?? null,
     preferenceKey,
     push: {
       status: enabled ? 'pending' : 'disabled',
@@ -1198,6 +1727,7 @@ export async function notifyOwnerNewJoin({
     copyVariant: copy.copyVariant,
     dedupeKey,
     deeplink: {circleId, screen: 'CircleDetail'},
+    feedCategory: 'companion',
     preferenceKey: 'socialActivity',
     title: copy.title,
     type: 'member_joined',
@@ -1282,11 +1812,315 @@ export async function notifyNudge({
     copyVariant: copy.copyVariant,
     dedupeKey,
     deeplink: {circleId, screen: 'TapInComposer', source: 'notification'},
+    feedCategory: 'companion',
     preferenceKey: 'nudges',
     title: copy.title,
     type: 'nudge',
     uid: targetUid,
   });
+}
+
+type CompanionFeedEventInput = {
+  actor: NotificationActor;
+  circle?: CompanionFeedSourceCircle;
+  circleId: string;
+  context: NotificationCopyContext;
+  dateKey: string;
+  dedupeSubject: string;
+  excludedUids?: string[];
+  fallbackBody: string;
+  fallbackTitle: string;
+  mediaImageUrl?: string | null;
+  type:
+    | 'companion_achievement_unlocked'
+    | 'companion_circle_created'
+    | 'companion_circle_joined'
+    | 'companion_momentum_level_up'
+    | 'companion_skipped'
+    | 'companion_streak_milestone';
+};
+
+async function notifyCompanionFeedEvent({
+  actor,
+  circle,
+  circleId,
+  context,
+  dateKey,
+  dedupeSubject,
+  excludedUids = [],
+  fallbackBody,
+  fallbackTitle,
+  mediaImageUrl,
+  type,
+}: CompanionFeedEventInput) {
+  const actorUid = asOptionalString(actor.uid);
+
+  if (!actorUid) {
+    return [];
+  }
+
+  const excludedUidSet = new Set([actorUid, ...excludedUids]);
+  const targets = await resolveCompanionFeedTargets({
+    actorUid,
+    circle,
+    circleId,
+  });
+
+  return Promise.all(
+    targets
+      .filter(target => !excludedUidSet.has(target.uid))
+      .map(target => {
+        const targetMediaImageUrl = target.canViewMedia
+          ? asOptionalString(mediaImageUrl)
+          : undefined;
+        const dedupeKey = `${type}_${circleId}_${dateKey}_${actorUid}_${dedupeSubject}_${target.uid}`;
+        const copy = resolveNotificationCopy({
+          context,
+          dedupeKey,
+          fallbackBody,
+          fallbackTitle,
+          type,
+        });
+
+        return createInboxEvent({
+          actor,
+          body: copy.body,
+          circleId,
+          copyVariant: copy.copyVariant,
+          dedupeKey,
+          deeplink: {circleId, screen: 'CircleDetail'},
+          feedCategory: 'companion',
+          mediaImageUrl: targetMediaImageUrl,
+          preferenceKey: 'socialActivity',
+          pushData: {
+            feedCategory: 'companion',
+            ...(targetMediaImageUrl ? {hasMedia: 'true'} : {}),
+          },
+          title: copy.title,
+          type,
+          uid: target.uid,
+        });
+      }),
+  );
+}
+
+export async function notifyCompanionSkipped({
+  actor,
+  circle,
+  circleId,
+  circleTitle,
+  dateKey,
+}: {
+  actor: NotificationActor;
+  circle?: CompanionFeedSourceCircle;
+  circleId: string;
+  circleTitle: string;
+  dateKey: string;
+}) {
+  const actorName = actor.displayName ?? 'Someone';
+
+  return notifyCompanionFeedEvent({
+    actor,
+    circle,
+    circleId,
+    context: {actorName, circleTitle},
+    dateKey,
+    dedupeSubject: 'skip',
+    fallbackBody: `${actorName} used a skip for ${circleTitle}.`,
+    fallbackTitle: 'A companion used a skip',
+    type: 'companion_skipped',
+  });
+}
+
+export async function notifyCompanionCircleCreated({
+  actor,
+  circle,
+  circleId,
+  circleTitle,
+  dateKey,
+}: {
+  actor: NotificationActor;
+  circle?: CompanionFeedSourceCircle;
+  circleId: string;
+  circleTitle: string;
+  dateKey: string;
+}) {
+  if (!canShareCircleOutsideMembers(circle)) {
+    return [];
+  }
+
+  const actorName = actor.displayName ?? 'Someone';
+
+  return notifyCompanionFeedEvent({
+    actor,
+    circle,
+    circleId,
+    context: {actorName, circleTitle},
+    dateKey,
+    dedupeSubject: 'created',
+    fallbackBody: `${actorName} created ${circleTitle}.`,
+    fallbackTitle: 'New circle created',
+    type: 'companion_circle_created',
+  });
+}
+
+export async function notifyCompanionCircleJoined({
+  actor,
+  circle,
+  circleId,
+  circleTitle,
+  dateKey,
+  excludedUids,
+}: {
+  actor: NotificationActor;
+  circle?: CompanionFeedSourceCircle;
+  circleId: string;
+  circleTitle: string;
+  dateKey: string;
+  excludedUids?: string[];
+}) {
+  const actorName = actor.displayName ?? 'Someone';
+
+  return notifyCompanionFeedEvent({
+    actor,
+    circle,
+    circleId,
+    context: {actorName, circleTitle},
+    dateKey,
+    dedupeSubject: 'joined',
+    excludedUids,
+    fallbackBody: `${actorName} joined ${circleTitle}.`,
+    fallbackTitle: 'A companion joined',
+    type: 'companion_circle_joined',
+  });
+}
+
+function getCompanionMilestoneContext(
+  event: CompanionMilestoneEvent,
+  actorName: string,
+): NotificationCopyContext {
+  if (event.type === 'companion_achievement_unlocked') {
+    return {achievementTitle: event.achievementTitle, actorName};
+  }
+
+  if (event.type === 'companion_momentum_level_up') {
+    return {actorName, momentumLabel: event.momentumLabel};
+  }
+
+  return {actorName, streakDays: event.streakDays};
+}
+
+function getCompanionMilestoneFallback({
+  actorName,
+  event,
+}: {
+  actorName: string;
+  event: CompanionMilestoneEvent;
+}) {
+  if (event.type === 'companion_achievement_unlocked') {
+    return {
+      body: `${actorName} unlocked ${event.achievementTitle}.`,
+      title: 'Achievement unlocked',
+    };
+  }
+
+  if (event.type === 'companion_momentum_level_up') {
+    return {
+      body: `${actorName} reached ${event.momentumLabel} momentum.`,
+      title: 'Momentum level up',
+    };
+  }
+
+  return {
+    body: `${actorName} reached a ${event.streakDays}-day streak.`,
+    title: 'Streak milestone',
+  };
+}
+
+export async function notifyCompanionMilestones({
+  actor,
+  circle,
+  circleId,
+  dateKey,
+  events,
+  targetUid,
+}: {
+  actor: NotificationActor;
+  circle?: CompanionFeedSourceCircle;
+  circleId: string;
+  dateKey: string;
+  events: CompanionMilestoneEvent[];
+  targetUid: string;
+}) {
+  const actorUid = asOptionalString(actor.uid);
+  const actorName = actor.displayName ?? 'Someone';
+
+  if (!actorUid || events.length === 0) {
+    return [];
+  }
+
+  const targets = await resolveCompanionFeedTargets({
+    actorUid,
+    circle,
+    circleId,
+  });
+  const companionSends = events.flatMap(event => {
+    const context = getCompanionMilestoneContext(event, actorName);
+    const fallback = getCompanionMilestoneFallback({actorName, event});
+
+    return targets.map(target => {
+      const dedupeKey = `${event.type}_${circleId}_${dateKey}_${actorUid}_${event.key}_${target.uid}`;
+      const copy = resolveNotificationCopy({
+        context,
+        dedupeKey,
+        fallbackBody: fallback.body,
+        fallbackTitle: fallback.title,
+        type: event.type,
+      });
+
+      return createInboxEvent({
+        actor,
+        body: copy.body,
+        circleId,
+        copyVariant: copy.copyVariant,
+        dedupeKey,
+        deeplink: {circleId, screen: 'CircleDetail'},
+        feedCategory: 'companion',
+        preferenceKey: 'socialActivity',
+        pushData: {feedCategory: 'companion'},
+        title: copy.title,
+        type: event.type,
+        uid: target.uid,
+      });
+    });
+  });
+  const selfSends = events.map(event => {
+    const context = getCompanionMilestoneContext(event, 'You');
+    const fallback = getCompanionMilestoneFallback({actorName: 'You', event});
+    const dedupeKey = `self_${event.type}_${dateKey}_${actorUid}_${event.key}`;
+    const copy = resolveNotificationCopy({
+      context,
+      dedupeKey,
+      fallbackBody: fallback.body,
+      fallbackTitle: fallback.title,
+      type: event.type,
+    });
+
+    return createInboxEvent({
+      actor,
+      body: copy.body,
+      circleId,
+      copyVariant: copy.copyVariant,
+      dedupeKey,
+      deeplink: {circleId, screen: 'CircleDetail'},
+      preferenceKey: 'socialActivity',
+      title: copy.title,
+      type: event.type,
+      uid: targetUid,
+    });
+  });
+
+  return Promise.all([...companionSends, ...selfSends]);
 }
 
 export function getCircleAtRiskNotificationBody({
@@ -1318,12 +2152,14 @@ export async function notifyCompanionTappedIn({
   circleId,
   circleTitle,
   dateKey,
+  mediaImageUrl,
   targetUid,
 }: {
   actor?: DocumentData;
   circleId: string;
   circleTitle: string;
   dateKey: string;
+  mediaImageUrl?: string | null;
   targetUid: string;
 }) {
   const notificationActor = buildActor(actor);
@@ -1346,7 +2182,13 @@ export async function notifyCompanionTappedIn({
     copyVariant: copy.copyVariant,
     dedupeKey,
     deeplink: {circleId, screen: 'CircleDetail'},
+    feedCategory: 'companion',
+    mediaImageUrl,
     preferenceKey: 'socialActivity',
+    pushData: {
+      feedCategory: 'companion',
+      ...(mediaImageUrl ? {hasMedia: 'true'} : {}),
+    },
     title: copy.title,
     type: 'companion_tapped_in',
     uid: targetUid,
@@ -1382,6 +2224,7 @@ export async function notifyCircleComplete({
     copyVariant: copy.copyVariant,
     dedupeKey,
     deeplink: {circleId, screen: 'CircleDetail'},
+    feedCategory: 'companion',
     preferenceKey: 'socialActivity',
     title: copy.title,
     type: 'circle_complete',
@@ -1683,9 +2526,7 @@ async function sendTapInReminders(kind: 'final' | 'midday') {
       }
 
       const type =
-        kind === 'midday'
-          ? 'tap_in_midday_reminder'
-          : 'tap_in_final_warning';
+        kind === 'midday' ? 'tap_in_midday_reminder' : 'tap_in_final_warning';
       const copy = resolveNotificationCopy({
         context: {circleTitle},
         dedupeKey: eligibility.dedupeKey,
@@ -1733,9 +2574,7 @@ function getPeriodKey({
   dateKey: string;
   periodDateKeys: string[];
 }) {
-  return commitmentCadence === 'daily'
-    ? dateKey
-    : periodDateKeys[0] ?? dateKey;
+  return commitmentCadence === 'daily' ? dateKey : periodDateKeys[0] ?? dateKey;
 }
 
 async function sendCircleEngagementPrompts() {
@@ -1852,7 +2691,8 @@ async function getEligibleDiscoveryCircleForUser({
   for (const circleSnapshot of publicCircleSnapshots.docs) {
     const circle = circleSnapshot.data();
     const memberCount =
-      typeof circle.memberCount === 'number' && Number.isFinite(circle.memberCount)
+      typeof circle.memberCount === 'number' &&
+      Number.isFinite(circle.memberCount)
         ? circle.memberCount
         : 0;
     const maxSize =

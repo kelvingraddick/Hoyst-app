@@ -4,6 +4,7 @@ import {BlurView} from '@react-native-community/blur';
 import LinearGradient from 'react-native-linear-gradient';
 
 import {useHoystTheme} from '../../design/theme/useHoystTheme';
+import {glass} from '../../design/tokens/glass';
 
 export function HoystTabBarBackground(): React.JSX.Element {
   const theme = useHoystTheme();
@@ -30,11 +31,7 @@ export function HoystTabBarBackground(): React.JSX.Element {
       <LinearGradient
         colors={
           theme.isDark
-            ? [
-                'rgba(255, 255, 255, 0.12)',
-                'rgba(255, 255, 255, 0.04)',
-                'rgba(255, 255, 255, 0.02)',
-              ]
+            ? [...glass.darkHighlightGradientColors]
             : [
                 'rgba(255, 255, 255, 0.72)',
                 'rgba(255, 255, 255, 0.5)',
@@ -79,10 +76,10 @@ const styles = StyleSheet.create({
   },
   topSheen: {
     borderRadius: 999,
-    height: 2,
-    left: 28,
+    height: glass.darkHighlightSheenHeight,
+    left: glass.darkTabBarHighlightSheenInset,
     position: 'absolute',
-    right: 28,
-    top: 1,
+    right: glass.darkTabBarHighlightSheenInset,
+    top: glass.darkHighlightSheenTop,
   },
 });

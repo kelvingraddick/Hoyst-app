@@ -1,5 +1,11 @@
 import React from 'react';
-import {StyleSheet, View, type StyleProp, type ViewStyle} from 'react-native';
+import {
+  Image,
+  StyleSheet,
+  View,
+  type StyleProp,
+  type ViewStyle,
+} from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
 import {Heart} from 'lucide-react-native';
 
@@ -35,6 +41,9 @@ export function ActivityFeedCard({
       : item.tone === 'pending'
       ? {color: theme.accentSecondaryForeground}
       : {color: theme.warningForeground};
+  const mediaSource = item.mediaImageUrl
+    ? {uri: item.mediaImageUrl}
+    : undefined;
 
   return (
     <GlassPanel style={style}>
@@ -73,7 +82,14 @@ export function ActivityFeedCard({
           <Heart color={theme.textMuted} fill="transparent" size={16} />
         )}
       </View>
-      {item.imageVariant === 'workout' ? (
+      {mediaSource ? (
+        <Image
+          resizeMode="cover"
+          source={mediaSource}
+          style={styles.mediaImage}
+          testID="activity-feed-media-image"
+        />
+      ) : item.imageVariant === 'workout' ? (
         <LinearGradient
           colors={['#1a3431', '#102226', '#1e1f1c']}
           style={styles.media}>
@@ -118,5 +134,11 @@ const styles = StyleSheet.create({
   },
   mediaLabel: {
     color: '#f5f5f5',
+  },
+  mediaImage: {
+    borderRadius: 18,
+    height: 148,
+    marginTop: 14,
+    width: '100%',
   },
 });

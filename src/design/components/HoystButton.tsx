@@ -19,6 +19,7 @@ type HoystButtonProps = {
   onPress?: () => void;
   accentIcon?: React.ReactNode;
   icon?: React.ReactNode;
+  iconPosition?: 'leading' | 'trailing';
   disabled?: boolean;
   variant?: 'primary' | 'secondary' | 'ghost' | 'outline';
   backgroundColor?: string;
@@ -31,6 +32,7 @@ export function HoystButton({
   label,
   accentIcon,
   icon,
+  iconPosition = 'leading',
   disabled,
   onPress,
   variant = 'primary',
@@ -88,12 +90,13 @@ export function HoystButton({
           colors={[...gradients.purpleButton]}
           style={styles.fill}>
           <View style={styles.content}>
-            {renderedIcon}
+            {iconPosition === 'leading' ? renderedIcon : null}
             <HoystText
               style={{color: textColor ?? theme.onPurpleAccent}}
               variant="button">
               {label}
             </HoystText>
+            {iconPosition === 'trailing' ? renderedIcon : null}
           </View>
         </LinearGradient>
       ) : (
@@ -110,7 +113,7 @@ export function HoystButton({
               : {backgroundColor: backgroundColor ?? theme.surfaceSoft},
           ]}>
           <View style={styles.content}>
-            {renderedIcon}
+            {iconPosition === 'leading' ? renderedIcon : null}
             <HoystText
               style={
                 variant === 'primary'
@@ -124,6 +127,7 @@ export function HoystButton({
               variant="button">
               {label}
             </HoystText>
+            {iconPosition === 'trailing' ? renderedIcon : null}
           </View>
         </View>
       )}

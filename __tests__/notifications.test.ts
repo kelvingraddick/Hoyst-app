@@ -5,52 +5,75 @@ jest.mock('../functions/src/firebase', () => ({
   },
 }));
 
-jest.mock('firebase-admin/app', () => ({
-  getApps: () => [{}],
-  initializeApp: jest.fn(),
-}), {virtual: true});
-
-jest.mock('firebase-admin/firestore', () => ({
-  FieldValue: {
-    serverTimestamp: jest.fn(),
-  },
-  getFirestore: () => ({
-    batch: jest.fn(),
-    collection: jest.fn(),
+jest.mock(
+  'firebase-admin/app',
+  () => ({
+    getApps: () => [{}],
+    initializeApp: jest.fn(),
   }),
-}), {virtual: true});
+  {virtual: true},
+);
 
-jest.mock('firebase-functions/params', () => ({
-  defineSecret: () => ({
-    value: () => '',
+jest.mock(
+  'firebase-admin/firestore',
+  () => ({
+    FieldValue: {
+      serverTimestamp: jest.fn(),
+    },
+    getFirestore: () => ({
+      batch: jest.fn(),
+      collection: jest.fn(),
+    }),
   }),
-  defineString: (_name: string, options?: {default?: string}) => ({
-    value: () => options?.default ?? '',
+  {virtual: true},
+);
+
+jest.mock(
+  'firebase-functions/params',
+  () => ({
+    defineSecret: () => ({
+      value: () => '',
+    }),
+    defineString: (_name: string, options?: {default?: string}) => ({
+      value: () => options?.default ?? '',
+    }),
   }),
-}), {virtual: true});
+  {virtual: true},
+);
 
-jest.mock('firebase-functions/v2/https', () => {
-  class MockHttpsError extends Error {
-    code: string;
+jest.mock(
+  'firebase-functions/v2/https',
+  () => {
+    class MockHttpsError extends Error {
+      code: string;
 
-    constructor(code: string, message: string) {
-      super(message);
-      this.code = code;
+      constructor(code: string, message: string) {
+        super(message);
+        this.code = code;
+      }
     }
-  }
 
-  return {
-    HttpsError: MockHttpsError,
-    onCall: (handler: unknown) => handler,
-  };
-}, {virtual: true});
+    return {
+      HttpsError: MockHttpsError,
+      onCall: (handler: unknown) => handler,
+    };
+  },
+  {virtual: true},
+);
 
-jest.mock('firebase-functions/v2/scheduler', () => ({
-  onSchedule: (_options: unknown, handler: unknown) => handler,
-}), {virtual: true});
+jest.mock(
+  'firebase-functions/v2/scheduler',
+  () => ({
+    onSchedule: (_options: unknown, handler: unknown) => handler,
+  }),
+  {virtual: true},
+);
 
 import {
   buildOneSignalPushPayload,
+  canShareCircleOutsideMembers,
+  getCompanionFeedTargetsFromMemberships,
+  getCompanionMilestoneEvents,
   getCircleAtRiskNotificationBody,
   getDiscoveryInactivityEligibility,
   getJoinRequestNotificationDedupeKey,
@@ -84,6 +107,12 @@ describe('notification copy rotation', () => {
   it('supports the new notification purposes', () => {
     const newTypes = [
       'companion_tapped_in',
+      'companion_skipped',
+      'companion_circle_created',
+      'companion_circle_joined',
+      'companion_achievement_unlocked',
+      'companion_streak_milestone',
+      'companion_momentum_level_up',
       'circle_complete',
       'member_due_prompt',
       'circle_nudge_prompt',
@@ -128,12 +157,102 @@ describe('notification copy rotation', () => {
   });
 });
 
+describe('companion feed targeting', () => {
+  it('keeps private or invite-only circle updates inside the source circle', () => {
+    expect(canShareCircleOutsideMembers({privacy: 'private'})).toBe(false);
+    expect(
+      canShareCircleOutsideMembers({
+        joinMode: 'invite_only',
+        privacy: 'public',
+      }),
+    ).toBe(false);
+
+    expect(
+      getCompanionFeedTargetsFromMemberships({
+        actorUid: 'actor-1',
+        sharedMemberUids: ['outside-1', 'source-2'],
+        sourceCircle: {privacy: 'private'},
+        sourceMemberUids: ['actor-1', 'source-2'],
+      }),
+    ).toEqual([{canViewMedia: true, uid: 'source-2'}]);
+  });
+
+  it('allows shared companions to see public non-invite circle updates', () => {
+    expect(
+      canShareCircleOutsideMembers({
+        joinMode: 'request_to_join',
+        privacy: 'public',
+      }),
+    ).toBe(true);
+
+    expect(
+      getCompanionFeedTargetsFromMemberships({
+        actorUid: 'actor-1',
+        sharedMemberUids: ['outside-1', 'source-2', 'actor-1'],
+        sourceCircle: {joinMode: 'open', privacy: 'public'},
+        sourceMemberUids: ['actor-1', 'source-2'],
+      }),
+    ).toEqual([
+      {canViewMedia: true, uid: 'source-2'},
+      {canViewMedia: true, uid: 'outside-1'},
+    ]);
+  });
+});
+
+describe('companion milestone detection', () => {
+  it('detects achievements, substantial streaks, and momentum upgrades', () => {
+    expect(
+      getCompanionMilestoneEvents({
+        priorSummary: {
+          bestStreak: 6,
+          currentStreak: 2,
+          status: 'building_momentum',
+        },
+        summary: {
+          bestStreak: 10,
+          currentStreak: 7,
+          label: 'Strong',
+          status: 'strong_momentum',
+        },
+      }),
+    ).toEqual([
+      {
+        achievementTitle: '7 Days Straight',
+        key: '7-days-straight',
+        type: 'companion_achievement_unlocked',
+      },
+      {
+        achievementTitle: '10 Day Streak',
+        key: '10-day-streak',
+        type: 'companion_achievement_unlocked',
+      },
+      {
+        key: '3-day-streak',
+        streakDays: 3,
+        type: 'companion_streak_milestone',
+      },
+      {
+        key: '7-day-streak',
+        streakDays: 7,
+        type: 'companion_streak_milestone',
+      },
+      {
+        key: 'strong_momentum',
+        momentumLabel: 'Strong',
+        type: 'companion_momentum_level_up',
+      },
+    ]);
+  });
+});
+
 describe('notification settings compatibility', () => {
   it('defaults new preferences on', () => {
     expect(getNotificationPreferenceEnabled(undefined, 'socialActivity')).toBe(
       true,
     );
-    expect(getNotificationPreferenceEnabled(undefined, 'circleRisk')).toBe(true);
+    expect(getNotificationPreferenceEnabled(undefined, 'circleRisk')).toBe(
+      true,
+    );
     expect(getNotificationPreferenceEnabled(undefined, 'nudges')).toBe(true);
     expect(getNotificationPreferenceEnabled(undefined, 'discovery')).toBe(true);
   });
@@ -419,9 +538,10 @@ describe('OneSignal push payload', () => {
 });
 
 describe('mark inbox events read callable', () => {
-  const invokeMarkInboxEventsRead = markInboxEventsRead as unknown as (request: {
-    auth?: {uid: string};
-  }) => Promise<{read: number}>;
+  const invokeMarkInboxEventsRead =
+    markInboxEventsRead as unknown as (request: {
+      auth?: {uid: string};
+    }) => Promise<{read: number}>;
 
   beforeEach(() => {
     jest.clearAllMocks();

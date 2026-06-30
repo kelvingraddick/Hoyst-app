@@ -93,23 +93,11 @@ function normalizeNotificationSettings(value: unknown): NotificationSettings {
   );
 
   return {
-    circleRisk: asBoolean(
-      data.circleRisk,
-      legacyCircleActivity,
-    ),
-    discovery: asBoolean(
-      data.discovery,
-      productUpdates,
-    ),
-    nudges: asBoolean(
-      data.nudges,
-      legacyCircleActivity,
-    ),
+    circleRisk: asBoolean(data.circleRisk, legacyCircleActivity),
+    discovery: asBoolean(data.discovery, productUpdates),
+    nudges: asBoolean(data.nudges, legacyCircleActivity),
     productUpdates,
-    socialActivity: asBoolean(
-      data.socialActivity,
-      legacyCircleActivity,
-    ),
+    socialActivity: asBoolean(data.socialActivity, legacyCircleActivity),
     tapInReminders: asBoolean(
       data.tapInReminders,
       defaultNotificationSettings.tapInReminders,
@@ -153,8 +141,10 @@ function mapInboxEventSnapshot(
     circleId: asOptionalString(data.circleId),
     createdAtLabel: getTimestampLabel(data.createdAt),
     deeplink,
+    feedCategory: data.feedCategory === 'companion' ? 'companion' : undefined,
     id: snapshot.id,
     isRead: Boolean(data.readAt),
+    mediaImageUrl: asOptionalString(data.mediaImageUrl),
     title,
     type,
   };
@@ -174,10 +164,7 @@ export function subscribeToNotificationSettings({
     .doc(uid)
     .onSnapshot(
       (
-        snapshot:
-          | FirebaseFirestoreTypes.DocumentSnapshot
-          | null
-          | undefined,
+        snapshot: FirebaseFirestoreTypes.DocumentSnapshot | null | undefined,
       ) => {
         if (!snapshot) {
           onSettings(defaultNotificationSettings);
@@ -217,9 +204,7 @@ export function subscribeToInboxEvents({
     .orderBy('createdAt', 'desc')
     .limit(50)
     .onSnapshot(
-      (
-        snapshot: FirebaseFirestoreTypes.QuerySnapshot | null | undefined,
-      ) => {
+      (snapshot: FirebaseFirestoreTypes.QuerySnapshot | null | undefined) => {
         if (!snapshot) {
           onEvents([]);
           onError?.(new Error('Inbox listener returned no snapshot.'));
@@ -255,9 +240,7 @@ export function subscribeToInboxUnreadCount({
     .where('readAt', '==', null)
     .limit(10)
     .onSnapshot(
-      (
-        snapshot: FirebaseFirestoreTypes.QuerySnapshot | null | undefined,
-      ) => {
+      (snapshot: FirebaseFirestoreTypes.QuerySnapshot | null | undefined) => {
         if (!snapshot) {
           onCount(0);
           onError?.(new Error('Inbox unread listener returned no snapshot.'));
@@ -304,10 +287,7 @@ export async function markInboxEventRead(eventId: string) {
       .doc(uid)
       .collection('inbox')
       .doc(eventId)
-      .set(
-        {readAt: firestore.FieldValue.serverTimestamp()},
-        {merge: true},
-      );
+      .set({readAt: firestore.FieldValue.serverTimestamp()}, {merge: true});
 
     return {read: true as const};
   }

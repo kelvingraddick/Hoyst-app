@@ -1,5 +1,5 @@
 import React, {useCallback, useEffect, useRef, useState} from 'react';
-import {Pressable, StyleSheet, View} from 'react-native';
+import {Image, Pressable, StyleSheet, View} from 'react-native';
 import type {NativeStackScreenProps} from '@react-navigation/native-stack';
 import {useFocusEffect} from '@react-navigation/native';
 import {ArrowLeft} from 'lucide-react-native';
@@ -43,6 +43,11 @@ function getInitials(name: string) {
 function isSuccessEvent(event: InboxEvent) {
   return (
     event.type === 'circle_complete' ||
+    event.type === 'companion_achievement_unlocked' ||
+    event.type === 'companion_circle_created' ||
+    event.type === 'companion_circle_joined' ||
+    event.type === 'companion_momentum_level_up' ||
+    event.type === 'companion_streak_milestone' ||
     event.type === 'companion_tapped_in' ||
     event.type === 'join_approved' ||
     event.type === 'member_joined'
@@ -52,6 +57,7 @@ function isSuccessEvent(event: InboxEvent) {
 function isAlertEvent(event: InboxEvent) {
   if (
     event.type === 'circle_at_risk' ||
+    event.type === 'companion_skipped' ||
     event.type === 'member_due_prompt' ||
     event.type === 'tap_in_final_warning' ||
     event.type === 'join_declined'
@@ -142,6 +148,24 @@ function getActionLabel(event: InboxEvent) {
   }
   if (event.type === 'circle_complete') {
     return 'Complete';
+  }
+  if (event.type === 'companion_achievement_unlocked') {
+    return 'Unlocked';
+  }
+  if (event.type === 'companion_circle_created') {
+    return 'Created';
+  }
+  if (event.type === 'companion_circle_joined') {
+    return 'Joined';
+  }
+  if (event.type === 'companion_momentum_level_up') {
+    return 'Level up';
+  }
+  if (event.type === 'companion_skipped') {
+    return 'Skip';
+  }
+  if (event.type === 'companion_streak_milestone') {
+    return 'Streak';
   }
   if (event.type === 'companion_tapped_in') {
     return 'Tapped in';
@@ -242,6 +266,14 @@ function InboxEventRow({
               variant="caption">
               {event.createdAtLabel}
             </HoystText>
+            {event.mediaImageUrl ? (
+              <Image
+                resizeMode="cover"
+                source={{uri: event.mediaImageUrl}}
+                style={styles.notificationMediaImage}
+                testID="inbox-media-image"
+              />
+            ) : null}
           </View>
           <HoystChip
             density="compact"
@@ -511,6 +543,12 @@ const styles = StyleSheet.create({
   },
   notificationList: {
     gap: 10,
+  },
+  notificationMediaImage: {
+    borderRadius: 16,
+    height: 112,
+    marginTop: 6,
+    width: '100%',
   },
   notificationMessageUnread: {
     fontWeight: '700',

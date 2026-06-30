@@ -136,6 +136,57 @@ function detail(overrides: Partial<CircleDetailModel> = {}): CircleDetailModel {
     commitmentLabel: 'Commitment: Move for 30 minutes',
     completionRate: 60,
     graceRules: {skip: {allowance: 0, windowDays: 7}},
+    groupProgressDays: [
+      {
+        coveredCount: 0,
+        dateKey: '2026-05-23',
+        label: '23',
+        state: 'future',
+        totalCount: 5,
+      },
+      {
+        coveredCount: 2,
+        dateKey: '2026-05-24',
+        label: '24',
+        state: 'future',
+        totalCount: 5,
+      },
+      {
+        coveredCount: 5,
+        dateKey: '2026-05-25',
+        label: '25',
+        state: 'done',
+        totalCount: 5,
+      },
+      {
+        coveredCount: 0,
+        dateKey: '2026-05-26',
+        label: '26',
+        state: 'future',
+        totalCount: 5,
+      },
+      {
+        coveredCount: 0,
+        dateKey: '2026-05-27',
+        label: '27',
+        state: 'future',
+        totalCount: 5,
+      },
+      {
+        coveredCount: 0,
+        dateKey: '2026-05-28',
+        label: '28',
+        state: 'future',
+        totalCount: 5,
+      },
+      {
+        coveredCount: 0,
+        dateKey: '2026-05-29',
+        label: '29',
+        state: 'future',
+        totalCount: 5,
+      },
+    ],
     id: 'circle-1',
     inviteUrl: 'https://hoyst.app/join/circle-1',
     joinLabel: 'Open seats',
@@ -380,6 +431,24 @@ describe('CircleDetailScreen reference redesign', () => {
     expect(output.indexOf('This week')).toBeLessThan(
       output.indexOf('Completion'),
     );
+    expect(output).toContain('LAST 7 DAYS');
+    expect(output).not.toContain('Your last 7 days');
+    expect(output).toContain('partial, 2 of 5 completed');
+    expect(output).toContain('complete, 5 of 5 completed');
+    expect(output).toContain('empty, 0 of 5 completed');
+    expect(
+      tree.root.findByProps({
+        testID: 'week-progress-2026-05-24-partial-ring',
+      }),
+    ).toBeTruthy();
+    expect(
+      StyleSheet.flatten(
+        tree.root.findByProps({testID: 'week-progress-2026-05-25-chip'}).props
+          .style,
+      ),
+    ).toEqual(expect.objectContaining({backgroundColor: '#22A565'}));
+    expect(output).not.toContain('M13 2L4 13.5h5.5L9 22l9-12h-6z');
+    expect(output).not.toContain('M7 7 17 17M17 7 7 17');
     expect(
       tree.root
         .findAllByType(TapInPulseButton)

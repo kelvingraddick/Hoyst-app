@@ -47,7 +47,7 @@ type TodayCircleCardProps = {
   onCardPress: () => void;
   surfaceStyle?: StyleProp<ViewStyle>;
   useCategoryTintGradient?: boolean;
-  variant?: 'today' | 'active' | 'upcoming' | 'attention';
+  variant?: 'today' | 'active' | 'upcoming' | 'attention' | 'list';
 };
 
 function getPeriodCopy(card: CircleManagementCard) {
@@ -380,8 +380,8 @@ export function TodayCircleCard({
           style={[
             styles.attentionTapInButton,
             {
-              backgroundColor: categoryColor,
-              shadowColor: categoryColor,
+              backgroundColor: categoryVisual.foregroundColor,
+              shadowColor: categoryVisual.foregroundColor,
             },
           ]}>
           <HoystText style={styles.attentionTapInLabel} variant="button">
@@ -552,6 +552,110 @@ export function TodayCircleCard({
                 size={22}
                 strokeWidth={2.4}
               />
+            </View>
+          </View>
+        </GlassPanel>
+      </Pressable>
+    );
+  }
+
+  if (variant === 'list') {
+    const listCardBorder = theme.isDark
+      ? `${categoryVisual.accentLight}24`
+      : theme.glassBorder;
+    const listPrimaryMeta =
+      card.viewerMembershipStatus === 'pending'
+        ? 'Pending approval'
+        : canTapInToday(card)
+        ? (card.viewerRemainingTapIns ?? 0) > 0 &&
+          card.commitmentCadence !== 'daily'
+          ? getRemainingTapInsLabel(card.viewerRemainingTapIns ?? 0, card)
+          : `Next tap ${getPeriodCopy(card)}`
+        : card.state === 'done'
+        ? 'Complete'
+        : 'On track';
+    const listMeta = (
+      card.viewerMembershipStatus === 'pending'
+        ? [listPrimaryMeta]
+        : [
+            listPrimaryMeta,
+            shownUpCount > 0
+              ? `${shownUpCount} companion${
+                  shownUpCount === 1 ? '' : 's'
+                } showed up`
+              : undefined,
+            `${clampedCompletionRate}%`,
+          ]
+    )
+      .filter((part): part is string => Boolean(part))
+      .join(' · ');
+
+    return (
+      <Pressable
+        onPress={onCardPress}
+        style={({pressed}) => [
+          styles.cardPressable,
+          {opacity: pressed ? 0.94 : 1},
+        ]}>
+        <GlassPanel
+          padding="none"
+          style={[
+            styles.listCard,
+            {borderColor: listCardBorder, shadowColor: theme.glassShadow},
+            surfaceStyle,
+          ]}>
+          <View style={styles.listContent}>
+            <View style={styles.listHeader}>
+              <View style={styles.listTitleCluster}>
+                <CircleCategoryIcon
+                  category={card.category}
+                  shape="roundedSquare"
+                  size={38}
+                  style={styles.categoryTitleIcon}
+                />
+                <View style={styles.listTitleCopy}>
+                  <HoystText numberOfLines={1} style={styles.listTitle}>
+                    {card.title}
+                  </HoystText>
+                  <HoystText
+                    numberOfLines={1}
+                    style={[styles.listCategory, {color: categoryColor}]}>
+                    {categoryVisual.label.toUpperCase()}
+                  </HoystText>
+                </View>
+              </View>
+              <HoystChip density="compact" label={statusLabel} tone={statusTone} />
+            </View>
+
+            <HoystText
+              numberOfLines={1}
+              style={styles.listMeta}
+              tone="muted"
+              variant="caption">
+              {listMeta}
+            </HoystText>
+
+            <View
+              style={[
+                styles.attentionRailTrack,
+                {backgroundColor: `${categoryVisual.accentColor}22`},
+              ]}>
+              <View
+                style={[
+                  styles.attentionRailFill,
+                  {
+                    backgroundColor: categoryColor,
+                    width: `${clampedCompletionRate}%`,
+                  },
+                ]}
+              />
+            </View>
+
+            <View style={styles.attentionFooter}>
+              <AvatarPreview card={card} />
+              <View style={styles.attentionActionSlot}>
+                {attentionActionSlot}
+              </View>
             </View>
           </View>
         </GlassPanel>
@@ -867,6 +971,49 @@ const styles = StyleSheet.create({
   },
   attentionPressable: {
     flexShrink: 0,
+  },
+  listCard: {
+    borderRadius: 22,
+  },
+  listContent: {
+    gap: 11,
+    padding: 18,
+  },
+  listHeader: {
+    alignItems: 'flex-start',
+    flexDirection: 'row',
+    gap: 10,
+    justifyContent: 'space-between',
+  },
+  listTitleCluster: {
+    alignItems: 'center',
+    flex: 1,
+    flexDirection: 'row',
+    gap: 11,
+    minWidth: 0,
+  },
+  listTitleCopy: {
+    flex: 1,
+    gap: 2,
+    minWidth: 0,
+  },
+  listTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+    letterSpacing: 0,
+    lineHeight: 21,
+  },
+  listCategory: {
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.6,
+    lineHeight: 13,
+  },
+  listMeta: {
+    fontSize: 13,
+    fontWeight: '600',
+    letterSpacing: 0,
+    lineHeight: 17,
   },
   attentionCard: {
     elevation: 9,

@@ -10,7 +10,7 @@ import {
 import type {BottomTabNavigationProp} from '@react-navigation/bottom-tabs';
 import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import {useFocusEffect, useNavigation} from '@react-navigation/native';
-import {Plus} from 'lucide-react-native';
+import {UsersRound} from 'lucide-react-native';
 
 import {ActivityFeedCard} from '../../../design/components/ActivityFeedCard';
 import {CircleSummaryRings} from '../../../design/components/CircleSummaryRings';
@@ -18,13 +18,10 @@ import {FrostedBackdrop} from '../../../design/components/FrostedBackdrop';
 import {GlassPanel} from '../../../design/components/GlassPanel';
 import {HomeHeroHeader} from '../../../design/components/HomeHeroHeader';
 import {HoystButton} from '../../../design/components/HoystButton';
-import {HoystText} from '../../../design/components/HoystText';
 import {SectionEyebrow} from '../../../design/components/SectionEyebrow';
 import {SectionHeader} from '../../../design/components/SectionHeader';
-import {TapInRingMark} from '../../../design/components/TapInRingMark';
 import {TodayCircleCard} from '../../../design/components/TodayCircleCard';
 import {WeekProgressStrip} from '../../../design/components/WeekProgressStrip';
-import {actionMotion} from '../../../design/tokens/actions';
 import {useHoystTheme} from '../../../design/theme/useHoystTheme';
 import {useProtectedAction} from '../../auth/hooks/useProtectedAction';
 import {
@@ -39,7 +36,6 @@ import {
   getTodayAttentionCircles,
   getUpcomingAttentionCircles,
   shouldShowAuthenticatedHomeEmptyState,
-  shouldShowHomeCreateCircleButton,
   shouldShowHomeDataErrorPanel,
   subscribeToHomeData,
   type HomeData,
@@ -69,6 +65,7 @@ import type {
 import {useOnboardingStore} from '../../../store/onboarding-store';
 import {useUserProfileStore} from '../../../store/profile-store';
 import {useSessionStore} from '../../../store/session-store';
+import {CircleActionCard} from '../../circles/components/CircleActionCard';
 import {nudgeCircleMembers} from '../../circles/services/circle-service';
 import {
   buildMomentumSummaryFromHomeData,
@@ -103,6 +100,90 @@ function getInitials(name: string) {
     .join('');
 }
 
+const companionFeedEventTypes: ReadonlySet<InboxEvent['type']> = new Set([
+  'circle_complete',
+  'companion_achievement_unlocked',
+  'companion_circle_created',
+  'companion_circle_joined',
+  'companion_momentum_level_up',
+  'companion_skipped',
+  'companion_streak_milestone',
+  'companion_tapped_in',
+  'member_joined',
+  'nudge',
+]);
+
+function isCompanionFeedEvent(event: InboxEvent, viewerUid?: string) {
+  if (event.actor?.uid && event.actor.uid === viewerUid) {
+    return false;
+  }
+
+  return (
+    event.feedCategory === 'companion' ||
+    companionFeedEventTypes.has(event.type)
+  );
+}
+
+function getCompanionFeedActionLabel(event: InboxEvent) {
+  if (event.type === 'circle_complete') {
+    return 'Complete';
+  }
+  if (event.type === 'companion_achievement_unlocked') {
+    return 'Unlocked';
+  }
+  if (event.type === 'companion_circle_created') {
+    return 'Created';
+  }
+  if (
+    event.type === 'companion_circle_joined' ||
+    event.type === 'member_joined'
+  ) {
+    return 'Joined';
+  }
+  if (event.type === 'companion_momentum_level_up') {
+    return 'Level up';
+  }
+  if (event.type === 'companion_skipped') {
+    return 'Skip';
+  }
+  if (event.type === 'companion_streak_milestone') {
+    return 'Streak';
+  }
+  if (event.type === 'companion_tapped_in') {
+    return 'Tapped in';
+  }
+  if (event.type === 'nudge') {
+    return 'Nudge';
+  }
+
+  return 'Update';
+}
+
+function getCompanionFeedTone(event: InboxEvent) {
+  if (event.type === 'companion_skipped') {
+    return 'alert' as const;
+  }
+
+  if (event.type === 'nudge' || event.type === 'companion_circle_created') {
+    return 'pending' as const;
+  }
+
+  return 'success' as const;
+}
+
+function getEventMessage(event: InboxEvent) {
+  const actorName = event.actor?.displayName?.trim();
+
+  if (!actorName) {
+    return event.body;
+  }
+
+  const duplicatedPrefix = `${actorName} `;
+  return event.body.startsWith(duplicatedPrefix)
+    ? event.body.slice(duplicatedPrefix.length)
+    : event.body;
+}
+
 function mapInboxEventToActivity(event: InboxEvent): CircleActivityItem {
   const actorName = event.actor?.displayName ?? event.title;
 
@@ -110,16 +191,12 @@ function mapInboxEventToActivity(event: InboxEvent): CircleActivityItem {
     actorAvatarUrl: event.actor?.avatarUrl,
     actorInitials: getInitials(actorName) || 'HO',
     actorName,
-    actionLabel: event.type === 'join_request' ? 'Review' : 'Update',
+    actionLabel: getCompanionFeedActionLabel(event),
     id: event.id,
-    message: event.body,
+    mediaImageUrl: event.mediaImageUrl,
+    message: getEventMessage(event),
     timestamp: event.createdAtLabel,
-    tone:
-      event.type === 'circle_at_risk' || event.type === 'tap_in_final_warning'
-        ? 'alert'
-        : event.type === 'join_approved' || event.type === 'member_joined'
-        ? 'success'
-        : 'pending',
+    tone: getCompanionFeedTone(event),
   };
 }
 
@@ -144,7 +221,6 @@ function getInboxAccessibilityLabel(unreadCount: number) {
 
 export function HomeScreen(): React.JSX.Element {
   const theme = useHoystTheme();
-  const createButtonSubtitleColor = theme.isDark ? '#C9D0E1' : '#687386';
   const [homeData, setHomeData] = useState<HomeData>(() =>
     createEmptyHomeData(),
   );
@@ -321,13 +397,16 @@ export function HomeScreen(): React.JSX.Element {
     isLoadingHomeData,
     membershipCount: homeData.membershipCount,
   });
-  const showCreateCircleButton = shouldShowHomeCreateCircleButton({
-    isAuthenticatedHome,
-    showAccountPrompt,
-  });
+  const companionFeedEvents = useMemo(
+    () =>
+      events
+        .filter(event => isCompanionFeedEvent(event, user?.uid))
+        .slice(0, 6),
+    [events, user?.uid],
+  );
   const companionUpdates = useMemo(
-    () => events.slice(0, 2).map(mapInboxEventToActivity),
-    [events],
+    () => companionFeedEvents.map(mapInboxEventToActivity),
+    [companionFeedEvents],
   );
   const homeCardLiftStyle = [
     styles.homeCardLift,
@@ -520,12 +599,6 @@ export function HomeScreen(): React.JSX.Element {
     shareCircle(circle);
   };
 
-  const openCreateCircle = () => {
-    requireAccount({type: 'createCircle'}, () =>
-      rootNavigation?.navigate('CreateCircle'),
-    );
-  };
-
   const openInbox = () => {
     setUnreadInboxCount(0);
 
@@ -618,7 +691,7 @@ export function HomeScreen(): React.JSX.Element {
                 />
                 <HoystButton
                   label="Find circles"
-                  onPress={() => navigation.navigate('Circles')}
+                  onPress={() => navigation.navigate('Explore')}
                   variant="outline"
                 />
               </View>
@@ -658,6 +731,17 @@ export function HomeScreen(): React.JSX.Element {
                   />
                 </GlassPanel>
               ) : null}
+
+              <CircleActionCard
+                accessibilityLabel="All my circles"
+                onPress={() => rootNavigation?.navigate('Circles')}
+                renderIcon={color => (
+                  <UsersRound color={color} size={24} strokeWidth={2.3} />
+                )}
+                subtitle="View commitments and join requests"
+                testID="all-my-circles-card"
+                title="All my circles"
+              />
             </View>
           ) : null}
 
@@ -712,12 +796,7 @@ export function HomeScreen(): React.JSX.Element {
               <View style={styles.emptyActions}>
                 <HoystButton
                   label="Find circles"
-                  onPress={() => navigation.navigate('Circles')}
-                />
-                <HoystButton
-                  label="Create Circle"
-                  onPress={openCreateCircle}
-                  variant="outline"
+                  onPress={() => navigation.navigate('Explore')}
                 />
               </View>
             </GlassPanel>
@@ -725,14 +804,12 @@ export function HomeScreen(): React.JSX.Element {
 
           {isAuthenticatedHome ? (
             <View style={styles.circleSectionGroup}>
-              <SectionEyebrow style={styles.companionSectionLabel}>
-                Companion updates
-              </SectionEyebrow>
+              <SectionEyebrow>COMPANION FEED</SectionEyebrow>
               {companionUpdates.length > 0 ? (
                 companionUpdates.map((item, index) => (
                   <Pressable
                     key={item.id}
-                    onPress={() => openEvent(events[index])}>
+                    onPress={() => openEvent(companionFeedEvents[index])}>
                     <ActivityFeedCard
                       density="compact"
                       item={item}
@@ -743,68 +820,12 @@ export function HomeScreen(): React.JSX.Element {
               ) : (
                 <GlassPanel>
                   <SectionHeader
-                    description="Nudges, joins, and circle milestones will appear here."
-                    title="No companion updates yet"
+                    description="Tap Ins, skips, joins, nudges, and milestones will appear here."
+                    title="No companion feed yet"
                   />
                 </GlassPanel>
               )}
             </View>
-          ) : null}
-
-          {showCreateCircleButton ? (
-            <Pressable
-              accessibilityLabel="Create Circle"
-              accessibilityRole="button"
-              hitSlop={8}
-              onPress={openCreateCircle}
-              style={({pressed}) => [
-                styles.createButtonPressable,
-                {
-                  opacity: pressed ? actionMotion.pressedOpacity : 1,
-                  transform: [{scale: pressed ? actionMotion.pressedScale : 1}],
-                },
-              ]}>
-              <GlassPanel
-                padding="none"
-                style={[styles.createButton, homeCardLiftStyle]}>
-                <View style={styles.createButtonInner}>
-                  <View style={styles.createButtonCopy}>
-                    <HoystText
-                      numberOfLines={1}
-                      style={[styles.createButtonLabel, {color: theme.text}]}
-                      variant="button">
-                      Create Circle
-                    </HoystText>
-                    <HoystText
-                      numberOfLines={1}
-                      style={[
-                        styles.createButtonSubtitle,
-                        {color: createButtonSubtitleColor},
-                      ]}
-                      variant="caption">
-                      Start a new accountability crew
-                    </HoystText>
-                  </View>
-                  <View
-                    style={[
-                      styles.createActionOrb,
-                      {
-                        backgroundColor: theme.surfaceSoft,
-                        borderColor: theme.borderStrong,
-                      },
-                    ]}>
-                    <View style={styles.createRingStack}>
-                      <TapInRingMark innerSize={18} outerSize={34} />
-                      <View
-                        pointerEvents="none"
-                        style={styles.createCenteredPlus}>
-                        <Plus color={theme.text} size={15} strokeWidth={3} />
-                      </View>
-                    </View>
-                  </View>
-                </View>
-              </GlassPanel>
-            </Pressable>
           ) : null}
         </View>
       </ScrollView>
@@ -846,67 +867,8 @@ const styles = StyleSheet.create({
   circleSectionGroup: {
     gap: 12,
   },
-  companionSectionLabel: {
-    fontSize: 11,
-    lineHeight: 13,
-  },
   circlesSection: {
     gap: 14,
-  },
-  createButton: {
-    width: '100%',
-  },
-  createButtonCopy: {
-    flex: 1,
-    gap: 4,
-  },
-  createButtonInner: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: 16,
-    justifyContent: 'space-between',
-    minHeight: 72,
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-  },
-  createButtonLabel: {
-    fontSize: 16,
-    fontWeight: '800',
-    lineHeight: 20,
-  },
-  createButtonSubtitle: {
-    fontSize: 13,
-    lineHeight: 17,
-  },
-  createButtonPressable: {
-    alignSelf: 'stretch',
-    width: '100%',
-  },
-  createActionOrb: {
-    alignItems: 'center',
-    borderRadius: 999,
-    borderWidth: 1,
-    height: 48,
-    justifyContent: 'center',
-    width: 48,
-  },
-  createRingStack: {
-    alignItems: 'center',
-    height: 34,
-    justifyContent: 'center',
-    position: 'relative',
-    width: 34,
-  },
-  createCenteredPlus: {
-    alignItems: 'center',
-    bottom: 0,
-    height: 34,
-    justifyContent: 'center',
-    left: 0,
-    position: 'absolute',
-    right: 0,
-    top: 0,
-    width: 34,
   },
   emptyActions: {
     gap: 12,

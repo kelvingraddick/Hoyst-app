@@ -8,6 +8,7 @@ import {
   frostedBackdropLightBlobs,
   getFrostedBackdropBlobs,
 } from '../src/design/components/FrostedBackdrop';
+import {glass} from '../src/design/tokens/glass';
 import {gradients} from '../src/design/tokens/gradients';
 
 jest.mock('../src/store/settings-store', () => ({
@@ -126,6 +127,17 @@ describe('Hoyst design tokens', () => {
     expect(theme.glassBorder).toBe('rgba(255,255,255,0.20)');
     expect(theme.glassHighlight).toBe('rgba(255,255,255,0.18)');
     expect(theme.glassChipBorder).toBe('rgba(255,255,255,0.18)');
+    expect(glass.darkHighlightGradientColors).toEqual([
+      'rgba(255, 255, 255, 0.12)',
+      'rgba(255, 255, 255, 0.04)',
+      'rgba(255, 255, 255, 0.02)',
+    ]);
+    expect(glass.darkHighlightSheenHeight).toBe(2);
+    expect(glass.darkCardHighlightSheenInset).toBe(24);
+    expect(glass.darkPanelHighlightSheenInset).toBe(28);
+    expect(glass.darkNavHighlightSheenInset).toBe(32);
+    expect(glass.darkTabBarHighlightSheenInset).toBe(28);
+    expect(glass.darkHighlightSheenTop).toBe(1);
   });
 
   it('keeps light-mode foreground tokens readable on app surfaces', () => {

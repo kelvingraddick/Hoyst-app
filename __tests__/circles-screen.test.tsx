@@ -1,12 +1,11 @@
 import React from 'react';
-import {StyleSheet, TextInput} from 'react-native';
+import {StyleSheet} from 'react-native';
 import renderer, {act} from 'react-test-renderer';
-import {UsersRound} from 'lucide-react-native';
 
-import {CircleCardTapInButton} from '../src/design/components/CircleCardTapInButton';
 import {CirclesScreen} from '../src/features/circles/screens/CirclesScreen';
+import {GlassPanel} from '../src/design/components/GlassPanel';
 import type {HomeData} from '../src/features/home/services/home-data-service';
-import type {CircleManagementCard, ExploreCircle} from '../src/types/models';
+import type {CircleManagementCard} from '../src/types/models';
 
 jest.mock('@react-native-community/blur', () => {
   const MockReact = require('react');
@@ -15,6 +14,17 @@ jest.mock('@react-native-community/blur', () => {
   return {
     BlurView: ({children, ...props}: {children?: React.ReactNode}) =>
       MockReact.createElement(View, props, children),
+  };
+});
+
+jest.mock('react-native-safe-area-context', () => {
+  const MockReact = require('react');
+  const {View} = require('react-native');
+
+  return {
+    SafeAreaView: ({children, ...props}: {children?: React.ReactNode}) =>
+      MockReact.createElement(View, props, children),
+    useSafeAreaInsets: () => ({bottom: 0, left: 0, right: 0, top: 0}),
   };
 });
 
@@ -55,7 +65,6 @@ jest.mock('../src/store/profile-store', () => ({
 }));
 
 let mockHomeData: HomeData;
-let mockPublicCircles: ExploreCircle[];
 
 jest.mock('../src/features/home/services/home-data-service', () => {
   return {
@@ -105,13 +114,6 @@ jest.mock('../src/features/home/services/home-data-service', () => {
   };
 });
 
-jest.mock('../src/features/circles/services/public-circle-service', () => ({
-  subscribeToPublicCircles: jest.fn(onCircles => {
-    onCircles(mockPublicCircles);
-    return jest.fn();
-  }),
-}));
-
 jest.mock('../src/features/circles/services/circle-service', () => ({
   nudgeCircleMembers: jest.fn(),
 }));
@@ -146,25 +148,6 @@ function circle(
   };
 }
 
-function publicCircle(overrides: Partial<ExploreCircle>): ExploreCircle {
-  return {
-    category: 'Fitness',
-    commitment: 'Move for 30 minutes',
-    commitmentCadence: 'daily',
-    commitmentFrequency: {tapInsPerWeek: 7},
-    completionRate: 86,
-    id: 'public-1',
-    joinLabel: 'Open seats',
-    matchCopy: 'A steady group for showing up.',
-    maxSize: 8,
-    memberCount: 4,
-    members: [],
-    streakLabel: 'Daily rhythm',
-    title: 'Public Movers',
-    ...overrides,
-  };
-}
-
 function homeData(circles: CircleManagementCard[]): HomeData {
   return {
     circles,
@@ -182,7 +165,7 @@ function homeData(circles: CircleManagementCard[]): HomeData {
 function renderScreenWithNavigation() {
   const rootNavigate = jest.fn();
   const navigation = {
-    getParent: () => ({navigate: rootNavigate}),
+    navigate: rootNavigate,
   };
   let screen: renderer.ReactTestRenderer | undefined;
 
@@ -204,90 +187,127 @@ function renderScreen() {
 }
 
 describe('CirclesScreen render paths', () => {
-  beforeEach(() => {
-    mockPublicCircles = [publicCircle({})];
-  });
-
-  it('renders management first and discovery later when an active circle exists', () => {
+  it('renders the filterable management list when an active circle exists', () => {
     mockHomeData = homeData([circle({})]);
     const output = renderScreen();
 
-    expect(output).toContain('Overview');
+    expect(output).toContain('Your commitments');
+    expect(output).toContain('Active circles and join requests.');
     expect(output).toContain('Needs You');
-    expect(output).not.toContain('Needs Tap');
-    expect(output).toContain('#A83A00');
-    expect(output).toContain('#FFF0E6');
     expect(output).toContain('Pending');
-    expect(output).toContain('#7A5C00');
-    expect(output).toContain('#FFF8EA');
     expect(output).toContain('On Track');
-    expect(output).toContain('#086CA8');
-    expect(output).toContain('#E7F8FF');
     expect(output).toContain('Done');
-    expect(output).toContain('#07763E');
-    expect(output).toContain('#E7F8EF');
-    expect(output).not.toContain('Completed Today');
-    expect(output).not.toContain('Your attention');
-    expect(output).not.toContain('Approval');
-    expect(output).not.toContain('Keep it going');
-    expect(output).not.toContain('Nice work!');
-    expect(output).toContain('Need Attention');
-    expect(output).toContain('All Circles');
-    expect(output).not.toContain('Companion Updates');
-    expect(output).toContain('Discover Circles');
-    expect(output).toContain('View Circle');
-    expect(output.indexOf('Overview')).toBeLessThan(
-      output.indexOf('Discover Circles'),
-    );
+    // Stat-card tone colors (light mode).
+    expect(output).toContain('#FF6D00');
+    expect(output).toContain('#D68B00');
+    expect(output).toContain('#2F6FED');
+    expect(output).toContain('#159957');
+    expect(output).toContain('Morning Movers');
+    expect(output).toContain('Sorted by urgency');
+    expect(output).toContain('Find more circles');
+    expect(output).toContain('Browse public circles in Explore');
+    expect(output).not.toContain('Overview');
+    expect(output).not.toContain('Need Attention');
+    expect(output).not.toContain('All Circles');
+    expect(output).not.toContain('Discover Circles');
   });
 
-  it('renders discovery first when there are no joined active circles', () => {
+  it('uses compact commitment header type and full-width stat cards', () => {
+    mockHomeData = homeData([circle({})]);
+    const {screen} = renderScreenWithNavigation();
+    const headingStyles = screen.root
+      .findAll(node => node.props.children === 'Your commitments')
+      .map(node => StyleSheet.flatten(node.props.style));
+    const subtitleStyles = screen.root
+      .findAll(
+        node => node.props.children === 'Active circles and join requests.',
+      )
+      .map(node => StyleSheet.flatten(node.props.style));
+    const needsYouStat = screen.root
+      .findAllByProps({
+        accessibilityLabel: 'Needs You, 1',
+      })
+      .find(node => typeof node.props.style === 'function');
+
+    if (!needsYouStat) {
+      throw new Error('Needs You stat pressable was not found');
+    }
+    let ancestor = needsYouStat.parent;
+    let statRowStyle: ReturnType<typeof StyleSheet.flatten> | undefined;
+
+    while (ancestor) {
+      const flattenedStyle = StyleSheet.flatten(ancestor.props.style);
+
+      if (
+        flattenedStyle?.flexDirection === 'row' &&
+        flattenedStyle?.gap === 9
+      ) {
+        statRowStyle = flattenedStyle;
+        break;
+      }
+
+      ancestor = ancestor.parent;
+    }
+
+    if (!statRowStyle) {
+      throw new Error('Stat row style was not found');
+    }
+
+    const statButtonStyle = StyleSheet.flatten(
+      needsYouStat.props.style({pressed: false}),
+    );
+    const statPanels = screen.root.findAllByType(GlassPanel).filter(panel => {
+      const panelStyle = StyleSheet.flatten(panel.props.style);
+
+      return panelStyle?.borderRadius === 18 && panelStyle?.width === '100%';
+    });
+
+    expect(headingStyles).toContainEqual(
+      expect.objectContaining({
+        fontSize: 24,
+        letterSpacing: 0,
+        lineHeight: 28,
+      }),
+    );
+    expect(subtitleStyles).toContainEqual(
+      expect.objectContaining({
+        fontSize: 14,
+        fontWeight: '700',
+        lineHeight: 18,
+      }),
+    );
+    expect(statRowStyle).toMatchObject({
+      alignItems: 'stretch',
+      alignSelf: 'stretch',
+      flexDirection: 'row',
+      width: '100%',
+    });
+    expect(statButtonStyle).toMatchObject({
+      flex: 1,
+      flexBasis: 0,
+      minWidth: 0,
+      width: '100%',
+    });
+    expect(statPanels).toHaveLength(4);
+    statPanels.forEach(panel => {
+      expect(StyleSheet.flatten(panel.props.style)).toMatchObject({
+        borderRadius: 18,
+        width: '100%',
+      });
+    });
+  });
+
+  it('renders the empty state when there are no joined circles', () => {
     mockHomeData = homeData([]);
     const output = renderScreen();
 
-    expect(output).toContain('Find Circles or start your own');
-    expect(output).toContain('Start your own');
-    expect(output).toContain('Private rhythms start here');
-    expect(output).toContain('Create Circle');
-    expect(output).toContain('Discover Circles');
-    expect(output).toContain('Public Movers');
-    expect(output).toContain('View Circle');
-    expect(output).toContain('All Circles');
-    expect(output).not.toContain('Companion Updates');
-    expect(output.indexOf('Discover Circles')).toBeLessThan(
-      output.indexOf('All Circles'),
-    );
-  });
-
-  it('uses category color for discover card member icons', () => {
-    mockHomeData = homeData([]);
-    const tree = renderScreenTree();
-
-    expect(
-      tree.root
-        .findAllByType(UsersRound)
-        .some(icon => icon.props.color === '#07763E'),
-    ).toBe(true);
-  });
-
-  it('uses rounded-square category icon backplates in discover cards', () => {
-    mockHomeData = homeData([]);
-    const tree = renderScreenTree();
-    const iconBackplates = tree.root.findAll(node => {
-      const flattenedStyle = StyleSheet.flatten(node.props.style);
-
-      return (
-        flattenedStyle?.backgroundColor === '#E7F8EF' &&
-        flattenedStyle.height === 34 &&
-        flattenedStyle.width === 34
-      );
-    });
-    const iconBackplateStyle = StyleSheet.flatten(
-      iconBackplates[0]?.props.style,
-    );
-
-    expect(iconBackplates.length).toBeGreaterThan(0);
-    expect(iconBackplateStyle.borderRadius).toBe(10);
+    expect(output).toContain('Your commitments');
+    expect(output).toContain('No circles yet');
+    expect(output).toContain('Find more circles');
+    expect(output).toContain('New');
+    expect(output).not.toContain('Need Attention');
+    expect(output).not.toContain('All Circles');
+    expect(output).not.toContain('Discover Circles');
   });
 
   it('opens Tap In for a completed weekly commitment without today coverage', () => {
@@ -308,14 +328,12 @@ describe('CirclesScreen render paths', () => {
     ]);
 
     const {rootNavigate, screen} = renderScreenWithNavigation();
-    const tapInButton = screen.root
-      .findAllByType(CircleCardTapInButton)
-      .find(button => button.props.label === 'Tap In');
-
-    expect(tapInButton).toBeTruthy();
+    const tapInButton = screen.root.findByProps({
+      testID: 'attention-tap-in-button',
+    });
 
     act(() => {
-      tapInButton?.props.onPress({stopPropagation: jest.fn()});
+      tapInButton.props.onPress({stopPropagation: jest.fn()});
     });
 
     expect(rootNavigate).toHaveBeenCalledWith('TapInComposer', {
@@ -324,26 +342,79 @@ describe('CirclesScreen render paths', () => {
     });
   });
 
-  it('renders a Today-style no-results discovery card', () => {
+  it('opens Create Circle from the header New button', () => {
     mockHomeData = homeData([]);
-    const tree = renderScreenTree();
-
-    act(() => {
-      tree.root.findByType(TextInput).props.onChangeText('nope');
+    const {rootNavigate, screen} = renderScreenWithNavigation();
+    const createButton = screen.root.findByProps({
+      accessibilityLabel: 'Create Circle',
     });
 
-    const output = JSON.stringify(tree.toJSON());
+    act(() => {
+      createButton.props.onPress();
+    });
 
-    expect(output).toContain('No Circles found');
-    expect(output).toContain('No matches');
-    expect(output).toContain('Filters active');
-    expect(output).toContain(
-      'Clearing filters brings every public Circle back into view.',
-    );
-    expect(output).toContain('Clear filters');
+    expect(rootNavigate).toHaveBeenCalledWith('CreateCircle');
   });
 
-  it('keeps discovery visible before pending-only circle management', () => {
+  it('opens Explore from the find-more-circles card', () => {
+    mockHomeData = homeData([circle({})]);
+    const {rootNavigate, screen} = renderScreenWithNavigation();
+    const findMoreButton = screen.root.findByProps({
+      accessibilityLabel: 'Find more circles',
+    });
+
+    act(() => {
+      findMoreButton.props.onPress();
+    });
+
+    expect(rootNavigate).toHaveBeenCalledWith('MainTabs', {screen: 'Explore'});
+  });
+
+  it('renders the find-more-circles action as a dashed horizontal card', () => {
+    mockHomeData = homeData([circle({})]);
+    const {screen} = renderScreenWithNavigation();
+    const findMoreStyle = screen.root
+      .findAllByProps({testID: 'find-more-circles-card'})
+      .map(node => StyleSheet.flatten(node.props.style))
+      .find(style => style?.borderStyle === 'dashed');
+
+    expect(findMoreStyle).toBeTruthy();
+
+    expect(findMoreStyle).toMatchObject({
+      borderStyle: 'dashed',
+      borderWidth: 2,
+      flexDirection: 'row',
+      minHeight: 88,
+    });
+  });
+
+  it('filters the list to pending circles when the Pending stat is tapped', () => {
+    mockHomeData = homeData([
+      circle({id: 'active-circle', title: 'Active Circle'}),
+      circle({
+        id: 'pending-circle',
+        title: 'Pending Circle',
+        viewerMembershipStatus: 'pending',
+      }),
+    ]);
+    const {screen} = renderScreenWithNavigation();
+
+    expect(JSON.stringify(screen.toJSON())).toContain('Active Circle');
+
+    const pendingStat = screen.root.findByProps({
+      accessibilityLabel: 'Pending, 1',
+    });
+
+    act(() => {
+      pendingStat.props.onPress();
+    });
+
+    const filtered = JSON.stringify(screen.toJSON());
+    expect(filtered).toContain('Pending Circle');
+    expect(filtered).not.toContain('Active Circle');
+  });
+
+  it('keeps a pending-only circle visible without discovery', () => {
     mockHomeData = homeData([
       circle({
         id: 'pending-circle',
@@ -353,10 +424,8 @@ describe('CirclesScreen render paths', () => {
     ]);
     const output = renderScreen();
 
-    expect(output).toContain('Discover Circles');
     expect(output).toContain('Pending Circle');
-    expect(output.indexOf('Discover Circles')).toBeLessThan(
-      output.indexOf('Pending Circle'),
-    );
+    expect(output).toContain('Find more circles');
+    expect(output).not.toContain('Discover Circles');
   });
 });

@@ -17,16 +17,17 @@ import {
   removeTapInOpportunity,
 } from '../momentum';
 import {
+  getCompanionMilestoneEvents,
   notifyCircleAtRisk,
   notifyCircleComplete,
+  notifyCompanionMilestones,
+  notifyCompanionSkipped,
   notifyCompanionTappedIn,
   oneSignalRestApiKey,
+  resolveCompanionFeedTargets,
 } from '../notifications';
 import {getCommitmentCadence, getRequiredTapIns} from '../shared/commitments';
-import {
-  getCircleCompleteNotificationTargets,
-  getCompanionTapInNotificationTargets,
-} from './notification-plan';
+import {getCircleCompleteNotificationTargets} from './notification-plan';
 
 const submitTapInSchema = z.object({
   circleId: z.string().trim().min(1),
@@ -186,9 +187,18 @@ async function processTapInSideEffectsForCheckIn({
   uid,
 }: TapInSideEffectInput) {
   const circleRef = db.collection('circles').doc(circleId);
-
-  await recalculateMomentumSummaryForUser(uid).catch(error =>
-    console.error('recalculate_momentum_summary_failed', error),
+  const momentumRef = db
+    .collection('userPrivate')
+    .doc(uid)
+    .collection('momentum')
+    .doc('current');
+  const priorMomentumSnapshot = await momentumRef.get();
+  const priorMomentumSummary = priorMomentumSnapshot.data();
+  const momentumSummary = await recalculateMomentumSummaryForUser(uid).catch(
+    error => {
+      console.error('recalculate_momentum_summary_failed', error);
+      return undefined;
+    },
   );
 
   const [circleSnapshot, memberSnapshots] = await Promise.all([
@@ -270,10 +280,12 @@ async function processTapInSideEffectsForCheckIn({
     handle: asCleanString(checkIn.handle) ?? null,
     uid,
   };
-  const companionTargetUids = getCompanionTapInNotificationTargets({
-    activeMemberUids,
+  const companionTargets = await resolveCompanionFeedTargets({
     actorUid: uid,
+    circle,
+    circleId,
   });
+  const mediaImageUrl = asCleanString(checkIn.photoUrl);
   const circleCompleteTargetUids = getCircleCompleteNotificationTargets({
     activeMemberUids,
     remainingTapIns: totalRemainingCount,
@@ -281,16 +293,45 @@ async function processTapInSideEffectsForCheckIn({
 
   if (status === 'done') {
     await Promise.all(
-      companionTargetUids.map(targetUid =>
+      companionTargets.map(target =>
         notifyCompanionTappedIn({
           actor,
           circleId,
           circleTitle,
           dateKey,
-          targetUid,
+          mediaImageUrl: target.canViewMedia ? mediaImageUrl : undefined,
+          targetUid: target.uid,
         }),
       ),
     ).catch(error => console.error('notify_companion_tapped_in_failed', error));
+  }
+
+  if (status === 'skip') {
+    await notifyCompanionSkipped({
+      actor,
+      circle,
+      circleId,
+      circleTitle,
+      dateKey,
+    }).catch(error => console.error('notify_companion_skipped_failed', error));
+  }
+
+  if (momentumSummary) {
+    const milestoneEvents = getCompanionMilestoneEvents({
+      priorSummary: priorMomentumSummary,
+      summary: momentumSummary,
+    });
+
+    await notifyCompanionMilestones({
+      actor,
+      circle,
+      circleId,
+      dateKey,
+      events: milestoneEvents,
+      targetUid: uid,
+    }).catch(error =>
+      console.error('notify_companion_milestones_failed', error),
+    );
   }
 
   if (circleCompleteTargetUids.length > 0) {

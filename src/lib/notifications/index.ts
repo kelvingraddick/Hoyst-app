@@ -13,22 +13,59 @@ type NotificationClickEvent = {
 let initialized = false;
 let navigationRef: NavigationContainerRef<RootStackParamList> | undefined;
 let pushUserId: string | undefined;
+let requestedPermissionDuringSession = false;
 let warnedMissingAppId = false;
 
-async function optInWithExistingPermission(): Promise<boolean> {
+async function optInWithAvailablePermission({
+  requestPermissionIfPossible = false,
+}: {
+  requestPermissionIfPossible?: boolean;
+} = {}): Promise<{
+  optInAttempted: boolean;
+  permissionGranted?: boolean;
+  permissionRequested: boolean;
+}> {
   if (!initialized) {
-    return false;
+    return {optInAttempted: false, permissionRequested: false};
   }
 
   const existingPermission =
     await OneSignal.Notifications.getPermissionAsync().catch(() => false);
 
-  if (!existingPermission) {
-    return false;
+  if (existingPermission) {
+    OneSignal.User.pushSubscription.optIn();
+    return {optInAttempted: true, permissionRequested: false};
+  }
+
+  if (!requestPermissionIfPossible || requestedPermissionDuringSession) {
+    return {optInAttempted: false, permissionRequested: false};
+  }
+
+  const canRequestPermission =
+    await OneSignal.Notifications.canRequestPermission().catch(() => false);
+
+  if (!canRequestPermission) {
+    return {optInAttempted: false, permissionRequested: false};
+  }
+
+  requestedPermissionDuringSession = true;
+  const permissionGranted =
+    await OneSignal.Notifications.requestPermission(true).catch(() => false);
+
+  if (!permissionGranted) {
+    return {
+      optInAttempted: false,
+      permissionGranted,
+      permissionRequested: true,
+    };
   }
 
   OneSignal.User.pushSubscription.optIn();
-  return true;
+  return {
+    optInAttempted: true,
+    permissionGranted,
+    permissionRequested: true,
+  };
 }
 
 function asString(value: unknown) {
@@ -131,10 +168,14 @@ export async function identifyPushUser(uid: string): Promise<void> {
   }
 
   pushUserId = uid;
-  await syncPushSubscription();
+  await syncPushSubscription({requestPermissionIfPossible: true});
 }
 
-export async function syncPushSubscription(): Promise<boolean> {
+export async function syncPushSubscription({
+  requestPermissionIfPossible = false,
+}: {
+  requestPermissionIfPossible?: boolean;
+} = {}): Promise<boolean> {
   initializePushNotifications();
 
   if (!initialized || !pushUserId) {
@@ -142,7 +183,11 @@ export async function syncPushSubscription(): Promise<boolean> {
   }
 
   OneSignal.login(pushUserId);
-  return optInWithExistingPermission();
+  const syncResult = await optInWithAvailablePermission({
+    requestPermissionIfPossible,
+  });
+
+  return syncResult.optInAttempted;
 }
 
 export async function clearPushUser(): Promise<void> {
@@ -172,9 +217,9 @@ export async function requestPushNotificationPermission(): Promise<boolean> {
     return false;
   }
 
-  const existingPermission = await optInWithExistingPermission();
+  const existingPermission = await optInWithAvailablePermission();
 
-  if (existingPermission) {
+  if (existingPermission.optInAttempted) {
     return true;
   }
 

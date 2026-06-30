@@ -24,7 +24,7 @@ import {MomentumStageIcon} from './MomentumStageIcon';
 import {getMomentumStatusVisualColor} from './MomentumStatusPill';
 
 const AVATAR_SIZE = 46;
-const BADGE_SIZE = 24;
+const AVATAR_BADGE_SIZE = 22;
 const BAR_HEIGHT = 10;
 const KNOB_SIZE = 34;
 const MOMENTUM_STAGE_ICON_BACKGROUND = '#FFF3DF';
@@ -107,7 +107,10 @@ function AvatarBadgeIcon({kind}: {kind: HomeAvatarBadgeKind}) {
   const gradientId = useGradientId(`avatar-badge-${kind}`);
 
   return (
-    <Svg height={BADGE_SIZE} viewBox="0 0 32 32" width={BADGE_SIZE}>
+    <Svg
+      height={AVATAR_BADGE_SIZE}
+      viewBox="0 0 32 32"
+      width={AVATAR_BADGE_SIZE}>
       <Defs>
         <LinearGradient id={gradientId} x1="6" x2="26" y1="4" y2="28">
           <Stop offset="0" stopColor={visual.gradientStart} />
@@ -559,14 +562,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: brandColors.red,
     borderColor: brandColors.white,
-    borderRadius: 11,
+    borderRadius: AVATAR_BADGE_SIZE / 2,
     borderWidth: 2,
     bottom: -3,
-    height: 22,
+    height: AVATAR_BADGE_SIZE,
     justifyContent: 'center',
     position: 'absolute',
     right: -3,
-    width: 22,
+    width: AVATAR_BADGE_SIZE,
   },
   unreadBadgeText: {
     color: brandColors.white,

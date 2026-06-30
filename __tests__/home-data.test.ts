@@ -1,6 +1,7 @@
 jest.mock('@react-native-firebase/firestore', () => jest.fn());
 
 import {
+  buildCircleGroupProgressDays,
   buildHomeDataFromCircles,
   canTapInToday,
   createEmptyHomeData,
@@ -64,6 +65,53 @@ function homeCard(
 }
 
 describe('home data mapping', () => {
+  it('builds group last-7-days progress with partial, empty, complete, and skip-covered days', () => {
+    const groupDays = buildCircleGroupProgressDays({
+      memberRecords: [
+        {status: 'active', uid: 'user-1'},
+        {status: 'pending', uid: 'user-2'},
+        {status: 'active', uid: 'user-3'},
+      ],
+      now: new Date('2026-05-29T12:00:00.000Z'),
+      recentCheckInStatuses: new Map([
+        ['2026-05-23', new Map()],
+        [
+          '2026-05-24',
+          new Map([
+            ['user-1', 'done'],
+            ['user-2', 'skip'],
+          ]),
+        ],
+        [
+          '2026-05-25',
+          new Map([
+            ['user-1', 'done'],
+            ['user-2', 'skip'],
+            ['user-3', 'done'],
+          ]),
+        ],
+      ]),
+      timezone: 'UTC',
+    });
+
+    expect(groupDays).toHaveLength(7);
+    expect(groupDays.find(day => day.dateKey === '2026-05-23')).toMatchObject({
+      coveredCount: 0,
+      state: 'future',
+      totalCount: 3,
+    });
+    expect(groupDays.find(day => day.dateKey === '2026-05-24')).toMatchObject({
+      coveredCount: 2,
+      state: 'future',
+      totalCount: 3,
+    });
+    expect(groupDays.find(day => day.dateKey === '2026-05-25')).toMatchObject({
+      coveredCount: 3,
+      state: 'done',
+      totalCount: 3,
+    });
+  });
+
   it('builds the Today attention list from Tap In and Nudge actions only', () => {
     const needsTapIn = homeCard({
       id: 'needs-tap-in',

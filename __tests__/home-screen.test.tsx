@@ -5,11 +5,15 @@ import renderer, {act} from 'react-test-renderer';
 import {ActivityFeedCard} from '../src/design/components/ActivityFeedCard';
 import {FrostedBackdrop} from '../src/design/components/FrostedBackdrop';
 import {GlassPanel} from '../src/design/components/GlassPanel';
+import {HoystButton} from '../src/design/components/HoystButton';
 import {SectionEyebrow} from '../src/design/components/SectionEyebrow';
 import {brandColors} from '../src/design/tokens/colors';
 import {HomeScreen} from '../src/features/home/screens/HomeScreen';
 import type {HomeData} from '../src/features/home/services/home-data-service';
-import {getTodayAttentionCircles} from '../src/features/home/services/home-data-service';
+import {
+  getTodayAttentionCircles,
+  shouldShowAuthenticatedHomeEmptyState,
+} from '../src/features/home/services/home-data-service';
 import {
   markInboxEventRead,
   subscribeToInboxEvents,
@@ -317,9 +321,10 @@ describe('HomeScreen companion updates', () => {
     mockMomentumSummary = momentumSummary();
     mockAppearance = 'light';
     (getTodayAttentionCircles as jest.Mock).mockReturnValue([]);
+    (shouldShowAuthenticatedHomeEmptyState as jest.Mock).mockReturnValue(false);
   });
 
-  it('subscribes to inbox events and renders empty companion updates at the bottom', () => {
+  it('subscribes to inbox events and renders empty companion feed at the bottom', () => {
     const output = renderScreen();
 
     expect(subscribeToInboxEvents).toHaveBeenCalledWith(
@@ -328,38 +333,72 @@ describe('HomeScreen companion updates', () => {
         uid: 'user-1',
       }),
     );
-    expect(output).toContain('Companion updates');
-    expect(output).toContain('No companion updates yet');
-    expect(output.indexOf('Companion updates')).toBeGreaterThan(
+    expect(output).toContain('COMPANION FEED');
+    expect(output).toContain('No companion feed yet');
+    expect(output.indexOf('COMPANION FEED')).toBeGreaterThan(
       output.indexOf('Today is clear'),
-    );
-    expect(output.indexOf('Companion updates')).toBeLessThan(
-      output.lastIndexOf('Create Circle'),
     );
   });
 
-  it('renders the create circle mini card and keeps the protected action flow', () => {
+  it('does not render create circle CTAs on Home', () => {
     const tree = renderScreenTree();
     const output = JSON.stringify(tree.toJSON());
 
-    expect(output).toContain('Create Circle');
-    expect(output).toContain('Start a new accountability crew');
+    expect(output).not.toContain('Create Circle');
+    expect(output).not.toContain('Start a new accountability crew');
+    expect(
+      tree.root.findAllByProps({accessibilityLabel: 'Create Circle'}),
+    ).toHaveLength(0);
+  });
 
-    const createCircleCard = tree.root.findByProps({
-      accessibilityLabel: 'Create Circle',
+  it('opens the private Circles screen from the Home attention section', () => {
+    const tree = renderScreenTree();
+    const allMyCirclesButton = tree.root.findByProps({
+      accessibilityLabel: 'All my circles',
     });
 
-    expect(createCircleCard.props.accessibilityRole).toBe('button');
+    expect(allMyCirclesButton).toBeTruthy();
 
     act(() => {
-      createCircleCard.props.onPress();
+      allMyCirclesButton.props.onPress();
     });
 
-    expect(mockRequireAccount).toHaveBeenCalledWith(
-      {type: 'createCircle'},
-      expect.any(Function),
+    expect(mockRootNavigate).toHaveBeenCalledWith('Circles');
+  });
+
+  it('renders the all-my-circles action with the shared dashed card style', () => {
+    const tree = renderScreenTree();
+    const allMyCirclesCard = tree.root
+      .findAllByProps({testID: 'all-my-circles-card'})
+      .find(node => node.props.style);
+
+    expect(JSON.stringify(tree.toJSON())).toContain('All my circles');
+    expect(JSON.stringify(tree.toJSON())).toContain(
+      'View commitments and join requests',
     );
-    expect(mockRootNavigate).toHaveBeenCalledWith('CreateCircle');
+    expect(allMyCirclesCard).toBeTruthy();
+    expect(StyleSheet.flatten(allMyCirclesCard?.props.style)).toMatchObject({
+      borderStyle: 'dashed',
+      borderWidth: 2,
+      flexDirection: 'row',
+      minHeight: 88,
+    });
+  });
+
+  it('routes authenticated empty-state circle discovery to Explore', () => {
+    (shouldShowAuthenticatedHomeEmptyState as jest.Mock).mockReturnValue(true);
+    const tree = renderScreenTree();
+    const findCirclesButton = tree.root
+      .findAllByType(HoystButton)
+      .find(button => button.props.label === 'Find circles');
+
+    expect(findCirclesButton).toBeTruthy();
+
+    act(() => {
+      findCirclesButton?.props.onPress();
+    });
+
+    expect(mockNavigate).toHaveBeenCalledWith('Explore');
   });
 
   it('renders the frosted backdrop behind glass Home sections', () => {
@@ -465,26 +504,55 @@ describe('HomeScreen companion updates', () => {
     expect(smallTailDotStyle.shadowOpacity).toBe(0.58);
   });
 
-  it('renders recent companion updates and opens their deeplink', () => {
-    mockInboxEvents = [inboxEvent()];
+  it('renders recent companion feed updates and opens their deeplink', () => {
+    mockInboxEvents = [
+      inboxEvent({
+        feedCategory: 'companion',
+        mediaImageUrl: 'https://example.com/tap-in.jpg',
+      }),
+      inboxEvent({
+        body: 'Tap In to keep Morning Movers moving.',
+        id: 'reminder-1',
+        title: 'Reminder',
+        type: 'tap_in_midday_reminder',
+      }),
+      inboxEvent({
+        actor: {
+          displayName: 'Kelvin',
+          uid: 'user-1',
+        },
+        body: 'Kelvin reached a 7-day streak.',
+        feedCategory: 'companion',
+        id: 'self-1',
+        title: 'Streak milestone',
+        type: 'companion_streak_milestone',
+      }),
+    ];
     const tree = renderScreenTree();
     const output = JSON.stringify(tree.toJSON());
 
-    expect(output).toContain('Companion updates');
+    expect(output).toContain('COMPANION FEED');
     expect(output).toContain('Ari Runner');
     expect(output).toContain('tapped in for Morning Movers.');
+    expect(output).not.toContain('Tap In to keep Morning Movers moving.');
+    expect(output).not.toContain('Kelvin reached a 7-day streak.');
 
     const companionLabel = tree.root
       .findAllByType(SectionEyebrow)
-      .find(node => node.props.children === 'Companion updates');
-    const companionLabelStyle = StyleSheet.flatten(companionLabel?.props.style);
+      .find(node => node.props.children === 'COMPANION FEED');
+    const attentionLabel = tree.root
+      .findAllByType(SectionEyebrow)
+      .find(node => node.props.children === 'Circles need your attention');
     const companionCard = tree.root.findByType(ActivityFeedCard);
 
-    expect(companionLabelStyle).toMatchObject({
-      fontSize: 11,
-      lineHeight: 13,
-    });
+    expect(companionLabel?.props.style).toEqual(attentionLabel?.props.style);
     expect(companionCard.props.density).toBe('compact');
+    expect(companionCard.props.item.mediaImageUrl).toBe(
+      'https://example.com/tap-in.jpg',
+    );
+    expect(
+      tree.root.findAllByProps({testID: 'activity-feed-media-image'}).length,
+    ).toBeGreaterThan(0);
 
     const eventPressable = tree.root
       .findAllByType(Pressable)

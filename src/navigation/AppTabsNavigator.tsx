@@ -4,7 +4,7 @@ import {createBottomTabNavigator} from '@react-navigation/bottom-tabs';
 import type {NativeStackScreenProps} from '@react-navigation/native-stack';
 
 import {
-  CirclesTabIcon,
+  ExploreTabIcon,
   HomeTabIcon,
   MomentumTabIcon,
   ProfileTabIcon,
@@ -12,7 +12,7 @@ import {
 } from '../design/components/TabBarIcons';
 
 import {HoystTapInMark} from '../design/components/HoystTapInMark';
-import {CirclesScreen} from '../features/circles/screens/CirclesScreen';
+import {ExploreScreen} from '../features/explore/screens/ExploreScreen';
 import {HomeScreen} from '../features/home/screens/HomeScreen';
 import {MomentumScreen} from '../features/momentum/screens/MomentumScreen';
 import {ProfileScreen} from '../features/profile/screens/ProfileScreen';
@@ -34,7 +34,7 @@ type TabBarIconComponent = (props: TabBarIconProps) => React.JSX.Element;
 
 const routeIcons: Record<StandardTabName, TabBarIconComponent> = {
   Home: HomeTabIcon,
-  Circles: CirclesTabIcon,
+  Explore: ExploreTabIcon,
   Momentum: MomentumTabIcon,
   Profile: ProfileTabIcon,
 };
@@ -212,7 +212,7 @@ export function AppTabsNavigator({
         },
       })}>
       <Tab.Screen component={HomeScreen} name="Home" />
-      <Tab.Screen component={CirclesScreen} name="Circles" />
+      <Tab.Screen component={ExploreScreen} name="Explore" />
       <Tab.Screen
         component={TapInPlaceholder}
         listeners={() => ({

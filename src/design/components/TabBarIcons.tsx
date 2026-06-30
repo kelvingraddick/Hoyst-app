@@ -108,6 +108,45 @@ export function CirclesTabIcon({
   );
 }
 
+export function ExploreTabIcon({
+  color = 'currentColor',
+  fill = 'none',
+  focused,
+  secondaryColor,
+  size = 24,
+  strokeWidth = 2,
+  ...props
+}: TabBarIconProps): React.JSX.Element {
+  const c = getIconColors({color, fill, focused, secondaryColor});
+
+  return (
+    <Svg fill="none" height={size} viewBox="0 0 28 28" width={size} {...props}>
+      <Circle
+        cx={13.2}
+        cy={13.2}
+        fill="none"
+        r={7.8}
+        stroke={c.primary}
+        strokeWidth={strokeWidth}
+      />
+      <Path
+        d="m18.9 18.9 4.1 4.1"
+        fill="none"
+        stroke={c.secondary}
+        strokeLinecap="round"
+        strokeWidth={strokeWidth}
+      />
+      <Path
+        d="M9.95 16.45 11.65 11.65 16.45 9.95 14.75 14.75z"
+        fill={c.fillPrimary}
+        stroke={c.secondary}
+        strokeLinejoin="round"
+        strokeWidth={strokeWidth}
+      />
+    </Svg>
+  );
+}
+
 export function MomentumTabIcon({
   color = 'currentColor',
   fill = 'none',

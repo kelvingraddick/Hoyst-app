@@ -237,7 +237,7 @@ async function deleteCircleCheckInsForMember(circleId, uid) {
         await deleteStoragePrefix(`circles/${circleRef.id}/check-ins/${dayRef.id}/${uid}/`);
     }
 }
-exports.createCircle = (0, https_1.onCall)(async (request) => {
+exports.createCircle = (0, https_1.onCall)({ secrets: [notifications_1.oneSignalRestApiKey] }, async (request) => {
     const { profile, uid } = await requireCompletedProfile(request.auth?.uid);
     const input = createCircleSchema.parse(request.data);
     const circleRef = firebase_1.db.collection('circles').doc();
@@ -295,6 +295,18 @@ exports.createCircle = (0, https_1.onCall)(async (request) => {
         });
     }
     await batch.commit();
+    await (0, notifications_1.notifyCompanionCircleCreated)({
+        actor: {
+            avatarUrl: profile.avatarUrl ?? null,
+            displayName: profile.displayName,
+            handle: profile.handle,
+            uid,
+        },
+        circle,
+        circleId: circleRef.id,
+        circleTitle: input.title,
+        dateKey: getDateKeyForTimezone(circle.timezone),
+    }).catch(error => console.error('notify_companion_circle_created_failed', error));
     return { circleId: circleRef.id, inviteCode };
 });
 exports.joinCircle = (0, https_1.onCall)({ secrets: [notifications_1.oneSignalRestApiKey] }, async (request) => {
@@ -425,6 +437,21 @@ exports.joinCircle = (0, https_1.onCall)({ secrets: [notifications_1.oneSignalRe
             ownerId,
         }).catch(error => console.error('notify_owner_new_join_failed', error));
     }
+    if (result.status === 'active' && result.shouldNotifyOwner) {
+        await (0, notifications_1.notifyCompanionCircleJoined)({
+            actor: {
+                avatarUrl: profile.avatarUrl ?? null,
+                displayName: profile.displayName,
+                handle: profile.handle,
+                uid,
+            },
+            circle,
+            circleId: input.circleId,
+            circleTitle,
+            dateKey: getDateKeyForTimezone(asOptionalString(circle?.timezone) ?? profile.timezone ?? 'UTC'),
+            excludedUids: ownerId ? [ownerId] : undefined,
+        }).catch(error => console.error('notify_companion_circle_joined_failed', error));
+    }
     return { status: result.status };
 });
 exports.reviewJoinRequest = (0, https_1.onCall)({ secrets: [notifications_1.oneSignalRestApiKey] }, async (request) => {
@@ -530,6 +557,20 @@ exports.reviewJoinRequest = (0, https_1.onCall)({ secrets: [notifications_1.oneS
                 joinedMember: result.requesterMember,
                 ownerId,
             }).catch(error => console.error('notify_owner_approved_join_failed', error));
+            const joinedMember = result.requesterMember ?? {};
+            await (0, notifications_1.notifyCompanionCircleJoined)({
+                actor: {
+                    avatarUrl: joinedMember.avatarUrl ?? null,
+                    displayName: asOptionalString(joinedMember.displayName) ?? 'Hoyst member',
+                    handle: asOptionalString(joinedMember.handle) ?? null,
+                    uid: input.requesterId,
+                },
+                circle,
+                circleId: input.circleId,
+                circleTitle: result.circleTitle,
+                dateKey: getDateKeyForTimezone(asOptionalString(circle?.timezone) ?? profile.timezone ?? 'UTC'),
+                excludedUids: [ownerId],
+            }).catch(error => console.error('notify_companion_approved_join_failed', error));
         }
     }
     return { status: result.status };
@@ -656,9 +697,7 @@ exports.leaveCircle = (0, https_1.onCall)(async (request) => {
         }
         if (publicIndexSnapshot.exists) {
             transaction.set(publicIndexRef, {
-                ...(isActiveMember
-                    ? { memberCount: firestore_1.FieldValue.increment(-1) }
-                    : {}),
+                ...(isActiveMember ? { memberCount: firestore_1.FieldValue.increment(-1) } : {}),
                 ...(filteredMembers ? { members: filteredMembers } : {}),
                 updatedAt: now,
             }, { merge: true });
@@ -689,7 +728,8 @@ exports.updateCircle = (0, https_1.onCall)(async (request) => {
         member?.status !== 'active') {
         throw new https_1.HttpsError('permission-denied', 'Only the circle owner can edit this circle.');
     }
-    const storedMemberCount = typeof circle?.memberCount === 'number' && Number.isFinite(circle.memberCount)
+    const storedMemberCount = typeof circle?.memberCount === 'number' &&
+        Number.isFinite(circle.memberCount)
         ? circle.memberCount
         : 0;
     const memberCount = Math.max(storedMemberCount, activeMemberSnapshots.size);

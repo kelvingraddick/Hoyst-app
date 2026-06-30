@@ -3,10 +3,14 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.notificationModules = exports.markInboxEventsRead = exports.markInboxEventRead = exports.updateNotificationSettings = exports.sendRoutineEngagementNotifications = exports.sendFinalTapInWarnings = exports.sendMiddayTapInReminders = exports.oneSignalAppId = exports.oneSignalRestApiKey = void 0;
 exports.getJoinRequestNotificationDedupeKey = getJoinRequestNotificationDedupeKey;
 exports.getNudgeNotificationDedupeKey = getNudgeNotificationDedupeKey;
+exports.canShareCircleOutsideMembers = canShareCircleOutsideMembers;
+exports.getCompanionFeedTargetsFromMemberships = getCompanionFeedTargetsFromMemberships;
+exports.getCompanionMilestoneEvents = getCompanionMilestoneEvents;
 exports.getNotificationCopyVariantIndex = getNotificationCopyVariantIndex;
 exports.resolveNotificationCopy = resolveNotificationCopy;
 exports.getRoutineNotificationEligibility = getRoutineNotificationEligibility;
 exports.getDiscoveryInactivityEligibility = getDiscoveryInactivityEligibility;
+exports.resolveCompanionFeedTargets = resolveCompanionFeedTargets;
 exports.getNotificationPreferenceEnabled = getNotificationPreferenceEnabled;
 exports.buildOneSignalPushPayload = buildOneSignalPushPayload;
 exports.markUnreadInboxEventsRead = markUnreadInboxEventsRead;
@@ -15,6 +19,10 @@ exports.notifyOwnerJoinRequest = notifyOwnerJoinRequest;
 exports.notifyOwnerNewJoin = notifyOwnerNewJoin;
 exports.notifyJoinRequestReview = notifyJoinRequestReview;
 exports.notifyNudge = notifyNudge;
+exports.notifyCompanionSkipped = notifyCompanionSkipped;
+exports.notifyCompanionCircleCreated = notifyCompanionCircleCreated;
+exports.notifyCompanionCircleJoined = notifyCompanionCircleJoined;
+exports.notifyCompanionMilestones = notifyCompanionMilestones;
 exports.getCircleAtRiskNotificationBody = getCircleAtRiskNotificationBody;
 exports.notifyCompanionTappedIn = notifyCompanionTappedIn;
 exports.notifyCircleComplete = notifyCircleComplete;
@@ -75,6 +83,19 @@ const routineSpacingMs = 6 * 60 * 60 * 1000;
 const routineDailyLimit = 2;
 const discoverySpacingMs = 7 * 24 * 60 * 60 * 1000;
 const discoveryInactivityMs = 3 * 24 * 60 * 60 * 1000;
+const companionAchievementCatalog = [
+    { key: '7-days-straight', threshold: 7, title: '7 Days Straight' },
+    { key: '10-day-streak', threshold: 10, title: '10 Day Streak' },
+    { key: '20-day-streak', threshold: 20, title: '20 Day Streak' },
+    { key: '30-day-streak', threshold: 30, title: '30 Day Streak' },
+    { key: '50-taps', threshold: 50, title: '50 Taps' },
+];
+const milestoneStatuses = [
+    'getting_started',
+    'building_momentum',
+    'strong_momentum',
+    'peak_momentum',
+];
 function asString(value, fallback = '') {
     return typeof value === 'string' && value.trim().length > 0
         ? value.trim()
@@ -84,6 +105,98 @@ function asOptionalString(value) {
     return typeof value === 'string' && value.trim().length > 0
         ? value.trim()
         : undefined;
+}
+function asNumber(value, fallback = 0) {
+    return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
+}
+function normalizeMomentumStatus(value) {
+    return value === 'getting_started' ||
+        value === 'building_momentum' ||
+        value === 'strong_momentum' ||
+        value === 'peak_momentum'
+        ? value
+        : undefined;
+}
+function getMomentumStatusLabel(status) {
+    if (status === 'peak_momentum') {
+        return 'Peak';
+    }
+    if (status === 'strong_momentum') {
+        return 'Strong';
+    }
+    if (status === 'building_momentum') {
+        return 'Building';
+    }
+    return 'Getting Started';
+}
+function getMomentumStatusRank(status) {
+    return status ? milestoneStatuses.indexOf(status) : -1;
+}
+function canShareCircleOutsideMembers(circle) {
+    return circle?.privacy === 'public' && circle?.joinMode !== 'invite_only';
+}
+function getCompanionFeedTargetsFromMemberships({ actorUid, sharedMemberUids, sourceCircle, sourceMemberUids, }) {
+    const targets = new Map();
+    const sourceMemberUidSet = new Set(sourceMemberUids.filter(Boolean));
+    const canShareOutsideMembers = canShareCircleOutsideMembers(sourceCircle);
+    sourceMemberUidSet.forEach(uid => {
+        if (uid && uid !== actorUid) {
+            targets.set(uid, { canViewMedia: true, uid });
+        }
+    });
+    if (canShareOutsideMembers) {
+        sharedMemberUids.forEach(uid => {
+            if (uid && uid !== actorUid && !targets.has(uid)) {
+                targets.set(uid, { canViewMedia: true, uid });
+            }
+        });
+    }
+    return Array.from(targets.values());
+}
+function getStreakMilestonesCrossed({ currentStreak, priorStreak, }) {
+    const fixedMilestones = [3, 7, 14, 30];
+    const recurringMilestones = currentStreak > 30
+        ? Array.from({ length: Math.floor(currentStreak / 30) - 1 }, (_, index) => (index + 2) * 30)
+        : [];
+    return [...fixedMilestones, ...recurringMilestones].filter(milestone => priorStreak < milestone && currentStreak >= milestone);
+}
+function getCompanionMilestoneEvents({ priorSummary, summary, }) {
+    const priorBestStreak = asNumber(priorSummary?.bestStreak, 0);
+    const bestStreak = asNumber(summary.bestStreak, 0);
+    const priorCurrentStreak = asNumber(priorSummary?.currentStreak, 0);
+    const currentStreak = asNumber(summary.currentStreak, 0);
+    const priorStatus = normalizeMomentumStatus(priorSummary?.status);
+    const status = normalizeMomentumStatus(summary.status);
+    const events = [];
+    companionAchievementCatalog.forEach(achievement => {
+        if (priorBestStreak < achievement.threshold &&
+            bestStreak >= achievement.threshold) {
+            events.push({
+                achievementTitle: achievement.title,
+                key: achievement.key,
+                type: 'companion_achievement_unlocked',
+            });
+        }
+    });
+    getStreakMilestonesCrossed({
+        currentStreak,
+        priorStreak: priorCurrentStreak,
+    }).forEach(streakDays => {
+        events.push({
+            key: `${streakDays}-day-streak`,
+            streakDays,
+            type: 'companion_streak_milestone',
+        });
+    });
+    if (status &&
+        getMomentumStatusRank(status) > getMomentumStatusRank(priorStatus)) {
+        events.push({
+            key: status,
+            momentumLabel: asOptionalString(summary.label) ?? getMomentumStatusLabel(status),
+            type: 'companion_momentum_level_up',
+        });
+    }
+    return events;
 }
 function sanitizeEventId(value) {
     return value.replace(/[^A-Za-z0-9_.-]/g, '_').slice(0, 500);
@@ -107,6 +220,16 @@ function getActorName(context) {
 }
 function getPeriodCopy(context) {
     return context.periodCopy ?? 'this period';
+}
+function getAchievementTitle(context) {
+    return context.achievementTitle ?? 'a new achievement';
+}
+function getMomentumLabelCopy(context) {
+    return context.momentumLabel ?? 'a new momentum level';
+}
+function getStreakDaysCopy(context) {
+    const streakDays = Math.max(1, Math.round(context.streakDays ?? 1));
+    return `${streakDays}-day streak`;
 }
 const notificationCopyCatalog = {
     circle_at_risk: [
@@ -195,6 +318,138 @@ const notificationCopyCatalog = {
         context => ({
             body: `You can help ${getCircleTitle(context)} stay on track with one quick nudge.`,
             title: 'Circle needs a boost',
+        }),
+    ],
+    companion_achievement_unlocked: [
+        context => ({
+            body: `${getActorName(context)} unlocked ${getAchievementTitle(context)}.`,
+            title: 'Achievement unlocked',
+        }),
+        context => ({
+            body: `${getAchievementTitle(context)} is now on ${getActorName(context)}'s board.`,
+            title: 'New achievement',
+        }),
+        context => ({
+            body: `${getActorName(context)} earned ${getAchievementTitle(context)}.`,
+            title: 'Companion achievement',
+        }),
+        context => ({
+            body: `${getActorName(context)} hit ${getAchievementTitle(context)}.`,
+            title: 'Milestone unlocked',
+        }),
+        context => ({
+            body: `${getActorName(context)} added ${getAchievementTitle(context)} to their progress.`,
+            title: 'Progress milestone',
+        }),
+    ],
+    companion_circle_created: [
+        context => ({
+            body: `${getActorName(context)} created ${getCircleTitle(context)}.`,
+            title: 'New circle created',
+        }),
+        context => ({
+            body: `${getActorName(context)} started ${getCircleTitle(context)}.`,
+            title: 'A companion started a circle',
+        }),
+        context => ({
+            body: `${getCircleTitle(context)} is a new circle from ${getActorName(context)}.`,
+            title: 'New companion circle',
+        }),
+        context => ({
+            body: `${getActorName(context)} opened ${getCircleTitle(context)} for Progression.`,
+            title: 'Circle opened',
+        }),
+        context => ({
+            body: `${getActorName(context)} made a new place to Tap In: ${getCircleTitle(context)}.`,
+            title: 'Fresh circle',
+        }),
+    ],
+    companion_circle_joined: [
+        context => ({
+            body: `${getActorName(context)} joined ${getCircleTitle(context)}.`,
+            title: 'A companion joined',
+        }),
+        context => ({
+            body: `${getCircleTitle(context)} has ${getActorName(context)} in the circle now.`,
+            title: 'Circle grew',
+        }),
+        context => ({
+            body: `${getActorName(context)} took a seat in ${getCircleTitle(context)}.`,
+            title: 'New circle companion',
+        }),
+        context => ({
+            body: `${getActorName(context)} is now part of ${getCircleTitle(context)}.`,
+            title: 'Companion joined',
+        }),
+        context => ({
+            body: `${getCircleTitle(context)} welcomed ${getActorName(context)}.`,
+            title: 'Member joined',
+        }),
+    ],
+    companion_momentum_level_up: [
+        context => ({
+            body: `${getActorName(context)} reached ${getMomentumLabelCopy(context)} momentum.`,
+            title: 'Momentum level up',
+        }),
+        context => ({
+            body: `${getActorName(context)} moved into ${getMomentumLabelCopy(context)} momentum.`,
+            title: 'Momentum rising',
+        }),
+        context => ({
+            body: `${getMomentumLabelCopy(context)} momentum is live for ${getActorName(context)}.`,
+            title: 'New momentum level',
+        }),
+        context => ({
+            body: `${getActorName(context)} leveled up to ${getMomentumLabelCopy(context)} momentum.`,
+            title: 'Companion leveled up',
+        }),
+        context => ({
+            body: `${getActorName(context)} built their way to ${getMomentumLabelCopy(context)} momentum.`,
+            title: 'Momentum milestone',
+        }),
+    ],
+    companion_skipped: [
+        context => ({
+            body: `${getActorName(context)} used a skip for ${getCircleTitle(context)}.`,
+            title: 'A companion used a skip',
+        }),
+        context => ({
+            body: `${getActorName(context)} kept ${getCircleTitle(context)} covered with a skip.`,
+            title: 'Skip used',
+        }),
+        context => ({
+            body: `${getCircleTitle(context)} has a skip from ${getActorName(context)}.`,
+            title: 'Circle still covered',
+        }),
+        context => ({
+            body: `${getActorName(context)} used grace in ${getCircleTitle(context)}.`,
+            title: 'Grace skip',
+        }),
+        context => ({
+            body: `${getActorName(context)} protected the rhythm in ${getCircleTitle(context)} with a skip.`,
+            title: 'Rhythm protected',
+        }),
+    ],
+    companion_streak_milestone: [
+        context => ({
+            body: `${getActorName(context)} reached a ${getStreakDaysCopy(context)}.`,
+            title: 'Streak milestone',
+        }),
+        context => ({
+            body: `${getActorName(context)} is on a ${getStreakDaysCopy(context)}.`,
+            title: 'Streak rising',
+        }),
+        context => ({
+            body: `${getStreakDaysCopy(context)} for ${getActorName(context)}.`,
+            title: 'Companion streak',
+        }),
+        context => ({
+            body: `${getActorName(context)} kept the streak alive for ${context.streakDays ?? 1} days.`,
+            title: 'New streak milestone',
+        }),
+        context => ({
+            body: `${getActorName(context)} just hit a ${getStreakDaysCopy(context)}.`,
+            title: 'Streak unlocked',
         }),
     ],
     companion_tapped_in: [
@@ -472,7 +727,8 @@ function getRoutineNotificationEligibility({ deliveryState, now = new Date(), ty
         now.getTime() - routineLastSentAt.getTime() < routineSpacingMs) {
         return { eligible: false, reason: 'routine-spacing' };
     }
-    if (routineDateKey === localDateKey && routineSentCount >= routineDailyLimit) {
+    if (routineDateKey === localDateKey &&
+        routineSentCount >= routineDailyLimit) {
         return { eligible: false, reason: 'routine-daily-limit' };
     }
     if (type === 'circle_discovery_suggestion' &&
@@ -562,14 +818,45 @@ function buildActor(data) {
         uid: asOptionalString(data.uid) ?? null,
     };
 }
+async function getActiveCircleMemberUids(circleId) {
+    const snapshot = await firebase_1.db
+        .collection('circles')
+        .doc(circleId)
+        .collection('members')
+        .where('status', '==', 'active')
+        .get();
+    return snapshot.docs
+        .map(doc => asOptionalString(doc.data().uid) ?? doc.id)
+        .filter(Boolean);
+}
+async function getActorActiveCircleIds(actorUid) {
+    const snapshot = await firebase_1.db
+        .collectionGroup('members')
+        .where('uid', '==', actorUid)
+        .get();
+    return snapshot.docs
+        .filter(doc => doc.data().status === 'active')
+        .map(doc => doc.ref.parent.parent?.id)
+        .filter((circleId) => Boolean(circleId));
+}
+async function resolveCompanionFeedTargets({ actorUid, circle, circleId, }) {
+    const sourceMemberUids = await getActiveCircleMemberUids(circleId);
+    const sharedMemberUids = canShareCircleOutsideMembers(circle)
+        ? (await Promise.all(Array.from(new Set(await getActorActiveCircleIds(actorUid))).map(activeCircleId => getActiveCircleMemberUids(activeCircleId)))).flat()
+        : [];
+    return getCompanionFeedTargetsFromMemberships({
+        actorUid,
+        sharedMemberUids,
+        sourceCircle: circle,
+        sourceMemberUids,
+    });
+}
 function isPreferenceEnabled(notificationSettings, key) {
     const value = notificationSettings?.[key];
     if (typeof value === 'boolean') {
         return value;
     }
-    if ((key === 'circleRisk' ||
-        key === 'nudges' ||
-        key === 'socialActivity') &&
+    if ((key === 'circleRisk' || key === 'nudges' || key === 'socialActivity') &&
         typeof notificationSettings?.circleActivity === 'boolean') {
         return notificationSettings.circleActivity;
     }
@@ -684,7 +971,7 @@ async function recordRoutineNotificationDelivery({ now = new Date(), type, uid, 
         },
     }, { merge: true });
 }
-async function createInboxEvent({ actor, body, circleId, copyVariant, dedupeKey, deeplink, deliveryPriority = 'immediate', preferenceKey, pushData, routineTimezone = 'UTC', title, type, uid, }) {
+async function createInboxEvent({ actor, body, circleId, copyVariant, dedupeKey, deeplink, deliveryPriority = 'immediate', feedCategory, mediaImageUrl, preferenceKey, pushData, routineTimezone = 'UTC', title, type, uid, }) {
     const eventId = sanitizeEventId(dedupeKey ?? `${type}_${circleId ?? 'general'}_${Date.now()}`);
     const eventRef = firebase_1.db
         .collection('userPrivate')
@@ -715,6 +1002,8 @@ async function createInboxEvent({ actor, body, circleId, copyVariant, dedupeKey,
         copyVariant: copyVariant ?? null,
         createdAt: firestore_1.FieldValue.serverTimestamp(),
         deeplink,
+        feedCategory: feedCategory ?? null,
+        mediaImageUrl: mediaImageUrl ?? null,
         preferenceKey,
         push: {
             status: enabled ? 'pending' : 'disabled',
@@ -811,6 +1100,7 @@ async function notifyOwnerNewJoin({ circleId, circleTitle, joinedMember, ownerId
         copyVariant: copy.copyVariant,
         dedupeKey,
         deeplink: { circleId, screen: 'CircleDetail' },
+        feedCategory: 'companion',
         preferenceKey: 'socialActivity',
         title: copy.title,
         type: 'member_joined',
@@ -865,11 +1155,195 @@ async function notifyNudge({ actor, circleId, circleTitle, dateKey, targetUid, }
         copyVariant: copy.copyVariant,
         dedupeKey,
         deeplink: { circleId, screen: 'TapInComposer', source: 'notification' },
+        feedCategory: 'companion',
         preferenceKey: 'nudges',
         title: copy.title,
         type: 'nudge',
         uid: targetUid,
     });
+}
+async function notifyCompanionFeedEvent({ actor, circle, circleId, context, dateKey, dedupeSubject, excludedUids = [], fallbackBody, fallbackTitle, mediaImageUrl, type, }) {
+    const actorUid = asOptionalString(actor.uid);
+    if (!actorUid) {
+        return [];
+    }
+    const excludedUidSet = new Set([actorUid, ...excludedUids]);
+    const targets = await resolveCompanionFeedTargets({
+        actorUid,
+        circle,
+        circleId,
+    });
+    return Promise.all(targets
+        .filter(target => !excludedUidSet.has(target.uid))
+        .map(target => {
+        const targetMediaImageUrl = target.canViewMedia
+            ? asOptionalString(mediaImageUrl)
+            : undefined;
+        const dedupeKey = `${type}_${circleId}_${dateKey}_${actorUid}_${dedupeSubject}_${target.uid}`;
+        const copy = resolveNotificationCopy({
+            context,
+            dedupeKey,
+            fallbackBody,
+            fallbackTitle,
+            type,
+        });
+        return createInboxEvent({
+            actor,
+            body: copy.body,
+            circleId,
+            copyVariant: copy.copyVariant,
+            dedupeKey,
+            deeplink: { circleId, screen: 'CircleDetail' },
+            feedCategory: 'companion',
+            mediaImageUrl: targetMediaImageUrl,
+            preferenceKey: 'socialActivity',
+            pushData: {
+                feedCategory: 'companion',
+                ...(targetMediaImageUrl ? { hasMedia: 'true' } : {}),
+            },
+            title: copy.title,
+            type,
+            uid: target.uid,
+        });
+    }));
+}
+async function notifyCompanionSkipped({ actor, circle, circleId, circleTitle, dateKey, }) {
+    const actorName = actor.displayName ?? 'Someone';
+    return notifyCompanionFeedEvent({
+        actor,
+        circle,
+        circleId,
+        context: { actorName, circleTitle },
+        dateKey,
+        dedupeSubject: 'skip',
+        fallbackBody: `${actorName} used a skip for ${circleTitle}.`,
+        fallbackTitle: 'A companion used a skip',
+        type: 'companion_skipped',
+    });
+}
+async function notifyCompanionCircleCreated({ actor, circle, circleId, circleTitle, dateKey, }) {
+    if (!canShareCircleOutsideMembers(circle)) {
+        return [];
+    }
+    const actorName = actor.displayName ?? 'Someone';
+    return notifyCompanionFeedEvent({
+        actor,
+        circle,
+        circleId,
+        context: { actorName, circleTitle },
+        dateKey,
+        dedupeSubject: 'created',
+        fallbackBody: `${actorName} created ${circleTitle}.`,
+        fallbackTitle: 'New circle created',
+        type: 'companion_circle_created',
+    });
+}
+async function notifyCompanionCircleJoined({ actor, circle, circleId, circleTitle, dateKey, excludedUids, }) {
+    const actorName = actor.displayName ?? 'Someone';
+    return notifyCompanionFeedEvent({
+        actor,
+        circle,
+        circleId,
+        context: { actorName, circleTitle },
+        dateKey,
+        dedupeSubject: 'joined',
+        excludedUids,
+        fallbackBody: `${actorName} joined ${circleTitle}.`,
+        fallbackTitle: 'A companion joined',
+        type: 'companion_circle_joined',
+    });
+}
+function getCompanionMilestoneContext(event, actorName) {
+    if (event.type === 'companion_achievement_unlocked') {
+        return { achievementTitle: event.achievementTitle, actorName };
+    }
+    if (event.type === 'companion_momentum_level_up') {
+        return { actorName, momentumLabel: event.momentumLabel };
+    }
+    return { actorName, streakDays: event.streakDays };
+}
+function getCompanionMilestoneFallback({ actorName, event, }) {
+    if (event.type === 'companion_achievement_unlocked') {
+        return {
+            body: `${actorName} unlocked ${event.achievementTitle}.`,
+            title: 'Achievement unlocked',
+        };
+    }
+    if (event.type === 'companion_momentum_level_up') {
+        return {
+            body: `${actorName} reached ${event.momentumLabel} momentum.`,
+            title: 'Momentum level up',
+        };
+    }
+    return {
+        body: `${actorName} reached a ${event.streakDays}-day streak.`,
+        title: 'Streak milestone',
+    };
+}
+async function notifyCompanionMilestones({ actor, circle, circleId, dateKey, events, targetUid, }) {
+    const actorUid = asOptionalString(actor.uid);
+    const actorName = actor.displayName ?? 'Someone';
+    if (!actorUid || events.length === 0) {
+        return [];
+    }
+    const targets = await resolveCompanionFeedTargets({
+        actorUid,
+        circle,
+        circleId,
+    });
+    const companionSends = events.flatMap(event => {
+        const context = getCompanionMilestoneContext(event, actorName);
+        const fallback = getCompanionMilestoneFallback({ actorName, event });
+        return targets.map(target => {
+            const dedupeKey = `${event.type}_${circleId}_${dateKey}_${actorUid}_${event.key}_${target.uid}`;
+            const copy = resolveNotificationCopy({
+                context,
+                dedupeKey,
+                fallbackBody: fallback.body,
+                fallbackTitle: fallback.title,
+                type: event.type,
+            });
+            return createInboxEvent({
+                actor,
+                body: copy.body,
+                circleId,
+                copyVariant: copy.copyVariant,
+                dedupeKey,
+                deeplink: { circleId, screen: 'CircleDetail' },
+                feedCategory: 'companion',
+                preferenceKey: 'socialActivity',
+                pushData: { feedCategory: 'companion' },
+                title: copy.title,
+                type: event.type,
+                uid: target.uid,
+            });
+        });
+    });
+    const selfSends = events.map(event => {
+        const context = getCompanionMilestoneContext(event, 'You');
+        const fallback = getCompanionMilestoneFallback({ actorName: 'You', event });
+        const dedupeKey = `self_${event.type}_${dateKey}_${actorUid}_${event.key}`;
+        const copy = resolveNotificationCopy({
+            context,
+            dedupeKey,
+            fallbackBody: fallback.body,
+            fallbackTitle: fallback.title,
+            type: event.type,
+        });
+        return createInboxEvent({
+            actor,
+            body: copy.body,
+            circleId,
+            copyVariant: copy.copyVariant,
+            dedupeKey,
+            deeplink: { circleId, screen: 'CircleDetail' },
+            preferenceKey: 'socialActivity',
+            title: copy.title,
+            type: event.type,
+            uid: targetUid,
+        });
+    });
+    return Promise.all([...companionSends, ...selfSends]);
 }
 function getCircleAtRiskNotificationBody({ circleTitle, commitmentCadence, remainingCount, }) {
     const periodCopy = getCommitmentPeriodCopy(commitmentCadence);
@@ -882,7 +1356,7 @@ function getCommitmentPeriodCopy(commitmentCadence) {
             ? 'this month'
             : 'this week';
 }
-async function notifyCompanionTappedIn({ actor, circleId, circleTitle, dateKey, targetUid, }) {
+async function notifyCompanionTappedIn({ actor, circleId, circleTitle, dateKey, mediaImageUrl, targetUid, }) {
     const notificationActor = buildActor(actor);
     const actorName = notificationActor?.displayName ?? 'Someone';
     const dedupeKey = `companion_tapped_in_${circleId}_${dateKey}_${notificationActor?.uid ?? 'unknown'}_${targetUid}`;
@@ -900,7 +1374,13 @@ async function notifyCompanionTappedIn({ actor, circleId, circleTitle, dateKey, 
         copyVariant: copy.copyVariant,
         dedupeKey,
         deeplink: { circleId, screen: 'CircleDetail' },
+        feedCategory: 'companion',
+        mediaImageUrl,
         preferenceKey: 'socialActivity',
+        pushData: {
+            feedCategory: 'companion',
+            ...(mediaImageUrl ? { hasMedia: 'true' } : {}),
+        },
         title: copy.title,
         type: 'companion_tapped_in',
         uid: targetUid,
@@ -922,6 +1402,7 @@ async function notifyCircleComplete({ circleId, circleTitle, commitmentCadence, 
         copyVariant: copy.copyVariant,
         dedupeKey,
         deeplink: { circleId, screen: 'CircleDetail' },
+        feedCategory: 'companion',
         preferenceKey: 'socialActivity',
         title: copy.title,
         type: 'circle_complete',
@@ -1117,9 +1598,7 @@ async function sendTapInReminders(kind) {
             if (!eligibility.eligible || !eligibility.dedupeKey) {
                 continue;
             }
-            const type = kind === 'midday'
-                ? 'tap_in_midday_reminder'
-                : 'tap_in_final_warning';
+            const type = kind === 'midday' ? 'tap_in_midday_reminder' : 'tap_in_final_warning';
             const copy = resolveNotificationCopy({
                 context: { circleTitle },
                 dedupeKey: eligibility.dedupeKey,
@@ -1152,9 +1631,7 @@ async function sendTapInReminders(kind) {
     return { sentOrSkipped: sendPromises.length };
 }
 function getPeriodKey({ commitmentCadence, dateKey, periodDateKeys, }) {
-    return commitmentCadence === 'daily'
-        ? dateKey
-        : periodDateKeys[0] ?? dateKey;
+    return commitmentCadence === 'daily' ? dateKey : periodDateKeys[0] ?? dateKey;
 }
 async function sendCircleEngagementPrompts() {
     const targetHour = 18;
@@ -1236,7 +1713,8 @@ async function sendCircleEngagementPrompts() {
 async function getEligibleDiscoveryCircleForUser({ publicCircleSnapshots, uid, }) {
     for (const circleSnapshot of publicCircleSnapshots.docs) {
         const circle = circleSnapshot.data();
-        const memberCount = typeof circle.memberCount === 'number' && Number.isFinite(circle.memberCount)
+        const memberCount = typeof circle.memberCount === 'number' &&
+            Number.isFinite(circle.memberCount)
             ? circle.memberCount
             : 0;
         const maxSize = typeof circle.maxSize === 'number' && Number.isFinite(circle.maxSize)

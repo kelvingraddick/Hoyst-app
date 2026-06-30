@@ -125,7 +125,17 @@ function asCleanString(value) {
 }
 async function processTapInSideEffectsForCheckIn({ checkIn, circleId, dateKey, status, uid, }) {
     const circleRef = firebase_1.db.collection('circles').doc(circleId);
-    await (0, momentum_1.recalculateMomentumSummaryForUser)(uid).catch(error => console.error('recalculate_momentum_summary_failed', error));
+    const momentumRef = firebase_1.db
+        .collection('userPrivate')
+        .doc(uid)
+        .collection('momentum')
+        .doc('current');
+    const priorMomentumSnapshot = await momentumRef.get();
+    const priorMomentumSummary = priorMomentumSnapshot.data();
+    const momentumSummary = await (0, momentum_1.recalculateMomentumSummaryForUser)(uid).catch(error => {
+        console.error('recalculate_momentum_summary_failed', error);
+        return undefined;
+    });
     const [circleSnapshot, memberSnapshots] = await Promise.all([
         circleRef.get(),
         circleRef.collection('members').where('status', '==', 'active').get(),
@@ -185,22 +195,48 @@ async function processTapInSideEffectsForCheckIn({ checkIn, circleId, dateKey, s
         handle: asCleanString(checkIn.handle) ?? null,
         uid,
     };
-    const companionTargetUids = (0, notification_plan_1.getCompanionTapInNotificationTargets)({
-        activeMemberUids,
+    const companionTargets = await (0, notifications_1.resolveCompanionFeedTargets)({
         actorUid: uid,
+        circle,
+        circleId,
     });
+    const mediaImageUrl = asCleanString(checkIn.photoUrl);
     const circleCompleteTargetUids = (0, notification_plan_1.getCircleCompleteNotificationTargets)({
         activeMemberUids,
         remainingTapIns: totalRemainingCount,
     });
     if (status === 'done') {
-        await Promise.all(companionTargetUids.map(targetUid => (0, notifications_1.notifyCompanionTappedIn)({
+        await Promise.all(companionTargets.map(target => (0, notifications_1.notifyCompanionTappedIn)({
             actor,
             circleId,
             circleTitle,
             dateKey,
-            targetUid,
+            mediaImageUrl: target.canViewMedia ? mediaImageUrl : undefined,
+            targetUid: target.uid,
         }))).catch(error => console.error('notify_companion_tapped_in_failed', error));
+    }
+    if (status === 'skip') {
+        await (0, notifications_1.notifyCompanionSkipped)({
+            actor,
+            circle,
+            circleId,
+            circleTitle,
+            dateKey,
+        }).catch(error => console.error('notify_companion_skipped_failed', error));
+    }
+    if (momentumSummary) {
+        const milestoneEvents = (0, notifications_1.getCompanionMilestoneEvents)({
+            priorSummary: priorMomentumSummary,
+            summary: momentumSummary,
+        });
+        await (0, notifications_1.notifyCompanionMilestones)({
+            actor,
+            circle,
+            circleId,
+            dateKey,
+            events: milestoneEvents,
+            targetUid: uid,
+        }).catch(error => console.error('notify_companion_milestones_failed', error));
     }
     if (circleCompleteTargetUids.length > 0) {
         await Promise.all(circleCompleteTargetUids.map(targetUid => (0, notifications_1.notifyCircleComplete)({

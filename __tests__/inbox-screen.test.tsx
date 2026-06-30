@@ -197,6 +197,38 @@ describe('InboxScreen', () => {
     expect(output).not.toContain('Clark Digital Clark Digital');
   });
 
+  it('labels new companion feed event types', () => {
+    mockInboxEvents = [
+      eventForType('companion_circle_created'),
+      eventForType('companion_skipped'),
+      eventForType('companion_momentum_level_up'),
+      eventForType('companion_streak_milestone'),
+    ];
+
+    const {tree} = renderInbox();
+    const chips = tree.root.findAllByType(HoystChip);
+
+    expect(chips.map(chip => chip.props.label)).toEqual([
+      'Created',
+      'Skip',
+      'Level up',
+      'Streak',
+    ]);
+  });
+
+  it('renders stored notification media thumbnails', () => {
+    mockInboxEvents = [eventForType('companion_tapped_in')].map(event => ({
+      ...event,
+      mediaImageUrl: 'https://example.com/tap-in.jpg',
+    }));
+
+    const {tree} = renderInbox();
+
+    expect(
+      tree.root.findAllByProps({testID: 'inbox-media-image'}).length,
+    ).toBeGreaterThan(0);
+  });
+
   it('shows unread rows with a status-colored dot and stronger text', () => {
     mockInboxEvents = [
       inboxEvent({

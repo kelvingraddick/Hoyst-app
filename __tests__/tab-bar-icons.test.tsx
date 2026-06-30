@@ -3,7 +3,7 @@ import Svg, {Circle, Path} from 'react-native-svg';
 import renderer, {act} from 'react-test-renderer';
 
 import {
-  CirclesTabIcon,
+  ExploreTabIcon,
   HomeTabIcon,
   MomentumTabIcon,
   ProfileTabIcon,
@@ -16,7 +16,7 @@ const icons: Array<{
   name: string;
 }> = [
   {Component: HomeTabIcon, name: 'Home'},
-  {Component: CirclesTabIcon, name: 'Circles'},
+  {Component: ExploreTabIcon, name: 'Explore'},
   {Component: MomentumTabIcon, name: 'Momentum'},
   {Component: ProfileTabIcon, name: 'Profile'},
 ];
@@ -61,6 +61,20 @@ function getVisibleGlyphColors(tree: renderer.ReactTestRenderer) {
     );
 }
 
+function getSvgPathPoints(path: string): Array<{x: number; y: number}> {
+  const coordinates = path.match(/-?\d+(?:\.\d+)?/g)?.map(Number) ?? [];
+
+  expect(coordinates.length % 2).toBe(0);
+
+  return coordinates.reduce<Array<{x: number; y: number}>>(
+    (points, coordinate, index) =>
+      index % 2 === 0
+        ? points.concat({x: coordinate, y: coordinates[index + 1]})
+        : points,
+    [],
+  );
+}
+
 describe('TabBarIcons', () => {
   it('renders every tab icon at the same visible size', () => {
     icons.forEach(({Component}) => {
@@ -82,22 +96,31 @@ describe('TabBarIcons', () => {
     });
   });
 
-  it('renders the Circles icon as three linked ring outlines', () => {
-    const tree = renderIcon(CirclesTabIcon);
+  it('renders the Explore icon as a search and compass mark', () => {
+    const tree = renderIcon(ExploreTabIcon);
     const rings = tree.root.findAllByType(Circle);
+    const paths = tree.root.findAllByType(Path);
 
-    expect(rings).toHaveLength(3);
-    expect(rings.map(ring => ring.props.fill)).toEqual([
-      'none',
-      'none',
-      'none',
+    expect(rings).toHaveLength(1);
+    expect(paths).toHaveLength(2);
+    expect(rings[0].props.fill).toBe('none');
+    expect(rings[0].props.stroke).toBe('#111827');
+    expect(paths.map(path => path.props.stroke)).toEqual([
+      '#6C748C',
+      '#6C748C',
     ]);
-    expect(rings.map(ring => ring.props.stroke)).toEqual([
-      '#111827',
-      '#111827',
-      '#111827',
-    ]);
-    expect(rings.map(ring => ring.props.r)).toEqual([5.25, 5.25, 5.25]);
+
+    const compassPoints = getSvgPathPoints(paths[1].props.d);
+    const compassCenter = compassPoints.reduce(
+      (center, point) => ({
+        x: center.x + point.x / compassPoints.length,
+        y: center.y + point.y / compassPoints.length,
+      }),
+      {x: 0, y: 0},
+    );
+
+    expect(compassCenter.x).toBeCloseTo(rings[0].props.cx);
+    expect(compassCenter.y).toBeCloseTo(rings[0].props.cy);
   });
 
   it('can render inactive icons in one gray color', () => {

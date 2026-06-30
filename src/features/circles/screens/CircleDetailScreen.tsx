@@ -550,7 +550,11 @@ function CircleStatRings({
         <SectionEyebrowTrailing>{statsRangeLabel}</SectionEyebrowTrailing>
       </View>
       <GlassPanel padding="compact" style={styles.statsWeekCard}>
-        <WeekProgressStrip days={weekCells} streakDays={weekStreakDays} />
+        <WeekProgressStrip
+          days={weekCells}
+          showStreak={false}
+          title="LAST 7 DAYS"
+        />
       </GlassPanel>
       <View style={styles.statRingsRow}>
         <StatBarCard
@@ -1229,10 +1233,10 @@ export function CircleDetailScreen({
   const weekStreakDays = Number.isFinite(streakValue)
     ? Math.max(0, streakValue)
     : 0;
-  const weekCells = circleProgressToWeekCells(
-    detail.monthProgress,
-    detail.timezone,
-  );
+  const weekCells =
+    detail.groupProgressDays && detail.groupProgressDays.length > 0
+      ? detail.groupProgressDays
+      : circleProgressToWeekCells(detail.monthProgress, detail.timezone);
 
   const shareInvite = () => {
     if (!canInvite || !detail.inviteUrl) {

@@ -8,6 +8,7 @@ import {
   type ViewStyle,
 } from 'react-native';
 import {BlurView} from '@react-native-community/blur';
+import LinearGradient from 'react-native-linear-gradient';
 
 import {useHoystTheme} from '../theme/useHoystTheme';
 import {glass} from '../tokens/glass';
@@ -37,6 +38,12 @@ export function GlassPanel({
       : padding === 'compact'
       ? styles.contentCompact
       : styles.content;
+  const darkTopSheenStyle =
+    variant === 'panel'
+      ? styles.darkPanelTopSheen
+      : variant === 'nav'
+      ? styles.darkNavTopSheen
+      : styles.darkCardTopSheen;
 
   return (
     <View
@@ -81,6 +88,16 @@ export function GlassPanel({
         ]}
         testID="glass-panel-tint"
       />
+      {theme.isDark ? (
+        <LinearGradient
+          colors={[...glass.darkHighlightGradientColors]}
+          end={{x: 0.5, y: 1}}
+          pointerEvents="none"
+          start={{x: 0.5, y: 0}}
+          style={StyleSheet.absoluteFill}
+          testID="glass-panel-highlight-gradient"
+        />
+      ) : null}
       <View
         pointerEvents="none"
         style={[
@@ -95,8 +112,10 @@ export function GlassPanel({
         pointerEvents="none"
         style={[
           styles.topSheen,
+          theme.isDark ? darkTopSheenStyle : undefined,
           {backgroundColor: theme.glassHighlight},
         ]}
+        testID="glass-panel-top-sheen"
       />
       <View style={contentStyle}>{children}</View>
     </View>
@@ -137,5 +156,23 @@ const styles = StyleSheet.create({
     position: 'absolute',
     right: 16,
     top: 0.5,
+  },
+  darkCardTopSheen: {
+    height: glass.darkHighlightSheenHeight,
+    left: glass.darkCardHighlightSheenInset,
+    right: glass.darkCardHighlightSheenInset,
+    top: glass.darkHighlightSheenTop,
+  },
+  darkPanelTopSheen: {
+    height: glass.darkHighlightSheenHeight,
+    left: glass.darkPanelHighlightSheenInset,
+    right: glass.darkPanelHighlightSheenInset,
+    top: glass.darkHighlightSheenTop,
+  },
+  darkNavTopSheen: {
+    height: glass.darkHighlightSheenHeight,
+    left: glass.darkNavHighlightSheenInset,
+    right: glass.darkNavHighlightSheenInset,
+    top: glass.darkHighlightSheenTop,
   },
 });

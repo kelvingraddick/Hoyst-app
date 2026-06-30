@@ -2,45 +2,35 @@ import React, {useEffect, useMemo, useState} from 'react';
 import {
   Alert,
   Pressable,
-  ScrollView,
   Share,
   StyleSheet,
+  useWindowDimensions,
   View,
 } from 'react-native';
-import {Plus, Search, UsersRound} from 'lucide-react-native';
-import type {BottomTabScreenProps} from '@react-navigation/bottom-tabs';
-import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
+import {
+  ArrowLeft,
+  CalendarClock,
+  Plus,
+  Star,
+  TrendingUp,
+  Zap,
+} from 'lucide-react-native';
+import type {NativeStackScreenProps} from '@react-navigation/native-stack';
 
+import {FrostedBackdrop} from '../../../design/components/FrostedBackdrop';
 import {GlassPanel} from '../../../design/components/GlassPanel';
-import {HoystButton} from '../../../design/components/HoystButton';
-import {HoystChip} from '../../../design/components/HoystChip';
-import {HoystInput} from '../../../design/components/HoystInput';
 import {HoystScreen} from '../../../design/components/HoystScreen';
 import {HoystText} from '../../../design/components/HoystText';
-import {LayeredAvatar} from '../../../design/components/LayeredAvatar';
-import {SectionHeader} from '../../../design/components/SectionHeader';
-import {
-  OverviewStatusIcon,
-  type OverviewStatusIconKind,
-} from '../../../design/components/OverviewStatusIcon';
-import {
-  CircleCategoryIcon,
-  CircleCategoryPill,
-  getCircleCategoryForegroundColor,
-  getCircleCategoryVisual,
-} from '../../../design/components/CircleCategoryIcon';
-import {GradientRing} from '../../../design/components/GradientRing';
+import {OverviewStatCard} from '../../../design/components/OverviewStatCard';
+import {HeroIconButton} from '../../../design/components/ScreenHeroHeader';
 import {TodayCircleCard} from '../../../design/components/TodayCircleCard';
 import {actionMotion} from '../../../design/tokens/actions';
 import {brandColors} from '../../../design/tokens/colors';
 import {radius} from '../../../design/tokens/radius';
 import {useHoystTheme} from '../../../design/theme/useHoystTheme';
-import type {
-  AppTabsParamList,
-  RootStackParamList,
-} from '../../../navigation/types';
+import type {RootStackParamList} from '../../../navigation/types';
 import {useSessionStore} from '../../../store/session-store';
-import type {CircleManagementCard, ExploreCircle} from '../../../types/models';
+import type {CircleManagementCard} from '../../../types/models';
 import {
   canTapInToday,
   createEmptyHomeData,
@@ -50,57 +40,46 @@ import {
   type HomeData,
 } from '../../home/services/home-data-service';
 import {useUserProfileStore} from '../../../store/profile-store';
-import {exploreCircles} from '../mockData';
+import {CircleActionCard} from '../components/CircleActionCard';
 import {nudgeCircleMembers} from '../services/circle-service';
-import {
-  filterPublicCircles,
-  getPublicCircleCategories,
-} from '../services/circles-screen-selectors';
-import {subscribeToPublicCircles} from '../services/public-circle-service';
 
-type Props = BottomTabScreenProps<AppTabsParamList, 'Circles'>;
-type OverviewTone = 'blue' | 'green' | 'orange' | 'purple' | 'yellow';
+type Props = NativeStackScreenProps<RootStackParamList, 'Circles'>;
 
-function getToneForeground(
-  theme: ReturnType<typeof useHoystTheme>,
-  tone: React.ComponentProps<typeof HoystChip>['tone'] | OverviewTone,
+type CirclesFilter = 'all' | 'needsYou' | 'pending' | 'onTrack' | 'done';
+const STAT_ROW_GAP = 9;
+const SCREEN_HORIZONTAL_PADDING = 40;
+const lightCommitmentStatColors = {
+  done: '#159957',
+  needsYou: brandColors.orangeStrong,
+  onTrack: brandColors.blueVivid,
+  pending: '#D68B00',
+};
+
+function matchesCirclesFilter(
+  circle: CircleManagementCard,
+  filter: CirclesFilter,
 ) {
-  if (tone === 'green') {
-    return theme.successForeground;
+  if (filter === 'all') {
+    return true;
   }
 
-  if (tone === 'orange') {
-    return theme.warningForeground;
+  if (filter === 'pending') {
+    return circle.viewerMembershipStatus === 'pending';
   }
 
-  if (tone === 'yellow') {
-    return theme.isDark ? brandColors.spectrumYellow : '#7A5C00';
+  if (circle.viewerMembershipStatus === 'pending') {
+    return false;
   }
 
-  if (tone === 'blue') {
-    return theme.accentTertiaryForeground;
+  if (filter === 'needsYou') {
+    return canTapInToday(circle);
   }
 
-  if (tone === 'purple') {
-    return theme.accentSecondaryForeground;
+  if (filter === 'onTrack') {
+    return Boolean(circle.viewerHasCheckedIn) && circle.state !== 'done';
   }
 
-  return theme.textMuted;
-}
-
-function getCompletionTone(
-  theme: ReturnType<typeof useHoystTheme>,
-  completionRate: number,
-) {
-  if (completionRate >= 85) {
-    return theme.successForeground;
-  }
-
-  if (completionRate >= 75) {
-    return theme.accentSecondaryForeground;
-  }
-
-  return theme.warningForeground;
+  return circle.state === 'done';
 }
 
 function canInvite(circle: CircleManagementCard) {
@@ -110,305 +89,33 @@ function canInvite(circle: CircleManagementCard) {
   );
 }
 
-function OverviewStat({
-  iconKind,
-  label,
-  tone,
-  value,
-}: {
-  iconKind: OverviewStatusIconKind;
-  label: string;
-  tone: OverviewTone;
-  value: number;
-}) {
-  const theme = useHoystTheme();
-  const color = getToneForeground(theme, tone);
-
-  return (
-    <View style={styles.overviewStat}>
-      <OverviewStatusIcon color={color} kind={iconKind} size={42} />
-      <HoystText style={styles.overviewValue}>{value}</HoystText>
-      <HoystChip label={label} style={styles.overviewChip} tone={tone} />
-    </View>
-  );
-}
-
-function DiscoverAvatarPreview({circle}: {circle: ExploreCircle}) {
-  const theme = useHoystTheme();
-
-  return (
-    <View style={styles.avatarRow}>
-      {circle.members.slice(0, 3).map((member, index) => (
-        <View
-          key={member.id}
-          style={[
-            styles.avatarOffset,
-            index === 0 ? undefined : styles.avatarOverlap,
-          ]}>
-          <LayeredAvatar
-            imageSource={member.avatarImage}
-            imageUrl={member.avatarUrl}
-            initials={member.initials}
-            size={36}
-            state={member.state}
-          />
-        </View>
-      ))}
-      {circle.members.length > 3 ? (
-        <View
-          style={[
-            styles.moreCountBubble,
-            {backgroundColor: theme.surfaceHigh},
-          ]}>
-          <HoystText style={styles.moreCount} tone="muted" variant="caption">
-            +{circle.members.length - 3}
-          </HoystText>
-        </View>
-      ) : null}
-    </View>
-  );
-}
-
-function DiscoverCircleCard({
-  circle,
-  onPress,
-}: {
-  circle: ExploreCircle;
-  onPress: () => void;
-}) {
-  const theme = useHoystTheme();
-  const seatsOpen = Math.max(circle.maxSize - circle.memberCount, 0);
-  const completionTone = getCompletionTone(theme, circle.completionRate);
-  const categoryColor = getCircleCategoryForegroundColor(
-    circle.category,
-    theme,
-  );
-  const description = circle.matchCopy ?? circle.commitment;
-  const supportingLabel = circle.matchCopy ? circle.commitment : undefined;
-  const seatsLabel =
-    seatsOpen === 1 ? '1 seat open' : `${seatsOpen} seats open`;
-
-  return (
-    <Pressable
-      accessibilityRole="button"
-      onPress={onPress}
-      style={({pressed}) => [
-        styles.cardPressable,
-        {opacity: pressed ? actionMotion.pressedOpacity : 1},
-      ]}>
-      <GlassPanel style={styles.discoverCard}>
-        <View style={styles.discoverBody}>
-          <View style={styles.discoverTitleRow}>
-            <View style={styles.titleCluster}>
-              <CircleCategoryIcon
-                category={circle.category}
-                shape="roundedSquare"
-                size={34}
-                style={styles.categoryTitleIcon}
-              />
-              <HoystText style={styles.discoverTitle}>{circle.title}</HoystText>
-            </View>
-            <View
-              style={[
-                styles.completionBadge,
-                {
-                  backgroundColor: `${completionTone}14`,
-                  borderColor: `${completionTone}55`,
-                },
-              ]}>
-              <HoystText style={{color: completionTone}} variant="caption">
-                {circle.completionRate}%
-              </HoystText>
-            </View>
-          </View>
-
-          <View style={styles.discoverMeta}>
-            <CircleCategoryPill category={circle.category} uppercase />
-            <HoystChip
-              label={circle.joinLabel}
-              tone={circle.joinLabel === 'Open seats' ? 'green' : 'purple'}
-            />
-          </View>
-
-          <View style={styles.discoverCopy}>
-            <HoystText numberOfLines={2} tone="muted">
-              {description}
-            </HoystText>
-            {supportingLabel ? (
-              <HoystText tone="muted" variant="caption">
-                {supportingLabel}
-              </HoystText>
-            ) : null}
-          </View>
-
-          <View style={styles.discoverStats}>
-            <View style={styles.statRow}>
-              <UsersRound color={categoryColor} size={17} strokeWidth={2.4} />
-              <HoystText tone="muted" variant="caption">
-                {circle.memberCount}/{circle.maxSize} members
-              </HoystText>
-            </View>
-            <View style={styles.statRow}>
-              <GradientRing
-                flatColor={categoryColor}
-                progress={circle.completionRate / 100}
-                size={18}
-                strokeWidth={3}
-                trackColor={theme.ring}
-              />
-              <HoystText tone="muted" variant="caption">
-                {circle.completionRate}% tapped-in pace
-              </HoystText>
-            </View>
-            <HoystText tone="muted" variant="caption">
-              {circle.streakLabel} · {seatsLabel}
-            </HoystText>
-          </View>
-
-          <View style={styles.discoverFooter}>
-            <DiscoverAvatarPreview circle={circle} />
-
-            <Pressable
-              accessibilityRole="button"
-              onPress={event => {
-                event.stopPropagation();
-                onPress();
-              }}
-              style={({pressed}) => [
-                styles.previewButtonPressable,
-                {opacity: pressed ? actionMotion.pressedOpacity : 1},
-              ]}>
-              <View
-                style={[
-                  styles.previewButton,
-                  {
-                    backgroundColor: theme.surfaceHigh,
-                    borderColor: theme.borderStrong,
-                  },
-                ]}>
-                <HoystText
-                  style={[
-                    styles.previewButtonLabel,
-                    {color: theme.actionForeground},
-                  ]}
-                  variant="button">
-                  View Circle
-                </HoystText>
-              </View>
-            </Pressable>
-          </View>
-        </View>
-      </GlassPanel>
-    </Pressable>
-  );
-}
-
-function DiscoverySectionCard({
-  actionLabel,
-  description,
-  icon,
-  metaLabels,
-  onActionPress,
-  stats,
-  supportingLabel,
-  title,
-}: {
-  actionLabel: string;
-  description: string;
-  icon: React.ReactNode;
-  metaLabels: [string, string];
-  onActionPress: () => void;
-  stats: [string, string];
-  supportingLabel: string;
-  title: string;
-}) {
-  const theme = useHoystTheme();
-
-  return (
-    <GlassPanel style={styles.discoverCard}>
-      <View style={styles.discoverBody}>
-        <View style={styles.discoverTitleRow}>
-          <View style={styles.titleCluster}>
-            <View
-              style={[
-                styles.discoveryIcon,
-                {
-                  backgroundColor: `${theme.accent}12`,
-                  borderColor: `${theme.accentForeground}24`,
-                },
-              ]}>
-              {icon}
-            </View>
-            <HoystText style={styles.discoverTitle}>{title}</HoystText>
-          </View>
-        </View>
-
-        <View style={styles.discoverMeta}>
-          <HoystChip label={metaLabels[0]} tone="purple" />
-          <HoystChip label={metaLabels[1]} tone="green" />
-        </View>
-
-        <View style={styles.discoverCopy}>
-          <HoystText numberOfLines={2} tone="muted">
-            {description}
-          </HoystText>
-          <HoystText tone="muted" variant="caption">
-            {supportingLabel}
-          </HoystText>
-        </View>
-
-        <View style={styles.discoverStats}>
-          <View style={styles.statRow}>
-            <Search
-              color={theme.accentForeground}
-              size={17}
-              strokeWidth={2.4}
-            />
-            <HoystText tone="muted" variant="caption">
-              {stats[0]}
-            </HoystText>
-          </View>
-          <View style={styles.statRow}>
-            <Plus color={theme.successForeground} size={17} strokeWidth={2.4} />
-            <HoystText tone="muted" variant="caption">
-              {stats[1]}
-            </HoystText>
-          </View>
-        </View>
-
-        <View style={styles.discoveryAction}>
-          <HoystButton
-            label={actionLabel}
-            onPress={onActionPress}
-            variant="outline"
-          />
-        </View>
-      </View>
-    </GlassPanel>
-  );
-}
-
 export function CirclesScreen({navigation}: Props): React.JSX.Element {
   const theme = useHoystTheme();
+  const {width: viewportWidth} = useWindowDimensions();
   const status = useSessionStore(state => state.status);
   const user = useSessionStore(state => state.user);
   const profile = useUserProfileStore(state => state.profile);
   const [homeData, setHomeData] = useState<HomeData>(() =>
     createEmptyHomeData(),
   );
-  const [publicCircles, setPublicCircles] = useState<ExploreCircle[]>([]);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [activeCategory, setActiveCategory] = useState('All');
+  const [selectedFilter, setSelectedFilter] = useState<CirclesFilter>('all');
   const [nudgedCircleIds, setNudgedCircleIds] = useState<Set<string>>(
     () => new Set(),
   );
   const [nudgingCircleIds, setNudgingCircleIds] = useState<Set<string>>(
     () => new Set(),
   );
-  const rootNavigation =
-    navigation.getParent<NativeStackNavigationProp<RootStackParamList>>();
   const timezone = profile?.timezone ?? 'UTC';
   const canLoad = status === 'authenticatedReady' && Boolean(user?.uid);
+  const statSlotStyle = useMemo(
+    () => ({
+      width: Math.max(
+        0,
+        (viewportWidth - SCREEN_HORIZONTAL_PADDING - STAT_ROW_GAP * 3) / 4,
+      ),
+    }),
+    [viewportWidth],
+  );
 
   useEffect(() => {
     if (!canLoad || !user?.uid) {
@@ -424,56 +131,53 @@ export function CirclesScreen({navigation}: Props): React.JSX.Element {
     });
   }, [canLoad, timezone, user?.uid]);
 
-  useEffect(
-    () => subscribeToPublicCircles(setPublicCircles, () => undefined),
-    [],
-  );
-
-  const activeCircles = useMemo(
-    () =>
-      homeData.circles.filter(
-        circle => circle.viewerMembershipStatus !== 'pending',
-      ),
-    [homeData.circles],
-  );
-  const needsAttention = useMemo(
-    () =>
-      sortHomeCircles(activeCircles.filter(circle => canTapInToday(circle))),
-    [activeCircles],
-  );
   const allCircles = useMemo(
     () => sortHomeCircles(homeData.circles),
     [homeData.circles],
   );
-  const onTrackCount = activeCircles.filter(
-    circle => circle.viewerHasCheckedIn && circle.state !== 'done',
-  ).length;
-  const completedTodayCount = activeCircles.filter(
-    circle => circle.state === 'done',
-  ).length;
-  const pendingCount = homeData.circles.filter(
-    circle => circle.viewerMembershipStatus === 'pending',
-  ).length;
-  const hasActiveCircles = activeCircles.length > 0;
-  const sourcePublicCircles =
-    publicCircles.length > 0 ? publicCircles : exploreCircles;
-  const categories = useMemo(
-    () => getPublicCircleCategories(sourcePublicCircles),
-    [sourcePublicCircles],
+  const counts = useMemo(
+    () => ({
+      done: allCircles.filter(circle => matchesCirclesFilter(circle, 'done'))
+        .length,
+      needsYou: allCircles.filter(circle =>
+        matchesCirclesFilter(circle, 'needsYou'),
+      ).length,
+      onTrack: allCircles.filter(circle =>
+        matchesCirclesFilter(circle, 'onTrack'),
+      ).length,
+      pending: allCircles.filter(circle =>
+        matchesCirclesFilter(circle, 'pending'),
+      ).length,
+    }),
+    [allCircles],
   );
-  const filteredPublicCircles = useMemo(
-    () => filterPublicCircles(sourcePublicCircles, activeCategory, searchTerm),
-    [activeCategory, searchTerm, sourcePublicCircles],
+  const visibleCircles = useMemo(
+    () =>
+      allCircles.filter(circle => matchesCirclesFilter(circle, selectedFilter)),
+    [allCircles, selectedFilter],
   );
 
-  useEffect(() => {
-    if (!categories.includes(activeCategory)) {
-      setActiveCategory('All');
-    }
-  }, [activeCategory, categories]);
+  const toneColor = {
+    done: theme.isDark
+      ? theme.successForeground
+      : lightCommitmentStatColors.done,
+    needsYou: theme.isDark
+      ? theme.warningForeground
+      : lightCommitmentStatColors.needsYou,
+    onTrack: theme.isDark
+      ? theme.accentTertiaryForeground
+      : lightCommitmentStatColors.onTrack,
+    pending: theme.isDark
+      ? brandColors.spectrumYellow
+      : lightCommitmentStatColors.pending,
+  };
+
+  const toggleFilter = (filter: CirclesFilter) => {
+    setSelectedFilter(current => (current === filter ? 'all' : filter));
+  };
 
   const openCircle = (circleId: string) => {
-    rootNavigation?.navigate('CircleDetail', {circleId});
+    navigation.navigate('CircleDetail', {circleId});
   };
 
   const shareCircle = (circle: CircleManagementCard) => {
@@ -548,7 +252,7 @@ export function CirclesScreen({navigation}: Props): React.JSX.Element {
     }
 
     if (actionVariant === 'check_in') {
-      rootNavigation?.navigate('TapInComposer', {
+      navigation.navigate('TapInComposer', {
         circleId: circle.id,
         source: 'tap_in',
       });
@@ -568,531 +272,334 @@ export function CirclesScreen({navigation}: Props): React.JSX.Element {
     openCircle(circle.id);
   };
 
-  const overviewSection = (
-    <GlassPanel padding="compact" style={styles.overview}>
-      <HoystText tone="muted" variant="bodyStrong">
-        Overview
+  const newButton = (
+    <Pressable
+      accessibilityLabel="Create Circle"
+      accessibilityRole="button"
+      onPress={() => navigation.navigate('CreateCircle')}
+      style={({pressed}) => ({
+        opacity: pressed ? actionMotion.pressedOpacity : 1,
+        transform: [{scale: pressed ? actionMotion.pressedScale : 1}],
+      })}>
+      <View
+        style={[
+          styles.newPill,
+          {backgroundColor: theme.accent, shadowColor: theme.accent},
+        ]}>
+        <Plus color={theme.onPurpleAccent} size={15} strokeWidth={2.8} />
+        <HoystText
+          numberOfLines={1}
+          style={[styles.newPillLabel, {color: theme.onPurpleAccent}]}>
+          New
+        </HoystText>
+      </View>
+    </Pressable>
+  );
+
+  const header = (
+    <View style={styles.navRow}>
+      <View style={styles.navSide}>
+        <HeroIconButton
+          accessibilityLabel="Go back"
+          onPress={() => navigation.goBack()}>
+          <ArrowLeft color={theme.text} size={22} strokeWidth={2.3} />
+        </HeroIconButton>
+      </View>
+      <HoystText numberOfLines={1} style={styles.navTitle}>
+        Circles
       </HoystText>
-      <View style={styles.overviewRow}>
-        <OverviewStat
-          iconKind="needsTap"
+      <View style={[styles.navSide, styles.navSideEnd]}>{newButton}</View>
+    </View>
+  );
+
+  const overviewRow = (
+    <View style={styles.statRow}>
+      <View style={[styles.statSlot, statSlotStyle]}>
+        <OverviewStatCard
+          accessibilityLabel={`Needs You, ${counts.needsYou}`}
+          color={toneColor.needsYou}
           label="Needs You"
-          tone="orange"
-          value={needsAttention.length}
-        />
-        <View
-          style={[
-            styles.overviewDivider,
-            {backgroundColor: theme.borderStrong},
-          ]}
-        />
-        <OverviewStat
-          iconKind="pending"
-          label="Pending"
-          tone="yellow"
-          value={pendingCount}
-        />
-        <View
-          style={[
-            styles.overviewDivider,
-            {backgroundColor: theme.borderStrong},
-          ]}
-        />
-        <OverviewStat
-          iconKind="onTrack"
-          label="On Track"
-          tone="blue"
-          value={onTrackCount}
-        />
-        <View
-          style={[
-            styles.overviewDivider,
-            {backgroundColor: theme.borderStrong},
-          ]}
-        />
-        <OverviewStat
-          iconKind="completedToday"
-          label="Done"
-          tone="green"
-          value={completedTodayCount}
+          onPress={() => toggleFilter('needsYou')}
+          renderIcon={color => (
+            <Zap color={color} size={17} strokeWidth={2.4} />
+          )}
+          selected={selectedFilter === 'needsYou'}
+          value={counts.needsYou}
         />
       </View>
-    </GlassPanel>
+      <View style={[styles.statSlot, statSlotStyle]}>
+        <OverviewStatCard
+          accessibilityLabel={`Pending, ${counts.pending}`}
+          color={toneColor.pending}
+          label="Pending"
+          onPress={() => toggleFilter('pending')}
+          renderIcon={color => (
+            <CalendarClock color={color} size={17} strokeWidth={2.2} />
+          )}
+          selected={selectedFilter === 'pending'}
+          value={counts.pending}
+        />
+      </View>
+      <View style={[styles.statSlot, statSlotStyle]}>
+        <OverviewStatCard
+          accessibilityLabel={`On Track, ${counts.onTrack}`}
+          color={toneColor.onTrack}
+          label="On Track"
+          onPress={() => toggleFilter('onTrack')}
+          renderIcon={color => (
+            <TrendingUp color={color} size={17} strokeWidth={2.4} />
+          )}
+          selected={selectedFilter === 'onTrack'}
+          value={counts.onTrack}
+        />
+      </View>
+      <View style={[styles.statSlot, statSlotStyle]}>
+        <OverviewStatCard
+          accessibilityLabel={`Done, ${counts.done}`}
+          color={toneColor.done}
+          label="Done"
+          onPress={() => toggleFilter('done')}
+          renderIcon={color => (
+            <Star color={color} fill={color} size={16} strokeWidth={2} />
+          )}
+          selected={selectedFilter === 'done'}
+          value={counts.done}
+        />
+      </View>
+    </View>
   );
 
-  const needAttentionSection = (
-    <>
-      <SectionHeader
-        description="Circles that need your Tap In to keep moving."
-        title="Need Attention"
-      />
-      {needsAttention.length > 0 ? (
-        needsAttention.map(circle => (
-          <TodayCircleCard
-            card={circle}
-            isNudged={nudgedCircleIds.has(circle.id)}
-            isNudging={nudgingCircleIds.has(circle.id)}
-            key={circle.id}
-            onActionPress={() => handleCircleAction(circle)}
-            onCardPress={() => openCircle(circle.id)}
-            variant="today"
-          />
-        ))
-      ) : (
-        <GlassPanel>
-          <SectionHeader
-            description="When a Tap In, nudge, or circle update needs attention, it will show up here."
-            title="No circles need you right now"
-          />
-        </GlassPanel>
-      )}
-    </>
+  const listHeader = (
+    <View style={styles.listHeaderRow}>
+      <HoystText style={[styles.listHeaderLabel, {color: theme.textMuted}]}>
+        Sorted by urgency
+      </HoystText>
+      {counts.needsYou > 0 ? (
+        <View style={styles.needCue}>
+          <Zap color={theme.warningForeground} size={13} strokeWidth={2.6} />
+          <HoystText
+            style={[styles.needCueLabel, {color: theme.warningForeground}]}>
+            {counts.needsYou} need you
+          </HoystText>
+        </View>
+      ) : null}
+    </View>
   );
 
-  const allCirclesSection = (
-    <>
-      <SectionHeader
-        description="Everything you have joined or requested to join."
-        title="All Circles"
-      />
-      {allCircles.length > 0 ? (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={styles.allCirclesScroll}
-          contentContainerStyle={styles.allCirclesScrollContent}>
-          {allCircles.map(circle => (
-            <TodayCircleCard
-              card={circle}
-              isNudged={nudgedCircleIds.has(circle.id)}
-              isNudging={nudgingCircleIds.has(circle.id)}
-              key={circle.id}
-              onActionPress={() => handleCircleAction(circle)}
-              onCardPress={() => openCircle(circle.id)}
-              variant="upcoming"
-            />
-          ))}
-        </ScrollView>
-      ) : (
-        <GlassPanel style={styles.emptyPanel}>
-          <SectionHeader
-            description="Public Circles and your own created Circles will collect here."
-            title="No circles yet"
-          />
-        </GlassPanel>
-      )}
-    </>
-  );
+  const emptyState =
+    allCircles.length === 0 ? (
+      <GlassPanel style={styles.emptyPanel}>
+        <HoystText style={styles.emptyTitle}>No circles yet</HoystText>
+        <HoystText tone="muted" variant="caption">
+          Joined circles and the requests you have made will collect here.
+        </HoystText>
+      </GlassPanel>
+    ) : (
+      <GlassPanel style={styles.emptyPanel}>
+        <HoystText style={styles.emptyTitle}>Nothing here right now</HoystText>
+        <HoystText tone="muted" variant="caption">
+          No circles match this filter yet.
+        </HoystText>
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => setSelectedFilter('all')}
+          style={({pressed}) => [
+            styles.showAll,
+            {
+              borderColor: theme.borderStrong,
+              opacity: pressed ? actionMotion.pressedOpacity : 1,
+            },
+          ]}>
+          <HoystText style={[styles.showAllLabel, {color: theme.text}]}>
+            Show all circles
+          </HoystText>
+        </Pressable>
+      </GlassPanel>
+    );
 
-  const startPanel = (
-    <DiscoverySectionCard
-      actionLabel="Create Circle"
-      description="Browse public Circles below, or create a Circle around the habit you want to keep moving."
-      icon={<Plus color={theme.accentForeground} size={28} strokeWidth={2.6} />}
-      metaLabels={['Find Circles', 'Start your own']}
-      onActionPress={() => rootNavigation?.navigate('CreateCircle')}
-      stats={[
-        'Public Circles are ready to browse',
-        'Private rhythms start here',
-      ]}
-      supportingLabel="Find people already moving, or build the space you need."
-      title="Find Circles or start your own"
+  const findMore = (
+    <CircleActionCard
+      accessibilityLabel="Find more circles"
+      onPress={() => navigation.navigate('MainTabs', {screen: 'Explore'})}
+      subtitle="Browse public circles in Explore"
+      testID="find-more-circles-card"
+      title="Find more circles"
     />
   );
 
-  const discoverSection = (
-    <>
-      <SectionHeader
-        description="Browse public Circles with open seats, steady Tap Ins, and members moving at your pace."
-        title="Find Circles"
-      />
-
-      <View style={styles.searchWrap}>
-        <Search
-          color={theme.textMuted}
-          size={18}
-          strokeWidth={2.2}
-          style={styles.searchIcon}
-        />
-        <HoystInput
-          containerStyle={styles.searchInput}
-          onChangeText={setSearchTerm}
-          placeholder="Search Circles, categories, or Commitments"
-          value={searchTerm}
-        />
-      </View>
-
-      <View style={styles.filterRow}>
-        {categories.map(category => {
-          const isActive = activeCategory === category;
-          const isAllCategory = category === 'All';
-          const categoryVisual = isAllCategory
-            ? undefined
-            : getCircleCategoryVisual(category);
-          const tone = categoryVisual?.tone ?? 'neutral';
-          const borderColor =
-            categoryVisual?.accentColor ?? getToneForeground(theme, tone);
-          const chipStyle = [
-            styles.filterChip,
-            isActive
-              ? {
-                  backgroundColor: theme.surfaceStrong,
-                  borderColor,
-                }
-              : styles.filterChipInactive,
-          ];
-
-          return (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityState={{selected: isActive}}
-              key={category}
-              onPress={() => setActiveCategory(category)}
-              style={({pressed}) => [
-                styles.filterChipButton,
-                {opacity: pressed ? actionMotion.pressedOpacity : 1},
-              ]}>
-              {isAllCategory ? (
-                <HoystChip label={category} style={chipStyle} tone={tone} />
-              ) : (
-                <CircleCategoryPill category={category} style={chipStyle} />
-              )}
-            </Pressable>
-          );
-        })}
-      </View>
-
-      <View style={styles.resultsHeader}>
-        <HoystText tone="muted" variant="label">
-          Discover Circles
-        </HoystText>
-        <HoystText tone="muted" variant="caption">
-          {filteredPublicCircles.length} match
-          {filteredPublicCircles.length === 1 ? '' : 'es'}
-        </HoystText>
-      </View>
-
-      {filteredPublicCircles.length > 0 ? (
-        filteredPublicCircles.map(circle => (
-          <DiscoverCircleCard
-            circle={circle}
-            key={circle.id}
-            onPress={() => openCircle(circle.id)}
-          />
-        ))
-      ) : (
-        <DiscoverySectionCard
-          actionLabel="Clear filters"
-          description="Try a different search or switch categories to keep browsing."
-          icon={
-            <Search
-              color={theme.accentForeground}
-              size={27}
-              strokeWidth={2.5}
-            />
-          }
-          metaLabels={['No matches', 'Filters active']}
-          onActionPress={() => {
-            setActiveCategory('All');
-            setSearchTerm('');
-          }}
-          stats={[
-            'Search terms narrow the list',
-            'Categories can hide matches',
-          ]}
-          supportingLabel="Clearing filters brings every public Circle back into view."
-          title="No Circles found"
-        />
-      )}
-    </>
-  );
-
   return (
-    <HoystScreen contentContainerStyle={styles.content}>
-      <View style={styles.header}>
-        <View style={styles.headerCopy}>
-          <HoystText variant="headline">Circles</HoystText>
-          <HoystText tone="muted">
-            Your active commitments and new circles to join.
+    <HoystScreen
+      background={<FrostedBackdrop />}
+      contentContainerStyle={styles.content}
+      padded={false}>
+      <View style={styles.page}>
+        {header}
+
+        <View style={styles.headingBlock}>
+          <HoystText style={styles.heading}>Your commitments</HoystText>
+          <HoystText style={styles.headingSubtitle} tone="muted">
+            Active circles and join requests.
           </HoystText>
         </View>
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => rootNavigation?.navigate('CreateCircle')}
-          style={({pressed}) => [
-            styles.newCircle,
-            {opacity: pressed ? actionMotion.pressedOpacity : 1},
-          ]}>
-          <View
-            style={[
-              styles.newCircleIcon,
-              {backgroundColor: `${theme.accent}12`},
-            ]}>
-            <Plus color={theme.accentForeground} size={32} strokeWidth={2.6} />
-          </View>
-          <HoystText
-            style={[styles.newCircleLabel, {color: theme.accentForeground}]}
-            variant="caption">
-            New Circle
-          </HoystText>
-        </Pressable>
-      </View>
 
-      {hasActiveCircles ? (
-        <>
-          {overviewSection}
-          {needAttentionSection}
-          {allCirclesSection}
-          {discoverSection}
-        </>
-      ) : (
-        <>
-          {startPanel}
-          {discoverSection}
-          {allCirclesSection}
-        </>
-      )}
+        <View style={styles.body}>
+          {overviewRow}
+
+          <View style={styles.listBlock}>
+            {listHeader}
+            {visibleCircles.length > 0
+              ? visibleCircles.map(circle => (
+                  <TodayCircleCard
+                    card={circle}
+                    isNudged={nudgedCircleIds.has(circle.id)}
+                    isNudging={nudgingCircleIds.has(circle.id)}
+                    key={circle.id}
+                    onActionPress={() => handleCircleAction(circle)}
+                    onCardPress={() => openCircle(circle.id)}
+                    variant="list"
+                  />
+                ))
+              : emptyState}
+          </View>
+
+          {findMore}
+        </View>
+      </View>
     </HoystScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  allCirclesScroll: {
-    marginHorizontal: -20,
-  },
-  allCirclesScrollContent: {
-    gap: 12,
+  body: {
+    gap: 18,
     paddingHorizontal: 20,
-  },
-  avatarOffset: {
-    borderRadius: radius.pill,
-  },
-  avatarOverlap: {
-    marginLeft: -13,
-  },
-  avatarRow: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    flex: 1,
-    minWidth: 0,
-  },
-  cardPressable: {
-    borderRadius: radius.lg,
-  },
-  categoryTitleIcon: {
-    flexShrink: 0,
-  },
-  completionBadge: {
-    alignItems: 'center',
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    flexShrink: 0,
-    minWidth: 54,
-    paddingHorizontal: 10,
-    paddingVertical: 7,
+    paddingTop: 18,
   },
   content: {
-    paddingBottom: 176,
+    paddingBottom: 56,
   },
-  discoverCard: {
-    minHeight: 250,
-  },
-  discoverBody: {
-    gap: 13,
-  },
-  discoverCopy: {
-    gap: 7,
-  },
-  discoverFooter: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: 12,
-    justifyContent: 'space-between',
-  },
-  discoverMeta: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    minWidth: 0,
-  },
-  discoverStats: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-  },
-  discoverTitle: {
-    flexShrink: 1,
-    fontSize: 21,
+  heading: {
+    fontSize: 24,
     fontWeight: '800',
     letterSpacing: 0,
-    lineHeight: 25,
-    minWidth: 0,
+    lineHeight: 28,
   },
-  emptyPanel: {
-    gap: 16,
+  headingBlock: {
+    gap: 2,
+    paddingHorizontal: 20,
+    paddingTop: 16,
   },
-  discoverTitleRow: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: 10,
-    justifyContent: 'space-between',
-  },
-  discoveryAction: {
-    alignItems: 'stretch',
-    marginTop: 2,
-  },
-  discoveryIcon: {
-    alignItems: 'center',
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    height: 42,
-    justifyContent: 'center',
-    width: 42,
-  },
-  filterChip: {
-    borderRadius: radius.pill,
-    borderWidth: 1,
-  },
-  filterChipButton: {
-    borderRadius: radius.pill,
-  },
-  filterChipInactive: {
-    borderColor: 'transparent',
-  },
-  filterRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-  },
-  header: {
-    alignItems: 'flex-start',
-    flexDirection: 'row',
-    gap: 16,
-    justifyContent: 'space-between',
-  },
-  headerCopy: {
-    flex: 1,
-    gap: 8,
-    minWidth: 0,
-  },
-  moreCount: {
+  headingSubtitle: {
     fontSize: 14,
     fontWeight: '700',
     letterSpacing: 0,
-    lineHeight: 16,
-  },
-  moreCountBubble: {
-    alignItems: 'center',
-    borderRadius: radius.pill,
-    height: 36,
-    justifyContent: 'center',
-    marginLeft: -13,
-    width: 36,
-  },
-  newCircle: {
-    alignItems: 'center',
-    borderRadius: radius.lg,
-    gap: 14,
-    justifyContent: 'center',
-    minHeight: 80,
-    width: 98,
-  },
-  newCircleIcon: {
-    alignItems: 'center',
-    alignSelf: 'center',
-    borderRadius: 29,
-    height: 58,
-    justifyContent: 'center',
-    width: 58,
-  },
-  newCircleLabel: {
-    flexShrink: 0,
-    fontSize: 14,
-    fontWeight: '800',
-    letterSpacing: 0,
-    lineHeight: 17,
-    marginTop: 2,
-    textAlign: 'center',
-    width: 98,
-  },
-  overview: {
-    gap: 14,
-  },
-  overviewChip: {
-    alignSelf: 'center',
-  },
-  overviewDivider: {
-    alignSelf: 'stretch',
-    marginVertical: 10,
-    opacity: 0.68,
-    width: StyleSheet.hairlineWidth,
-  },
-  overviewRow: {
-    alignItems: 'stretch',
-    flexDirection: 'row',
-  },
-  overviewStat: {
-    alignItems: 'center',
-    flex: 1,
-    gap: 4,
-    minHeight: 100,
-    minWidth: 0,
-    paddingHorizontal: 2,
-    paddingVertical: 2,
-  },
-  overviewValue: {
-    fontSize: 28,
-    fontWeight: '800',
-    letterSpacing: 0,
-    lineHeight: 32,
-    textAlign: 'center',
-  },
-  previewButton: {
-    alignItems: 'center',
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    justifyContent: 'center',
-    minHeight: 48,
-    minWidth: 104,
-    paddingHorizontal: 18,
-  },
-  previewButtonLabel: {
-    fontSize: 14,
     lineHeight: 18,
   },
-  previewButtonPressable: {
-    borderRadius: radius.pill,
-    flexShrink: 0,
-  },
-  resultsHeader: {
+  navRow: {
     alignItems: 'center',
     flexDirection: 'row',
     justifyContent: 'space-between',
+    minHeight: 44,
+    paddingHorizontal: 20,
   },
-  searchIcon: {
-    left: 16,
-    position: 'absolute',
-    top: 19,
-    zIndex: 1,
+  navSide: {
+    flexShrink: 0,
+    width: 96,
   },
-  searchInput: {
-    paddingLeft: 44,
+  navSideEnd: {
+    alignItems: 'flex-end',
   },
-  searchWrap: {
-    position: 'relative',
+  navTitle: {
+    flex: 1,
+    fontSize: 17,
+    fontWeight: '800',
+    letterSpacing: 0,
+    lineHeight: 21,
+    textAlign: 'center',
   },
-  statRow: {
-    alignItems: 'center',
-    flexDirection: 'row',
+  page: {
+    paddingTop: 4,
+  },
+  emptyPanel: {
     gap: 8,
   },
-  titleCluster: {
+  emptyTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+    letterSpacing: 0,
+    lineHeight: 21,
+  },
+  listBlock: {
+    gap: 12,
+  },
+  listHeaderLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 1.3,
+    lineHeight: 15,
+    textTransform: 'uppercase',
+  },
+  listHeaderRow: {
     alignItems: 'center',
-    flex: 1,
     flexDirection: 'row',
-    gap: 10,
-    minWidth: 0,
+    justifyContent: 'space-between',
+    paddingHorizontal: 2,
+    paddingTop: 4,
+  },
+  needCue: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 4,
+  },
+  needCueLabel: {
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 0,
+    lineHeight: 15,
+  },
+  newPill: {
+    alignItems: 'center',
+    alignSelf: 'flex-end',
+    borderRadius: 13,
+    elevation: 6,
+    flexDirection: 'row',
+    flexShrink: 0,
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    shadowOffset: {height: 6, width: 0},
+    shadowOpacity: 0.4,
+    shadowRadius: 14,
+  },
+  newPillLabel: {
+    fontSize: 13,
+    fontWeight: '800',
+    letterSpacing: 0,
+    lineHeight: 16,
+  },
+  showAll: {
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    marginTop: 4,
+    paddingHorizontal: 16,
+    paddingVertical: 9,
+  },
+  showAllLabel: {
+    fontSize: 13,
+    fontWeight: '800',
+    letterSpacing: 0,
+    lineHeight: 16,
+  },
+  statRow: {
+    alignItems: 'stretch',
+    alignSelf: 'stretch',
+    flexDirection: 'row',
+    gap: STAT_ROW_GAP,
+    width: '100%',
+  },
+  statSlot: {
+    flexShrink: 0,
   },
 });

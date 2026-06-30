@@ -12,6 +12,8 @@ import {z} from 'zod';
 
 import {db} from '../firebase';
 import {
+  notifyCompanionCircleCreated,
+  notifyCompanionCircleJoined,
   notifyJoinRequestReview,
   notifyOwnerJoinRequest,
   notifyOwnerNewJoin,
@@ -174,7 +176,9 @@ function getCommitmentMonthDateKeys(timezone: string, now = new Date()) {
     timeZone: timezone,
     year: 'numeric',
   }).formatToParts(now);
-  const year = Number(parts.find(part => part.type === 'year')?.value ?? '1970');
+  const year = Number(
+    parts.find(part => part.type === 'year')?.value ?? '1970',
+  );
   const month = Number(parts.find(part => part.type === 'month')?.value ?? '1');
   const dayCount = new Date(Date.UTC(year, month, 0)).getUTCDate();
 
@@ -286,9 +290,7 @@ async function deleteCircleCheckInsForMember(circleId: string, uid: string) {
     .get();
 
   for (const checkInSnapshot of checkInSnapshots.docs) {
-    const {circleRef, dayRef} = getCircleRefFromCheckInRef(
-      checkInSnapshot.ref,
-    );
+    const {circleRef, dayRef} = getCircleRefFromCheckInRef(checkInSnapshot.ref);
 
     if (circleRef.id !== circleId) {
       continue;
@@ -317,76 +319,94 @@ async function deleteCircleCheckInsForMember(circleId: string, uid: string) {
   }
 }
 
-export const createCircle = onCall(async request => {
-  const {profile, uid} = await requireCompletedProfile(request.auth?.uid);
-  const input = createCircleSchema.parse(request.data);
-  const circleRef = db.collection('circles').doc();
-  const memberRef = circleRef.collection('members').doc(uid);
-  const publicIndexRef = db.collection('publicCircleIndex').doc(circleRef.id);
-  const now = FieldValue.serverTimestamp();
-  const inviteCode = createInviteCode();
-  const commitmentCadence = getInputCommitmentCadence(
-    input.commitmentCadence,
-    input.commitmentFrequency,
-  );
-  const commitmentFrequency = getStoredCommitmentFrequency(
-    commitmentCadence,
-    input.commitmentFrequency,
-  );
-  const circle = {
-    category: input.category,
-    createdAt: now,
-    commitment: input.commitment,
-    commitmentCadence,
-    commitmentFrequency,
-    graceRules: input.graceRules ?? {
-      skip: {
-        allowance: 2,
-        windowDays: 7,
-      },
-    },
-    inviteCode,
-    joinMode: input.joinMode,
-    maxSize: input.maxSize,
-    memberCount: 1,
-    ownerId: uid,
-    privacy: input.privacy,
-    title: input.title,
-    timezone: input.timezone ?? profile.timezone ?? 'UTC',
-    updatedAt: now,
-  };
-
-  const batch = db.batch();
-  batch.set(circleRef, circle);
-  batch.set(memberRef, {
-    avatarUrl: profile.avatarUrl ?? null,
-    displayName: profile.displayName,
-    handle: profile.handle,
-    joinedAt: now,
-    role: 'owner',
-    status: 'active',
-    uid,
-  });
-
-  if (input.privacy === 'public') {
-    batch.set(publicIndexRef, {
+export const createCircle = onCall(
+  {secrets: [oneSignalRestApiKey]},
+  async request => {
+    const {profile, uid} = await requireCompletedProfile(request.auth?.uid);
+    const input = createCircleSchema.parse(request.data);
+    const circleRef = db.collection('circles').doc();
+    const memberRef = circleRef.collection('members').doc(uid);
+    const publicIndexRef = db.collection('publicCircleIndex').doc(circleRef.id);
+    const now = FieldValue.serverTimestamp();
+    const inviteCode = createInviteCode();
+    const commitmentCadence = getInputCommitmentCadence(
+      input.commitmentCadence,
+      input.commitmentFrequency,
+    );
+    const commitmentFrequency = getStoredCommitmentFrequency(
+      commitmentCadence,
+      input.commitmentFrequency,
+    );
+    const circle = {
       category: input.category,
+      createdAt: now,
       commitment: input.commitment,
       commitmentCadence,
       commitmentFrequency,
+      graceRules: input.graceRules ?? {
+        skip: {
+          allowance: 2,
+          windowDays: 7,
+        },
+      },
+      inviteCode,
       joinMode: input.joinMode,
       maxSize: input.maxSize,
       memberCount: 1,
-      members: [buildMemberPublicPreview(profile, uid)],
+      ownerId: uid,
+      privacy: input.privacy,
       title: input.title,
+      timezone: input.timezone ?? profile.timezone ?? 'UTC',
       updatedAt: now,
+    };
+
+    const batch = db.batch();
+    batch.set(circleRef, circle);
+    batch.set(memberRef, {
+      avatarUrl: profile.avatarUrl ?? null,
+      displayName: profile.displayName,
+      handle: profile.handle,
+      joinedAt: now,
+      role: 'owner',
+      status: 'active',
+      uid,
     });
-  }
 
-  await batch.commit();
+    if (input.privacy === 'public') {
+      batch.set(publicIndexRef, {
+        category: input.category,
+        commitment: input.commitment,
+        commitmentCadence,
+        commitmentFrequency,
+        joinMode: input.joinMode,
+        maxSize: input.maxSize,
+        memberCount: 1,
+        members: [buildMemberPublicPreview(profile, uid)],
+        title: input.title,
+        updatedAt: now,
+      });
+    }
 
-  return {circleId: circleRef.id, inviteCode};
-});
+    await batch.commit();
+
+    await notifyCompanionCircleCreated({
+      actor: {
+        avatarUrl: profile.avatarUrl ?? null,
+        displayName: profile.displayName,
+        handle: profile.handle,
+        uid,
+      },
+      circle,
+      circleId: circleRef.id,
+      circleTitle: input.title,
+      dateKey: getDateKeyForTimezone(circle.timezone),
+    }).catch(error =>
+      console.error('notify_companion_circle_created_failed', error),
+    );
+
+    return {circleId: circleRef.id, inviteCode};
+  },
+);
 
 export const joinCircle = onCall(
   {secrets: [oneSignalRestApiKey]},
@@ -568,6 +588,26 @@ export const joinCircle = onCall(
       }).catch(error => console.error('notify_owner_new_join_failed', error));
     }
 
+    if (result.status === 'active' && result.shouldNotifyOwner) {
+      await notifyCompanionCircleJoined({
+        actor: {
+          avatarUrl: profile.avatarUrl ?? null,
+          displayName: profile.displayName,
+          handle: profile.handle,
+          uid,
+        },
+        circle,
+        circleId: input.circleId,
+        circleTitle,
+        dateKey: getDateKeyForTimezone(
+          asOptionalString(circle?.timezone) ?? profile.timezone ?? 'UTC',
+        ),
+        excludedUids: ownerId ? [ownerId] : undefined,
+      }).catch(error =>
+        console.error('notify_companion_circle_joined_failed', error),
+      );
+    }
+
     return {status: result.status};
   },
 );
@@ -718,6 +758,26 @@ export const reviewJoinRequest = onCall(
           ownerId,
         }).catch(error =>
           console.error('notify_owner_approved_join_failed', error),
+        );
+
+        const joinedMember = result.requesterMember ?? {};
+        await notifyCompanionCircleJoined({
+          actor: {
+            avatarUrl: joinedMember.avatarUrl ?? null,
+            displayName:
+              asOptionalString(joinedMember.displayName) ?? 'Hoyst member',
+            handle: asOptionalString(joinedMember.handle) ?? null,
+            uid: input.requesterId,
+          },
+          circle,
+          circleId: input.circleId,
+          circleTitle: result.circleTitle,
+          dateKey: getDateKeyForTimezone(
+            asOptionalString(circle?.timezone) ?? profile.timezone ?? 'UTC',
+          ),
+          excludedUids: [ownerId],
+        }).catch(error =>
+          console.error('notify_companion_approved_join_failed', error),
         );
       }
     }
@@ -901,9 +961,7 @@ export const leaveCircle = onCall(async request => {
       transaction.set(
         publicIndexRef,
         {
-          ...(isActiveMember
-            ? {memberCount: FieldValue.increment(-1)}
-            : {}),
+          ...(isActiveMember ? {memberCount: FieldValue.increment(-1)} : {}),
           ...(filteredMembers ? {members: filteredMembers} : {}),
           updatedAt: now,
         },
@@ -952,7 +1010,8 @@ export const updateCircle = onCall(async request => {
   }
 
   const storedMemberCount =
-    typeof circle?.memberCount === 'number' && Number.isFinite(circle.memberCount)
+    typeof circle?.memberCount === 'number' &&
+    Number.isFinite(circle.memberCount)
       ? circle.memberCount
       : 0;
   const memberCount = Math.max(storedMemberCount, activeMemberSnapshots.size);

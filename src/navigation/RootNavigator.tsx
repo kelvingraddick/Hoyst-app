@@ -5,6 +5,7 @@ import {HoystScreen} from '../design/components/HoystScreen';
 import {HoystText} from '../design/components/HoystText';
 import {CreateCircleScreen} from '../features/create-circle/screens/CreateCircleScreen';
 import {CircleDetailScreen} from '../features/circles/screens/CircleDetailScreen';
+import {CirclesScreen} from '../features/circles/screens/CirclesScreen';
 import {EditCircleScreen} from '../features/circles/screens/EditCircleScreen';
 import {EditProfileScreen} from '../features/settings/screens/EditProfileScreen';
 import {TapInCompleteScreen} from '../features/check-in/screens/TapInCompleteScreen';
@@ -15,10 +16,7 @@ import {useOnboardingStore} from '../store/onboarding-store';
 import {useSessionStore} from '../store/session-store';
 import {AppTabsNavigator} from './AppTabsNavigator';
 import {AuthStackNavigator} from './AuthStackNavigator';
-import {
-  getRootNavigatorMode,
-  shouldRegisterAccountRoutes,
-} from './root-mode';
+import {getRootNavigatorMode, shouldRegisterAccountRoutes} from './root-mode';
 import type {RootStackParamList} from './types';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -88,6 +86,14 @@ export function RootNavigator(): React.JSX.Element {
       <Stack.Screen
         component={InboxScreen}
         name="Inbox"
+        options={{
+          animation: 'slide_from_right',
+          headerShown: false,
+        }}
+      />
+      <Stack.Screen
+        component={CirclesScreen}
+        name="Circles"
         options={{
           animation: 'slide_from_right',
           headerShown: false,
