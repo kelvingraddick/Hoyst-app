@@ -1,4 +1,5 @@
 import React from 'react';
+import {Pressable} from 'react-native';
 import renderer, {act} from 'react-test-renderer';
 
 import {TapInPulseButton} from '../src/design/components/TapInPulseButton';
@@ -139,6 +140,24 @@ function renderComposerScreen() {
   );
 }
 
+function findPressableContainingText(
+  tree: renderer.ReactTestRenderer,
+  text: string,
+) {
+  const hasText = (node: renderer.ReactTestInstance): boolean =>
+    node.children.some(child => {
+      if (typeof child === 'string') {
+        return child.includes(text);
+      }
+
+      return hasText(child);
+    });
+
+  return tree.root
+    .findAllByType(Pressable)
+    .find(pressable => hasText(pressable));
+}
+
 describe('TapInComposerScreen', () => {
   beforeEach(() => {
     mockDetail = {...baseMockDetail};
@@ -213,5 +232,72 @@ describe('TapInComposerScreen', () => {
     expect(output).toContain('Commitment complete');
     expect(confirmButton).toBeTruthy();
     expect(confirmButton?.props.disabled).toBe(false);
+  });
+
+  it('keeps skip disabled until grace availability is loaded', async () => {
+    mockDetail = {
+      ...baseMockDetail,
+      graceRules: {skip: {allowance: 1, windowDays: 7}},
+    };
+    let tree: renderer.ReactTestRenderer | undefined;
+
+    await act(async () => {
+      tree = renderComposerScreen();
+    });
+
+    const output = JSON.stringify(tree!.toJSON());
+    const skipButton = findPressableContainingText(tree!, 'Checking skips');
+
+    expect(output).toContain('Checking skips (1 per 7 days)');
+    expect(skipButton?.props.disabled).toBe(true);
+  });
+
+  it('disables skip when the grace allowance is exhausted', async () => {
+    mockDetail = {
+      ...baseMockDetail,
+      graceRules: {skip: {allowance: 1, windowDays: 7}},
+      viewerAvailableSkips: 0,
+    };
+    let tree: renderer.ReactTestRenderer | undefined;
+
+    await act(async () => {
+      tree = renderComposerScreen();
+    });
+
+    const output = JSON.stringify(tree!.toJSON());
+    const skipButton = findPressableContainingText(tree!, 'No skips left');
+
+    expect(output).toContain('No skips left (1 per 7 days)');
+    expect(skipButton?.props.disabled).toBe(true);
+  });
+
+  it('submits a skip when grace availability is positive', async () => {
+    mockDetail = {
+      ...baseMockDetail,
+      graceRules: {skip: {allowance: 1, windowDays: 7}},
+      viewerAvailableSkips: 1,
+    };
+    let tree: renderer.ReactTestRenderer | undefined;
+
+    await act(async () => {
+      tree = renderComposerScreen();
+    });
+
+    const skipButton = findPressableContainingText(tree!, 'Use Skip (1 left)');
+
+    expect(skipButton?.props.disabled).toBe(false);
+
+    await act(async () => {
+      skipButton!.props.onPress();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(mockSubmitTapIn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        circleId: 'circle-1',
+        status: 'skip',
+      }),
+    );
   });
 });

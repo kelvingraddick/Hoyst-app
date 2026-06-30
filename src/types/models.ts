@@ -217,6 +217,7 @@ export type CircleSummary = {
   progressLabel?: string;
   timezone?: string;
   viewerHasTappedInToday?: boolean;
+  viewerAvailableSkips?: number;
   viewerRemainingTapIns?: number;
 };
 

@@ -434,6 +434,78 @@ describe('home data mapping', () => {
     ]);
   });
 
+  it('derives viewer skip availability from loaded grace-window statuses', () => {
+    const card = mapHomeCircleFromData({
+      circleData: {
+        ...circleData,
+        graceRules: {
+          skip: {
+            allowance: 1,
+            windowDays: 7,
+          },
+        },
+      },
+      circleId: 'circle-skip-availability',
+      membersData: [
+        {
+          displayName: 'Kelvin North',
+          role: 'owner',
+          status: 'active',
+          uid: 'user-1',
+        },
+      ],
+      membershipData: {
+        displayName: 'Kelvin North',
+        role: 'owner',
+        status: 'active',
+        uid: 'user-1',
+      },
+      viewerSkipGraceDateKeys: ['2026-05-29', '2026-05-28', '2026-05-27'],
+      viewerSkipGraceLoadedDateKeys: new Set([
+        '2026-05-29',
+        '2026-05-28',
+        '2026-05-27',
+      ]),
+      viewerSkipGraceStatuses: new Map([['2026-05-28', 'skip']]),
+    });
+
+    expect(card?.viewerAvailableSkips).toBe(0);
+  });
+
+  it('does not expose viewer skip availability before the grace window loads', () => {
+    const card = mapHomeCircleFromData({
+      circleData: {
+        ...circleData,
+        graceRules: {
+          skip: {
+            allowance: 1,
+            windowDays: 7,
+          },
+        },
+      },
+      circleId: 'circle-skip-loading',
+      membersData: [
+        {
+          displayName: 'Kelvin North',
+          role: 'owner',
+          status: 'active',
+          uid: 'user-1',
+        },
+      ],
+      membershipData: {
+        displayName: 'Kelvin North',
+        role: 'owner',
+        status: 'active',
+        uid: 'user-1',
+      },
+      viewerSkipGraceDateKeys: ['2026-05-29', '2026-05-28'],
+      viewerSkipGraceLoadedDateKeys: new Set(['2026-05-29']),
+      viewerSkipGraceStatuses: new Map(),
+    });
+
+    expect(card?.viewerAvailableSkips).toBeUndefined();
+  });
+
   it('maps daily commitments from today coverage only', () => {
     const card = mapHomeCircleFromData({
       circleData: {

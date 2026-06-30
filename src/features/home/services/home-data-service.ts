@@ -79,6 +79,9 @@ export type HomeCircleMappingInput = {
   periodCheckInStatuses?: ReadonlyMap<string, ReadonlyMap<string, CheckInStatus>>;
   todayCheckInStatuses?: ReadonlyMap<string, CheckInStatus>;
   todayCheckInUids?: ReadonlySet<string>;
+  viewerSkipGraceDateKeys?: readonly string[];
+  viewerSkipGraceLoadedDateKeys?: ReadonlySet<string>;
+  viewerSkipGraceStatuses?: ReadonlyMap<string, CheckInStatus | undefined>;
 };
 
 type CircleSubscriptionState = {
@@ -93,6 +96,11 @@ type CircleSubscriptionState = {
   recentGroupCheckInStatuses: Map<string, Map<string, CheckInStatus>>;
   recentGroupCheckInUnsubscribes: Array<() => void>;
   recentUserCheckIns: Map<string, boolean>;
+  skipGraceCheckInStatuses: Map<string, CheckInStatus | undefined>;
+  skipGraceDateKeys: string[];
+  skipGraceKey?: string;
+  skipGraceLoadedDateKeys: Set<string>;
+  skipGraceUnsubscribes: Array<() => void>;
   todayCheckInStatuses: Map<string, CheckInStatus>;
 };
 
@@ -422,6 +430,57 @@ function getCommitmentPeriodDateKeys(
   }
 
   return getCommitmentWeekDateKeys(timezone, now);
+}
+
+function getRollingGraceDateKeys(
+  timezone: string,
+  windowDays: number,
+  now = new Date(),
+) {
+  const today = DateTime.fromJSDate(now, {zone: timezone}).startOf('day');
+  const dayCount = Math.min(365, Math.max(1, Math.round(windowDays)));
+
+  return Array.from({length: dayCount}, (_, index) =>
+    today.minus({days: index}).toFormat('yyyy-LL-dd'),
+  );
+}
+
+function getViewerAvailableSkips({
+  graceRule,
+  viewerSkipGraceDateKeys,
+  viewerSkipGraceLoadedDateKeys,
+  viewerSkipGraceStatuses,
+}: {
+  graceRule: GraceRule;
+  viewerSkipGraceDateKeys?: readonly string[];
+  viewerSkipGraceLoadedDateKeys?: ReadonlySet<string>;
+  viewerSkipGraceStatuses?: ReadonlyMap<string, CheckInStatus | undefined>;
+}) {
+  const allowance = Math.max(0, Math.round(graceRule.allowance));
+
+  if (allowance <= 0) {
+    return 0;
+  }
+
+  if (
+    !viewerSkipGraceDateKeys ||
+    viewerSkipGraceDateKeys.length === 0 ||
+    !viewerSkipGraceLoadedDateKeys ||
+    !viewerSkipGraceStatuses ||
+    viewerSkipGraceDateKeys.some(
+      dateKey => !viewerSkipGraceLoadedDateKeys.has(dateKey),
+    )
+  ) {
+    return undefined;
+  }
+
+  const usedSkips = viewerSkipGraceDateKeys.reduce(
+    (total, dateKey) =>
+      viewerSkipGraceStatuses.get(dateKey) === 'skip' ? total + 1 : total,
+    0,
+  );
+
+  return Math.max(allowance - usedSkips, 0);
 }
 
 function buildProgressDays(
@@ -810,6 +869,9 @@ export function mapHomeCircleFromData({
   periodCheckInStatuses,
   todayCheckInStatuses,
   todayCheckInUids = new Set<string>(),
+  viewerSkipGraceDateKeys,
+  viewerSkipGraceLoadedDateKeys,
+  viewerSkipGraceStatuses,
 }: HomeCircleMappingInput): CircleManagementCard | undefined {
   const membershipStatus = normalizeMembershipStatus(membershipData?.status);
 
@@ -921,6 +983,13 @@ export function mapHomeCircleFromData({
     : asString(circleData.matchCopy);
   const periodLabel = getCommitmentPeriodLabel(commitmentCadence);
   const progressLabel = `${periodLabel} · ${progressPercent}%`;
+  const graceRules = normalizeGraceRules(circleData.graceRules);
+  const viewerAvailableSkips = getViewerAvailableSkips({
+    graceRule: graceRules.skip,
+    viewerSkipGraceDateKeys,
+    viewerSkipGraceLoadedDateKeys,
+    viewerSkipGraceStatuses,
+  });
 
   return {
     category: asString(circleData.category, 'General'),
@@ -928,7 +997,7 @@ export function mapHomeCircleFromData({
     commitmentCadence,
     commitment,
     commitmentFrequency,
-    graceRules: normalizeGraceRules(circleData.graceRules),
+    graceRules,
     id: circleId,
     inviteUrl: getInviteUrl(circleData),
     joinMode: normalizeJoinMode(circleData.joinMode),
@@ -955,6 +1024,7 @@ export function mapHomeCircleFromData({
       : 'Start today',
     title,
     timezone: asString(circleData.timezone, 'UTC'),
+    ...(typeof viewerAvailableSkips === 'number' ? {viewerAvailableSkips} : {}),
     viewerHasCheckedIn,
     viewerHasTappedInToday,
     viewerMembershipStatus: membershipStatus,
@@ -1165,6 +1235,9 @@ function buildCircleFromState(
     membershipData,
     periodCheckInStatuses: state?.periodCheckInStatuses,
     todayCheckInStatuses: state?.todayCheckInStatuses,
+    viewerSkipGraceDateKeys: state?.skipGraceDateKeys,
+    viewerSkipGraceLoadedDateKeys: state?.skipGraceLoadedDateKeys,
+    viewerSkipGraceStatuses: state?.skipGraceCheckInStatuses,
   });
 }
 
@@ -1258,6 +1331,15 @@ function clearRecentGroupCheckInListeners(state: CircleSubscriptionState) {
   state.recentGroupCheckInStatuses.clear();
 }
 
+function clearSkipGraceCheckInListeners(state: CircleSubscriptionState) {
+  state.skipGraceUnsubscribes.forEach(unsubscribe => unsubscribe());
+  state.skipGraceUnsubscribes = [];
+  state.skipGraceKey = undefined;
+  state.skipGraceDateKeys = [];
+  state.skipGraceCheckInStatuses.clear();
+  state.skipGraceLoadedDateKeys.clear();
+}
+
 function syncPeriodCheckInListeners({
   cadence,
   circleRef,
@@ -1297,6 +1379,62 @@ function syncPeriodCheckInListeners({
           if (dateKey === todayDateKey) {
             state.todayCheckInStatuses = dayStatuses;
           }
+          onUpdate();
+        }, onError),
+    );
+  });
+}
+
+function syncSkipGraceCheckInListeners({
+  circleRef,
+  graceRule,
+  onError,
+  onUpdate,
+  state,
+  timezone,
+  uid,
+}: {
+  circleRef: FirebaseFirestoreTypes.DocumentReference;
+  graceRule: GraceRule;
+  onError: (error: Error) => void;
+  onUpdate: () => void;
+  state: CircleSubscriptionState;
+  timezone: string;
+  uid: string;
+}) {
+  const allowance = Math.max(0, Math.round(graceRule.allowance));
+
+  if (allowance <= 0) {
+    clearSkipGraceCheckInListeners(state);
+    return;
+  }
+
+  const dateKeys = getRollingGraceDateKeys(timezone, graceRule.windowDays);
+  const skipGraceKey = `${uid}:${timezone}:${allowance}:${
+    graceRule.windowDays
+  }:${dateKeys.join('|')}`;
+
+  if (state.skipGraceKey === skipGraceKey) {
+    return;
+  }
+
+  clearSkipGraceCheckInListeners(state);
+  state.skipGraceKey = skipGraceKey;
+  state.skipGraceDateKeys = dateKeys;
+
+  dateKeys.forEach(dateKey => {
+    state.skipGraceUnsubscribes.push(
+      circleRef
+        .collection('days')
+        .doc(dateKey)
+        .collection('checkIns')
+        .doc(uid)
+        .onSnapshot(snapshot => {
+          state.skipGraceCheckInStatuses.set(
+            dateKey,
+            normalizeCheckInStatus(snapshot.data()?.status),
+          );
+          state.skipGraceLoadedDateKeys.add(dateKey);
           onUpdate();
         }, onError),
     );
@@ -1399,6 +1537,7 @@ export function subscribeToHomeData({
       clearMemberProfileListeners(state);
       clearPeriodCheckInListeners(state);
       clearRecentGroupCheckInListeners(state);
+      clearSkipGraceCheckInListeners(state);
     });
     states.clear();
   };
@@ -1418,6 +1557,10 @@ export function subscribeToHomeData({
         recentGroupCheckInStatuses: new Map(),
         recentGroupCheckInUnsubscribes: [],
         recentUserCheckIns: new Map(),
+        skipGraceCheckInStatuses: new Map(),
+        skipGraceDateKeys: [],
+        skipGraceLoadedDateKeys: new Set(),
+        skipGraceUnsubscribes: [],
         todayCheckInStatuses: new Map(),
       };
 
@@ -1549,6 +1692,10 @@ export function subscribeToMemberCircleDetail({
     recentGroupCheckInStatuses: new Map(),
     recentGroupCheckInUnsubscribes: [],
     recentUserCheckIns: new Map(),
+    skipGraceCheckInStatuses: new Map(),
+    skipGraceDateKeys: [],
+    skipGraceLoadedDateKeys: new Set(),
+    skipGraceUnsubscribes: [],
     todayCheckInStatuses: new Map(),
   };
   let membershipData: PlainData | undefined;
@@ -1568,6 +1715,9 @@ export function subscribeToMemberCircleDetail({
       membershipData,
       periodCheckInStatuses: state.periodCheckInStatuses,
       todayCheckInStatuses: state.todayCheckInStatuses,
+      viewerSkipGraceDateKeys: state.skipGraceDateKeys,
+      viewerSkipGraceLoadedDateKeys: state.skipGraceLoadedDateKeys,
+      viewerSkipGraceStatuses: state.skipGraceCheckInStatuses,
     });
     const groupProgressDays = buildCircleGroupProgressDays({
       memberRecords: state.membersData ?? [],
@@ -1595,6 +1745,7 @@ export function subscribeToMemberCircleDetail({
     state.todayCheckInStatuses = new Map();
     clearPeriodCheckInListeners(state);
     clearRecentGroupCheckInListeners(state);
+    clearSkipGraceCheckInListeners(state);
     state.recentUserCheckIns.clear();
   };
 
@@ -1644,6 +1795,15 @@ export function subscribeToMemberCircleDetail({
         state,
         timezone: asString(state.circleData.timezone, 'UTC'),
       });
+      syncSkipGraceCheckInListeners({
+        circleRef,
+        graceRule: normalizeGraceRules(state.circleData.graceRules).skip,
+        onError,
+        onUpdate: emit,
+        state,
+        timezone: asString(state.circleData.timezone, 'UTC'),
+        uid,
+      });
     }
 
     recentDateKeys.forEach(dateKey => {
@@ -1686,6 +1846,19 @@ export function subscribeToMemberCircleDetail({
         state,
         timezone: asString(state.circleData?.timezone, 'UTC'),
       });
+      if (state.circleData) {
+        syncSkipGraceCheckInListeners({
+          circleRef,
+          graceRule: normalizeGraceRules(state.circleData.graceRules).skip,
+          onError,
+          onUpdate: emit,
+          state,
+          timezone: asString(state.circleData.timezone, 'UTC'),
+          uid,
+        });
+      } else {
+        clearSkipGraceCheckInListeners(state);
+      }
     }
     emit();
   }, onError);
@@ -1704,6 +1877,7 @@ export function subscribeToMemberCircleDetail({
     stopActiveListeners();
     clearMemberProfileListeners(state);
     clearRecentGroupCheckInListeners(state);
+    clearSkipGraceCheckInListeners(state);
   };
 }
 

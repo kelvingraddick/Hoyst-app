@@ -196,11 +196,25 @@ export function TapInComposerScreen({
       ? `1 Tap In left ${remainingPeriodCopy}`
       : `${detail.remainingCheckIns ?? 0} Tap Ins left ${remainingPeriodCopy}`;
   const skipGraceRule = detail.graceRules?.skip;
+  const skipAllowance = skipGraceRule?.allowance ?? 0;
+  const skipWindowDays = skipGraceRule?.windowDays ?? 1;
+  const availableSkips = detail.viewerAvailableSkips;
+  const isSkipAvailabilityKnown = typeof availableSkips === 'number';
+  const hasSkipRule = skipAllowance > 0;
   const canSubmitTapIn = !detail.viewerHasTappedInToday;
   const canSkip =
     !detail.viewerHasCheckedIn &&
     canSubmitTapIn &&
-    Boolean(skipGraceRule && skipGraceRule.allowance > 0);
+    hasSkipRule &&
+    isSkipAvailabilityKnown &&
+    availableSkips > 0;
+  const shouldShowSkipAction =
+    !detail.viewerHasCheckedIn && canSubmitTapIn && hasSkipRule;
+  const skipActionLabel = !isSkipAvailabilityKnown
+    ? `Checking skips (${skipAllowance} per ${skipWindowDays} days)`
+    : availableSkips > 0
+    ? `Use Skip (${availableSkips} left)`
+    : `No skips left (${skipAllowance} per ${skipWindowDays} days)`;
   const canRemoveTodayCheckIn =
     detail.viewerTodayStatus === 'done' || detail.viewerTodayStatus === 'skip';
   const composerPulseRingState = getPulseRingStateForCircle(detail);
@@ -617,14 +631,12 @@ export function TapInComposerScreen({
                 }
                 ringState={composerPulseRingState}
               />
-              {canSkip ? (
+              {shouldShowSkipAction ? (
                 <ComposerUtilityAction
-                  disabled={isSubmitting}
-                  label={`Use Skip (${skipGraceRule?.allowance ?? 0} per ${
-                    skipGraceRule?.windowDays ?? 1
-                  } days)`}
+                  disabled={isSubmitting || !canSkip}
+                  label={skipActionLabel}
                   onPress={
-                    isSubmitting
+                    isSubmitting || !canSkip
                       ? undefined
                       : () => {
                           handleConfirm('skip').catch(() => undefined);
