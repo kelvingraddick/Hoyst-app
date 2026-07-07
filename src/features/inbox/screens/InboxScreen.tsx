@@ -441,6 +441,11 @@ export function InboxScreen({navigation}: Props): React.JSX.Element {
   const openEvent = (event: InboxEvent) => {
     markInboxEventRead(event.id).catch(() => undefined);
 
+    if (event.deeplink.screen === 'TapInPicker') {
+      navigation.navigate('TapInPicker');
+      return;
+    }
+
     if (event.deeplink.screen === 'TapInComposer') {
       navigation.navigate('TapInComposer', {
         circleId: event.deeplink.circleId,

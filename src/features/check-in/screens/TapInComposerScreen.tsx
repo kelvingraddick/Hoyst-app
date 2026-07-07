@@ -1,23 +1,21 @@
 import React, {useEffect, useState} from 'react';
 import {Alert, Image, Pressable, StyleSheet, View} from 'react-native';
-import {Camera, ImagePlus, Trash2, X} from 'lucide-react-native';
+import type {LayoutChangeEvent} from 'react-native';
+import {Camera, Flame, ImagePlus, Trash2, X} from 'lucide-react-native';
 import {launchCamera, launchImageLibrary} from 'react-native-image-picker';
 import type {NativeStackScreenProps} from '@react-navigation/native-stack';
 
+import {FrostedBackdrop} from '../../../design/components/FrostedBackdrop';
 import {GlassPanel} from '../../../design/components/GlassPanel';
-import {HoystButton} from '../../../design/components/HoystButton';
 import {HoystChip} from '../../../design/components/HoystChip';
 import {HoystInput} from '../../../design/components/HoystInput';
 import {HoystScreen} from '../../../design/components/HoystScreen';
 import {HoystText} from '../../../design/components/HoystText';
 import {CircleCategoryPill} from '../../../design/components/CircleCategoryIcon';
-import {TapInRingMark} from '../../../design/components/TapInRingMark';
-import {TapInPulseButton} from '../../../design/components/TapInPulseButton';
-import {
-  getPulseRingStateForCircle,
-  type PulseRingState,
-} from '../../../design/components/pulse-ring-state';
+import {HoystTapInMark} from '../../../design/components/HoystTapInMark';
+import {TapInActionButton} from '../../../design/components/TapInActionButton';
 import {actionMotion} from '../../../design/tokens/actions';
+import {brandColors} from '../../../design/tokens/colors';
 import {radius} from '../../../design/tokens/radius';
 import {useHoystTheme} from '../../../design/theme/useHoystTheme';
 import {triggerTapInSuccessHaptic} from '../../../lib/haptics/tap-in-haptics';
@@ -37,77 +35,7 @@ type Props = NativeStackScreenProps<RootStackParamList, 'TapInComposer'>;
 const initialTapInDraft: TapInDraft = {
   note: '',
 };
-
-type ComposerActionProps = {
-  disabled?: boolean;
-  label: string;
-  onPress?: () => void;
-  ringState?: PulseRingState;
-};
-
-function ComposerPrimaryAction({
-  disabled,
-  label,
-  onPress,
-  ringState = 'active',
-}: ComposerActionProps): React.JSX.Element {
-  return (
-    <TapInPulseButton
-      disabled={disabled}
-      label={label}
-      onPress={onPress}
-      ringState={ringState}
-      variant="primary"
-    />
-  );
-}
-
-type ComposerUtilityActionProps = ComposerActionProps & {
-  tone?: 'muted' | 'skip';
-};
-
-function ComposerUtilityAction({
-  disabled,
-  label,
-  onPress,
-  tone = 'muted',
-}: ComposerUtilityActionProps): React.JSX.Element {
-  const theme = useHoystTheme();
-  const isSkip = tone === 'skip';
-  const labelColor = isSkip ? theme.warningForeground : theme.textSubtle;
-
-  return (
-    <Pressable
-      accessibilityRole="button"
-      disabled={disabled}
-      onPress={disabled ? undefined : onPress}
-      style={({pressed}) => [
-        styles.composerUtilityPressable,
-        {
-          opacity: disabled ? 0.42 : pressed ? actionMotion.pressedOpacity : 1,
-          transform: [
-            {scale: pressed && !disabled ? actionMotion.pressedScale : 1},
-          ],
-        },
-      ]}>
-      <View
-        style={[
-          styles.composerUtilityFill,
-          {
-            backgroundColor: isSkip ? theme.surfaceSoft : 'transparent',
-            borderColor: isSkip ? theme.warningForeground : theme.border,
-          },
-        ]}>
-        <HoystText
-          numberOfLines={1}
-          style={[styles.composerUtilityLabel, {color: labelColor}]}
-          variant="button">
-          {label}
-        </HoystText>
-      </View>
-    </Pressable>
-  );
-}
+const PHOTO_ACTION_GAP = 12;
 
 export function TapInComposerScreen({
   navigation,
@@ -118,6 +46,7 @@ export function TapInComposerScreen({
   const [detail, setDetail] = useState<CircleDetailModel | undefined>();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isRemovingTapIn, setIsRemovingTapIn] = useState(false);
+  const [formFieldWidth, setFormFieldWidth] = useState(0);
   const profile = useUserProfileStore(state => state.profile);
   const status = useSessionStore(state => state.status);
   const user = useSessionStore(state => state.user);
@@ -151,9 +80,14 @@ export function TapInComposerScreen({
 
   if (!detail) {
     return (
-      <HoystScreen contentContainerStyle={styles.content}>
+      <HoystScreen
+        background={<FrostedBackdrop />}
+        contentContainerStyle={styles.content}>
         <View style={styles.closeRow}>
           <Pressable
+            accessibilityLabel="Close Tap In composer"
+            accessibilityRole="button"
+            hitSlop={8}
             onPress={resetAndClose}
             style={({pressed}) => [
               styles.closeButton,
@@ -163,7 +97,7 @@ export function TapInComposerScreen({
                 opacity: pressed ? 0.92 : 1,
               },
             ]}>
-            <X color={theme.text} size={18} strokeWidth={2.4} />
+            <X color={theme.text} size={22} strokeWidth={2.5} />
           </Pressable>
         </View>
         <GlassPanel style={styles.contextPanel}>
@@ -217,7 +151,6 @@ export function TapInComposerScreen({
     : `No skips left (${skipAllowance} per ${skipWindowDays} days)`;
   const canRemoveTodayCheckIn =
     detail.viewerTodayStatus === 'done' || detail.viewerTodayStatus === 'skip';
-  const composerPulseRingState = getPulseRingStateForCircle(detail);
   const removeActionLabel =
     detail.viewerTodayStatus === 'skip' ? 'Remove Skip' : 'Remove Tap In';
   const checkedInStatusCopy =
@@ -232,6 +165,20 @@ export function TapInComposerScreen({
     detail.commitmentCadence === 'daily'
       ? "This will undo today's Progression for this Circle."
       : "This will undo this week's Progression for this Circle.";
+  const photoActionWidth = Math.max(0, (formFieldWidth - PHOTO_ACTION_GAP) / 2);
+  const hasMeasuredFormField = formFieldWidth > 0;
+  const photoActionMeasuredStyle = hasMeasuredFormField
+    ? {width: photoActionWidth}
+    : styles.photoActionFlex;
+  const photoActionsMeasuredStyle = hasMeasuredFormField
+    ? {width: formFieldWidth}
+    : undefined;
+  const handleFormFieldLayout = (event: LayoutChangeEvent) => {
+    const measuredWidth = event.nativeEvent.layout.width;
+    setFormFieldWidth(currentWidth =>
+      Math.abs(currentWidth - measuredWidth) < 1 ? currentWidth : measuredWidth,
+    );
+  };
 
   const handleChoosePhoto = async () => {
     const response = await launchImageLibrary({
@@ -328,9 +275,17 @@ export function TapInComposerScreen({
   };
 
   return (
-    <HoystScreen contentContainerStyle={styles.content}>
+    <HoystScreen
+      background={<FrostedBackdrop />}
+      contentContainerStyle={styles.content}
+      keyboardAvoiding
+      keyboardDismissMode="interactive"
+      keyboardShouldPersistTaps="handled">
       <View style={styles.closeRow}>
         <Pressable
+          accessibilityLabel="Close Tap In composer"
+          accessibilityRole="button"
+          hitSlop={8}
           onPress={resetAndClose}
           style={({pressed}) => [
             styles.closeButton,
@@ -340,67 +295,67 @@ export function TapInComposerScreen({
               opacity: pressed ? 0.92 : 1,
             },
           ]}>
-          <X color={theme.text} size={18} strokeWidth={2.4} />
+          <X color={theme.text} size={22} strokeWidth={2.5} />
         </Pressable>
       </View>
 
-      <GlassPanel style={styles.heroPanel}>
-        <View style={styles.heroHeader}>
-          <TapInRingMark
-            centerTreatment="state"
-            innerSize={44}
-            outerSize={78}
-            state={composerPulseRingState}
-          />
-          <View style={styles.heroCopy}>
-            <HoystText style={styles.heroTitle} variant="display">
-              Tap In
-            </HoystText>
-            <HoystText style={styles.centerText} tone="muted">
-              Share today's proof, context, or momentum with your Circle.
-            </HoystText>
-          </View>
-          <View style={styles.summaryChips}>
-            <CircleCategoryPill category={detail.category} uppercase />
-            <HoystChip label={progressLabel} tone="green" />
-            <HoystChip label={statusLabel} tone="orange" />
-          </View>
+      <View style={styles.heroPanel}>
+        <HoystTapInMark size={78} testID="tap-in-composer-logo" />
+        <View style={styles.heroCopy}>
+          <HoystText style={styles.heroTitle}>Tap In</HoystText>
+          <HoystText style={[styles.heroSubtitle, {color: theme.textMuted}]}>
+            Share today's proof, context, or momentum with your Circle.
+          </HoystText>
         </View>
-      </GlassPanel>
+        <View style={styles.summaryChips}>
+          <CircleCategoryPill category={detail.category} uppercase />
+          <HoystChip
+            label={progressLabel}
+            style={styles.summaryChip}
+            tone="green"
+          />
+          <HoystChip
+            label={statusLabel}
+            style={styles.statusChip}
+            tone="orange"
+          />
+        </View>
+      </View>
 
       <GlassPanel style={styles.contextPanel}>
         <View style={styles.sectionHeader}>
           <HoystText tone="muted" variant="label">
             Circle Commitment
           </HoystText>
-          <HoystText style={{color: theme.successForeground}} variant="caption">
-            {detail.streakDays ?? 0}d streak
-          </HoystText>
+          <View style={styles.streakPill}>
+            <Flame
+              color={theme.successForeground}
+              size={14}
+              strokeWidth={2.6}
+            />
+            <HoystText
+              style={[
+                styles.streakPillLabel,
+                {color: theme.successForeground},
+              ]}>
+              {detail.streakDays ?? 0}d streak
+            </HoystText>
+          </View>
         </View>
         <View style={styles.contextCopy}>
           <HoystText style={styles.contextTitle}>{detail.title}</HoystText>
-          <HoystText tone="muted">{detail.commitment}</HoystText>
+          <HoystText style={styles.contextSubtitle} tone="muted">
+            {detail.commitment}
+          </HoystText>
         </View>
       </GlassPanel>
 
-      <GlassPanel style={styles.formPanel}>
+      <View style={styles.formPanel}>
         {canRemoveTodayCheckIn ? (
           <View style={styles.checkedInState}>
-            <View
-              style={[
-                styles.previewCard,
-                {
-                  backgroundColor: theme.surfaceSoft,
-                  borderColor: theme.borderStrong,
-                },
-              ]}>
+            <GlassPanel style={styles.coveredPanel}>
               <View style={styles.previewHeader}>
-                <TapInRingMark
-                  centerTreatment="state"
-                  innerSize={22}
-                  outerSize={40}
-                  state={composerPulseRingState}
-                />
+                <HoystTapInMark size={42} />
                 <View style={styles.previewHeaderCopy}>
                   <HoystText style={styles.previewTitle}>
                     Today is covered
@@ -410,11 +365,12 @@ export function TapInComposerScreen({
                   </HoystText>
                 </View>
               </View>
-              <HoystText tone="muted">{removeProgressionCopy}</HoystText>
-            </View>
+              <HoystText style={styles.previewBody} tone="muted">
+                {removeProgressionCopy}
+              </HoystText>
+            </GlassPanel>
             <View style={styles.actionStack}>
-              <HoystButton
-                borderColor={theme.dangerForeground}
+              <TapInActionButton
                 disabled={isRemovingTapIn}
                 icon={
                   <Trash2
@@ -425,17 +381,13 @@ export function TapInComposerScreen({
                 }
                 label={isRemovingTapIn ? 'Removing...' : removeActionLabel}
                 onPress={confirmRemoveTapIn}
-                textColor={theme.dangerForeground}
-                variant="outline"
+                variant="dangerOutline"
               />
-              <Pressable onPress={resetAndClose} style={styles.textAction}>
-                <HoystText
-                  style={styles.centerText}
-                  tone="muted"
-                  variant="bodyStrong">
-                  Close
-                </HoystText>
-              </Pressable>
+              <TapInActionButton
+                label="Close"
+                onPress={resetAndClose}
+                variant="text"
+              />
             </View>
           </View>
         ) : (
@@ -451,8 +403,16 @@ export function TapInComposerScreen({
                   onChangeText={value =>
                     setDraft(current => ({...current, note: value}))
                   }
+                  onLayout={handleFormFieldLayout}
                   placeholder="Share what you did, how it went, or what your Circle should know."
-                  style={styles.noteInput}
+                  placeholderTextColor={theme.isDark ? '#8D96AD' : '#918CAE'}
+                  style={[
+                    styles.noteInput,
+                    {
+                      backgroundColor: theme.glassSurfaceStrong,
+                      borderColor: theme.glassBorder,
+                    },
+                  ]}
                   textAlignVertical="top"
                   value={draft.note}
                 />
@@ -462,11 +422,12 @@ export function TapInComposerScreen({
                 <HoystText tone="muted" variant="label">
                   Photo
                 </HoystText>
-                <View style={styles.photoActions}>
+                <View style={[styles.photoActions, photoActionsMeasuredStyle]}>
                   <Pressable
                     onPress={handleTakePhoto}
                     style={({pressed}) => [
                       styles.photoActionPressable,
+                      photoActionMeasuredStyle,
                       {
                         opacity: pressed ? actionMotion.pressedOpacity : 1,
                         transform: [
@@ -474,41 +435,55 @@ export function TapInComposerScreen({
                         ],
                       },
                     ]}>
-                    <View
+                    <GlassPanel
+                      padding="none"
                       style={[
-                        styles.photoActionFill,
-                        {
-                          backgroundColor: theme.surfaceHigh,
-                          borderColor: theme.borderStrong,
-                        },
+                        styles.photoActionPanel,
+                        hasMeasuredFormField ? {width: photoActionWidth} : null,
                       ]}>
-                      <View style={styles.photoActionIcon}>
-                        <Camera
-                          color={theme.textSubtle}
-                          size={22}
-                          strokeWidth={2.1}
-                        />
+                      <View style={styles.photoActionFill}>
+                        <View
+                          style={[
+                            styles.photoActionIcon,
+                            {
+                              backgroundColor: theme.isDark
+                                ? 'rgba(122,85,255,0.22)'
+                                : 'rgba(200,194,255,0.38)',
+                            },
+                          ]}>
+                          <Camera
+                            color={
+                              theme.isDark
+                                ? brandColors.purpleBright
+                                : brandColors.purple
+                            }
+                            size={22}
+                            strokeWidth={2.1}
+                          />
+                        </View>
+                        <View style={styles.photoActionCopy}>
+                          <HoystText
+                            numberOfLines={1}
+                            style={styles.photoActionLabel}
+                            variant="button">
+                            Take Photo
+                          </HoystText>
+                          <HoystText
+                            numberOfLines={1}
+                            tone="muted"
+                            variant="caption">
+                            Open camera
+                          </HoystText>
+                        </View>
                       </View>
-                      <View style={styles.photoActionCopy}>
-                        <HoystText
-                          numberOfLines={1}
-                          style={styles.photoActionLabel}
-                          variant="button">
-                          Take Photo
-                        </HoystText>
-                        <HoystText
-                          numberOfLines={1}
-                          tone="muted"
-                          variant="caption">
-                          Open camera
-                        </HoystText>
-                      </View>
-                    </View>
+                    </GlassPanel>
                   </Pressable>
+                  <View pointerEvents="none" style={styles.photoActionGap} />
                   <Pressable
                     onPress={handleChoosePhoto}
                     style={({pressed}) => [
                       styles.photoActionPressable,
+                      photoActionMeasuredStyle,
                       {
                         opacity: pressed ? actionMotion.pressedOpacity : 1,
                         transform: [
@@ -516,36 +491,44 @@ export function TapInComposerScreen({
                         ],
                       },
                     ]}>
-                    <View
+                    <GlassPanel
+                      padding="none"
                       style={[
-                        styles.photoActionFill,
-                        {
-                          backgroundColor: theme.surfaceHigh,
-                          borderColor: theme.borderStrong,
-                        },
+                        styles.photoActionPanel,
+                        hasMeasuredFormField ? {width: photoActionWidth} : null,
                       ]}>
-                      <View style={styles.photoActionIcon}>
-                        <ImagePlus
-                          color={theme.textSubtle}
-                          size={22}
-                          strokeWidth={2.1}
-                        />
+                      <View style={styles.photoActionFill}>
+                        <View
+                          style={[
+                            styles.photoActionIcon,
+                            {
+                              backgroundColor: theme.isDark
+                                ? 'rgba(104,184,232,0.18)'
+                                : 'rgba(220,230,255,0.72)',
+                            },
+                          ]}>
+                          <ImagePlus
+                            color={theme.accentTertiaryForeground}
+                            size={22}
+                            strokeWidth={2.1}
+                          />
+                        </View>
+                        <View style={styles.photoActionCopy}>
+                          <HoystText
+                            numberOfLines={1}
+                            style={styles.photoActionLabel}
+                            variant="button">
+                            Library
+                          </HoystText>
+                          <HoystText
+                            numberOfLines={1}
+                            tone="muted"
+                            variant="caption">
+                            Choose saved
+                          </HoystText>
+                        </View>
                       </View>
-                      <View style={styles.photoActionCopy}>
-                        <HoystText
-                          numberOfLines={1}
-                          style={styles.photoActionLabel}
-                          variant="button">
-                          Library
-                        </HoystText>
-                        <HoystText
-                          numberOfLines={1}
-                          tone="muted"
-                          variant="caption">
-                          Choose saved
-                        </HoystText>
-                      </View>
-                    </View>
+                    </GlassPanel>
                   </Pressable>
                 </View>
               </View>
@@ -555,21 +538,9 @@ export function TapInComposerScreen({
                   <HoystText tone="muted" variant="label">
                     Preview
                   </HoystText>
-                  <View
-                    style={[
-                      styles.previewCard,
-                      {
-                        backgroundColor: theme.surfaceSoft,
-                        borderColor: theme.borderStrong,
-                      },
-                    ]}>
+                  <GlassPanel style={styles.previewCard}>
                     <View style={styles.previewHeader}>
-                      <TapInRingMark
-                        centerTreatment="state"
-                        innerSize={22}
-                        outerSize={40}
-                        state={composerPulseRingState}
-                      />
+                      <HoystTapInMark size={42} />
                       <View style={styles.previewHeaderCopy}>
                         <HoystText style={styles.previewTitle}>
                           {detail.title}
@@ -607,13 +578,13 @@ export function TapInComposerScreen({
                         </Pressable>
                       </View>
                     ) : null}
-                  </View>
+                  </GlassPanel>
                 </View>
               ) : null}
             </View>
 
             <View style={styles.actionStack}>
-              <ComposerPrimaryAction
+              <TapInActionButton
                 disabled={isSubmitting || !canSubmitTapIn}
                 label={
                   isSubmitting
@@ -629,10 +600,11 @@ export function TapInComposerScreen({
                         handleConfirm().catch(() => undefined);
                       }
                 }
-                ringState={composerPulseRingState}
+                testID="tap-in-composer-confirm-action"
+                variant="primary"
               />
               {shouldShowSkipAction ? (
-                <ComposerUtilityAction
+                <TapInActionButton
                   disabled={isSubmitting || !canSkip}
                   label={skipActionLabel}
                   onPress={
@@ -642,163 +614,176 @@ export function TapInComposerScreen({
                           handleConfirm('skip').catch(() => undefined);
                         }
                   }
-                  tone="skip"
+                  variant="warmOutline"
                 />
               ) : null}
-              <ComposerUtilityAction label="Discard" onPress={resetAndClose} />
+              <TapInActionButton
+                label="Discard"
+                onPress={resetAndClose}
+                variant="text"
+              />
             </View>
           </>
         )}
-      </GlassPanel>
+      </View>
     </HoystScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  content: {
-    paddingBottom: 60,
+  actionStack: {
+    gap: 10,
+    marginTop: 6,
   },
-  closeRow: {
-    alignItems: 'flex-end',
+  checkedInState: {
+    gap: 18,
   },
   closeButton: {
     alignItems: 'center',
-    borderRadius: 16,
+    borderRadius: radius.pill,
     borderWidth: 1,
-    height: 34,
+    height: 48,
     justifyContent: 'center',
-    width: 34,
+    width: 48,
   },
-  heroPanel: {
-    minHeight: 160,
+  closeRow: {
+    alignItems: 'flex-end',
+    paddingTop: 4,
   },
-  heroHeader: {
-    alignItems: 'center',
+  content: {
+    paddingBottom: 60,
+  },
+  contextCopy: {
+    gap: 6,
+  },
+  contextPanel: {
+    minHeight: 118,
+  },
+  contextSubtitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    letterSpacing: 0,
+    lineHeight: 18,
+  },
+  contextTitle: {
+    fontSize: 21,
+    fontWeight: '800',
+    letterSpacing: 0,
+    lineHeight: 25,
+  },
+  coveredPanel: {
+    minHeight: 116,
+  },
+  fieldBlock: {
+    alignSelf: 'stretch',
     gap: 10,
+    width: '100%',
   },
-  centerText: {
-    textAlign: 'center',
+  formPanel: {
+    alignSelf: 'stretch',
+    gap: 18,
+    width: '100%',
+  },
+  formStack: {
+    alignSelf: 'stretch',
+    gap: 18,
+    width: '100%',
   },
   heroCopy: {
     alignItems: 'center',
     gap: 6,
   },
+  heroPanel: {
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 8,
+    paddingTop: 2,
+  },
+  heroSubtitle: {
+    color: '#7A789A',
+    fontSize: 13,
+    fontWeight: '500',
+    letterSpacing: 0,
+    lineHeight: 18,
+    maxWidth: 280,
+    textAlign: 'center',
+  },
   heroTitle: {
-    textAlign: 'center',
-  },
-  summaryChips: {
-    alignSelf: 'center',
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-    justifyContent: 'center',
-  },
-  contextPanel: {
-    minHeight: 118,
-  },
-  sectionHeader: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  contextCopy: {
-    gap: 8,
-  },
-  contextTitle: {
-    fontSize: 24,
+    fontSize: 28,
     fontWeight: '800',
-    lineHeight: 27,
-  },
-  formPanel: {
-    minHeight: 420,
-  },
-  formStack: {
-    gap: 18,
-  },
-  fieldBlock: {
-    gap: 10,
-  },
-  checkedInState: {
-    gap: 18,
-  },
-  actionStack: {
-    gap: 10,
-    marginTop: 6,
-  },
-  composerUtilityPressable: {
-    borderRadius: radius.md,
-    width: '100%',
-  },
-  composerUtilityFill: {
-    alignItems: 'center',
-    borderRadius: radius.md,
-    borderWidth: 1,
-    justifyContent: 'center',
-    minHeight: 52,
-    paddingHorizontal: 18,
-    width: '100%',
-  },
-  composerUtilityLabel: {
-    flexShrink: 1,
-    fontSize: 15,
-    fontWeight: '800',
-    lineHeight: 19,
+    letterSpacing: 0,
+    lineHeight: 32,
     textAlign: 'center',
-  },
-  textAction: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 44,
   },
   noteInput: {
-    minHeight: 136,
+    borderRadius: radius.lg,
+    fontSize: 16,
+    fontWeight: '600',
+    lineHeight: 22,
+    minHeight: 126,
+    paddingHorizontal: 16,
     paddingTop: 16,
-  },
-  photoActions: {
-    alignSelf: 'stretch',
-    flexDirection: 'row',
-    gap: 10,
-    width: '100%',
-  },
-  photoActionPressable: {
-    alignSelf: 'stretch',
-    borderRadius: radius.md,
-    flex: 1,
-    flexBasis: 0,
-    minWidth: 0,
-  },
-  photoActionFill: {
-    alignItems: 'flex-start',
-    borderRadius: radius.md,
-    borderWidth: 1,
-    justifyContent: 'center',
-    gap: 10,
-    minHeight: 86,
-    minWidth: 0,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    width: '100%',
-  },
-  photoActionIcon: {
-    alignItems: 'center',
-    height: 24,
-    justifyContent: 'center',
-    width: 24,
   },
   photoActionCopy: {
     gap: 2,
     minWidth: 0,
     width: '100%',
   },
+  photoActionFill: {
+    alignItems: 'flex-start',
+    gap: 10,
+    justifyContent: 'center',
+    minHeight: 96,
+    minWidth: 0,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    width: '100%',
+  },
+  photoActionIcon: {
+    alignItems: 'center',
+    borderRadius: 13,
+    height: 34,
+    justifyContent: 'center',
+    width: 34,
+  },
   photoActionLabel: {
     fontSize: 14,
+    fontWeight: '800',
+    letterSpacing: 0,
     lineHeight: 18,
   },
+  photoActionFlex: {
+    flex: 1,
+  },
+  photoActionPressable: {
+    alignSelf: 'stretch',
+    borderRadius: radius.lg,
+    flexShrink: 0,
+    minWidth: 0,
+  },
+  photoActionPanel: {
+    flex: 1,
+    minHeight: 96,
+    width: '100%',
+  },
+  photoActionGap: {
+    flexShrink: 0,
+    width: PHOTO_ACTION_GAP,
+  },
+  photoActions: {
+    alignSelf: 'stretch',
+    alignItems: 'stretch',
+    flexDirection: 'row',
+    width: '100%',
+  },
+  previewBody: {
+    fontSize: 14,
+    fontWeight: '600',
+    letterSpacing: 0,
+    lineHeight: 19,
+  },
   previewCard: {
-    borderRadius: radius.md,
-    borderWidth: 1,
-    gap: 12,
-    padding: 14,
+    minHeight: 118,
   },
   previewHeader: {
     alignItems: 'center',
@@ -810,10 +795,9 @@ const styles = StyleSheet.create({
     gap: 3,
     minWidth: 0,
   },
-  previewTitle: {
-    fontSize: 18,
-    fontWeight: '800',
-    lineHeight: 22,
+  previewImage: {
+    height: '100%',
+    width: '100%',
   },
   previewImageWrap: {
     borderRadius: radius.md,
@@ -821,9 +805,11 @@ const styles = StyleSheet.create({
     height: 168,
     overflow: 'hidden',
   },
-  previewImage: {
-    height: '100%',
-    width: '100%',
+  previewTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+    letterSpacing: 0,
+    lineHeight: 21,
   },
   removePhotoButton: {
     alignItems: 'center',
@@ -835,5 +821,35 @@ const styles = StyleSheet.create({
     right: 8,
     top: 8,
     width: 24,
+  },
+  sectionHeader: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  statusChip: {
+    alignSelf: 'center',
+  },
+  streakPill: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 5,
+  },
+  streakPillLabel: {
+    fontSize: 14,
+    fontWeight: '800',
+    letterSpacing: 0,
+    lineHeight: 18,
+  },
+  summaryChip: {
+    alignSelf: 'center',
+  },
+  summaryChips: {
+    alignSelf: 'center',
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    justifyContent: 'center',
+    maxWidth: 360,
   },
 });

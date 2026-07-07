@@ -612,6 +612,11 @@ export function HomeScreen(): React.JSX.Element {
   const openEvent = (event: InboxEvent) => {
     markInboxEventRead(event.id).catch(() => undefined);
 
+    if (event.deeplink.screen === 'TapInPicker') {
+      rootNavigation?.navigate('TapInPicker');
+      return;
+    }
+
     if (event.deeplink.screen === 'TapInComposer') {
       rootNavigation?.navigate('TapInComposer', {
         circleId: event.deeplink.circleId,
@@ -700,7 +705,7 @@ export function HomeScreen(): React.JSX.Element {
 
           {isAuthenticatedHome ? (
             <View style={styles.circlesSection}>
-              <SectionEyebrow>Circles need your attention</SectionEyebrow>
+              <SectionEyebrow>CIRCLES THAT NEED ATTENTION NOW</SectionEyebrow>
 
               {todayActionCircles.length > 0 ? (
                 <ScrollView
@@ -736,7 +741,7 @@ export function HomeScreen(): React.JSX.Element {
                 accessibilityLabel="All my circles"
                 onPress={() => rootNavigation?.navigate('Circles')}
                 renderIcon={color => (
-                  <UsersRound color={color} size={24} strokeWidth={2.3} />
+                  <UsersRound color={color} size={24} strokeWidth={2.4} />
                 )}
                 subtitle="View commitments and join requests"
                 testID="all-my-circles-card"
@@ -747,10 +752,9 @@ export function HomeScreen(): React.JSX.Element {
 
           {isAuthenticatedHome && upcomingActionCircles.length > 0 ? (
             <View style={styles.circleSectionGroup}>
-              <SectionHeader
-                description="Circles that will need attention tomorrow or later this week."
-                title="Upcoming"
-              />
+              <SectionEyebrow>
+                CIRCLES THAT WILL NEED ACTION SOON
+              </SectionEyebrow>
               <ScrollView
                 horizontal
                 showsHorizontalScrollIndicator={false}

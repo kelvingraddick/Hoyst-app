@@ -6,6 +6,25 @@ import {HoystText} from '../../../design/components/HoystText';
 import {actionMotion} from '../../../design/tokens/actions';
 import {useHoystTheme} from '../../../design/theme/useHoystTheme';
 
+const actionCardColors = {
+  dark: {
+    background: 'rgba(255,255,255,0.06)',
+    border: 'rgba(200,194,255,0.36)',
+    chevron: '#B4BCD1',
+    icon: '#C8C2FF',
+    iconBackground: 'rgba(122,85,255,0.22)',
+    subtitle: '#B4BCD1',
+  },
+  light: {
+    background: 'rgba(255,255,255,0.42)',
+    border: 'rgba(200,194,255,0.86)',
+    chevron: '#918CAE',
+    icon: '#6B3CFF',
+    iconBackground: 'rgba(200,194,255,0.34)',
+    subtitle: '#8D88A8',
+  },
+} as const;
+
 type CircleActionCardProps = {
   accessibilityLabel: string;
   onPress: () => void;
@@ -24,7 +43,9 @@ export function CircleActionCard({
   title,
 }: CircleActionCardProps): React.JSX.Element {
   const theme = useHoystTheme();
-  const iconColor = theme.accentForeground;
+  const cardColors = theme.isDark
+    ? actionCardColors.dark
+    : actionCardColors.light;
 
   return (
     <Pressable
@@ -37,12 +58,8 @@ export function CircleActionCard({
           style={[
             styles.card,
             {
-              backgroundColor: theme.isDark
-                ? 'rgba(255,255,255,0.04)'
-                : 'rgba(255,255,255,0.35)',
-              borderColor: theme.isDark
-                ? 'rgba(255,255,255,0.18)'
-                : 'rgba(124,111,240,0.34)',
+              backgroundColor: cardColors.background,
+              borderColor: cardColors.border,
               opacity: pressed ? actionMotion.pressedOpacity : 1,
             },
           ]}
@@ -50,16 +67,12 @@ export function CircleActionCard({
           <View
             style={[
               styles.icon,
-              {
-                backgroundColor: theme.isDark
-                  ? 'rgba(122,85,255,0.16)'
-                  : 'rgba(122,85,255,0.12)',
-              },
+              {backgroundColor: cardColors.iconBackground},
             ]}>
             {renderIcon ? (
-              renderIcon(iconColor)
+              renderIcon(cardColors.icon)
             ) : (
-              <Search color={iconColor} size={24} strokeWidth={2.3} />
+              <Search color={cardColors.icon} size={24} strokeWidth={2.4} />
             )}
           </View>
           <View style={styles.copy}>
@@ -74,11 +87,15 @@ export function CircleActionCard({
               adjustsFontSizeToFit
               minimumFontScale={0.9}
               numberOfLines={1}
-              style={[styles.subtitle, {color: theme.textMuted}]}>
+              style={[styles.subtitle, {color: cardColors.subtitle}]}>
               {subtitle}
             </HoystText>
           </View>
-          <ChevronRight color={theme.textMuted} size={24} strokeWidth={2.5} />
+          <ChevronRight
+            color={cardColors.chevron}
+            size={22}
+            strokeWidth={2.4}
+          />
         </View>
       )}
     </Pressable>
@@ -88,18 +105,18 @@ export function CircleActionCard({
 const styles = StyleSheet.create({
   card: {
     alignItems: 'center',
-    borderRadius: 22,
+    borderRadius: 24,
     borderStyle: 'dashed',
-    borderWidth: 2,
+    borderWidth: 1.25,
     flexDirection: 'row',
     gap: 14,
-    minHeight: 88,
+    minHeight: 78,
     paddingHorizontal: 18,
-    paddingVertical: 18,
+    paddingVertical: 12,
   },
   copy: {
     flex: 1,
-    gap: 3,
+    gap: 0,
     minWidth: 0,
   },
   icon: {
@@ -117,12 +134,12 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     letterSpacing: 0,
-    lineHeight: 18,
+    lineHeight: 17,
   },
   title: {
-    fontSize: 17,
+    fontSize: 15,
     fontWeight: '800',
     letterSpacing: 0,
-    lineHeight: 21,
+    lineHeight: 18,
   },
 });

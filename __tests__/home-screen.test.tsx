@@ -371,6 +371,16 @@ describe('HomeScreen companion updates', () => {
     const allMyCirclesCard = tree.root
       .findAllByProps({testID: 'all-my-circles-card'})
       .find(node => node.props.style);
+    const allMyCirclesTitleStyle = tree.root
+      .findAll(node => node.props.children === 'All my circles')
+      .map(node => StyleSheet.flatten(node.props.style))
+      .find(style => style?.fontSize === 15);
+    const allMyCirclesSubtitleStyle = tree.root
+      .findAll(
+        node => node.props.children === 'View commitments and join requests',
+      )
+      .map(node => StyleSheet.flatten(node.props.style))
+      .find(style => style?.fontSize === 14);
 
     expect(JSON.stringify(tree.toJSON())).toContain('All my circles');
     expect(JSON.stringify(tree.toJSON())).toContain(
@@ -378,10 +388,22 @@ describe('HomeScreen companion updates', () => {
     );
     expect(allMyCirclesCard).toBeTruthy();
     expect(StyleSheet.flatten(allMyCirclesCard?.props.style)).toMatchObject({
+      borderRadius: 24,
       borderStyle: 'dashed',
-      borderWidth: 2,
+      borderWidth: 1.25,
       flexDirection: 'row',
-      minHeight: 88,
+      gap: 14,
+      minHeight: 78,
+      paddingHorizontal: 18,
+      paddingVertical: 12,
+    });
+    expect(allMyCirclesTitleStyle).toMatchObject({
+      fontSize: 15,
+      lineHeight: 18,
+    });
+    expect(allMyCirclesSubtitleStyle).toMatchObject({
+      fontSize: 14,
+      lineHeight: 17,
     });
   });
 
@@ -606,6 +628,9 @@ describe('HomeScreen companion updates', () => {
     const contributionIcon = tree.root.findByProps({
       testID: 'circle-summary-contribution-icon',
     });
+    const contributionArtwork = tree.root.findByProps({
+      testID: 'circle-summary-contribution-artwork',
+    });
     const contributionSideLeft = tree.root.findByProps({
       testID: 'circle-summary-contribution-side-left',
     });
@@ -628,19 +653,18 @@ describe('HomeScreen companion updates', () => {
     expect(streakDiscStyle.backgroundColor).toBe('#FFF3CF');
     expect(barKnobStyle.backgroundColor).toBe('#FFF3DF');
     expect(barKnobStyle.borderWidth).toBeUndefined();
-    expect(contributionIcon.props.height).toBe(33);
-    expect(contributionIcon.props.width).toBe(33);
-    expect(contributionSideLeft.props.y).toBe(23);
-    expect(contributionSideLeft.props.height).toBe(25);
-    expect(contributionSideRight.props.y).toBe(23);
-    expect(contributionSideRight.props.height).toBe(25);
-    expect(contributionBadge.props.y).toBe(17);
-    expect(contributionBadge.props.height).toBe(34);
+    expect(contributionIcon.props.height).toBe(28);
+    expect(contributionIcon.props.width).toBe(28);
+    expect(contributionArtwork.props.transform).toBe('translate(0 -4)');
+    expect(contributionSideLeft.props.fill).toBe('#0E9B57');
+    expect(contributionSideLeft.props.opacity).toBe(0.5);
+    expect(contributionSideRight.props.fill).toBe('#0E9B57');
+    expect(contributionSideRight.props.opacity).toBe(0.5);
     expect(contributionBadge.props.fill).toBe(brandColors.green);
     expect(contributionCheck.props.stroke).toBe('#FFFFFF');
-    expect(contributionCheck.props.strokeWidth).toBe(3.8);
-    expect(streakIcon.props.height).toBe(33);
-    expect(streakIcon.props.width).toBe(33);
+    expect(contributionCheck.props.strokeWidth).toBe(4.2);
+    expect(streakIcon.props.height).toBe(28);
+    expect(streakIcon.props.width).toBe(28);
     const textLabels = tree.root
       .findAll(node => typeof node.props.children === 'string')
       .map(node => node.props.children);

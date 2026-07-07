@@ -1,21 +1,20 @@
 import React from 'react';
 import {StyleSheet, View, type StyleProp, type ViewStyle} from 'react-native';
-import Svg, {G, Path, Rect} from 'react-native-svg';
+import Svg, {Circle, G, Path} from 'react-native-svg';
 
 import type {MomentumStatus} from '../../types/models';
 import {brandColors, frostedBlobColors} from '../tokens/colors';
 import {useHoystTheme} from '../theme/useHoystTheme';
 import {MomentumStageIcon} from './MomentumStageIcon';
-import {
-  getMomentumStatusVisualColor,
-} from './MomentumStatusPill';
+import {getMomentumStatusVisualColor} from './MomentumStatusPill';
 import {StatBarCard, clampStatPercent} from './StatBarCard';
 
 const CONTRIBUTION_CHIP_BACKGROUND = '#E8F8EF';
 const MOMENTUM_CHIP_BACKGROUND = '#FFF3DF';
 const STREAK_CHIP_BACKGROUND = '#FFF3CF';
-const SUMMARY_ICON_ARTWORK_SIZE = 33;
+const SUMMARY_ICON_ARTWORK_SIZE = 28;
 const MOMENTUM_STAGE_ICON_SIZE = 38;
+const CONTRIBUTION_ICON_ARTWORK_TRANSFORM = 'translate(0 -4)';
 
 type CircleSummaryRingsProps = {
   contributionPercent: number;
@@ -35,55 +34,35 @@ export function ContributionSummaryIcon({
   testID?: string;
 }) {
   return (
-    <Svg
-      height={size}
-      testID={testID}
-      viewBox="0 0 64 64"
-      width={size}>
-      <G>
-        <Rect
+    <Svg height={size} testID={testID} viewBox="0 0 64 64" width={size}>
+      <G
+        testID="circle-summary-contribution-artwork"
+        transform={CONTRIBUTION_ICON_ARTWORK_TRANSFORM}>
+        <G
           fill="#0E9B57"
-          height={25}
-          opacity={0.58}
-          rx={7}
-          testID="circle-summary-contribution-side-left"
-          width={12}
-          x={10}
-          y={23}
-        />
-        <Rect
-          fill={brandColors.green}
-          height={34}
-          rx={8}
-          testID="circle-summary-contribution-badge"
-          width={14}
-          x={25}
-          y={17}
-        />
-        <Rect
+          opacity={0.5}
+          testID="circle-summary-contribution-side-left">
+          <Circle cx={19} cy={24} r={7} />
+          <Path d="M8 48v-4.2C8 36.3 12.9 31 19 31s11 5.3 11 12.8V48H8Z" />
+        </G>
+        <G
           fill="#0E9B57"
-          height={25}
-          opacity={0.58}
-          rx={7}
-          testID="circle-summary-contribution-side-right"
-          width={12}
-          x={42}
-          y={23}
-        />
+          opacity={0.5}
+          testID="circle-summary-contribution-side-right">
+          <Circle cx={45} cy={24} r={7} />
+          <Path d="M34 48v-4.2C34 36.3 38.9 31 45 31s11 5.3 11 12.8V48H34Z" />
+        </G>
+        <G fill={brandColors.green} testID="circle-summary-contribution-badge">
+          <Circle cx={32} cy={20.5} r={8.2} />
+          <Path d="M17.5 51.5v-5.7c0-8.4 6.5-15.3 14.5-15.3s14.5 6.9 14.5 15.3v5.7c0 1.4-1.1 2.5-2.5 2.5H20c-1.4 0-2.5-1.1-2.5-2.5Z" />
+        </G>
         <Path
-          d="M24.5 55h15"
-          fill="none"
-          stroke={brandColors.green}
-          strokeLinecap="round"
-          strokeWidth={5}
-        />
-        <Path
-          d="M27.6 34.2 31.1 37.8 37.4 30.6"
+          d="M25.4 43.3 30.1 47.9 39.2 38.1"
           fill="none"
           stroke="#FFFFFF"
           strokeLinecap="round"
           strokeLinejoin="round"
-          strokeWidth={3.8}
+          strokeWidth={4.2}
           testID="circle-summary-contribution-check"
         />
       </G>
@@ -99,11 +78,7 @@ export function StreakSummaryIcon({
   testID?: string;
 }) {
   return (
-    <Svg
-      height={size}
-      testID={testID}
-      viewBox="0 0 64 64"
-      width={size}>
+    <Svg height={size} testID={testID} viewBox="0 0 64 64" width={size}>
       <G>
         <Path
           d="M31.8 57c-10.9-1.8-18-9.4-17-20.2.6-6.8 5.4-11.5 10-16 4.5-4.4 6.7-8.1 5.5-13.8 11.3 5.7 17.2 15.3 14.8 25.1 4.6 2.3 7.1 7.3 5.4 12.6C48.2 52.4 40.3 58.4 31.8 57Z"

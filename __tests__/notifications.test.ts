@@ -73,6 +73,7 @@ jest.mock(
 import {
   buildEveningSummaryCopy,
   buildOneSignalPushPayload,
+  buildTapInReminderNotification,
   canShareCircleOutsideMembers,
   formatNotificationCircleTitle,
   getCompanionFeedTargetsFromMemberships,
@@ -448,6 +449,64 @@ describe('evening activity recap', () => {
 });
 
 describe('notification reminder eligibility', () => {
+  it('keeps one due circle pointed at the Tap In composer', () => {
+    expect(
+      buildTapInReminderNotification({
+        dateKey: '2026-07-02',
+        kind: 'midday',
+        reminders: [
+          {
+            circleId: 'circle-1',
+            circleTitle: 'Hydration Circle',
+          },
+        ],
+        uid: 'user-1',
+      }),
+    ).toMatchObject({
+      body: 'Tap In today for "Hydration Circle".',
+      circleId: 'circle-1',
+      dedupeKey: 'tap_in_midday_circle-1_2026-07-02_user-1',
+      deeplink: {
+        circleId: 'circle-1',
+        screen: 'TapInComposer',
+        source: 'notification',
+      },
+      title: 'Tap In reminder',
+      type: 'tap_in_midday_reminder',
+    });
+  });
+
+  it('consolidates multiple due circles into one Tap In picker reminder', () => {
+    expect(
+      buildTapInReminderNotification({
+        dateKey: '2026-07-02',
+        kind: 'final',
+        reminders: [
+          {
+            circleId: 'circle-1',
+            circleTitle: 'STOP eating heavy after 9PM',
+          },
+          {
+            circleId: 'circle-2',
+            circleTitle: '3 Day Healthy Activity Tracker',
+          },
+          {
+            circleId: 'circle-3',
+            circleTitle: 'Morning Walks',
+          },
+        ],
+        uid: 'user-1',
+      }),
+    ).toMatchObject({
+      body: '2 hours left for 3 circles, including "STOP eating heavy a..." and "3 Day Healthy Activ...".',
+      dedupeKey: 'tap_in_final_summary_2026-07-02_user-1',
+      deeplink: {screen: 'TapInPicker'},
+      pushData: {screen: 'TapInPicker'},
+      title: 'Final Tap In warning',
+      type: 'tap_in_final_warning',
+    });
+  });
+
   it('allows active members with due Tap Ins and enabled reminders', () => {
     expect(
       getReminderEligibility({
@@ -630,12 +689,11 @@ describe('OneSignal push payload', () => {
 });
 
 describe('repair push subscription callable', () => {
-  const invokeRepairPushSubscription = repairPushSubscription as unknown as (
-    request: {
+  const invokeRepairPushSubscription =
+    repairPushSubscription as unknown as (request: {
       auth?: {uid: string};
       data?: unknown;
-    },
-  ) => Promise<{repaired: boolean; status: string}>;
+    }) => Promise<{repaired: boolean; status: string}>;
   const originalFetch = global.fetch;
   const originalOneSignalAppId = process.env.ONESIGNAL_APP_ID;
   const originalOneSignalRestApiKey = process.env.ONESIGNAL_REST_API_KEY;

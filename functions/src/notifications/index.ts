@@ -58,6 +58,7 @@ export type NotificationActor = {
 export type NotificationDeeplink =
   | {screen: 'CircleDetail'; circleId: string}
   | {screen: 'Inbox'}
+  | {screen: 'TapInPicker'}
   | {screen: 'TapInComposer'; circleId: string; source: 'notification'};
 
 export type CreateNotificationInput = {
@@ -140,6 +141,21 @@ export type ReminderCandidate = {
   remainingTapIns?: number;
   todayStatus?: unknown;
   uid: string;
+};
+
+export type TapInReminderCircle = {
+  circleId: string;
+  circleTitle: string;
+};
+
+export type TapInReminderNotificationPlan = {
+  body: string;
+  circleId?: string;
+  dedupeKey: string;
+  deeplink: NotificationDeeplink;
+  pushData?: Record<string, string>;
+  title: string;
+  type: 'tap_in_final_warning' | 'tap_in_midday_reminder';
 };
 
 export type CompanionFeedTarget = {
@@ -2407,11 +2423,117 @@ export function getReminderEligibility({
   };
 }
 
+function getTapInReminderType(kind: 'final' | 'midday') {
+  return kind === 'midday'
+    ? ('tap_in_midday_reminder' as const)
+    : ('tap_in_final_warning' as const);
+}
+
+function getTapInReminderSummaryDedupeKey({
+  dateKey,
+  kind,
+  uid,
+}: {
+  dateKey: string;
+  kind: 'final' | 'midday';
+  uid: string;
+}) {
+  return `tap_in_${kind}_summary_${dateKey}_${uid}`;
+}
+
+function getTapInReminderCircleListCopy(reminders: TapInReminderCircle[]) {
+  const formattedTitles = reminders
+    .slice(0, 2)
+    .map(reminder => formatNotificationCircleTitle(reminder.circleTitle));
+
+  if (formattedTitles.length === 0) {
+    return '';
+  }
+
+  if (formattedTitles.length === 1) {
+    return `, including ${formattedTitles[0]}`;
+  }
+
+  return `, including ${formattedTitles[0]} and ${formattedTitles[1]}`;
+}
+
+export function buildTapInReminderNotification({
+  dateKey,
+  kind,
+  reminders,
+  uid,
+}: {
+  dateKey: string;
+  kind: 'final' | 'midday';
+  reminders: TapInReminderCircle[];
+  uid: string;
+}): TapInReminderNotificationPlan | undefined {
+  const type = getTapInReminderType(kind);
+
+  if (reminders.length === 0) {
+    return undefined;
+  }
+
+  if (reminders.length === 1) {
+    const reminder = reminders[0];
+    const dedupeKey = `tap_in_${kind}_${reminder.circleId}_${dateKey}_${uid}`;
+    const copy = resolveNotificationCopy({
+      context: {circleTitle: reminder.circleTitle},
+      dedupeKey,
+      fallbackBody:
+        kind === 'midday'
+          ? `Tap In to keep ${reminder.circleTitle} Progression moving.`
+          : `2 hours left to Tap In for ${reminder.circleTitle}.`,
+      fallbackTitle:
+        kind === 'midday' ? 'Keep your Commitment moving' : '2 hours left',
+      type,
+    });
+
+    return {
+      body: copy.body,
+      circleId: reminder.circleId,
+      dedupeKey,
+      deeplink: {
+        circleId: reminder.circleId,
+        screen: 'TapInComposer',
+        source: 'notification',
+      },
+      title: copy.title,
+      type,
+    };
+  }
+
+  const circleCount = reminders.length;
+  const circleCopy = `${circleCount} circle${circleCount === 1 ? '' : 's'}`;
+  const listCopy = getTapInReminderCircleListCopy(reminders);
+  const dedupeKey = getTapInReminderSummaryDedupeKey({dateKey, kind, uid});
+
+  return {
+    body:
+      kind === 'midday'
+        ? `Tap In needed for ${circleCopy} today${listCopy}.`
+        : `2 hours left for ${circleCopy}${listCopy}.`,
+    dedupeKey,
+    deeplink: {screen: 'TapInPicker'},
+    pushData: {screen: 'TapInPicker'},
+    title: kind === 'midday' ? 'Tap In reminder' : 'Final Tap In warning',
+    type,
+  };
+}
+
 async function sendTapInReminders(kind: 'final' | 'midday') {
   const targetHour = kind === 'midday' ? 12 : 22;
   const now = new Date();
   const circleSnapshots = await db.collection('circles').get();
-  const sendPromises: Promise<unknown>[] = [];
+  const reminderGroups = new Map<
+    string,
+    {
+      dateKey: string;
+      reminders: TapInReminderCircle[];
+      timezone: string;
+      uid: string;
+    }
+  >();
 
   for (const circleSnapshot of circleSnapshots.docs) {
     const circle = circleSnapshot.data();
@@ -2498,41 +2620,60 @@ async function sendTapInReminders(kind: 'final' | 'midday') {
         continue;
       }
 
-      const type =
-        kind === 'midday' ? 'tap_in_midday_reminder' : 'tap_in_final_warning';
-      const copy = resolveNotificationCopy({
-        context: {circleTitle},
-        dedupeKey: eligibility.dedupeKey,
-        fallbackBody:
-          kind === 'midday'
-            ? `Tap In to keep ${circleTitle} Progression moving.`
-            : `2 hours left to Tap In for ${circleTitle}.`,
-        fallbackTitle:
-          kind === 'midday' ? 'Keep your Commitment moving' : '2 hours left',
-        type,
-      });
-
-      sendPromises.push(
-        createInboxEvent({
-          body: copy.body,
-          circleId: circleSnapshot.id,
-          copyVariant: copy.copyVariant,
-          dedupeKey: eligibility.dedupeKey,
-          deeplink: {
-            circleId: circleSnapshot.id,
-            screen: 'TapInComposer',
-            source: 'notification',
-          },
-          deliveryPriority: kind === 'midday' ? 'routine' : 'immediate',
-          preferenceKey: 'tapInReminders',
-          routineTimezone: timezone,
-          title: copy.title,
-          type,
+      const groupKey = `${kind}_${local.dateKey}_${uid}`;
+      const group =
+        reminderGroups.get(groupKey) ??
+        ({
+          dateKey: local.dateKey,
+          reminders: [],
+          timezone,
           uid,
-        }),
-      );
+        } satisfies {
+          dateKey: string;
+          reminders: TapInReminderCircle[];
+          timezone: string;
+          uid: string;
+        });
+
+      group.reminders.push({
+        circleId: circleSnapshot.id,
+        circleTitle,
+      });
+      reminderGroups.set(groupKey, group);
     }
   }
+
+  const sendPromises = Array.from(reminderGroups.values())
+    .map(group => {
+      const notification = buildTapInReminderNotification({
+        dateKey: group.dateKey,
+        kind,
+        reminders: group.reminders,
+        uid: group.uid,
+      });
+
+      if (!notification) {
+        return undefined;
+      }
+
+      return createInboxEvent({
+        body: notification.body,
+        circleId: notification.circleId,
+        copyVariant: notification.type,
+        dedupeKey: notification.dedupeKey,
+        deeplink: notification.deeplink,
+        deliveryPriority: kind === 'midday' ? 'routine' : 'immediate',
+        preferenceKey: 'tapInReminders',
+        pushData: notification.pushData,
+        routineTimezone: group.timezone,
+        title: notification.title,
+        type: notification.type,
+        uid: group.uid,
+      });
+    })
+    .filter((promise): promise is Promise<NotificationSendResult> =>
+      Boolean(promise),
+    );
 
   await Promise.all(sendPromises);
   return {sentOrSkipped: sendPromises.length};

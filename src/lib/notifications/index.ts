@@ -52,8 +52,9 @@ async function optInWithAvailablePermission({
   }
 
   requestedPermissionDuringSession = true;
-  const permissionGranted =
-    await OneSignal.Notifications.requestPermission(true).catch(() => false);
+  const permissionGranted = await OneSignal.Notifications.requestPermission(
+    true,
+  ).catch(() => false);
 
   if (!permissionGranted) {
     return {
@@ -84,17 +85,22 @@ function handleNotificationClick(event: NotificationClickEvent) {
   >;
   const type = asString(data.type);
   const circleId = asString(data.circleId);
+  const screen = asString(data.screen);
+  const isTapInReminder =
+    type === 'tap_in_midday_reminder' || type === 'tap_in_final_warning';
 
   if (!navigationRef?.isReady()) {
     return;
   }
 
+  if (isTapInReminder && (!circleId || screen === 'TapInPicker')) {
+    navigationRef.navigate('TapInPicker');
+    return;
+  }
+
   if (
     circleId &&
-    (type === 'tap_in_midday_reminder' ||
-      type === 'tap_in_final_warning' ||
-      type === 'member_due_prompt' ||
-      type === 'nudge')
+    (isTapInReminder || type === 'member_due_prompt' || type === 'nudge')
   ) {
     navigationRef.navigate('TapInComposer', {
       circleId,

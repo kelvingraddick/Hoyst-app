@@ -377,14 +377,34 @@ describe('CirclesScreen render paths', () => {
       .findAllByProps({testID: 'find-more-circles-card'})
       .map(node => StyleSheet.flatten(node.props.style))
       .find(style => style?.borderStyle === 'dashed');
+    const findMoreTitleStyle = screen.root
+      .findAll(node => node.props.children === 'Find more circles')
+      .map(node => StyleSheet.flatten(node.props.style))
+      .find(style => style?.fontSize === 15);
+    const findMoreSubtitleStyle = screen.root
+      .findAll(node => node.props.children === 'Browse public circles in Explore')
+      .map(node => StyleSheet.flatten(node.props.style))
+      .find(style => style?.fontSize === 14);
 
     expect(findMoreStyle).toBeTruthy();
 
     expect(findMoreStyle).toMatchObject({
+      borderRadius: 24,
       borderStyle: 'dashed',
-      borderWidth: 2,
+      borderWidth: 1.25,
       flexDirection: 'row',
-      minHeight: 88,
+      gap: 14,
+      minHeight: 78,
+      paddingHorizontal: 18,
+      paddingVertical: 12,
+    });
+    expect(findMoreTitleStyle).toMatchObject({
+      fontSize: 15,
+      lineHeight: 18,
+    });
+    expect(findMoreSubtitleStyle).toMatchObject({
+      fontSize: 14,
+      lineHeight: 17,
     });
   });
 

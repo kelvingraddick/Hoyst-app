@@ -2,7 +2,8 @@ import React from 'react';
 import {Pressable} from 'react-native';
 import renderer, {act} from 'react-test-renderer';
 
-import {TapInPulseButton} from '../src/design/components/TapInPulseButton';
+import {HoystTapInMark} from '../src/design/components/HoystTapInMark';
+import {TapInActionButton} from '../src/design/components/TapInActionButton';
 import {TapInComposerScreen} from '../src/features/check-in/screens/TapInComposerScreen';
 import type {CircleDetailModel} from '../src/types/models';
 
@@ -182,9 +183,14 @@ describe('TapInComposerScreen', () => {
 
     const navigation =
       tree!.root.findByType(TapInComposerScreen).props.navigation;
+    expect(tree!.root.findByProps({testID: 'tap-in-composer-logo'}).type).toBe(
+      HoystTapInMark,
+    );
     const confirmButton = tree!.root
-      .findAllByType(TapInPulseButton)
+      .findAllByType(TapInActionButton)
       .find(button => button.props.label === 'Confirm Tap In');
+
+    expect(confirmButton?.props.variant).toBe('primary');
 
     await act(async () => {
       confirmButton!.props.onPress();
@@ -226,7 +232,7 @@ describe('TapInComposerScreen', () => {
 
     const output = JSON.stringify(tree!.toJSON());
     const confirmButton = tree!.root
-      .findAllByType(TapInPulseButton)
+      .findAllByType(TapInActionButton)
       .find(button => button.props.label === 'Confirm Tap In');
 
     expect(output).toContain('Commitment complete');
@@ -299,5 +305,33 @@ describe('TapInComposerScreen', () => {
         status: 'skip',
       }),
     );
+  });
+
+  it('renders the refreshed already-covered state with remove and close actions', async () => {
+    mockDetail = {
+      ...baseMockDetail,
+      viewerHasCheckedIn: true,
+      viewerHasTappedInToday: true,
+      viewerTodayStatus: 'done',
+    };
+    let tree: renderer.ReactTestRenderer | undefined;
+
+    await act(async () => {
+      tree = renderComposerScreen();
+    });
+
+    const output = JSON.stringify(tree!.toJSON());
+    const removeButton = tree!.root
+      .findAllByType(TapInActionButton)
+      .find(button => button.props.label === 'Remove Tap In');
+    const closeButton = tree!.root
+      .findAllByType(TapInActionButton)
+      .find(button => button.props.label === 'Close');
+
+    expect(output).toContain('Today is covered');
+    expect(tree!.root.findAllByType(HoystTapInMark).length).toBeGreaterThan(0);
+    expect(removeButton?.props.variant).toBe('dangerOutline');
+    expect(removeButton?.props.disabled).toBe(false);
+    expect(closeButton?.props.variant).toBe('text');
   });
 });

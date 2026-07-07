@@ -164,6 +164,7 @@ export type InboxEventType =
 export type InboxDeeplink =
   | {screen: 'CircleDetail'; circleId: string}
   | {screen: 'Inbox'}
+  | {screen: 'TapInPicker'}
   | {screen: 'TapInComposer'; circleId: string; source: 'notification'};
 
 export type InboxEvent = {

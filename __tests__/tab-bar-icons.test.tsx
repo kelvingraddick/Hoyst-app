@@ -61,20 +61,6 @@ function getVisibleGlyphColors(tree: renderer.ReactTestRenderer) {
     );
 }
 
-function getSvgPathPoints(path: string): Array<{x: number; y: number}> {
-  const coordinates = path.match(/-?\d+(?:\.\d+)?/g)?.map(Number) ?? [];
-
-  expect(coordinates.length % 2).toBe(0);
-
-  return coordinates.reduce<Array<{x: number; y: number}>>(
-    (points, coordinate, index) =>
-      index % 2 === 0
-        ? points.concat({x: coordinate, y: coordinates[index + 1]})
-        : points,
-    [],
-  );
-}
-
 describe('TabBarIcons', () => {
   it('renders every tab icon at the same visible size', () => {
     icons.forEach(({Component}) => {
@@ -96,31 +82,38 @@ describe('TabBarIcons', () => {
     });
   });
 
-  it('renders the Explore icon as a search and compass mark', () => {
+  it('renders the Explore icon as a telescope mark', () => {
     const tree = renderIcon(ExploreTabIcon);
     const rings = tree.root.findAllByType(Circle);
     const paths = tree.root.findAllByType(Path);
 
     expect(rings).toHaveLength(1);
-    expect(paths).toHaveLength(2);
-    expect(rings[0].props.fill).toBe('none');
-    expect(rings[0].props.stroke).toBe('#111827');
-    expect(paths.map(path => path.props.stroke)).toEqual([
-      '#6C748C',
-      '#6C748C',
-    ]);
-
-    const compassPoints = getSvgPathPoints(paths[1].props.d);
-    const compassCenter = compassPoints.reduce(
-      (center, point) => ({
-        x: center.x + point.x / compassPoints.length,
-        y: center.y + point.y / compassPoints.length,
+    expect(paths).toHaveLength(6);
+    expect(rings[0].props).toEqual(
+      expect.objectContaining({
+        cx: 14,
+        cy: 15.167,
+        fill: 'none',
+        r: 2.333,
+        stroke: '#111827',
+        strokeWidth: 1.9,
       }),
-      {x: 0, y: 0},
     );
-
-    expect(compassCenter.x).toBeCloseTo(rings[0].props.cx);
-    expect(compassCenter.y).toBeCloseTo(rings[0].props.cy);
+    expect(paths.map(path => path.props.d)).toEqual([
+      'm11.743 14.575-7.21 1.538a1.09 1.09 0 0 1-1.293-.819l-.627-2.508a1.248 1.248 0 0 1 .806-1.476l15.755-5.18',
+      'm15.82 13.705 5.054-1.078',
+      'm18.667 24.5-3.623-7.245',
+      'M19.233 6.93a2.333 2.333 0 0 1 1.697-2.829l1.272-.317a1.167 1.167 0 0 1 1.414.848l1.768 7.07a1.167 1.167 0 0 1-.848 1.415l-1.272.317a2.333 2.333 0 0 1-2.829-1.697z',
+      'm7.184 10.072 1.3 5.199',
+      'm9.333 24.5 3.623-7.245',
+    ]);
+    paths.forEach(path => {
+      expect(path.props.fill).toBe('none');
+      expect(path.props.stroke).toBe('#111827');
+      expect(path.props.strokeLinecap).toBe('round');
+      expect(path.props.strokeLinejoin).toBe('round');
+      expect(path.props.strokeWidth).toBe(1.9);
+    });
   });
 
   it('can render inactive icons in one gray color', () => {

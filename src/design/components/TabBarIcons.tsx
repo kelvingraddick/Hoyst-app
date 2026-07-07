@@ -121,26 +121,60 @@ export function ExploreTabIcon({
 
   return (
     <Svg fill="none" height={size} viewBox="0 0 28 28" width={size} {...props}>
-      <Circle
-        cx={13.2}
-        cy={13.2}
+      <Path
+        d="m11.743 14.575-7.21 1.538a1.09 1.09 0 0 1-1.293-.819l-.627-2.508a1.248 1.248 0 0 1 .806-1.476l15.755-5.18"
         fill="none"
-        r={7.8}
         stroke={c.primary}
-        strokeWidth={strokeWidth}
-      />
-      <Path
-        d="m18.9 18.9 4.1 4.1"
-        fill="none"
-        stroke={c.secondary}
         strokeLinecap="round"
+        strokeLinejoin="round"
         strokeWidth={strokeWidth}
       />
       <Path
-        d="M9.95 16.45 11.65 11.65 16.45 9.95 14.75 14.75z"
-        fill={c.fillPrimary}
-        stroke={c.secondary}
+        d="m15.82 13.705 5.054-1.078"
+        fill="none"
+        stroke={c.primary}
+        strokeLinecap="round"
         strokeLinejoin="round"
+        strokeWidth={strokeWidth}
+      />
+      <Path
+        d="m18.667 24.5-3.623-7.245"
+        fill="none"
+        stroke={c.primary}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={strokeWidth}
+      />
+      <Path
+        d="M19.233 6.93a2.333 2.333 0 0 1 1.697-2.829l1.272-.317a1.167 1.167 0 0 1 1.414.848l1.768 7.07a1.167 1.167 0 0 1-.848 1.415l-1.272.317a2.333 2.333 0 0 1-2.829-1.697z"
+        fill="none"
+        stroke={c.primary}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={strokeWidth}
+      />
+      <Path
+        d="m7.184 10.072 1.3 5.199"
+        fill="none"
+        stroke={c.primary}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={strokeWidth}
+      />
+      <Path
+        d="m9.333 24.5 3.623-7.245"
+        fill="none"
+        stroke={c.primary}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={strokeWidth}
+      />
+      <Circle
+        cx={14}
+        cy={15.167}
+        fill="none"
+        r={2.333}
+        stroke={c.primary}
         strokeWidth={strokeWidth}
       />
     </Svg>
