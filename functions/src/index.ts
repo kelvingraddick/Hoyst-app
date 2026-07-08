@@ -29,6 +29,11 @@ export {
   backfillMomentumOpportunities,
   materializeMomentumOpportunities,
 } from './momentum';
+export {
+  markCircleThreadRead,
+  sendCircleThreadMessage,
+  toggleCircleThreadItemLike,
+} from './thread';
 
 export const healthcheck = onRequest((request, response) => {
   response.json({

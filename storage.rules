@@ -28,6 +28,13 @@ service firebase.storage {
         request.resource.size < 10 * 1024 * 1024;
     }
 
+    match /circles/{circleId}/messages/{uid}/{fileName} {
+      allow read: if isActiveMember(circleId);
+      allow write: if isSelf(uid) &&
+        isActiveMember(circleId) &&
+        request.resource.size < 10 * 1024 * 1024;
+    }
+
     match /{allPaths=**} {
       allow read, write: if false;
     }

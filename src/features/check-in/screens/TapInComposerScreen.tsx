@@ -1,7 +1,7 @@
 import React, {useEffect, useState} from 'react';
 import {Alert, Image, Pressable, StyleSheet, View} from 'react-native';
 import type {LayoutChangeEvent} from 'react-native';
-import {Camera, Flame, ImagePlus, Trash2, X} from 'lucide-react-native';
+import {Camera, Flame, ImagePlus, Share2, Trash2, X} from 'lucide-react-native';
 import {launchCamera, launchImageLibrary} from 'react-native-image-picker';
 import type {NativeStackScreenProps} from '@react-navigation/native-stack';
 
@@ -151,6 +151,7 @@ export function TapInComposerScreen({
     : `No skips left (${skipAllowance} per ${skipWindowDays} days)`;
   const canRemoveTodayCheckIn =
     detail.viewerTodayStatus === 'done' || detail.viewerTodayStatus === 'skip';
+  const canShareStoryFromCheckedIn = detail.viewerTodayStatus === 'done';
   const removeActionLabel =
     detail.viewerTodayStatus === 'skip' ? 'Remove Skip' : 'Remove Tap In';
   const checkedInStatusCopy =
@@ -213,7 +214,7 @@ export function TapInComposerScreen({
 
     setIsSubmitting(true);
     try {
-      await submitTapIn({
+      const result = await submitTapIn({
         circleId: route.params.circleId,
         note: note.length > 0 ? note : undefined,
         photoUrl: draft.photoUri,
@@ -229,10 +230,14 @@ export function TapInComposerScreen({
         circleTitle: detail.title,
         commitment: detail.commitment,
         inviteUrl: detail.inviteUrl,
+        memberCount: detail.memberCount,
+        periodTapInCount: detail.periodTapInCount,
         progressLabel: detail.progressLabel,
         source: route.params.source,
         status: checkInStatus,
+        streakDays: detail.streakDays,
         streakLabel: detail.streakLabel,
+        completionMomentum: result.momentum,
         note: note.length > 0 ? note : undefined,
         photoUri: draft.photoUri,
       });
@@ -272,6 +277,20 @@ export function TapInComposerScreen({
         text: 'Remove',
       },
     ]);
+  };
+  const shareStory = () => {
+    navigation.navigate('TapInStoryShare', {
+      circleId: route.params.circleId,
+      circleTitle: detail.title,
+      commitment: detail.commitment,
+      inviteUrl: detail.inviteUrl,
+      memberCount: detail.memberCount,
+      periodTapInCount: detail.periodTapInCount,
+      progressLabel: detail.progressLabel,
+      source: route.params.source,
+      streakDays: detail.streakDays,
+      streakLabel: detail.streakLabel,
+    });
   };
 
   return (
@@ -370,6 +389,20 @@ export function TapInComposerScreen({
               </HoystText>
             </GlassPanel>
             <View style={styles.actionStack}>
+              {canShareStoryFromCheckedIn ? (
+                <TapInActionButton
+                  icon={
+                    <Share2
+                      color={theme.accentSecondaryForeground}
+                      size={18}
+                      strokeWidth={2.3}
+                    />
+                  }
+                  label="Share Story"
+                  onPress={shareStory}
+                  variant="accentOutline"
+                />
+              ) : null}
               <TapInActionButton
                 disabled={isRemovingTapIn}
                 icon={

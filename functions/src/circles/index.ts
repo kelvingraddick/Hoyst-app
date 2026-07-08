@@ -26,6 +26,7 @@ import {
   getRequiredTapIns,
   getStoredCommitmentFrequency,
 } from '../shared/commitments';
+import {createCircleThreadActivity, getCircleThreadNudgeText} from '../thread';
 import {getNudgeTargetUids} from './nudge-targets';
 
 const graceRuleSchema = z.object({
@@ -868,6 +869,14 @@ export const nudgeCircleMembers = onCall(
       todayCoveredUids,
       viewerUid: uid,
     });
+    const targetMembersByUid = new Map(
+      activeMemberSnapshots.docs.map(snapshot => {
+        const data = snapshot.data();
+        const memberUid = asOptionalString(data.uid) ?? snapshot.id;
+
+        return [memberUid, data] as const;
+      }),
+    );
 
     await Promise.all(
       targetUids.map(targetUid =>
@@ -885,6 +894,50 @@ export const nudgeCircleMembers = onCall(
         }),
       ),
     );
+
+    if (targetUids.length > 0) {
+      const singleTarget =
+        targetUids.length === 1 ? targetMembersByUid.get(targetUids[0]) : null;
+      const targetActor =
+        singleTarget && targetUids[0]
+          ? {
+              avatarUrl: singleTarget.avatarUrl ?? null,
+              displayName:
+                asOptionalString(singleTarget.displayName) ??
+                asOptionalString(singleTarget.name) ??
+                'Hoyst member',
+              handle: asOptionalString(singleTarget.handle) ?? null,
+              uid: targetUids[0],
+            }
+          : undefined;
+      const targetName =
+        targetActor && targetUids.length === 1
+          ? asOptionalString(targetActor.displayName)
+          : undefined;
+
+      await createCircleThreadActivity({
+        actor: {
+          avatarUrl: profile.avatarUrl ?? null,
+          displayName: profile.displayName,
+          handle: profile.handle,
+          uid,
+        },
+        circleId: input.circleId,
+        itemId: `nudge_${dateKey}_${uid}_${
+          input.targetUid ?? 'group'
+        }_${Date.now()}`,
+        targetActor,
+        text: getCircleThreadNudgeText({
+          actorName: profile.displayName ?? 'Someone',
+          targetCount: targetUids.length,
+          targetName,
+        }),
+        tone: 'pending',
+        type: 'nudge',
+      }).catch(error =>
+        console.error('create_thread_nudge_activity_failed', error),
+      );
+    }
 
     return {nudged: targetUids.length};
   },

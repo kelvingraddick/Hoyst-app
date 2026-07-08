@@ -38,6 +38,24 @@ type RemoveTapInOpportunityInput = {
   uid: string;
 };
 
+export type TapInMomentumPreview = {
+  currentStreak: number;
+  streakDelta: number;
+};
+
+type TapInMomentumPreviewInput = {
+  circle: DocumentData | undefined;
+  circleId: string;
+  dateKey: string;
+  status: 'done' | 'skip';
+  transaction: Transaction;
+  uid: string;
+};
+
+type MomentumOpportunityWithId = MomentumOpportunity & {
+  id: string;
+};
+
 function asString(value: unknown, fallback = '') {
   return typeof value === 'string' && value.trim().length > 0
     ? value.trim()
@@ -48,7 +66,11 @@ function asNumber(value: unknown, fallback: number) {
   return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
 }
 
-function getOpportunityId(circleId: string, periodKey: string, slotIndex: number) {
+function getOpportunityId(
+  circleId: string,
+  periodKey: string,
+  slotIndex: number,
+) {
   return `${circleId}_${periodKey}_${slotIndex}`;
 }
 
@@ -90,7 +112,9 @@ function getSlotForDate(
   return nextSlot;
 }
 
-function mapOpportunitySnapshot(snapshot: DocumentSnapshot): MomentumOpportunity | undefined {
+function mapOpportunitySnapshot(
+  snapshot: DocumentSnapshot,
+): MomentumOpportunity | undefined {
   const data = snapshot.data();
   const status = data?.status;
 
@@ -111,6 +135,101 @@ function mapOpportunitySnapshot(snapshot: DocumentSnapshot): MomentumOpportunity
     slotIndex: asNumber(data?.slotIndex, 0),
     status,
   };
+}
+
+function mapOpportunitySnapshotWithId(
+  snapshot: DocumentSnapshot,
+): MomentumOpportunityWithId | undefined {
+  const opportunity = mapOpportunitySnapshot(snapshot);
+
+  if (!opportunity) {
+    return undefined;
+  }
+
+  return {
+    ...opportunity,
+    id: snapshot.id,
+  };
+}
+
+function getCurrentStreak(opportunities: MomentumOpportunity[]) {
+  return calculateMomentumSummary({
+    opportunities,
+    periodKey: 'current',
+  }).currentStreak;
+}
+
+export function buildTapInMomentumPreview({
+  opportunities,
+  targetOpportunity,
+}: {
+  opportunities: MomentumOpportunityWithId[];
+  targetOpportunity?: MomentumOpportunityWithId;
+}): TapInMomentumPreview {
+  const priorCurrentStreak = getCurrentStreak(opportunities);
+  const nextOpportunities = targetOpportunity
+    ? [
+        ...opportunities.filter(
+          opportunity => opportunity.id !== targetOpportunity.id,
+        ),
+        targetOpportunity,
+      ]
+    : opportunities;
+  const currentStreak = getCurrentStreak(nextOpportunities);
+
+  return {
+    currentStreak,
+    streakDelta: currentStreak - priorCurrentStreak,
+  };
+}
+
+export async function getTapInMomentumPreview({
+  circle,
+  circleId,
+  dateKey,
+  status,
+  transaction,
+  uid,
+}: TapInMomentumPreviewInput): Promise<TapInMomentumPreview> {
+  const userPrivateRef = db.collection('userPrivate').doc(uid);
+  const opportunitySnapshots = await transaction.get(
+    userPrivateRef
+      .collection('opportunities')
+      .where('isCurrentPeriod', '==', true),
+  );
+  const opportunities = opportunitySnapshots.docs
+    .map(mapOpportunitySnapshotWithId)
+    .filter((opportunity): opportunity is MomentumOpportunityWithId =>
+      Boolean(opportunity),
+    );
+  const slots = getCurrentSlots(circle);
+  const existingStatuses = new Map(
+    slots.map(slot => [
+      slot.slotIndex,
+      opportunities.find(
+        opportunity =>
+          opportunity.id ===
+          getOpportunityId(circleId, slot.periodKey, slot.slotIndex),
+      )?.status,
+    ]),
+  );
+  const slot = getSlotForDate(circle, dateKey, existingStatuses);
+  const opportunityStatus: OpportunityStatus =
+    status === 'done' ? 'completed' : 'skipped';
+  const targetOpportunity = slot
+    ? {
+        availableDateKey: slot.availableDateKey,
+        id: getOpportunityId(circleId, slot.periodKey, slot.slotIndex),
+        periodKey: slot.periodKey,
+        slotIndex: slot.slotIndex,
+        status: opportunityStatus,
+      }
+    : undefined;
+
+  return buildTapInMomentumPreview({
+    opportunities,
+    targetOpportunity,
+  });
 }
 
 export async function recalculateMomentumSummaryForUser(uid: string) {
@@ -375,7 +494,13 @@ export const materializeMomentumOpportunities = onSchedule(
             .collection('userPrivate')
             .doc(uid)
             .collection('opportunities')
-            .doc(getOpportunityId(circleSnapshot.id, slot.periodKey, slot.slotIndex));
+            .doc(
+              getOpportunityId(
+                circleSnapshot.id,
+                slot.periodKey,
+                slot.slotIndex,
+              ),
+            );
           const status = getOpportunityStatusForSlot({
             slot,
             timezone: asString(circle.timezone, 'UTC'),
@@ -412,7 +537,9 @@ export const materializeMomentumOpportunities = onSchedule(
     }
 
     await Promise.all(
-      Array.from(affectedUids).map(uid => recalculateMomentumSummaryForUser(uid)),
+      Array.from(affectedUids).map(uid =>
+        recalculateMomentumSummaryForUser(uid),
+      ),
     );
   },
 );

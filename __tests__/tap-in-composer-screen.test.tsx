@@ -26,6 +26,7 @@ const baseMockDetail: CircleDetailModel = {
   memberCount: 4,
   members: [],
   monthProgress: [],
+  periodTapInCount: 8,
   progressLabel: 'Week · 50%',
   remainingCheckIns: 2,
   state: 'active',
@@ -124,6 +125,7 @@ function renderComposerScreen() {
       navigation={
         {
           goBack: jest.fn(),
+          navigate: jest.fn(),
           replace: jest.fn(),
         } as never
       }
@@ -165,6 +167,10 @@ describe('TapInComposerScreen', () => {
     mockSubmitTapIn.mockResolvedValue({
       checkInId: 'user-1',
       dateKey: '2026-05-29',
+      momentum: {
+        currentStreak: 6,
+        streakDelta: 1,
+      },
     });
     mockRemoveTapIn.mockResolvedValue({dateKey: '2026-05-29', removed: true});
     mockSubscribeToMemberCircleDetail.mockClear();
@@ -201,13 +207,20 @@ describe('TapInComposerScreen', () => {
     expect(navigation.replace).toHaveBeenCalledWith('TapInComplete', {
       circleId: 'circle-1',
       circleTitle: 'Morning Movers',
+      completionMomentum: {
+        currentStreak: 6,
+        streakDelta: 1,
+      },
       commitment: 'Move for 30 minutes',
       inviteUrl: 'https://hoyst.app/join/circle-1',
+      memberCount: 4,
       note: undefined,
+      periodTapInCount: 8,
       photoUri: undefined,
       progressLabel: 'Week · 50%',
       source: 'home',
       status: 'done',
+      streakDays: 4,
       streakLabel: '4d streak',
     });
   });
@@ -307,7 +320,7 @@ describe('TapInComposerScreen', () => {
     );
   });
 
-  it('renders the refreshed already-covered state with remove and close actions', async () => {
+  it('renders the refreshed already-covered state with share, remove, and close actions', async () => {
     mockDetail = {
       ...baseMockDetail,
       viewerHasCheckedIn: true,
@@ -321,17 +334,48 @@ describe('TapInComposerScreen', () => {
     });
 
     const output = JSON.stringify(tree!.toJSON());
-    const removeButton = tree!.root
-      .findAllByType(TapInActionButton)
-      .find(button => button.props.label === 'Remove Tap In');
-    const closeButton = tree!.root
-      .findAllByType(TapInActionButton)
-      .find(button => button.props.label === 'Close');
+    const navigation =
+      tree!.root.findByType(TapInComposerScreen).props.navigation;
+    const actionButtons = tree!.root.findAllByType(TapInActionButton);
+    const shareButton = actionButtons.find(
+      button => button.props.label === 'Share Story',
+    );
+    const removeButton = actionButtons.find(
+      button => button.props.label === 'Remove Tap In',
+    );
+    const closeButton = actionButtons.find(
+      button => button.props.label === 'Close',
+    );
 
     expect(output).toContain('Today is covered');
     expect(tree!.root.findAllByType(HoystTapInMark).length).toBeGreaterThan(0);
+    expect(shareButton?.props.variant).toBe('accentOutline');
     expect(removeButton?.props.variant).toBe('dangerOutline');
     expect(removeButton?.props.disabled).toBe(false);
     expect(closeButton?.props.variant).toBe('text');
+    expect(
+      actionButtons
+        .map(button => button.props.label)
+        .filter((label: string) =>
+          ['Share Story', 'Remove Tap In', 'Close'].includes(label),
+        ),
+    ).toEqual(['Share Story', 'Remove Tap In', 'Close']);
+
+    await act(async () => {
+      shareButton!.props.onPress();
+    });
+
+    expect(navigation.navigate).toHaveBeenCalledWith('TapInStoryShare', {
+      circleId: 'circle-1',
+      circleTitle: 'Morning Movers',
+      commitment: 'Move for 30 minutes',
+      inviteUrl: 'https://hoyst.app/join/circle-1',
+      memberCount: 4,
+      periodTapInCount: 8,
+      progressLabel: 'Week · 50%',
+      source: 'home',
+      streakDays: 4,
+      streakLabel: '4d streak',
+    });
   });
 });

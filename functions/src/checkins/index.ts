@@ -12,6 +12,7 @@ import {db} from '../firebase';
 import {canUseSkipGrace, getRollingDateKeys} from './grace';
 import {getRemoveTapInDecision} from './remove';
 import {
+  getTapInMomentumPreview,
   recordTapInOpportunity,
   recalculateMomentumSummaryForUser,
   removeTapInOpportunity,
@@ -27,6 +28,7 @@ import {
   resolveCompanionFeedTargets,
 } from '../notifications';
 import {getCommitmentCadence, getRequiredTapIns} from '../shared/commitments';
+import {createCircleThreadActivity, getCircleThreadStreakText} from '../thread';
 import {getCircleCompleteNotificationTargets} from './notification-plan';
 
 const submitTapInSchema = z.object({
@@ -286,12 +288,27 @@ async function processTapInSideEffectsForCheckIn({
     circleId,
   });
   const mediaImageUrl = asCleanString(checkIn.photoUrl);
+  const note = asCleanString(checkIn.note);
   const circleCompleteTargetUids = getCircleCompleteNotificationTargets({
     activeMemberUids,
     remainingTapIns: totalRemainingCount,
   });
 
   if (status === 'done') {
+    await createCircleThreadActivity({
+      actor,
+      circleId,
+      createdAt: checkIn.createdAt,
+      itemId: `tap_in_${dateKey}_${uid}`,
+      mediaImageUrl,
+      note,
+      text: `${actor.displayName} tapped in`,
+      tone: 'success',
+      type: 'tap_in',
+    }).catch(error =>
+      console.error('create_thread_tap_in_activity_failed', error),
+    );
+
     await Promise.all(
       companionTargets.map(target =>
         notifyCompanionTappedIn({
@@ -321,6 +338,25 @@ async function processTapInSideEffectsForCheckIn({
       priorSummary: priorMomentumSummary,
       summary: momentumSummary,
     });
+    const streakMilestones = milestoneEvents.filter(
+      event => event.type === 'companion_streak_milestone',
+    );
+
+    await Promise.all(
+      streakMilestones.map(event =>
+        createCircleThreadActivity({
+          actor,
+          circleId,
+          createdAt: checkIn.createdAt,
+          itemId: `streak_${dateKey}_${uid}_${event.key}`,
+          text: getCircleThreadStreakText(event.streakDays),
+          tone: 'alert',
+          type: 'streak_milestone',
+        }),
+      ),
+    ).catch(error =>
+      console.error('create_thread_streak_activity_failed', error),
+    );
 
     await notifyCompanionMilestones({
       actor,
@@ -433,6 +469,15 @@ async function submitTapInHandler(request: CallableRequest) {
       }
     }
 
+    const momentum = await getTapInMomentumPreview({
+      circle,
+      circleId: input.circleId,
+      dateKey,
+      status: input.status,
+      transaction,
+      uid,
+    });
+
     await recordTapInOpportunity({
       checkInId: uid,
       circle,
@@ -475,7 +520,7 @@ async function submitTapInHandler(request: CallableRequest) {
       {merge: true},
     );
 
-    return {checkInId: uid, dateKey};
+    return {checkInId: uid, dateKey, momentum};
   });
 }
 

@@ -104,6 +104,16 @@ service cloud.firestore {
         allow read: if isActiveMember(circleId);
         allow write: if false;
       }
+
+      match /feedItems/{itemId} {
+        allow read: if isActiveMember(circleId);
+        allow write: if false;
+      }
+
+      match /threadReads/{uid} {
+        allow read: if isSelf(uid);
+        allow write: if false;
+      }
     }
   }
 }

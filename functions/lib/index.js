@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.healthcheck = exports.materializeMomentumOpportunities = exports.backfillMomentumOpportunities = exports.getProfileSummary = exports.generateHomeGreeting = exports.updateCircle = exports.reviewJoinRequest = exports.nudgeCircleMembers = exports.leaveCircle = exports.joinCircle = exports.deleteCircle = exports.createCircle = exports.submitTapIn = exports.removeTapIn = exports.processTapInSideEffects = exports.deleteAccount = exports.completeProfile = exports.updateNotificationSettings = exports.sendRoutineEngagementNotifications = exports.sendMiddayTapInReminders = exports.sendFinalTapInWarnings = exports.sendEveningActivityRecaps = exports.repairPushSubscription = exports.notificationModules = exports.markInboxEventRead = exports.markInboxEventsRead = exports.emailModules = void 0;
+exports.healthcheck = exports.toggleCircleThreadItemLike = exports.sendCircleThreadMessage = exports.markCircleThreadRead = exports.materializeMomentumOpportunities = exports.backfillMomentumOpportunities = exports.getProfileSummary = exports.generateHomeGreeting = exports.updateCircle = exports.reviewJoinRequest = exports.nudgeCircleMembers = exports.leaveCircle = exports.joinCircle = exports.deleteCircle = exports.createCircle = exports.submitTapIn = exports.removeTapIn = exports.processTapInSideEffects = exports.deleteAccount = exports.completeProfile = exports.updateNotificationSettings = exports.sendRoutineEngagementNotifications = exports.sendMiddayTapInReminders = exports.sendFinalTapInWarnings = exports.sendEveningActivityRecaps = exports.repairPushSubscription = exports.notificationModules = exports.markInboxEventRead = exports.markInboxEventsRead = exports.emailModules = void 0;
 const https_1 = require("firebase-functions/v2/https");
 var emails_1 = require("./emails");
 Object.defineProperty(exports, "emailModules", { enumerable: true, get: function () { return emails_1.emailModules; } });
@@ -36,6 +36,10 @@ Object.defineProperty(exports, "getProfileSummary", { enumerable: true, get: fun
 var momentum_1 = require("./momentum");
 Object.defineProperty(exports, "backfillMomentumOpportunities", { enumerable: true, get: function () { return momentum_1.backfillMomentumOpportunities; } });
 Object.defineProperty(exports, "materializeMomentumOpportunities", { enumerable: true, get: function () { return momentum_1.materializeMomentumOpportunities; } });
+var thread_1 = require("./thread");
+Object.defineProperty(exports, "markCircleThreadRead", { enumerable: true, get: function () { return thread_1.markCircleThreadRead; } });
+Object.defineProperty(exports, "sendCircleThreadMessage", { enumerable: true, get: function () { return thread_1.sendCircleThreadMessage; } });
+Object.defineProperty(exports, "toggleCircleThreadItemLike", { enumerable: true, get: function () { return thread_1.toggleCircleThreadItemLike; } });
 exports.healthcheck = (0, https_1.onRequest)((request, response) => {
     response.json({
         app: 'hoyst-functions',

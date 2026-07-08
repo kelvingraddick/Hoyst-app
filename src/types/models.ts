@@ -139,6 +139,41 @@ export type CircleActivityItem = {
   mediaImageUrl?: string;
 };
 
+export type CircleThreadActor = {
+  avatarUrl?: string;
+  handle?: string;
+  initials: string;
+  name: string;
+  uid?: string;
+};
+
+export type CircleThreadActivityType = 'nudge' | 'streak_milestone' | 'tap_in';
+
+export type CircleThreadTone = 'alert' | 'pending' | 'success';
+
+export type CircleThreadItem = {
+  activityType?: CircleThreadActivityType;
+  actor: CircleThreadActor;
+  createdAtLabel: string;
+  createdAtMs: number;
+  id: string;
+  isLikedByViewer: boolean;
+  kind: 'activity' | 'message';
+  likeCount: number;
+  mediaImageUrl?: string;
+  note?: string;
+  targetActor?: CircleThreadActor;
+  text?: string;
+  tone?: CircleThreadTone;
+};
+
+export type CircleThreadPreview = {
+  latestItem?: CircleThreadItem;
+  latestLabel?: string;
+  latestTimestamp?: string;
+  unreadCount: number;
+};
+
 export type InboxEventType =
   | 'circle_at_risk'
   | 'circle_complete'
@@ -207,6 +242,7 @@ export type CircleSummary = {
   streakDays?: number;
   memberCount?: number;
   maxSize?: number;
+  periodTapInCount?: number;
   privacy?: CirclePrivacy;
   joinMode?: CircleJoinMode;
   viewerRole?: MemberRole;

@@ -10,6 +10,15 @@ export type SubmitTapInInput = {
   status?: Extract<CheckInStatus, 'done' | 'skip'>;
 };
 
+export type SubmitTapInResult = {
+  checkInId: string;
+  dateKey: string;
+  momentum?: {
+    currentStreak: number;
+    streakDelta: number;
+  };
+};
+
 export type RemoveTapInInput = {
   circleId: string;
 };
@@ -17,7 +26,7 @@ export type RemoveTapInInput = {
 export async function submitTapIn(input: SubmitTapInInput) {
   const callable = firebaseFunctions().httpsCallable('submitTapIn');
   const result = await callable(input);
-  return result.data as {checkInId: string; dateKey: string};
+  return result.data as SubmitTapInResult;
 }
 
 export async function removeTapIn(input: RemoveTapInInput) {

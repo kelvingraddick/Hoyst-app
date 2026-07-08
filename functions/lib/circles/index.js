@@ -10,6 +10,7 @@ const zod_1 = require("zod");
 const firebase_1 = require("../firebase");
 const notifications_1 = require("../notifications");
 const commitments_1 = require("../shared/commitments");
+const thread_1 = require("../thread");
 const nudge_targets_1 = require("./nudge-targets");
 const graceRuleSchema = zod_1.z.object({
     allowance: zod_1.z.number().int().min(0).max(30),
@@ -636,6 +637,11 @@ exports.nudgeCircleMembers = (0, https_1.onCall)({ secrets: [notifications_1.one
         todayCoveredUids,
         viewerUid: uid,
     });
+    const targetMembersByUid = new Map(activeMemberSnapshots.docs.map(snapshot => {
+        const data = snapshot.data();
+        const memberUid = asOptionalString(data.uid) ?? snapshot.id;
+        return [memberUid, data];
+    }));
     await Promise.all(targetUids.map(targetUid => (0, notifications_1.notifyNudge)({
         actor: {
             avatarUrl: profile.avatarUrl ?? null,
@@ -648,6 +654,40 @@ exports.nudgeCircleMembers = (0, https_1.onCall)({ secrets: [notifications_1.one
         dateKey,
         targetUid,
     })));
+    if (targetUids.length > 0) {
+        const singleTarget = targetUids.length === 1 ? targetMembersByUid.get(targetUids[0]) : null;
+        const targetActor = singleTarget && targetUids[0]
+            ? {
+                avatarUrl: singleTarget.avatarUrl ?? null,
+                displayName: asOptionalString(singleTarget.displayName) ??
+                    asOptionalString(singleTarget.name) ??
+                    'Hoyst member',
+                handle: asOptionalString(singleTarget.handle) ?? null,
+                uid: targetUids[0],
+            }
+            : undefined;
+        const targetName = targetActor && targetUids.length === 1
+            ? asOptionalString(targetActor.displayName)
+            : undefined;
+        await (0, thread_1.createCircleThreadActivity)({
+            actor: {
+                avatarUrl: profile.avatarUrl ?? null,
+                displayName: profile.displayName,
+                handle: profile.handle,
+                uid,
+            },
+            circleId: input.circleId,
+            itemId: `nudge_${dateKey}_${uid}_${input.targetUid ?? 'group'}_${Date.now()}`,
+            targetActor,
+            text: (0, thread_1.getCircleThreadNudgeText)({
+                actorName: profile.displayName ?? 'Someone',
+                targetCount: targetUids.length,
+                targetName,
+            }),
+            tone: 'pending',
+            type: 'nudge',
+        }).catch(error => console.error('create_thread_nudge_activity_failed', error));
+    }
     return { nudged: targetUids.length };
 });
 exports.leaveCircle = (0, https_1.onCall)(async (request) => {

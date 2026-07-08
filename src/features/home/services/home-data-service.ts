@@ -20,10 +20,7 @@ import type {
   MemberRole,
   ProgressDayState,
 } from '../../../types/models';
-import {
-  canTapInToday,
-  getHomeCircleActionVariant,
-} from './home-circle-actions';
+import {canTapInToday, getHomeCircleActionVariant} from './home-circle-actions';
 export {
   canTapInToday,
   getHomeCircleActionVariant,
@@ -76,7 +73,10 @@ export type HomeCircleMappingInput = {
   memberProfilesByUid?: ReadonlyMap<string, PlainData>;
   membersData?: PlainData[];
   membershipData?: PlainData;
-  periodCheckInStatuses?: ReadonlyMap<string, ReadonlyMap<string, CheckInStatus>>;
+  periodCheckInStatuses?: ReadonlyMap<
+    string,
+    ReadonlyMap<string, CheckInStatus>
+  >;
   todayCheckInStatuses?: ReadonlyMap<string, CheckInStatus>;
   todayCheckInUids?: ReadonlySet<string>;
   viewerSkipGraceDateKeys?: readonly string[];
@@ -170,7 +170,8 @@ function normalizeCommitmentCadence(
     return value;
   }
 
-  return normalizeCommitmentFrequency(frequencyValue, 'weekly').tapInsPerWeek >= 7
+  return normalizeCommitmentFrequency(frequencyValue, 'weekly').tapInsPerWeek >=
+    7
     ? 'daily'
     : 'weekly';
 }
@@ -378,11 +379,7 @@ function normalizeLookbackDays(lookbackDays = 7) {
   return Number.isInteger(lookbackDays) && lookbackDays > 0 ? lookbackDays : 7;
 }
 
-function getRecentDates(
-  timezone: string,
-  now = new Date(),
-  lookbackDays = 7,
-) {
+function getRecentDates(timezone: string, now = new Date(), lookbackDays = 7) {
   const today = DateTime.fromJSDate(now, {zone: timezone}).startOf('day');
   const dayCount = normalizeLookbackDays(lookbackDays);
 
@@ -1006,6 +1003,7 @@ export function mapHomeCircleFromData({
     memberCount,
     members: visibleMembers,
     nudgeTargetCount,
+    periodTapInCount: periodCoveredCount,
     privacy: normalizePrivacy(circleData.privacy),
     completionLabel: isPending ? 'Pending approval' : progressLabel,
     progressLabel: isPending ? 'Pending approval' : progressLabel,

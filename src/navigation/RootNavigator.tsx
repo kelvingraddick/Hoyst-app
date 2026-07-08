@@ -5,12 +5,15 @@ import {HoystScreen} from '../design/components/HoystScreen';
 import {HoystText} from '../design/components/HoystText';
 import {CreateCircleScreen} from '../features/create-circle/screens/CreateCircleScreen';
 import {CircleDetailScreen} from '../features/circles/screens/CircleDetailScreen';
+import {CircleThreadScreen} from '../features/circles/screens/CircleThreadScreen';
+import {CircleToolsScreen} from '../features/circles/screens/CircleToolsScreen';
 import {CirclesScreen} from '../features/circles/screens/CirclesScreen';
 import {EditCircleScreen} from '../features/circles/screens/EditCircleScreen';
 import {EditProfileScreen} from '../features/settings/screens/EditProfileScreen';
 import {TapInCompleteScreen} from '../features/check-in/screens/TapInCompleteScreen';
 import {TapInComposerScreen} from '../features/check-in/screens/TapInComposerScreen';
 import {TapInPickerScreen} from '../features/check-in/screens/TapInPickerScreen';
+import {TapInStoryShareScreen} from '../features/check-in/screens/TapInStoryShareScreen';
 import {InboxScreen} from '../features/inbox/screens/InboxScreen';
 import {useOnboardingStore} from '../store/onboarding-store';
 import {useSessionStore} from '../store/session-store';
@@ -116,6 +119,22 @@ export function RootNavigator(): React.JSX.Element {
         }}
       />
       <Stack.Screen
+        component={CircleToolsScreen}
+        name="CircleTools"
+        options={{
+          animation: 'slide_from_right',
+          headerShown: false,
+        }}
+      />
+      <Stack.Screen
+        component={CircleThreadScreen}
+        name="CircleThread"
+        options={{
+          animation: 'slide_from_right',
+          headerShown: false,
+        }}
+      />
+      <Stack.Screen
         component={CreateCircleScreen}
         name="CreateCircle"
         options={{
@@ -135,6 +154,15 @@ export function RootNavigator(): React.JSX.Element {
       <Stack.Screen
         component={TapInCompleteScreen}
         name="TapInComplete"
+        options={{
+          animation: 'slide_from_bottom',
+          headerShown: false,
+          presentation: 'fullScreenModal',
+        }}
+      />
+      <Stack.Screen
+        component={TapInStoryShareScreen}
+        name="TapInStoryShare"
         options={{
           animation: 'slide_from_bottom',
           headerShown: false,

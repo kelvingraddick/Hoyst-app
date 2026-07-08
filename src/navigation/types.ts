@@ -24,6 +24,11 @@ export type AuthStackParamList = {
 
 export type TapInSource = 'circle_detail' | 'home' | 'notification' | 'tap_in';
 
+export type TapInCompletionMomentum = {
+  currentStreak: number;
+  streakDelta: number;
+};
+
 export type RootStackParamList = {
   Loading: undefined;
   MainTabs: NavigatorScreenParams<AppTabsParamList> | undefined;
@@ -32,6 +37,8 @@ export type RootStackParamList = {
   Inbox: undefined;
   EditProfile: undefined;
   EditCircle: {circleId: string};
+  CircleTools: {circleId: string};
+  CircleThread: {circleId: string};
   TapInPicker: undefined;
   CreateCircle: undefined;
   CircleDetail: {
@@ -45,9 +52,27 @@ export type RootStackParamList = {
     circleTitle?: string;
     commitment?: string;
     inviteUrl?: string;
+    memberCount?: number;
+    periodTapInCount?: number;
     progressLabel?: string;
     source: TapInSource;
     status?: 'done' | 'skip';
+    streakDays?: number;
+    streakLabel?: string;
+    completionMomentum?: TapInCompletionMomentum;
+    note?: string;
+    photoUri?: string;
+  };
+  TapInStoryShare: {
+    circleId: string;
+    circleTitle?: string;
+    commitment?: string;
+    inviteUrl?: string;
+    memberCount?: number;
+    periodTapInCount?: number;
+    progressLabel?: string;
+    source: TapInSource;
+    streakDays?: number;
     streakLabel?: string;
     note?: string;
     photoUri?: string;

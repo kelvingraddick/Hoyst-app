@@ -25,6 +25,9 @@ ios/tmp.xcconfig
 
 # Gradle
 /build/
+/android/build/
+/android/app/build/
+/android/app/.cxx/
 /packages/rn-tester/build
 /packages/rn-tester/android/app/.cxx/
 /packages/rn-tester/android/app/build/

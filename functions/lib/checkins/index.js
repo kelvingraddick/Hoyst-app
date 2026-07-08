@@ -12,6 +12,7 @@ const remove_1 = require("./remove");
 const momentum_1 = require("../momentum");
 const notifications_1 = require("../notifications");
 const commitments_1 = require("../shared/commitments");
+const thread_1 = require("../thread");
 const notification_plan_1 = require("./notification-plan");
 const submitTapInSchema = zod_1.z.object({
     circleId: zod_1.z.string().trim().min(1),
@@ -201,11 +202,23 @@ async function processTapInSideEffectsForCheckIn({ checkIn, circleId, dateKey, s
         circleId,
     });
     const mediaImageUrl = asCleanString(checkIn.photoUrl);
+    const note = asCleanString(checkIn.note);
     const circleCompleteTargetUids = (0, notification_plan_1.getCircleCompleteNotificationTargets)({
         activeMemberUids,
         remainingTapIns: totalRemainingCount,
     });
     if (status === 'done') {
+        await (0, thread_1.createCircleThreadActivity)({
+            actor,
+            circleId,
+            createdAt: checkIn.createdAt,
+            itemId: `tap_in_${dateKey}_${uid}`,
+            mediaImageUrl,
+            note,
+            text: `${actor.displayName} tapped in`,
+            tone: 'success',
+            type: 'tap_in',
+        }).catch(error => console.error('create_thread_tap_in_activity_failed', error));
         await Promise.all(companionTargets.map(target => (0, notifications_1.notifyCompanionTappedIn)({
             actor,
             circleId,
@@ -229,6 +242,16 @@ async function processTapInSideEffectsForCheckIn({ checkIn, circleId, dateKey, s
             priorSummary: priorMomentumSummary,
             summary: momentumSummary,
         });
+        const streakMilestones = milestoneEvents.filter(event => event.type === 'companion_streak_milestone');
+        await Promise.all(streakMilestones.map(event => (0, thread_1.createCircleThreadActivity)({
+            actor,
+            circleId,
+            createdAt: checkIn.createdAt,
+            itemId: `streak_${dateKey}_${uid}_${event.key}`,
+            text: (0, thread_1.getCircleThreadStreakText)(event.streakDays),
+            tone: 'alert',
+            type: 'streak_milestone',
+        }))).catch(error => console.error('create_thread_streak_activity_failed', error));
         await (0, notifications_1.notifyCompanionMilestones)({
             actor,
             circle,
@@ -304,6 +327,14 @@ async function submitTapInHandler(request) {
                 throw new https_1.HttpsError('resource-exhausted', 'No skips are available for this grace window.');
             }
         }
+        const momentum = await (0, momentum_1.getTapInMomentumPreview)({
+            circle,
+            circleId: input.circleId,
+            dateKey,
+            status: input.status,
+            transaction,
+            uid,
+        });
         await (0, momentum_1.recordTapInOpportunity)({
             checkInId: uid,
             circle,
@@ -335,7 +366,7 @@ async function submitTapInHandler(request) {
         transaction.set(firebase_1.db.collection('userPrivate').doc(uid), {
             lastTapInAt: now,
         }, { merge: true });
-        return { checkInId: uid, dateKey };
+        return { checkInId: uid, dateKey, momentum };
     });
 }
 exports.submitTapIn = (0, https_1.onCall)(submitTapInHandler);

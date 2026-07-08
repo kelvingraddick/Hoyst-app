@@ -14,6 +14,7 @@ import {useHoystTheme} from '../theme/useHoystTheme';
 import {HoystText} from './HoystText';
 
 export type TapInActionButtonVariant =
+  | 'accentOutline'
   | 'dangerOutline'
   | 'primary'
   | 'text'
@@ -55,6 +56,17 @@ export function TapInActionButton({
           backgroundColor: `${theme.danger}12`,
           borderColor: `${theme.dangerForeground}66`,
           color: theme.dangerForeground,
+          shadowColor: 'transparent',
+        }
+      : variant === 'accentOutline'
+      ? {
+          backgroundColor: theme.isDark
+            ? 'rgba(122,85,255,0.14)'
+            : 'rgba(122,85,255,0.10)',
+          borderColor: theme.isDark
+            ? 'rgba(122,85,255,0.50)'
+            : 'rgba(122,85,255,0.36)',
+          color: theme.accentSecondaryForeground,
           shadowColor: 'transparent',
         }
       : variant === 'warmOutline'

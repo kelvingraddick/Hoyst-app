@@ -7,20 +7,20 @@ import {SectionEyebrowTrailing} from '../src/design/components/SectionEyebrow';
 import {StatBarCard} from '../src/design/components/StatBarCard';
 import {TapInPulseButton} from '../src/design/components/TapInPulseButton';
 import {CircleDetailScreen} from '../src/features/circles/screens/CircleDetailScreen';
-import type {CircleDetailModel} from '../src/types/models';
+import type {CircleDetailModel, CircleThreadPreview} from '../src/types/models';
 
 const mockJoinCircle = jest.fn();
-const mockLeaveCircle = jest.fn();
 const mockNudgeCircleMembers = jest.fn();
 const mockReviewJoinRequest = jest.fn();
-const mockDeleteCircle = jest.fn();
 const mockRemoveTapIn = jest.fn();
+const mockSubscribeToCircleThreadPreview = jest.fn();
 const mockRequireAccount = jest.fn(
   (_pendingAction: unknown, callback: () => void) => callback(),
 );
 
 let mockMemberDetail: CircleDetailModel | undefined;
 let mockPublicDetail: CircleDetailModel | undefined;
+let mockThreadPreview: CircleThreadPreview | undefined;
 let mockSessionState: {
   status: 'authenticatedReady' | 'guest';
   user?: {providerIds: string[]; uid: string};
@@ -94,11 +94,22 @@ jest.mock('../src/features/circles/mockData', () => ({
 }));
 
 jest.mock('../src/features/circles/services/circle-service', () => ({
-  deleteCircle: (...args: unknown[]) => mockDeleteCircle(...args),
   joinCircle: (...args: unknown[]) => mockJoinCircle(...args),
-  leaveCircle: (...args: unknown[]) => mockLeaveCircle(...args),
   nudgeCircleMembers: (...args: unknown[]) => mockNudgeCircleMembers(...args),
   reviewJoinRequest: (...args: unknown[]) => mockReviewJoinRequest(...args),
+}));
+
+jest.mock('../src/features/circles/services/circle-thread-service', () => ({
+  subscribeToCircleThreadPreview: (
+    input: Parameters<typeof mockSubscribeToCircleThreadPreview>[0],
+  ) => {
+    mockSubscribeToCircleThreadPreview(input);
+    if (mockThreadPreview) {
+      input.onPreview(mockThreadPreview);
+    }
+
+    return jest.fn();
+  },
 }));
 
 jest.mock('../src/features/circles/services/public-circle-service', () => ({
@@ -300,20 +311,6 @@ function textContent(node: ReactTestInstance): string {
     .join('');
 }
 
-function pressByLabel(tree: renderer.ReactTestRenderer, label: string) {
-  const match = tree.root.findAll(
-    node => node.type === Pressable && textContent(node).includes(label),
-  )[0];
-
-  if (!match) {
-    throw new Error(`Could not find pressable with label ${label}`);
-  }
-
-  act(() => {
-    match.props.onPress();
-  });
-}
-
 function getLatestAlertButtons(title: string): AlertButton[] {
   const calls = alertSpy.mock.calls.filter(call => call[0] === title);
   const latestCall = calls[calls.length - 1];
@@ -345,15 +342,28 @@ describe('CircleDetailScreen reference redesign', () => {
     alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
     mockMemberDetail = detail();
     mockPublicDetail = undefined;
+    mockThreadPreview = {
+      latestItem: {
+        actor: {initials: 'MJ', name: 'Maya', uid: 'user-2'},
+        createdAtLabel: '8:41 AM',
+        createdAtMs: 1,
+        id: 'thread-1',
+        isLikedByViewer: false,
+        kind: 'message',
+        likeCount: 2,
+        text: 'Rough night but got it done',
+      },
+      latestLabel: 'Maya: Rough night but got it done',
+      latestTimestamp: '8:41 AM',
+      unreadCount: 2,
+    };
     mockSessionState = {
       status: 'authenticatedReady',
       user: {providerIds: [], uid: 'user-1'},
     };
     mockJoinCircle.mockResolvedValue({status: 'active'});
-    mockLeaveCircle.mockResolvedValue({status: 'left'});
     mockNudgeCircleMembers.mockResolvedValue({nudged: 1});
     mockReviewJoinRequest.mockResolvedValue({status: 'approved'});
-    mockDeleteCircle.mockResolvedValue(undefined);
     mockRemoveTapIn.mockResolvedValue({dateKey: '2026-05-29', removed: true});
     mockRequireAccount.mockClear();
   });
@@ -426,6 +436,8 @@ describe('CircleDetailScreen reference redesign', () => {
     );
     expect(output).toContain('Needs You');
     expect(output).toContain('Circle Companions');
+    expect(output).toContain('Circle chat');
+    expect(output).toContain('Maya: Rough night but got it done');
     expect(output).toContain('1 of 4 today');
     expect(output).not.toContain('Circle Companions · 1 of 4 today');
     expect(output).not.toContain("Today's Progress");
@@ -517,21 +529,11 @@ describe('CircleDetailScreen reference redesign', () => {
         const style = StyleSheet.flatten(node.props.style);
         return style?.height === size && style?.width === size;
       });
-    expect(
-      hasArtworkSize('circle-detail-artwork-members', 26),
-    ).toBe(true);
-    expect(
-      hasArtworkSize('circle-detail-artwork-members', 24),
-    ).toBe(true);
-    expect(
-      hasArtworkSize('circle-detail-artwork-leaderboard', 24),
-    ).toBe(true);
-    expect(
-      hasArtworkSize('circle-detail-artwork-goals', 24),
-    ).toBe(true);
-    expect(
-      hasArtworkSize('circle-detail-artwork-settings', 24),
-    ).toBe(true);
+    expect(hasArtworkSize('circle-detail-artwork-members', 26)).toBe(true);
+    expect(output).not.toContain('Circle Tools');
+    expect(output).not.toContain('Member Tools');
+    expect(output).not.toContain('Leaderboard');
+    expect(output).not.toContain('Goals');
     expect(output).not.toContain('Invite companions');
     expect(
       StyleSheet.flatten(
@@ -544,6 +546,96 @@ describe('CircleDetailScreen reference redesign', () => {
 
     expect(trailingLabels).toEqual(
       expect.arrayContaining(['1 of 4 today', 'This week']),
+    );
+  });
+
+  it('opens the smart circle chat preview from detail', () => {
+    const {navigation, tree} = renderScreen();
+    const preview = tree.root.findByProps({
+      accessibilityLabel: 'Open circle chat',
+    });
+    const previewFillStyle = StyleSheet.flatten(
+      tree.root.findByProps({testID: 'circle-detail-thread-preview-fill'})
+        .props.style,
+    );
+    const previewIconStyle = StyleSheet.flatten(
+      tree.root.findByProps({testID: 'circle-detail-thread-preview-icon'})
+        .props.style,
+    );
+    const previewTitle = tree.root
+      .findAllByType(Text)
+      .find(node => textContent(node) === 'Circle chat');
+
+    expect(previewFillStyle).toEqual(
+      expect.objectContaining({
+        minHeight: 58,
+        paddingHorizontal: 12,
+        paddingVertical: 7,
+      }),
+    );
+    expect(previewIconStyle).toEqual(
+      expect.objectContaining({height: 40, width: 40}),
+    );
+    expect(StyleSheet.flatten(previewTitle?.props.style)).toEqual(
+      expect.objectContaining({fontSize: 15, lineHeight: 19}),
+    );
+
+    act(() => {
+      preview.props.onPress();
+    });
+
+    expect(navigation.navigate).toHaveBeenCalledWith('CircleThread', {
+      circleId: 'circle-1',
+    });
+  });
+
+  it('keeps the nudge and empty chat actions matched and tightly spaced', () => {
+    mockThreadPreview = undefined;
+    mockMemberDetail = detail({
+      members: [
+        {
+          id: 'user-1',
+          initials: 'KM',
+          name: 'Kelvin',
+          state: 'done',
+        },
+        {
+          id: 'user-2',
+          initials: 'AR',
+          name: 'Ari',
+          state: 'pending',
+        },
+      ],
+      nudgeTargetCount: 1,
+    });
+
+    const {tree} = renderScreen();
+    const output = outputOf(tree);
+    const actionStackStyle = StyleSheet.flatten(
+      tree.root.findByProps({testID: 'circle-detail-companion-actions'}).props
+        .style,
+    );
+    const nudgeFrameStyle = StyleSheet.flatten(
+      tree.root.findByProps({testID: 'circle-detail-nudge-panel-frame'}).props
+        .style,
+    );
+    const previewFillStyle = StyleSheet.flatten(
+      tree.root.findByProps({testID: 'circle-detail-thread-preview-fill'})
+        .props.style,
+    );
+
+    expect(output).toContain('Start the chat');
+    expect(output).toContain('Message your companions.');
+    expect(output).not.toContain('Start the circle chat');
+    expect(output).not.toContain('Send the first message to your companions.');
+    expect(actionStackStyle).toEqual(expect.objectContaining({gap: 10}));
+    expect(nudgeFrameStyle).toEqual(expect.objectContaining({minHeight: 58}));
+    expect(previewFillStyle).toEqual(
+      expect.objectContaining({
+        minHeight: 58,
+        paddingHorizontal: 12,
+        paddingVertical: 7,
+      }),
     );
   });
 
@@ -567,12 +659,13 @@ describe('CircleDetailScreen reference redesign', () => {
     expect(output).toContain('View Today');
     expect(output).toContain('Remove Tap In');
     expect(output).toContain('Tapped today');
-    expect(output.indexOf('Circle Tools')).toBeLessThan(
+    expect(output).not.toContain('Circle Tools');
+    expect(output.indexOf('Stats')).toBeLessThan(
       output.indexOf('Remove Tap In'),
     );
   });
 
-  it('keeps owner tools nested under manage', () => {
+  it('keeps owner settings off the detail body', () => {
     mockMemberDetail = detail({
       commitmentCadence: 'weekly',
       members: [
@@ -588,33 +681,18 @@ describe('CircleDetailScreen reference redesign', () => {
     });
 
     const {tree} = renderScreen();
-
-    expect(outputOf(tree)).toContain('Circle Tools');
-    expect(outputOf(tree)).toContain('Circle Companions');
-    expect(outputOf(tree)).toContain('0 of 0 this week');
-    expect(outputOf(tree)).toContain('Invite companions');
-    expect(outputOf(tree)).not.toContain(
-      'Circle Companions · 0 of 0 this week',
-    );
-    expect(outputOf(tree)).toContain('Members');
-    expect(outputOf(tree)).toContain('Leaderboard');
-    expect(outputOf(tree)).toContain('Goals');
-    expect(outputOf(tree)).toContain('Settings');
-    expect(outputOf(tree)).toContain('Review');
-    expect(outputOf(tree)).not.toContain('Edit Circle');
-    const toolSubtitle = tree.root
-      .findAllByType(Text)
-      .find(node => textContent(node) === 'View all');
-    expect(StyleSheet.flatten(toolSubtitle?.props.style)).toEqual(
-      expect.objectContaining({color: '#9491B2'}),
-    );
-
-    pressByLabel(tree, 'Settings');
-
     const output = outputOf(tree);
-    expect(output).not.toContain('Wants to join');
-    expect(output).toContain('Edit Circle');
-    expect(output).toContain('Delete Circle');
+
+    expect(output).not.toContain('Circle Tools');
+    expect(output).toContain('Circle Companions');
+    expect(output).toContain('0 of 0 this week');
+    expect(output).toContain('Invite companions');
+    expect(output).not.toContain('Circle Companions · 0 of 0 this week');
+    expect(output).not.toContain('Leaderboard');
+    expect(output).not.toContain('Goals');
+    expect(output).toContain('Review');
+    expect(output).not.toContain('Edit Circle');
+    expect(output).not.toContain('Delete Circle');
   });
 
   it('opens the pending request review sheet from the companion card', () => {
@@ -749,9 +827,46 @@ describe('CircleDetailScreen reference redesign', () => {
     const nudgeButton = tree.root.findByProps({
       accessibilityLabel: 'Send a Nudge. 1 member to nudge',
     });
+    const nudgeFrameStyle = StyleSheet.flatten(
+      tree.root.findByProps({testID: 'circle-detail-nudge-panel-frame'}).props
+        .style,
+    );
+    const nudgeIconStyle = StyleSheet.flatten(
+      tree.root.findByProps({testID: 'circle-detail-nudge-icon'}).props.style,
+    );
+    const nudgeActionStyle = StyleSheet.flatten(
+      tree.root.findByProps({testID: 'circle-detail-nudge-action'}).props.style,
+    );
+    const nudgeTitle = tree.root
+      .findAllByType(Text)
+      .find(node => textContent(node) === 'Send a Nudge');
+    const nudgeSubtitle = tree.root
+      .findAllByType(Text)
+      .find(node => textContent(node) === '1 member to nudge');
+
     expect(
       StyleSheet.flatten(nudgeButton.props.style({pressed: false})),
     ).toEqual(expect.objectContaining({borderRadius: 20}));
+    expect(nudgeFrameStyle).toEqual(
+      expect.objectContaining({
+        borderWidth: 1,
+        minHeight: 58,
+        paddingHorizontal: 12,
+        paddingVertical: 7,
+      }),
+    );
+    expect(nudgeIconStyle).toEqual(
+      expect.objectContaining({height: 40, width: 40}),
+    );
+    expect(nudgeActionStyle).toEqual(
+      expect.objectContaining({height: 30, width: 30}),
+    );
+    expect(StyleSheet.flatten(nudgeTitle?.props.style)).toEqual(
+      expect.objectContaining({fontSize: 15, lineHeight: 19}),
+    );
+    expect(StyleSheet.flatten(nudgeSubtitle?.props.style)).toEqual(
+      expect.objectContaining({fontSize: 13, lineHeight: 17}),
+    );
     expect(output.indexOf('Circle Companions')).toBeLessThan(
       output.indexOf('Send a Nudge'),
     );
@@ -801,7 +916,7 @@ describe('CircleDetailScreen reference redesign', () => {
     expect(outputOf(tree)).toContain('Nudged');
   });
 
-  it('shows pending membership and cancel request tools', () => {
+  it('shows pending membership without member tools', () => {
     mockMemberDetail = detail({
       streakLabel: 'Pending approval',
       viewerMembershipStatus: 'pending',
@@ -812,10 +927,8 @@ describe('CircleDetailScreen reference redesign', () => {
 
     expect(outputOf(tree)).toContain('Pending approval');
     expect(outputOf(tree)).toContain('Pending');
-
-    pressByLabel(tree, 'Settings');
-
-    expect(outputOf(tree)).toContain('Cancel Request');
+    expect(outputOf(tree)).not.toContain('Member Tools');
+    expect(outputOf(tree)).not.toContain('Cancel Request');
   });
 
   it('renders public preview copy and join action', () => {
@@ -850,16 +963,25 @@ describe('CircleDetailScreen reference redesign', () => {
     expect(output).toContain('5/8');
   });
 
-  it('opens the Inbox from the header bell', () => {
+  it('opens circle settings from the header gear', () => {
     const {navigation, tree} = renderScreen();
-    const inboxButton = tree.root.findByProps({
-      accessibilityLabel: 'Open Inbox',
+    const settingsButton = tree.root.findByProps({
+      accessibilityLabel: 'Open circle settings',
     });
+
+    expect(
+      tree.root.findAllByProps({accessibilityLabel: 'Open Inbox'}),
+    ).toHaveLength(0);
+    expect(
+      tree.root.findAllByProps({accessibilityLabel: 'Invite members'}),
+    ).toHaveLength(0);
 
     act(() => {
-      inboxButton.props.onPress();
+      settingsButton.props.onPress();
     });
 
-    expect(navigation.navigate).toHaveBeenCalledWith('Inbox');
+    expect(navigation.navigate).toHaveBeenCalledWith('CircleTools', {
+      circleId: 'circle-1',
+    });
   });
 });

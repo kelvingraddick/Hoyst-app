@@ -23,6 +23,7 @@ export type HoystTapInMarkProps = {
   animated?: boolean;
   interactionKey?: number;
   isPressed?: boolean;
+  logoRotation?: Animated.AnimatedInterpolation<string | number>;
   size?: number;
   style?: StyleProp<ViewStyle>;
   testID?: string;
@@ -39,6 +40,7 @@ export function HoystTapInMark({
   animated = true,
   interactionKey = 0,
   isPressed = false,
+  logoRotation,
   size = 72,
   style,
   testID,
@@ -241,12 +243,15 @@ export function HoystTapInMark({
           {
             height: size,
             transform: reduceMotion
-              ? undefined
+              ? logoRotation
+                ? [{rotate: logoRotation}]
+                : undefined
               : [
                   {
                     translateY: Animated.add(logoTranslateY, pressedTranslateY),
                   },
                   {scale: logoScale},
+                  ...(logoRotation ? [{rotate: logoRotation}] : []),
                 ],
             width: size,
           },

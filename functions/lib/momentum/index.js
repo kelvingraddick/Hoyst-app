@@ -1,6 +1,8 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.backfillMomentumOpportunities = exports.materializeMomentumOpportunities = void 0;
+exports.buildTapInMomentumPreview = buildTapInMomentumPreview;
+exports.getTapInMomentumPreview = getTapInMomentumPreview;
 exports.recalculateMomentumSummaryForUser = recalculateMomentumSummaryForUser;
 exports.recordTapInOpportunity = recordTapInOpportunity;
 exports.removeTapInOpportunity = removeTapInOpportunity;
@@ -61,6 +63,66 @@ function mapOpportunitySnapshot(snapshot) {
         slotIndex: asNumber(data?.slotIndex, 0),
         status,
     };
+}
+function mapOpportunitySnapshotWithId(snapshot) {
+    const opportunity = mapOpportunitySnapshot(snapshot);
+    if (!opportunity) {
+        return undefined;
+    }
+    return {
+        ...opportunity,
+        id: snapshot.id,
+    };
+}
+function getCurrentStreak(opportunities) {
+    return (0, schedule_1.calculateMomentumSummary)({
+        opportunities,
+        periodKey: 'current',
+    }).currentStreak;
+}
+function buildTapInMomentumPreview({ opportunities, targetOpportunity, }) {
+    const priorCurrentStreak = getCurrentStreak(opportunities);
+    const nextOpportunities = targetOpportunity
+        ? [
+            ...opportunities.filter(opportunity => opportunity.id !== targetOpportunity.id),
+            targetOpportunity,
+        ]
+        : opportunities;
+    const currentStreak = getCurrentStreak(nextOpportunities);
+    return {
+        currentStreak,
+        streakDelta: currentStreak - priorCurrentStreak,
+    };
+}
+async function getTapInMomentumPreview({ circle, circleId, dateKey, status, transaction, uid, }) {
+    const userPrivateRef = firebase_1.db.collection('userPrivate').doc(uid);
+    const opportunitySnapshots = await transaction.get(userPrivateRef
+        .collection('opportunities')
+        .where('isCurrentPeriod', '==', true));
+    const opportunities = opportunitySnapshots.docs
+        .map(mapOpportunitySnapshotWithId)
+        .filter((opportunity) => Boolean(opportunity));
+    const slots = getCurrentSlots(circle);
+    const existingStatuses = new Map(slots.map(slot => [
+        slot.slotIndex,
+        opportunities.find(opportunity => opportunity.id ===
+            getOpportunityId(circleId, slot.periodKey, slot.slotIndex))?.status,
+    ]));
+    const slot = getSlotForDate(circle, dateKey, existingStatuses);
+    const opportunityStatus = status === 'done' ? 'completed' : 'skipped';
+    const targetOpportunity = slot
+        ? {
+            availableDateKey: slot.availableDateKey,
+            id: getOpportunityId(circleId, slot.periodKey, slot.slotIndex),
+            periodKey: slot.periodKey,
+            slotIndex: slot.slotIndex,
+            status: opportunityStatus,
+        }
+        : undefined;
+    return buildTapInMomentumPreview({
+        opportunities,
+        targetOpportunity,
+    });
 }
 async function recalculateMomentumSummaryForUser(uid) {
     const momentumRef = firebase_1.db
