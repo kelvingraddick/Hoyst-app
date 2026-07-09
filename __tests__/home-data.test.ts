@@ -1,6 +1,7 @@
 jest.mock('@react-native-firebase/firestore', () => jest.fn());
 
 import {
+  buildCircleDetailFromHomeCircle,
   buildCircleGroupProgressDays,
   buildHomeDataFromCircles,
   canTapInToday,
@@ -434,6 +435,41 @@ describe('home data mapping', () => {
     ]);
   });
 
+  it('maps viewer proof details into the circle detail model', () => {
+    const card = mapHomeCircleFromData({
+      circleData,
+      circleId: 'circle-proof',
+      membersData: [
+        {
+          displayName: 'Kelvin North',
+          role: 'owner',
+          status: 'active',
+          uid: 'user-1',
+        },
+      ],
+      membershipData: {
+        displayName: 'Kelvin North',
+        role: 'owner',
+        status: 'active',
+        uid: 'user-1',
+      },
+      todayCheckInStatuses: new Map([['user-1', 'done']]),
+      viewerTodayCheckIn: {
+        note: 'Finished the full sleep commitment.',
+        photoUrl: 'https://example.com/sleep-proof.jpg',
+        status: 'done',
+      },
+    });
+
+    const detail = buildCircleDetailFromHomeCircle(card!);
+
+    expect(detail.viewerTodayCheckIn).toEqual({
+      note: 'Finished the full sleep commitment.',
+      photoUrl: 'https://example.com/sleep-proof.jpg',
+      status: 'done',
+    });
+  });
+
   it('derives viewer skip availability from loaded grace-window statuses', () => {
     const card = mapHomeCircleFromData({
       circleData: {
@@ -754,11 +790,8 @@ describe('home data mapping', () => {
     expect(homeData.progressDays.every(day => day.state !== 'done')).toBe(true);
 
     expect(
-      createEmptyHomeData(
-        'UTC',
-        new Date('2026-05-07T12:00:00.000Z'),
-        28,
-      ).progressDays,
+      createEmptyHomeData('UTC', new Date('2026-05-07T12:00:00.000Z'), 28)
+        .progressDays,
     ).toHaveLength(28);
   });
 
@@ -943,7 +976,6 @@ describe('home data mapping', () => {
       }),
     ).toBe(false);
   });
-
 });
 
 describe('Home greeting fallback', () => {

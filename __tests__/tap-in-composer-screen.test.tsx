@@ -1,5 +1,5 @@
 import React from 'react';
-import {Pressable} from 'react-native';
+import {Image, Pressable} from 'react-native';
 import renderer, {act} from 'react-test-renderer';
 
 import {HoystTapInMark} from '../src/design/components/HoystTapInMark';
@@ -320,7 +320,7 @@ describe('TapInComposerScreen', () => {
     );
   });
 
-  it('renders the refreshed already-covered state with share, remove, and close actions', async () => {
+  it('renders the logged Tap In review state with fallback proof copy and actions', async () => {
     mockDetail = {
       ...baseMockDetail,
       viewerHasCheckedIn: true,
@@ -347,7 +347,13 @@ describe('TapInComposerScreen', () => {
       button => button.props.label === 'Close',
     );
 
-    expect(output).toContain('Today is covered');
+    expect(output).toContain('Tap In logged');
+    expect(output).toContain("Today's proof");
+    expect(output).not.toContain('Already tapped in');
+    expect(output).toContain('No note added. Your Tap In still counts.');
+    expect(output).toContain(
+      "Removing this will reopen today's Tap In and lower this Circle's Progression.",
+    );
     expect(tree!.root.findAllByType(HoystTapInMark).length).toBeGreaterThan(0);
     expect(shareButton?.props.variant).toBe('accentOutline');
     expect(removeButton?.props.variant).toBe('dangerOutline');
@@ -372,6 +378,62 @@ describe('TapInComposerScreen', () => {
       inviteUrl: 'https://hoyst.app/join/circle-1',
       memberCount: 4,
       periodTapInCount: 8,
+      progressLabel: 'Week · 50%',
+      source: 'home',
+      streakDays: 4,
+      streakLabel: '4d streak',
+      note: undefined,
+      photoUri: undefined,
+    });
+  });
+
+  it('renders the saved Tap In photo and note in the review state', async () => {
+    mockDetail = {
+      ...baseMockDetail,
+      viewerHasCheckedIn: true,
+      viewerHasTappedInToday: true,
+      viewerTodayCheckIn: {
+        note: 'Slept eight hours and woke up steady.',
+        photoUrl: 'https://example.com/proof.jpg',
+        status: 'done',
+      },
+      viewerTodayStatus: 'done',
+    };
+    let tree: renderer.ReactTestRenderer | undefined;
+
+    await act(async () => {
+      tree = renderComposerScreen();
+    });
+
+    const output = JSON.stringify(tree!.toJSON());
+    const navigation =
+      tree!.root.findByType(TapInComposerScreen).props.navigation;
+    const proofImage = tree!.root.findByProps({
+      testID: 'tap-in-view-proof-image',
+    });
+    const shareButton = tree!.root
+      .findAllByType(TapInActionButton)
+      .find(button => button.props.label === 'Share Story');
+
+    expect(output).toContain('Slept eight hours and woke up steady.');
+    expect(proofImage.type).toBe(Image);
+    expect(proofImage.props.source).toEqual({
+      uri: 'https://example.com/proof.jpg',
+    });
+
+    await act(async () => {
+      shareButton!.props.onPress();
+    });
+
+    expect(navigation.navigate).toHaveBeenCalledWith('TapInStoryShare', {
+      circleId: 'circle-1',
+      circleTitle: 'Morning Movers',
+      commitment: 'Move for 30 minutes',
+      inviteUrl: 'https://hoyst.app/join/circle-1',
+      memberCount: 4,
+      note: 'Slept eight hours and woke up steady.',
+      periodTapInCount: 8,
+      photoUri: 'https://example.com/proof.jpg',
       progressLabel: 'Week · 50%',
       source: 'home',
       streakDays: 4,

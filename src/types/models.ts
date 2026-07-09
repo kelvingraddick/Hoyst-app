@@ -221,6 +221,12 @@ export type InboxEvent = {
   type: InboxEventType;
 };
 
+export type ViewerTodayCheckIn = {
+  status: Extract<CheckInStatus, 'done' | 'skip'>;
+  note?: string;
+  photoUrl?: string;
+};
+
 export type CircleSummary = {
   id: string;
   title: string;
@@ -255,6 +261,7 @@ export type CircleSummary = {
   progressLabel?: string;
   timezone?: string;
   viewerHasTappedInToday?: boolean;
+  viewerTodayCheckIn?: ViewerTodayCheckIn;
   viewerAvailableSkips?: number;
   viewerRemainingTapIns?: number;
 };

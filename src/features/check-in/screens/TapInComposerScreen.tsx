@@ -151,21 +151,37 @@ export function TapInComposerScreen({
     : `No skips left (${skipAllowance} per ${skipWindowDays} days)`;
   const canRemoveTodayCheckIn =
     detail.viewerTodayStatus === 'done' || detail.viewerTodayStatus === 'skip';
+  const isViewingLoggedTapIn = detail.viewerTodayStatus === 'done';
   const canShareStoryFromCheckedIn = detail.viewerTodayStatus === 'done';
   const removeActionLabel =
     detail.viewerTodayStatus === 'skip' ? 'Remove Skip' : 'Remove Tap In';
+  const viewerTodayCheckIn =
+    detail.viewerTodayCheckIn?.status === detail.viewerTodayStatus
+      ? detail.viewerTodayCheckIn
+      : undefined;
+  const viewerTodayNote = viewerTodayCheckIn?.note?.trim();
+  const viewerTodayPhotoUrl = viewerTodayCheckIn?.photoUrl;
+  const loggedTapInRemoveCopy =
+    "Removing this will reopen today's Tap In and lower this Circle's Progression.";
   const checkedInStatusCopy =
     detail.viewerTodayStatus === 'skip'
       ? 'Your grace skip is covering today for this Circle.'
+      : isViewingLoggedTapIn
+      ? 'Your Tap In is logged for today.'
       : detail.viewerHasCheckedIn
       ? 'You are covered right now for this Circle.'
       : detail.commitmentCadence === 'daily'
       ? 'Your Tap In is counted for today.'
       : 'Your Tap In is counted for today. Keep going this week.';
-  const removeProgressionCopy =
-    detail.commitmentCadence === 'daily'
-      ? "This will undo today's Progression for this Circle."
-      : "This will undo this week's Progression for this Circle.";
+  const removeProgressionCopy = isViewingLoggedTapIn
+    ? loggedTapInRemoveCopy
+    : detail.commitmentCadence === 'daily'
+    ? "This will undo today's Progression for this Circle."
+    : "This will undo this week's Progression for this Circle.";
+  const heroTitle = isViewingLoggedTapIn ? 'Tap In logged' : 'Tap In';
+  const heroSubtitle = isViewingLoggedTapIn
+    ? undefined
+    : "Share today's proof, context, or momentum with your Circle.";
   const photoActionWidth = Math.max(0, (formFieldWidth - PHOTO_ACTION_GAP) / 2);
   const hasMeasuredFormField = formFieldWidth > 0;
   const photoActionMeasuredStyle = hasMeasuredFormField
@@ -290,6 +306,8 @@ export function TapInComposerScreen({
       source: route.params.source,
       streakDays: detail.streakDays,
       streakLabel: detail.streakLabel,
+      note: viewerTodayNote || undefined,
+      photoUri: viewerTodayPhotoUrl,
     });
   };
 
@@ -300,44 +318,80 @@ export function TapInComposerScreen({
       keyboardAvoiding
       keyboardDismissMode="interactive"
       keyboardShouldPersistTaps="handled">
-      <View style={styles.closeRow}>
-        <Pressable
-          accessibilityLabel="Close Tap In composer"
-          accessibilityRole="button"
-          hitSlop={8}
-          onPress={resetAndClose}
-          style={({pressed}) => [
-            styles.closeButton,
-            {
-              backgroundColor: theme.surfaceSoft,
-              borderColor: theme.border,
-              opacity: pressed ? 0.92 : 1,
-            },
+      <View
+        style={[
+          styles.topSection,
+          isViewingLoggedTapIn ? styles.loggedTopSection : null,
+        ]}>
+        <View
+          style={[
+            styles.closeRow,
+            isViewingLoggedTapIn ? styles.loggedCloseRow : null,
           ]}>
-          <X color={theme.text} size={22} strokeWidth={2.5} />
-        </Pressable>
-      </View>
-
-      <View style={styles.heroPanel}>
-        <HoystTapInMark size={78} testID="tap-in-composer-logo" />
-        <View style={styles.heroCopy}>
-          <HoystText style={styles.heroTitle}>Tap In</HoystText>
-          <HoystText style={[styles.heroSubtitle, {color: theme.textMuted}]}>
-            Share today's proof, context, or momentum with your Circle.
-          </HoystText>
+          <Pressable
+            accessibilityLabel="Close Tap In composer"
+            accessibilityRole="button"
+            hitSlop={16}
+            onPress={resetAndClose}
+            style={({pressed}) => [
+              styles.closeButton,
+              {
+                backgroundColor: theme.surfaceSoft,
+                borderColor: theme.border,
+                opacity: pressed ? 0.92 : 1,
+              },
+            ]}>
+            <X color={theme.text} size={22} strokeWidth={2.5} />
+          </Pressable>
         </View>
-        <View style={styles.summaryChips}>
-          <CircleCategoryPill category={detail.category} uppercase />
-          <HoystChip
-            label={progressLabel}
-            style={styles.summaryChip}
-            tone="green"
+
+        <View
+          style={[
+            styles.heroPanel,
+            isViewingLoggedTapIn ? styles.loggedHeroPanel : null,
+          ]}>
+          <HoystTapInMark
+            size={isViewingLoggedTapIn ? 54 : 78}
+            testID="tap-in-composer-logo"
           />
-          <HoystChip
-            label={statusLabel}
-            style={styles.statusChip}
-            tone="orange"
-          />
+          <View
+            style={[
+              styles.heroCopy,
+              isViewingLoggedTapIn ? styles.loggedHeroCopy : null,
+            ]}>
+            <HoystText
+              style={[
+                styles.heroTitle,
+                isViewingLoggedTapIn ? styles.loggedHeroTitle : null,
+              ]}>
+              {heroTitle}
+            </HoystText>
+            {heroSubtitle ? (
+              <HoystText
+                style={[styles.heroSubtitle, {color: theme.textMuted}]}>
+                {heroSubtitle}
+              </HoystText>
+            ) : null}
+          </View>
+          <View
+            style={[
+              styles.summaryChips,
+              isViewingLoggedTapIn ? styles.loggedSummaryChips : null,
+            ]}>
+            <CircleCategoryPill category={detail.category} uppercase />
+            <HoystChip
+              label={progressLabel}
+              style={styles.summaryChip}
+              tone="green"
+            />
+            {isViewingLoggedTapIn ? null : (
+              <HoystChip
+                label={statusLabel}
+                style={styles.statusChip}
+                tone="orange"
+              />
+            )}
+          </View>
         </View>
       </View>
 
@@ -377,13 +431,42 @@ export function TapInComposerScreen({
                 <HoystTapInMark size={42} />
                 <View style={styles.previewHeaderCopy}>
                   <HoystText style={styles.previewTitle}>
-                    Today is covered
+                    {isViewingLoggedTapIn
+                      ? "Today's proof"
+                      : 'Today is covered'}
                   </HoystText>
                   <HoystText tone="muted" variant="caption">
                     {checkedInStatusCopy}
                   </HoystText>
                 </View>
               </View>
+              {isViewingLoggedTapIn ? (
+                <>
+                  <HoystText
+                    style={styles.previewBody}
+                    tone={viewerTodayNote ? 'primary' : 'muted'}>
+                    {viewerTodayNote ||
+                      'No note added. Your Tap In still counts.'}
+                  </HoystText>
+                  {viewerTodayPhotoUrl ? (
+                    <View
+                      style={[
+                        styles.previewImageWrap,
+                        {
+                          backgroundColor: theme.surfaceHigh,
+                          borderColor: theme.border,
+                        },
+                      ]}>
+                      <Image
+                        resizeMode="cover"
+                        source={{uri: viewerTodayPhotoUrl}}
+                        style={styles.previewImage}
+                        testID="tap-in-view-proof-image"
+                      />
+                    </View>
+                  ) : null}
+                </>
+              ) : null}
               <HoystText style={styles.previewBody} tone="muted">
                 {removeProgressionCopy}
               </HoystText>
@@ -675,13 +758,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderRadius: radius.pill,
     borderWidth: 1,
-    height: 48,
+    height: 46,
     justifyContent: 'center',
-    width: 48,
+    width: 46,
   },
   closeRow: {
     alignItems: 'flex-end',
-    paddingTop: 4,
+    minHeight: 46,
+    paddingRight: 4,
   },
   content: {
     paddingBottom: 60,
@@ -747,6 +831,26 @@ const styles = StyleSheet.create({
     letterSpacing: 0,
     lineHeight: 32,
     textAlign: 'center',
+  },
+  loggedHeroCopy: {
+    gap: 0,
+  },
+  loggedHeroPanel: {
+    gap: 6,
+    paddingTop: 0,
+  },
+  loggedHeroTitle: {
+    fontSize: 25,
+    lineHeight: 29,
+  },
+  loggedSummaryChips: {
+    gap: 8,
+  },
+  loggedCloseRow: {
+    minHeight: 44,
+  },
+  loggedTopSection: {
+    paddingTop: 8,
   },
   noteInput: {
     borderRadius: radius.lg,
@@ -884,5 +988,8 @@ const styles = StyleSheet.create({
     gap: 8,
     justifyContent: 'center',
     maxWidth: 360,
+  },
+  topSection: {
+    gap: 0,
   },
 });

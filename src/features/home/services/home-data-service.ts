@@ -19,6 +19,7 @@ import type {
   GraceRule,
   MemberRole,
   ProgressDayState,
+  ViewerTodayCheckIn,
 } from '../../../types/models';
 import {canTapInToday, getHomeCircleActionVariant} from './home-circle-actions';
 export {
@@ -82,6 +83,7 @@ export type HomeCircleMappingInput = {
   viewerSkipGraceDateKeys?: readonly string[];
   viewerSkipGraceLoadedDateKeys?: ReadonlySet<string>;
   viewerSkipGraceStatuses?: ReadonlyMap<string, CheckInStatus | undefined>;
+  viewerTodayCheckIn?: ViewerTodayCheckIn;
 };
 
 type CircleSubscriptionState = {
@@ -102,6 +104,7 @@ type CircleSubscriptionState = {
   skipGraceLoadedDateKeys: Set<string>;
   skipGraceUnsubscribes: Array<() => void>;
   todayCheckInStatuses: Map<string, CheckInStatus>;
+  viewerTodayCheckIn?: ViewerTodayCheckIn;
 };
 
 type HomeSubscriptionOptions = {
@@ -869,6 +872,7 @@ export function mapHomeCircleFromData({
   viewerSkipGraceDateKeys,
   viewerSkipGraceLoadedDateKeys,
   viewerSkipGraceStatuses,
+  viewerTodayCheckIn,
 }: HomeCircleMappingInput): CircleManagementCard | undefined {
   const membershipStatus = normalizeMembershipStatus(membershipData?.status);
 
@@ -958,6 +962,10 @@ export function mapHomeCircleFromData({
     viewerUid: uid,
   });
   const viewerTodayStatus = uid ? coveredCheckIns.get(uid) : undefined;
+  const visibleViewerTodayCheckIn =
+    viewerTodayCheckIn && viewerTodayCheckIn.status === viewerTodayStatus
+      ? viewerTodayCheckIn
+      : undefined;
   const viewerCoveredCount = uid ? memberCoveredCounts.get(uid) ?? 0 : 0;
   const viewerHasTappedInToday = Boolean(viewerTodayStatus);
   const viewerRemainingTapIns = isPending
@@ -1028,6 +1036,9 @@ export function mapHomeCircleFromData({
     viewerMembershipStatus: membershipStatus,
     viewerRemainingTapIns,
     viewerRole: normalizeMemberRole(membershipData.role),
+    ...(visibleViewerTodayCheckIn
+      ? {viewerTodayCheckIn: visibleViewerTodayCheckIn}
+      : {}),
     viewerTodayStatus,
   };
 }
@@ -1236,6 +1247,7 @@ function buildCircleFromState(
     viewerSkipGraceDateKeys: state?.skipGraceDateKeys,
     viewerSkipGraceLoadedDateKeys: state?.skipGraceLoadedDateKeys,
     viewerSkipGraceStatuses: state?.skipGraceCheckInStatuses,
+    viewerTodayCheckIn: state?.viewerTodayCheckIn,
   });
 }
 
@@ -1314,12 +1326,45 @@ function getCoveredStatusesFromSnapshot(
   );
 }
 
+function getViewerTodayCheckInFromSnapshot(
+  snapshot: FirebaseFirestoreTypes.QuerySnapshot,
+  uid: string,
+): ViewerTodayCheckIn | undefined {
+  const checkInSnapshot = snapshot.docs.find(doc => {
+    const data = doc.data();
+    const docUid = asString(data.uid, doc.id);
+
+    return docUid === uid;
+  });
+
+  if (!checkInSnapshot) {
+    return undefined;
+  }
+
+  const data = checkInSnapshot.data();
+  const status = normalizeCheckInStatus(data.status);
+
+  if (status !== 'done' && status !== 'skip') {
+    return undefined;
+  }
+
+  const note = asString(data.note);
+  const photoUrl = asString(data.photoUrl);
+
+  return {
+    status,
+    ...(note ? {note} : {}),
+    ...(photoUrl ? {photoUrl} : {}),
+  };
+}
+
 function clearPeriodCheckInListeners(state: CircleSubscriptionState) {
   state.periodCheckInUnsubscribes.forEach(unsubscribe => unsubscribe());
   state.periodCheckInUnsubscribes = [];
   state.periodCheckInKey = undefined;
   state.periodCheckInStatuses.clear();
   state.todayCheckInStatuses = new Map();
+  state.viewerTodayCheckIn = undefined;
 }
 
 function clearRecentGroupCheckInListeners(state: CircleSubscriptionState) {
@@ -1345,6 +1390,7 @@ function syncPeriodCheckInListeners({
   onUpdate,
   state,
   timezone,
+  uid,
 }: {
   cadence: CommitmentCadence;
   circleRef: FirebaseFirestoreTypes.DocumentReference;
@@ -1352,6 +1398,7 @@ function syncPeriodCheckInListeners({
   onUpdate: () => void;
   state: CircleSubscriptionState;
   timezone: string;
+  uid: string;
 }) {
   const periodDateKeys = getCommitmentPeriodDateKeys(cadence, timezone);
   const todayDateKey = getDateKey(new Date(), timezone);
@@ -1376,6 +1423,10 @@ function syncPeriodCheckInListeners({
           state.periodCheckInStatuses.set(dateKey, dayStatuses);
           if (dateKey === todayDateKey) {
             state.todayCheckInStatuses = dayStatuses;
+            state.viewerTodayCheckIn = getViewerTodayCheckInFromSnapshot(
+              snapshot,
+              uid,
+            );
           }
           onUpdate();
         }, onError),
@@ -1584,6 +1635,7 @@ export function subscribeToHomeData({
               onUpdate: emit,
               state,
               timezone: asString(state.circleData?.timezone, 'UTC'),
+              uid,
             });
           }
           emit();
@@ -1624,6 +1676,7 @@ export function subscribeToHomeData({
           onUpdate: emit,
           state,
           timezone: asString(state.circleData.timezone, 'UTC'),
+          uid,
         });
       }
 
@@ -1716,6 +1769,7 @@ export function subscribeToMemberCircleDetail({
       viewerSkipGraceDateKeys: state.skipGraceDateKeys,
       viewerSkipGraceLoadedDateKeys: state.skipGraceLoadedDateKeys,
       viewerSkipGraceStatuses: state.skipGraceCheckInStatuses,
+      viewerTodayCheckIn: state.viewerTodayCheckIn,
     });
     const groupProgressDays = buildCircleGroupProgressDays({
       memberRecords: state.membersData ?? [],
@@ -1785,6 +1839,7 @@ export function subscribeToMemberCircleDetail({
         onUpdate: emit,
         state,
         timezone: asString(state.circleData.timezone, 'UTC'),
+        uid,
       });
       syncRecentGroupCheckInListeners({
         circleRef,
@@ -1836,6 +1891,7 @@ export function subscribeToMemberCircleDetail({
         onUpdate: emit,
         state,
         timezone: asString(state.circleData?.timezone, 'UTC'),
+        uid,
       });
       syncRecentGroupCheckInListeners({
         circleRef,

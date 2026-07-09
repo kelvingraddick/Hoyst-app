@@ -1,11 +1,13 @@
 import React, {useEffect, useMemo, useRef, useState} from 'react';
 import {
   Alert,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   useWindowDimensions,
   View,
+  type LayoutChangeEvent,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
 } from 'react-native';
@@ -19,10 +21,10 @@ import {
   type LucideIcon,
 } from 'lucide-react-native';
 import LinearGradient from 'react-native-linear-gradient';
+import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import Svg, {Circle, Path} from 'react-native-svg';
 
 import {FrostedBackdrop} from '../../../design/components/FrostedBackdrop';
-import {HoystScreen} from '../../../design/components/HoystScreen';
 import {HoystText} from '../../../design/components/HoystText';
 import {brandColors} from '../../../design/tokens/colors';
 import {radius} from '../../../design/tokens/radius';
@@ -99,8 +101,11 @@ const destinationConfigs: DestinationConfig[] = [
   },
 ];
 
-const HEADER_CONTROL_SIZE = 36;
-const PREVIEW_VERTICAL_RESERVE = 340;
+const HEADER_CONTROL_SIZE = 32;
+const DOTS_BLOCK_HEIGHT = 21;
+const SHARE_BLOCK_FALLBACK_HEIGHT = 112;
+const SCREEN_HORIZONTAL_PADDING = 20;
+const MIN_TOP_SAFE_PADDING = Platform.OS === 'ios' ? 44 : 20;
 
 function getShareErrorMessage(error: unknown) {
   return (
@@ -202,14 +207,30 @@ export function TapInStoryShareScreen({
   route,
 }: Props): React.JSX.Element {
   const theme = useHoystTheme();
+  const insets = useSafeAreaInsets();
   const {height, width} = useWindowDimensions();
   const captureRef = useRef<View>(null);
   const carouselRef = useRef<ScrollView>(null);
   const [activeIndex, setActiveIndex] = useState(0);
   const [busyDestination, setBusyDestination] = useState<ShareDestination>();
+  const [carouselBlockHeight, setCarouselBlockHeight] = useState(0);
   const [isPhotoSettled, setIsPhotoSettled] = useState(!route.params.photoUri);
-  const carouselWidth = Math.max(1, width - 40);
-  const availablePreviewHeight = Math.max(1, height - PREVIEW_VERTICAL_RESERVE);
+  const safeTopPadding = Math.max(insets.top, MIN_TOP_SAFE_PADDING) + 6;
+  const safeBottomPadding = Math.max(insets.bottom, 14) + 12;
+  const carouselWidth = Math.max(1, width - SCREEN_HORIZONTAL_PADDING * 2);
+  const fallbackCarouselHeight = Math.max(
+    1,
+    height -
+      safeTopPadding -
+      safeBottomPadding -
+      HEADER_CONTROL_SIZE -
+      SHARE_BLOCK_FALLBACK_HEIGHT -
+      28,
+  );
+  const availablePreviewHeight = Math.max(
+    1,
+    (carouselBlockHeight || fallbackCarouselHeight) - DOTS_BLOCK_HEIGHT,
+  );
   const previewScale = Math.min(
     1,
     carouselWidth / tapInStoryShareCardSize.width,
@@ -381,11 +402,18 @@ export function TapInStoryShareScreen({
     );
   };
 
+  const handleCarouselLayout = (event: LayoutChangeEvent) => {
+    const nextHeight = event.nativeEvent.layout.height;
+    setCarouselBlockHeight(currentHeight =>
+      Math.abs(currentHeight - nextHeight) > 1 ? nextHeight : currentHeight,
+    );
+  };
+
   return (
-    <HoystScreen
-      background={<FrostedBackdrop />}
-      contentContainerStyle={styles.content}
-      scrollEnabled={false}>
+    <View style={[styles.screen, {backgroundColor: theme.background}]}>
+      <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+        <FrostedBackdrop />
+      </View>
       <View style={styles.captureLayer} pointerEvents="none">
         <View collapsable={false} ref={captureRef} style={styles.captureCard}>
           <TapInStoryTemplateCard
@@ -398,127 +426,148 @@ export function TapInStoryShareScreen({
         </View>
       </View>
 
-      <View style={styles.headerRow}>
-        <Pressable
-          accessibilityLabel="Close Share Tap In"
-          accessibilityRole="button"
-          hitSlop={8}
-          onPress={close}
-          style={({pressed}) => [
-            styles.closeButton,
-            {
-              backgroundColor: theme.surfaceSoft,
-              borderColor: theme.border,
-              opacity: pressed ? 0.92 : 1,
-            },
-          ]}>
-          <X color={theme.text} size={19} strokeWidth={2.4} />
-        </Pressable>
-        <HoystText
-          numberOfLines={1}
-          style={[styles.headerTitle, {color: theme.text}]}>
-          Share Tap In
-        </HoystText>
-        <View style={styles.headerSpacer} />
-      </View>
+      <View
+        style={[
+          styles.content,
+          {
+            paddingBottom: safeBottomPadding,
+            paddingTop: safeTopPadding,
+          },
+        ]}>
+        <View style={styles.headerRow}>
+          <Pressable
+            accessibilityLabel="Close Share Tap In"
+            accessibilityRole="button"
+            hitSlop={8}
+            onPress={close}
+            style={({pressed}) => [
+              styles.closeButton,
+              {
+                backgroundColor: theme.surfaceSoft,
+                borderColor: theme.border,
+                opacity: pressed ? 0.92 : 1,
+              },
+            ]}>
+            <X color={theme.text} size={17} strokeWidth={2.35} />
+          </Pressable>
+          <HoystText
+            numberOfLines={1}
+            style={[styles.headerTitle, {color: theme.text}]}>
+            Share Tap In
+          </HoystText>
+          <View style={styles.headerSpacer} />
+        </View>
 
-      <View style={styles.carouselBlock}>
-        <ScrollView
-          bounces={false}
-          decelerationRate="fast"
-          horizontal
-          onMomentumScrollEnd={handleScrollEnd}
-          pagingEnabled
-          ref={carouselRef}
-          scrollEventThrottle={16}
-          showsHorizontalScrollIndicator={false}
-          style={[styles.carousel, {width: carouselWidth}]}>
-          {templates.map(templateId => (
-            <View
-              key={templateId}
-              style={[styles.carouselPage, {width: carouselWidth}]}>
-              <View
-                style={[
-                  styles.previewFrame,
-                  templateId === 'transparentStats'
-                    ? styles.previewBackgroundTransparent
-                    : previewBackgroundStyle,
-                  {
-                    height: previewHeight,
-                    width: previewWidth,
-                  },
-                ]}>
-                <View
-                  style={[
-                    styles.previewScaler,
-                    {
-                      left:
-                        -(tapInStoryShareCardSize.width * (1 - previewScale)) /
-                        2,
-                      top:
-                        -(tapInStoryShareCardSize.height * (1 - previewScale)) /
-                        2,
-                      transform: [{scale: previewScale}],
-                    },
-                  ]}>
-                  <TapInStoryTemplateCard
-                    showTransparencyGrid={templateId === 'transparentStats'}
-                    story={storyData}
-                    templateId={templateId}
-                  />
-                </View>
-              </View>
-            </View>
-          ))}
-        </ScrollView>
-
-        <View style={styles.dotsRow}>
-          {templates.map((templateId, index) => (
-            <Pressable
-              accessibilityLabel={`Show story option ${index + 1}`}
-              accessibilityRole="button"
-              hitSlop={8}
-              key={templateId}
-              onPress={() => {
-                carouselRef.current?.scrollTo({
-                  animated: true,
-                  x: carouselWidth * index,
-                });
-                setActiveIndex(index);
-              }}
+        <View style={styles.mainStack}>
+          <View onLayout={handleCarouselLayout} style={styles.carouselBlock}>
+            <ScrollView
+              bounces={false}
+              decelerationRate="fast"
+              horizontal
+              onMomentumScrollEnd={handleScrollEnd}
+              pagingEnabled
+              ref={carouselRef}
+              scrollEventThrottle={16}
+              showsHorizontalScrollIndicator={false}
               style={[
-                styles.dot,
-                index === activeIndex ? activeDotStyle : styles.inactiveDot,
-              ]}
-            />
-          ))}
-        </View>
-      </View>
+                styles.carousel,
+                {height: previewHeight, width: carouselWidth},
+              ]}>
+              {templates.map(templateId => (
+                <View
+                  key={templateId}
+                  style={[
+                    styles.carouselPage,
+                    {height: previewHeight, width: carouselWidth},
+                  ]}>
+                  <View
+                    style={[
+                      styles.previewFrame,
+                      templateId === 'transparentStats'
+                        ? styles.previewBackgroundTransparent
+                        : previewBackgroundStyle,
+                      {
+                        height: previewHeight,
+                        width: previewWidth,
+                      },
+                    ]}>
+                    <View
+                      style={[
+                        styles.previewScaler,
+                        {
+                          left:
+                            -(
+                              tapInStoryShareCardSize.width *
+                              (1 - previewScale)
+                            ) / 2,
+                          top:
+                            -(
+                              tapInStoryShareCardSize.height *
+                              (1 - previewScale)
+                            ) / 2,
+                          transform: [{scale: previewScale}],
+                        },
+                      ]}>
+                      <TapInStoryTemplateCard
+                        showTransparencyGrid={templateId === 'transparentStats'}
+                        story={storyData}
+                        templateId={templateId}
+                      />
+                    </View>
+                  </View>
+                </View>
+              ))}
+            </ScrollView>
 
-      <View style={styles.shareBlock}>
-        <HoystText tone="muted" variant="label" style={styles.shareLabel}>
-          SHARE TO
-        </HoystText>
-        <View style={styles.destinationsRow}>
-          {destinationConfigs.map(config => (
-            <DestinationButton
-              config={config}
-              disabled={
-                isBusy ||
-                ((config.id === 'instagram' ||
-                  config.id === 'snapchat' ||
-                  config.id === 'more' ||
-                  config.id === 'clipboard') &&
-                  !canCapture)
-              }
-              isBusy={busyDestination === config.id}
-              key={config.id}
-              onPress={() => handleDestinationPress(config.id)}
-            />
-          ))}
+            <View style={styles.dotsRow}>
+              {templates.map((templateId, index) => (
+                <Pressable
+                  accessibilityLabel={`Show story option ${index + 1}`}
+                  accessibilityRole="button"
+                  hitSlop={8}
+                  key={templateId}
+                  onPress={() => {
+                    carouselRef.current?.scrollTo({
+                      animated: true,
+                      x: carouselWidth * index,
+                    });
+                    setActiveIndex(index);
+                  }}
+                  style={[
+                    styles.dot,
+                    index === activeIndex ? activeDotStyle : styles.inactiveDot,
+                  ]}
+                />
+              ))}
+            </View>
+          </View>
+
+          <View style={styles.shareBlock}>
+            <HoystText tone="muted" variant="label" style={styles.shareLabel}>
+              Share to
+            </HoystText>
+            <View style={styles.destinationsRow}>
+              {destinationConfigs.map(config => (
+                <DestinationButton
+                  config={config}
+                  disabled={
+                    isBusy ||
+                    ((config.id === 'instagram' ||
+                      config.id === 'snapchat' ||
+                      config.id === 'more' ||
+                      config.id === 'clipboard') &&
+                      !canCapture)
+                  }
+                  isBusy={busyDestination === config.id}
+                  key={config.id}
+                  onPress={() => handleDestinationPress(config.id)}
+                />
+              ))}
+            </View>
+          </View>
         </View>
       </View>
-    </HoystScreen>
+    </View>
   );
 }
 
@@ -556,10 +605,8 @@ const styles = StyleSheet.create({
     width: HEADER_CONTROL_SIZE,
   },
   content: {
-    flexGrow: 1,
-    minHeight: '100%',
-    paddingBottom: 16,
-    paddingTop: 6,
+    flex: 1,
+    paddingHorizontal: SCREEN_HORIZONTAL_PADDING,
   },
   destination: {
     alignItems: 'center',
@@ -575,11 +622,11 @@ const styles = StyleSheet.create({
   },
   destinationLabel: {
     color: '#77799A',
-    fontSize: 10,
-    fontWeight: '600',
+    fontSize: 9.5,
+    fontWeight: '500',
     letterSpacing: 0,
-    lineHeight: 12,
-    minHeight: 24,
+    lineHeight: 11.5,
+    minHeight: 23,
     textAlign: 'center',
   },
   destinationsRow: {
@@ -609,10 +656,10 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     flex: 1,
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '800',
     letterSpacing: 0,
-    lineHeight: 22,
+    lineHeight: 20,
     textAlign: 'center',
   },
   instagramGlyph: {
@@ -621,6 +668,12 @@ const styles = StyleSheet.create({
     height: 30,
     justifyContent: 'center',
     width: 30,
+  },
+  mainStack: {
+    flex: 1,
+    gap: 16,
+    minHeight: 0,
+    paddingTop: 10,
   },
   inactiveDot: {
     backgroundColor: 'rgba(16,24,40,0.18)',
@@ -644,13 +697,15 @@ const styles = StyleSheet.create({
     width: tapInStoryShareCardSize.width,
   },
   shareBlock: {
-    gap: 8,
-    paddingTop: 0,
+    gap: 9,
   },
   shareLabel: {
-    fontSize: 11,
-    fontWeight: '600',
-    letterSpacing: 0.6,
-    lineHeight: 14,
+    fontSize: 12,
+    fontWeight: '500',
+    letterSpacing: 0,
+    lineHeight: 15,
+  },
+  screen: {
+    flex: 1,
   },
 });
