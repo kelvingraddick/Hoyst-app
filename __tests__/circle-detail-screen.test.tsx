@@ -665,6 +665,67 @@ describe('CircleDetailScreen reference redesign', () => {
     );
   });
 
+  it('shows remove alongside Update Tap In for saved quantity circles', async () => {
+    mockMemberDetail = detail({
+      commitmentType: 'build',
+      currentValue: 5,
+      completionRate: 100,
+      progressLabel: 'Today 100%',
+      remainingCheckIns: 0,
+      state: 'done',
+      targetValue: 5,
+      unitLabel: 'pages',
+      viewerCanUpdateTapIn: true,
+      viewerHasCheckedIn: true,
+      viewerHasTappedInToday: true,
+      viewerRemainingTapIns: 0,
+      viewerRole: 'owner',
+      viewerTodayCheckIn: {
+        coverageStatus: 'covered',
+        currentValue: 5,
+        status: 'done',
+      },
+      viewerTodayStatus: 'done',
+    });
+
+    const {tree} = renderScreen();
+    const output = outputOf(tree);
+
+    expect(output).toContain('Update Tap In');
+    expect(output).toContain('Remove Tap In');
+    expect(output).not.toContain('View Today');
+
+    const removeButton = tree.root
+      .findAllByType(Pressable)
+      .find(node => textContent(node).includes('Remove Tap In'));
+
+    if (!removeButton) {
+      throw new Error('Remove Tap In button was not found');
+    }
+
+    act(() => {
+      removeButton.props.onPress();
+    });
+
+    expect(alertSpy).toHaveBeenCalledWith(
+      'Remove today?',
+      "This will delete today's saved quantity and reopen this Tap In.",
+      expect.arrayContaining([
+        expect.objectContaining({text: 'Keep'}),
+        expect.objectContaining({style: 'destructive', text: 'Remove'}),
+      ]),
+    );
+
+    pressAlertButton('Remove today?', 'Remove');
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(mockRemoveTapIn).toHaveBeenCalledWith({circleId: 'circle-1'});
+  });
+
   it('keeps owner settings off the detail body', () => {
     mockMemberDetail = detail({
       commitmentCadence: 'weekly',

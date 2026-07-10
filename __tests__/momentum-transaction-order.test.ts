@@ -74,16 +74,6 @@ type Ref = {
   where: (field: string, operator: string, value: unknown) => Ref;
 };
 
-function createRef(path: string): Ref {
-  return {
-    collection: (name: string) => createRef(`${path}/${name}`),
-    doc: (id: string) => createRef(`${path}/${id}`),
-    path,
-    where: (field: string, operator: string, value: unknown) =>
-      createRef(`${path}?${field}${operator}${String(value)}`),
-  };
-}
-
 type QuerySnapshotData = {
   data: Record<string, unknown>;
   id: string;

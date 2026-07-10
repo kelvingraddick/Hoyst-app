@@ -1,5 +1,5 @@
 import React from 'react';
-import {Image, Pressable} from 'react-native';
+import {Alert, Image, Pressable} from 'react-native';
 import renderer, {act} from 'react-test-renderer';
 
 import {HoystTapInMark} from '../src/design/components/HoystTapInMark';
@@ -251,6 +251,226 @@ describe('TapInComposerScreen', () => {
     expect(output).toContain('Commitment complete');
     expect(confirmButton).toBeTruthy();
     expect(confirmButton?.props.disabled).toBe(false);
+  });
+
+  it('opens the completion screen after a first quantity Tap In save', async () => {
+    mockDetail = {
+      ...baseMockDetail,
+      commitmentType: 'build',
+      currentValue: 0,
+      targetValue: 3,
+      unitLabel: 'pages',
+      viewerCanUpdateTapIn: true,
+      viewerHasCheckedIn: false,
+      viewerHasTappedInToday: false,
+      viewerRemainingTapIns: 1,
+      viewerTodayStatus: undefined,
+    };
+    mockSubmitTapIn.mockResolvedValueOnce({
+      checkInId: 'user-1',
+      coverageStatus: 'covered',
+      currentValue: 3,
+      dateKey: '2026-05-29',
+      momentum: {
+        currentStreak: 6,
+        streakDelta: 1,
+      },
+      status: 'done',
+    });
+    let tree: renderer.ReactTestRenderer | undefined;
+
+    await act(async () => {
+      tree = renderComposerScreen();
+    });
+
+    const navigation =
+      tree!.root.findByType(TapInComposerScreen).props.navigation;
+    const tapInButton = tree!.root
+      .findAllByType(TapInActionButton)
+      .find(button => button.props.label === 'Tap In');
+
+    for (let index = 0; index < 3; index += 1) {
+      await act(async () => {
+        tree!.root
+          .findByProps({accessibilityLabel: 'Increase quantity'})
+          .props.onPress();
+      });
+    }
+
+    await act(async () => {
+      tapInButton!.props.onPress();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(mockSubmitTapIn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        circleId: 'circle-1',
+        currentValue: 3,
+        status: 'done',
+      }),
+    );
+    expect(navigation.replace).toHaveBeenCalledWith(
+      'TapInComplete',
+      expect.objectContaining({
+        circleId: 'circle-1',
+        commitmentType: 'build',
+        coverageStatus: 'covered',
+        currentValue: 3,
+        source: 'home',
+        status: 'done',
+        targetValue: 3,
+        unitLabel: 'pages',
+      }),
+    );
+  });
+
+  it('opens the completion screen after updating a saved quantity Tap In', async () => {
+    mockDetail = {
+      ...baseMockDetail,
+      commitmentType: 'build',
+      currentValue: 2,
+      stepValue: 1,
+      targetValue: 5,
+      unitLabel: 'pages',
+      viewerCanUpdateTapIn: true,
+      viewerHasCheckedIn: false,
+      viewerHasTappedInToday: true,
+      viewerRemainingTapIns: 1,
+      viewerTodayCheckIn: {
+        coverageStatus: 'partial',
+        currentValue: 2,
+        status: 'partial',
+      },
+      viewerTodayStatus: 'partial',
+    };
+    mockSubmitTapIn.mockResolvedValueOnce({
+      checkInId: 'user-1',
+      coverageStatus: 'partial',
+      currentValue: 3,
+      dateKey: '2026-05-29',
+      status: 'partial',
+    });
+    let tree: renderer.ReactTestRenderer | undefined;
+
+    await act(async () => {
+      tree = renderComposerScreen();
+    });
+
+    const navigation =
+      tree!.root.findByType(TapInComposerScreen).props.navigation;
+    const increaseButton = tree!.root.findByProps({
+      accessibilityLabel: 'Increase quantity',
+    });
+    const updateButton = tree!.root
+      .findAllByType(TapInActionButton)
+      .find(button => button.props.label === 'Update Tap In');
+
+    expect(JSON.stringify(tree!.toJSON())).toContain('Current total today');
+    expect(updateButton?.props.disabled).toBe(false);
+
+    await act(async () => {
+      increaseButton.props.onPress();
+    });
+
+    await act(async () => {
+      updateButton!.props.onPress();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(mockSubmitTapIn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        circleId: 'circle-1',
+        currentValue: 3,
+        status: 'done',
+      }),
+    );
+    expect(navigation.replace).toHaveBeenCalledWith(
+      'TapInComplete',
+      expect.objectContaining({
+        circleId: 'circle-1',
+        commitmentType: 'build',
+        coverageStatus: 'partial',
+        currentValue: 3,
+        source: 'home',
+        status: 'partial',
+        targetValue: 5,
+        unitLabel: 'pages',
+      }),
+    );
+  });
+
+  it('allows removing a saved quantity Tap In from the update composer', async () => {
+    const alertSpy = jest
+      .spyOn(Alert, 'alert')
+      .mockImplementation(() => undefined);
+    mockDetail = {
+      ...baseMockDetail,
+      commitmentType: 'build',
+      currentValue: 2,
+      targetValue: 5,
+      unitLabel: 'pages',
+      viewerCanUpdateTapIn: true,
+      viewerHasCheckedIn: false,
+      viewerHasTappedInToday: true,
+      viewerRemainingTapIns: 1,
+      viewerTodayCheckIn: {
+        coverageStatus: 'partial',
+        currentValue: 2,
+        status: 'partial',
+      },
+      viewerTodayStatus: 'partial',
+    };
+    let tree: renderer.ReactTestRenderer | undefined;
+
+    await act(async () => {
+      tree = renderComposerScreen();
+    });
+
+    const navigation =
+      tree!.root.findByType(TapInComposerScreen).props.navigation;
+    const actionButtons = tree!.root.findAllByType(TapInActionButton);
+    const updateButton = actionButtons.find(
+      button => button.props.label === 'Update Tap In',
+    );
+    const removeButton = actionButtons.find(
+      button => button.props.label === 'Remove Tap In',
+    );
+
+    expect(JSON.stringify(tree!.toJSON())).toContain('Current total today');
+    expect(updateButton).toBeTruthy();
+    expect(removeButton?.props.variant).toBe('dangerOutline');
+
+    await act(async () => {
+      removeButton!.props.onPress();
+    });
+
+    expect(alertSpy).toHaveBeenCalledWith(
+      'Remove today?',
+      "Removing this will delete today's saved quantity and reopen this Tap In.",
+      expect.arrayContaining([
+        expect.objectContaining({text: 'Keep'}),
+        expect.objectContaining({style: 'destructive', text: 'Remove'}),
+      ]),
+    );
+
+    const latestAlert = alertSpy.mock.calls.find(
+      call => call[0] === 'Remove today?',
+    );
+    const removeAlertButton = (
+      latestAlert?.[2] as Array<{onPress?: () => void; text?: string}>
+    ).find(button => button.text === 'Remove');
+
+    await act(async () => {
+      removeAlertButton?.onPress?.();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(mockRemoveTapIn).toHaveBeenCalledWith({circleId: 'circle-1'});
+    expect(navigation.goBack).toHaveBeenCalled();
+    alertSpy.mockRestore();
   });
 
   it('keeps skip disabled until grace availability is loaded', async () => {

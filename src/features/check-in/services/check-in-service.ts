@@ -5,6 +5,7 @@ import type {CheckInStatus} from '../../../types/models';
 
 export type SubmitTapInInput = {
   circleId: string;
+  currentValue?: number;
   note?: string;
   photoUrl?: string;
   status?: Extract<CheckInStatus, 'done' | 'skip'>;
@@ -12,11 +13,14 @@ export type SubmitTapInInput = {
 
 export type SubmitTapInResult = {
   checkInId: string;
+  coverageStatus?: 'covered' | 'skipped' | 'partial' | 'failed';
+  currentValue?: number;
   dateKey: string;
   momentum?: {
     currentStreak: number;
     streakDelta: number;
   };
+  status?: Exclude<CheckInStatus, 'rest'>;
 };
 
 export type RemoveTapInInput = {

@@ -25,16 +25,22 @@ const createCircleSchema = zod_1.z.object({
     commitment: zod_1.z.string().trim().min(1).max(160),
     commitmentCadence: zod_1.z.enum(['daily', 'weekly', 'monthly']).optional(),
     commitmentFrequency: commitmentFrequencySchema,
+    commitmentType: zod_1.z.enum(['build', 'limit', 'avoid']).default('build'),
     graceRules: zod_1.z
         .object({
         skip: graceRuleSchema,
     })
         .optional(),
     joinMode: zod_1.z.enum(['open', 'request_to_join', 'invite_only']),
+    maximumValue: zod_1.z.number().int().min(0).max(100000).optional(),
     maxSize: zod_1.z.number().int().min(2).max(100),
+    minimumValue: zod_1.z.number().int().min(0).max(100000).optional(),
     privacy: zod_1.z.enum(['public', 'private']),
+    stepValue: zod_1.z.number().min(0.01).max(100000).default(1),
+    targetValue: zod_1.z.number().int().min(0).max(100000).optional(),
     timezone: zod_1.z.string().trim().min(1).max(80).optional(),
     title: zod_1.z.string().trim().min(1).max(80),
+    unitLabel: zod_1.z.string().trim().min(1).max(32).default('Tap In'),
 });
 const joinCircleSchema = zod_1.z.object({
     circleId: zod_1.z.string().trim().min(1),
@@ -198,9 +204,6 @@ function getCircleRefFromCheckInRef(ref) {
     const circleRef = getParentDocument(dayRef, 'check-in day');
     return { circleRef, dayRef };
 }
-function isCoveredCheckInStatus(value) {
-    return value === 'done' || value === 'skip';
-}
 function withoutPublicMemberPreview(members, uid) {
     return Array.isArray(members)
         ? members.filter(memberPreview => !(typeof memberPreview === 'object' &&
@@ -225,10 +228,10 @@ async function deleteCircleCheckInsForMember(circleId, uid) {
         if (circleRef.id !== circleId) {
             continue;
         }
-        const status = checkInSnapshot.data().status;
+        const checkIn = checkInSnapshot.data();
         const batch = firebase_1.db.batch();
         batch.delete(checkInSnapshot.ref);
-        if (isCoveredCheckInStatus(status)) {
+        if ((0, commitments_1.isCoveredCheckInData)(checkIn)) {
             batch.set(dayRef, {
                 checkInCount: firestore_1.FieldValue.increment(-1),
                 updatedAt: firestore_1.FieldValue.serverTimestamp(),
@@ -248,12 +251,15 @@ exports.createCircle = (0, https_1.onCall)({ secrets: [notifications_1.oneSignal
     const inviteCode = createInviteCode();
     const commitmentCadence = (0, commitments_1.getInputCommitmentCadence)(input.commitmentCadence, input.commitmentFrequency);
     const commitmentFrequency = (0, commitments_1.getStoredCommitmentFrequency)(commitmentCadence, input.commitmentFrequency);
+    const commitmentType = (0, commitments_1.getCommitmentType)(input);
+    const quantityConfig = (0, commitments_1.getQuantityConfig)(input);
     const circle = {
         category: input.category,
         createdAt: now,
         commitment: input.commitment,
         commitmentCadence,
         commitmentFrequency,
+        commitmentType,
         graceRules: input.graceRules ?? {
             skip: {
                 allowance: 2,
@@ -262,12 +268,23 @@ exports.createCircle = (0, https_1.onCall)({ secrets: [notifications_1.oneSignal
         },
         inviteCode,
         joinMode: input.joinMode,
+        ...(typeof quantityConfig.maximumValue === 'number'
+            ? { maximumValue: quantityConfig.maximumValue }
+            : {}),
+        ...(typeof quantityConfig.minimumValue === 'number'
+            ? { minimumValue: quantityConfig.minimumValue }
+            : {}),
         maxSize: input.maxSize,
         memberCount: 1,
         ownerId: uid,
         privacy: input.privacy,
+        stepValue: quantityConfig.stepValue,
+        ...(typeof quantityConfig.targetValue === 'number'
+            ? { targetValue: quantityConfig.targetValue }
+            : {}),
         title: input.title,
         timezone: input.timezone ?? profile.timezone ?? 'UTC',
+        unitLabel: quantityConfig.unitLabel,
         updatedAt: now,
     };
     const batch = firebase_1.db.batch();
@@ -287,11 +304,23 @@ exports.createCircle = (0, https_1.onCall)({ secrets: [notifications_1.oneSignal
             commitment: input.commitment,
             commitmentCadence,
             commitmentFrequency,
+            commitmentType,
             joinMode: input.joinMode,
+            ...(typeof quantityConfig.maximumValue === 'number'
+                ? { maximumValue: quantityConfig.maximumValue }
+                : {}),
+            ...(typeof quantityConfig.minimumValue === 'number'
+                ? { minimumValue: quantityConfig.minimumValue }
+                : {}),
             maxSize: input.maxSize,
             memberCount: 1,
             members: [buildMemberPublicPreview(profile, uid)],
+            stepValue: quantityConfig.stepValue,
+            ...(typeof quantityConfig.targetValue === 'number'
+                ? { targetValue: quantityConfig.targetValue }
+                : {}),
             title: input.title,
+            unitLabel: quantityConfig.unitLabel,
             updatedAt: now,
         });
     }
@@ -611,7 +640,7 @@ exports.nudgeCircleMembers = (0, https_1.onCall)({ secrets: [notifications_1.one
     const coveredCounts = new Map();
     const todayCoveredUids = new Set();
     todayCheckInSnapshots.docs.forEach(doc => {
-        if (['done', 'skip'].includes(doc.data().status)) {
+        if ((0, commitments_1.isCoveredCheckInData)(doc.data())) {
             todayCoveredUids.add(asOptionalString(doc.data().uid) ?? doc.id);
         }
     });
@@ -620,7 +649,7 @@ exports.nudgeCircleMembers = (0, https_1.onCall)({ secrets: [notifications_1.one
         : periodCheckInSnapshots;
     scoringSnapshots.forEach(snapshot => {
         snapshot.docs.forEach(doc => {
-            if (['done', 'skip'].includes(doc.data().status)) {
+            if ((0, commitments_1.isCoveredCheckInData)(doc.data())) {
                 const targetUid = asOptionalString(doc.data().uid) ?? doc.id;
                 coveredCounts.set(targetUid, (coveredCounts.get(targetUid) ?? 0) + 1);
             }
@@ -779,11 +808,14 @@ exports.updateCircle = (0, https_1.onCall)(async (request) => {
     const now = firestore_1.FieldValue.serverTimestamp();
     const commitmentCadence = (0, commitments_1.getInputCommitmentCadence)(input.commitmentCadence, input.commitmentFrequency);
     const commitmentFrequency = (0, commitments_1.getStoredCommitmentFrequency)(commitmentCadence, input.commitmentFrequency);
+    const commitmentType = (0, commitments_1.getCommitmentType)(input);
+    const quantityConfig = (0, commitments_1.getQuantityConfig)(input);
     const circleUpdate = {
         category: input.category,
         commitment: input.commitment,
         commitmentCadence,
         commitmentFrequency,
+        commitmentType,
         graceRules: input.graceRules ?? {
             skip: {
                 allowance: 2,
@@ -791,10 +823,21 @@ exports.updateCircle = (0, https_1.onCall)(async (request) => {
             },
         },
         joinMode: input.joinMode,
+        maximumValue: typeof quantityConfig.maximumValue === 'number'
+            ? quantityConfig.maximumValue
+            : firestore_1.FieldValue.delete(),
         maxSize: input.maxSize,
+        minimumValue: typeof quantityConfig.minimumValue === 'number'
+            ? quantityConfig.minimumValue
+            : firestore_1.FieldValue.delete(),
         privacy: input.privacy,
+        stepValue: quantityConfig.stepValue,
+        targetValue: typeof quantityConfig.targetValue === 'number'
+            ? quantityConfig.targetValue
+            : firestore_1.FieldValue.delete(),
         title: input.title,
         timezone: input.timezone ?? circle?.timezone ?? 'UTC',
+        unitLabel: quantityConfig.unitLabel,
         updatedAt: now,
     };
     const batch = firebase_1.db.batch();
@@ -805,13 +848,25 @@ exports.updateCircle = (0, https_1.onCall)(async (request) => {
             commitment: input.commitment,
             commitmentCadence,
             commitmentFrequency,
+            commitmentType,
             joinMode: input.joinMode,
+            maximumValue: typeof quantityConfig.maximumValue === 'number'
+                ? quantityConfig.maximumValue
+                : firestore_1.FieldValue.delete(),
             maxSize: input.maxSize,
             memberCount,
             members: activeMemberSnapshots.docs.map(snapshot => buildPublicPreviewFromMember(snapshot.data(), snapshot.id)),
+            minimumValue: typeof quantityConfig.minimumValue === 'number'
+                ? quantityConfig.minimumValue
+                : firestore_1.FieldValue.delete(),
+            stepValue: quantityConfig.stepValue,
+            targetValue: typeof quantityConfig.targetValue === 'number'
+                ? quantityConfig.targetValue
+                : firestore_1.FieldValue.delete(),
             title: input.title,
+            unitLabel: quantityConfig.unitLabel,
             updatedAt: now,
-        });
+        }, { merge: true });
     }
     else {
         batch.delete(publicIndexRef);

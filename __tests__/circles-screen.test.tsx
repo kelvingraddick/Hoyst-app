@@ -67,12 +67,17 @@ jest.mock('../src/store/profile-store', () => ({
 let mockHomeData: HomeData;
 
 jest.mock('../src/features/home/services/home-data-service', () => {
+  function needsTapInToday(circle: CircleManagementCard) {
+    return (
+      circle.viewerMembershipStatus === 'active' &&
+      (!circle.viewerHasTappedInToday ||
+        circle.viewerTodayStatus === 'partial' ||
+        circle.viewerTodayStatus === 'failed')
+    );
+  }
+
   return {
-    canTapInToday: jest.fn(
-      (circle: CircleManagementCard) =>
-        circle.viewerMembershipStatus === 'active' &&
-        !circle.viewerHasTappedInToday,
-    ),
+    canTapInToday: jest.fn(needsTapInToday),
     createEmptyHomeData: jest.fn(() => ({
       circles: [],
       hasLoadedMemberships: false,
@@ -89,7 +94,7 @@ jest.mock('../src/features/home/services/home-data-service', () => {
         return 'view';
       }
 
-      if (!circle.viewerHasTappedInToday) {
+      if (needsTapInToday(circle)) {
         return 'check_in';
       }
 
@@ -340,6 +345,84 @@ describe('CirclesScreen render paths', () => {
       circleId: 'weekly-complete-new-day',
       source: 'tap_in',
     });
+  });
+
+  it('excludes covered quantity circles from Needs You but keeps partial and failed due', () => {
+    mockHomeData = homeData([
+      circle({
+        commitmentType: 'build',
+        currentValue: 5,
+        id: 'build-covered',
+        remainingCheckIns: 0,
+        state: 'done',
+        targetValue: 5,
+        title: 'Build Covered',
+        unitLabel: 'pages',
+        viewerCanUpdateTapIn: true,
+        viewerHasCheckedIn: true,
+        viewerHasTappedInToday: true,
+        viewerRemainingTapIns: 0,
+        viewerTodayStatus: 'done',
+      }),
+      circle({
+        commitmentType: 'limit',
+        currentValue: 4,
+        id: 'limit-covered',
+        maximumValue: 6,
+        minimumValue: 2,
+        remainingCheckIns: 0,
+        state: 'done',
+        title: 'Limit Covered',
+        unitLabel: 'servings',
+        viewerCanUpdateTapIn: true,
+        viewerHasCheckedIn: true,
+        viewerHasTappedInToday: true,
+        viewerRemainingTapIns: 0,
+        viewerTodayStatus: 'done',
+      }),
+      circle({
+        commitmentType: 'build',
+        currentValue: 3,
+        id: 'build-partial',
+        targetValue: 5,
+        title: 'Build Partial',
+        unitLabel: 'pages',
+        viewerCanUpdateTapIn: true,
+        viewerHasCheckedIn: false,
+        viewerHasTappedInToday: true,
+        viewerRemainingTapIns: 1,
+        viewerTodayStatus: 'partial',
+      }),
+      circle({
+        commitmentType: 'limit',
+        currentValue: 8,
+        id: 'limit-failed',
+        maximumValue: 6,
+        minimumValue: 2,
+        title: 'Limit Failed',
+        unitLabel: 'servings',
+        viewerCanUpdateTapIn: true,
+        viewerHasCheckedIn: false,
+        viewerHasTappedInToday: true,
+        viewerRemainingTapIns: 1,
+        viewerTodayStatus: 'failed',
+      }),
+    ]);
+    const {screen} = renderScreenWithNavigation();
+
+    const needsYouStat = screen.root.findByProps({
+      accessibilityLabel: 'Needs You, 2',
+    });
+
+    act(() => {
+      needsYouStat.props.onPress();
+    });
+
+    const filtered = JSON.stringify(screen.toJSON());
+    expect(filtered).toContain('Build Partial');
+    expect(filtered).toContain('Limit Failed');
+    expect(filtered).not.toContain('Build Covered');
+    expect(filtered).not.toContain('Limit Covered');
   });
 
   it('opens Create Circle from the header New button', () => {

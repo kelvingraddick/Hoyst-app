@@ -6,6 +6,7 @@ import type {
   CirclePrivacy,
   CommitmentCadence,
   CommitmentFrequency,
+  CommitmentType,
   GraceRule,
 } from '../../../types/models';
 
@@ -14,14 +15,20 @@ export type CreateCircleInput = {
   commitment: string;
   commitmentCadence: CommitmentCadence;
   commitmentFrequency: CommitmentFrequency;
+  commitmentType: CommitmentType;
   graceRules: {
     skip: GraceRule;
   };
   joinMode: CircleJoinMode;
+  maximumValue?: number;
   maxSize: number;
+  minimumValue?: number;
   privacy: CirclePrivacy;
+  stepValue: number;
+  targetValue?: number;
   title: string;
   timezone?: string;
+  unitLabel: string;
 };
 export type UpdateCircleInput = CreateCircleInput & {
   circleId: string;

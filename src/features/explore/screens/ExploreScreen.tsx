@@ -168,8 +168,6 @@ function ExploreSectionTitle({
   showFeaturedStar?: boolean;
   title: string;
 }) {
-  const theme = useHoystTheme();
-
   return (
     <View style={styles.sectionTitleRow}>
       <View style={styles.sectionTitleLabel}>

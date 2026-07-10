@@ -23,6 +23,7 @@ export const initialCreateCircleDraft: CreateCircleDraft = {
   category: 'Fitness',
   commitmentCadence: 'daily',
   commitmentFrequency: {tapInsPerWeek: 7},
+  commitmentType: 'build',
   title: '',
   commitment: '',
   graceRules: {
@@ -34,9 +35,12 @@ export const initialCreateCircleDraft: CreateCircleDraft = {
   joinMode: 'request_to_join',
   privacy: 'public',
   privacyMode: 'public',
+  stepValue: 1,
+  targetValue: 1,
   maxSize: 2,
   inviteCode: '',
   timezone: 'UTC',
+  unitLabel: 'Tap In',
 };
 
 export const todayCircles: TodayCircleCard[] = [
@@ -124,7 +128,8 @@ export const todayCircles: TodayCircleCard[] = [
     title: 'Sober Squad',
     category: 'Sobriety',
     commitment: 'Daily sobriety Tap In',
-    matchCopy: 'Supportive daily accountability for staying clear and connected.',
+    matchCopy:
+      'Supportive daily accountability for staying clear and connected.',
     state: 'risk',
     progressPercent: 42,
     viewerHasCheckedIn: false,
@@ -670,7 +675,8 @@ export function getCircleDetail(
       state: index === 6 ? 'today' : 'future',
     })),
   };
-  const progressPercent = summary.progressPercent ?? summary.completionRate ?? 0;
+  const progressPercent =
+    summary.progressPercent ?? summary.completionRate ?? 0;
 
   return {
     ...summary,

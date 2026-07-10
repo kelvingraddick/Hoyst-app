@@ -19,10 +19,18 @@ import {HoystTapInMark} from '../../../design/components/HoystTapInMark';
 import {radius} from '../../../design/tokens/radius';
 import {useHoystTheme} from '../../../design/theme/useHoystTheme';
 import type {RootStackParamList} from '../../../navigation/types';
-import type {CircleDetailModel} from '../../../types/models';
+import type {
+  CheckInCoverageStatus,
+  CircleDetailModel,
+  CommitmentType,
+} from '../../../types/models';
 import {useUserProfileStore} from '../../../store/profile-store';
 import {useSessionStore} from '../../../store/session-store';
 import {subscribeToMemberCircleDetail} from '../../home/services/home-data-service';
+import {
+  formatQuantityLabel,
+  formatQuantityValue,
+} from '../../commitments/commitment-logic';
 import {canShareTapInStory} from '../services/tap-in-story-share';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'TapInComplete'>;
@@ -71,6 +79,102 @@ function cleanOptionalText(value?: string) {
 
 function formatDayCount(value: number) {
   return `${value} ${value === 1 ? 'day' : 'days'}`;
+}
+
+function cleanQuantityValue(value?: number) {
+  return typeof value === 'number' && Number.isFinite(value)
+    ? Math.max(0, Math.round(value))
+    : undefined;
+}
+
+function getQuantityCoverageStatus({
+  coverageStatus,
+  status,
+}: {
+  coverageStatus?: CheckInCoverageStatus;
+  status?: RootStackParamList['TapInComplete']['status'];
+}): CheckInCoverageStatus | undefined {
+  if (coverageStatus) {
+    return coverageStatus;
+  }
+
+  if (status === 'partial' || status === 'failed') {
+    return status;
+  }
+
+  if (status === 'done') {
+    return 'covered';
+  }
+
+  return undefined;
+}
+
+function getQuantityOutcomeCopy({
+  commitmentType,
+  coverageStatus,
+}: {
+  commitmentType?: CommitmentType;
+  coverageStatus?: CheckInCoverageStatus;
+}) {
+  if (!commitmentType || commitmentType === 'avoid' || !coverageStatus) {
+    return undefined;
+  }
+
+  if (coverageStatus === 'failed') {
+    return {
+      headerTitle: 'Tap In Saved',
+      lead: 'Outside range',
+      trailing: undefined,
+    };
+  }
+
+  if (coverageStatus === 'partial') {
+    return {
+      headerTitle: 'Progress Saved',
+      lead: 'Keep building',
+      trailing: undefined,
+    };
+  }
+
+  return {
+    headerTitle: 'Tap In Complete',
+    lead: commitmentType === 'limit' ? 'Within range' : 'Goal covered',
+    trailing: undefined,
+  };
+}
+
+function getQuantityContextCopy({
+  commitmentType,
+  maximumValue,
+  minimumValue,
+  targetValue,
+  unitLabel,
+}: {
+  commitmentType?: CommitmentType;
+  maximumValue?: number;
+  minimumValue?: number;
+  targetValue?: number;
+  unitLabel: string;
+}) {
+  const cleanMaximum = cleanQuantityValue(maximumValue);
+  const cleanMinimum = cleanQuantityValue(minimumValue);
+  const cleanTarget = cleanQuantityValue(targetValue);
+
+  if (commitmentType === 'limit' && typeof cleanMaximum === 'number') {
+    if (typeof cleanMinimum === 'number') {
+      return `Range ${formatQuantityValue(
+        cleanMinimum,
+      )} to ${formatQuantityLabel(cleanMaximum, unitLabel)}`;
+    }
+
+    return `Max ${formatQuantityLabel(cleanMaximum, unitLabel)}`;
+  }
+
+  if (commitmentType === 'build' && typeof cleanTarget === 'number') {
+    return `Goal ${formatQuantityLabel(cleanTarget, unitLabel)}`;
+  }
+
+  return undefined;
 }
 
 function getStatusCopy({
@@ -139,6 +243,45 @@ export function TapInCompleteScreen({
   const note = route.params.note?.trim();
   const hasNote = Boolean(note);
   const isSkip = route.params.status === 'skip';
+  const quantityValue = cleanQuantityValue(route.params.currentValue);
+  const isQuantityCompletion =
+    route.params.commitmentType !== undefined &&
+    route.params.commitmentType !== 'avoid' &&
+    typeof quantityValue === 'number';
+  const quantityCoverageStatus = isQuantityCompletion
+    ? getQuantityCoverageStatus({
+        coverageStatus: route.params.coverageStatus,
+        status: route.params.status,
+      })
+    : undefined;
+  const quantityUnitLabel =
+    route.params.unitLabel?.trim() || (isQuantityCompletion ? 'unit' : '');
+  const quantitySummaryCopy =
+    isQuantityCompletion && typeof quantityValue === 'number'
+      ? `${formatQuantityLabel(quantityValue, quantityUnitLabel)} logged`
+      : undefined;
+  const quantityContextCopy = isQuantityCompletion
+    ? getQuantityContextCopy({
+        commitmentType: route.params.commitmentType,
+        maximumValue: route.params.maximumValue,
+        minimumValue: route.params.minimumValue,
+        targetValue: route.params.targetValue,
+        unitLabel: quantityUnitLabel,
+      })
+    : undefined;
+  const quantityOutcomeCopy = isQuantityCompletion
+    ? getQuantityOutcomeCopy({
+        commitmentType: route.params.commitmentType,
+        coverageStatus: quantityCoverageStatus,
+      })
+    : undefined;
+  const completionTone = isSkip
+    ? 'skip'
+    : quantityCoverageStatus === 'failed'
+    ? 'failed'
+    : quantityCoverageStatus === 'partial'
+    ? 'partial'
+    : 'covered';
   const snapshotDetail = useMemo<CompletionDetailSnapshot | undefined>(() => {
     const title = cleanOptionalText(route.params.circleTitle);
     const commitment = cleanOptionalText(route.params.commitment);
@@ -358,17 +501,29 @@ export function TapInCompleteScreen({
   const headerTitle = isReadyForCelebration
     ? isSkip
       ? 'Skip Recorded'
+      : quantityOutcomeCopy
+      ? quantityOutcomeCopy.headerTitle
       : 'Tap In Complete'
     : 'Finalizing Tap In';
   const loadingCopy = hasCompletionContent
     ? 'Getting the screen ready.'
     : 'Loading your circle.';
-  const statusCopy = getStatusCopy({
-    isSkip,
-    momentum: route.params.completionMomentum,
-    streakLabel: displayDetail?.streakLabel,
-  });
-  const particleColors = isSkip
+  const statusCopy =
+    quantityOutcomeCopy ??
+    getStatusCopy({
+      isSkip,
+      momentum: route.params.completionMomentum,
+      streakLabel: displayDetail?.streakLabel,
+    });
+  const particleColors =
+    completionTone === 'failed'
+      ? [
+          theme.danger,
+          theme.warning,
+          theme.accentSecondary,
+          theme.accentTertiary,
+        ]
+      : completionTone === 'skip' || completionTone === 'partial'
     ? [
         theme.warning,
         theme.accentWarmSoft,
@@ -381,6 +536,39 @@ export function TapInCompleteScreen({
         theme.accentTertiary,
         theme.accent,
       ];
+  const outcomeBackgroundColor =
+    completionTone === 'failed'
+      ? theme.danger
+      : completionTone === 'skip' || completionTone === 'partial'
+      ? theme.warning
+      : theme.success;
+  const outcomeForegroundColor =
+    completionTone === 'failed'
+      ? theme.dangerForeground
+      : completionTone === 'skip' || completionTone === 'partial'
+      ? theme.warningForeground
+      : theme.successForeground;
+  const statusIconColor =
+    completionTone === 'covered' ? theme.accentWarmSoft : outcomeForegroundColor;
+  const statusLeadColor =
+    completionTone === 'covered'
+      ? theme.isDark
+        ? theme.textMuted
+        : '#8F8CB2'
+      : outcomeForegroundColor;
+  const statusDotColor =
+    completionTone === 'covered' ? theme.accentWarm : outcomeForegroundColor;
+  const statusTrailingColor =
+    completionTone === 'covered'
+      ? theme.accentWarmForeground
+      : outcomeForegroundColor;
+  const emptyNoteCopy = isSkip
+    ? 'No note added. Your grace skip still counts.'
+    : quantityCoverageStatus === 'failed'
+    ? 'No note added. Your Tap In was saved.'
+    : quantityCoverageStatus === 'partial'
+    ? 'No note added. Your progress was saved.'
+    : 'No note added. Your Tap In still counts.';
   const haloAnimatedStyle = {
     opacity: haloProgress.interpolate({
       inputRange: [0, 0.18, 0.6, 1],
@@ -446,12 +634,8 @@ export function TapInCompleteScreen({
                 style={[
                   styles.halo,
                   {
-                    backgroundColor: isSkip
-                      ? `${theme.warning}20`
-                      : `${theme.success}20`,
-                    borderColor: isSkip
-                      ? `${theme.warningForeground}36`
-                      : `${theme.successForeground}36`,
+                    backgroundColor: `${outcomeBackgroundColor}20`,
+                    borderColor: `${outcomeForegroundColor}36`,
                   },
                   haloAnimatedStyle,
                 ]}
@@ -529,9 +713,7 @@ export function TapInCompleteScreen({
               {isReadyForCelebration ? (
                 <View style={styles.statusRow}>
                   <Flame
-                    color={
-                      isSkip ? theme.warningForeground : theme.accentWarmSoft
-                    }
+                    color={statusIconColor}
                     size={16}
                     strokeWidth={2.7}
                   />
@@ -539,13 +721,7 @@ export function TapInCompleteScreen({
                     numberOfLines={1}
                     style={[
                       styles.statusLead,
-                      {
-                        color: isSkip
-                          ? theme.warningForeground
-                          : theme.isDark
-                          ? theme.textMuted
-                          : '#8F8CB2',
-                      },
+                      {color: statusLeadColor},
                     ]}>
                     {statusCopy.lead}
                   </HoystText>
@@ -554,22 +730,14 @@ export function TapInCompleteScreen({
                       <View
                         style={[
                           styles.statusDot,
-                          {
-                            backgroundColor: isSkip
-                              ? theme.warningForeground
-                              : theme.accentWarm,
-                          },
+                          {backgroundColor: statusDotColor},
                         ]}
                       />
                       <HoystText
                         numberOfLines={1}
                         style={[
                           styles.statusTrailing,
-                          {
-                            color: isSkip
-                              ? theme.warningForeground
-                              : theme.accentWarmForeground,
-                          },
+                          {color: statusTrailingColor},
                         ]}>
                         {statusCopy.trailing}
                       </HoystText>
@@ -601,14 +769,24 @@ export function TapInCompleteScreen({
               <HoystText numberOfLines={2} style={styles.summaryTitle}>
                 {commitment}
               </HoystText>
+              {quantitySummaryCopy ? (
+                <View style={styles.quantitySummary}>
+                  <HoystText
+                    numberOfLines={1}
+                    style={styles.quantitySummaryValue}>
+                    {quantitySummaryCopy}
+                  </HoystText>
+                  {quantityContextCopy ? (
+                    <HoystText tone="muted" variant="caption">
+                      {quantityContextCopy}
+                    </HoystText>
+                  ) : null}
+                </View>
+              ) : null}
               <HoystText
                 style={styles.summaryNote}
                 tone={hasNote ? 'primary' : 'muted'}>
-                {hasNote
-                  ? note
-                  : isSkip
-                  ? 'No note added. Your grace skip still counts.'
-                  : 'No note added. Your Tap In still counts.'}
+                {hasNote ? note : emptyNoteCopy}
               </HoystText>
               {route.params.photoUri ? (
                 <Image
@@ -741,6 +919,15 @@ const styles = StyleSheet.create({
   particle: {
     borderRadius: radius.pill,
     position: 'absolute',
+  },
+  quantitySummary: {
+    gap: 3,
+  },
+  quantitySummaryValue: {
+    fontSize: 16,
+    fontWeight: '800',
+    letterSpacing: 0,
+    lineHeight: 20,
   },
   screenFrame: {
     justifyContent: 'space-between',

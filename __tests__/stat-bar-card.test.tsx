@@ -4,6 +4,24 @@ import renderer, {act} from 'react-test-renderer';
 
 import {StatBarCard} from '../src/design/components/StatBarCard';
 
+jest.mock('@react-native-community/blur', () => {
+  const MockReact = require('react');
+  const {View: MockView} = require('react-native');
+
+  return {
+    BlurView: ({children, ...props}: {children?: React.ReactNode}) =>
+      MockReact.createElement(MockView, props, children),
+  };
+});
+
+jest.mock('react-native-linear-gradient', () => {
+  const MockReact = require('react');
+  const {View: MockView} = require('react-native');
+
+  return ({children, ...props}: {children?: React.ReactNode}) =>
+    MockReact.createElement(MockView, props, children);
+});
+
 jest.mock('../src/store/settings-store', () => ({
   useSettingsStore: (selector: (state: {appearance: 'light'}) => unknown) =>
     selector({appearance: 'light'}),

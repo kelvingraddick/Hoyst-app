@@ -65,6 +65,7 @@ describe('circle service', () => {
       commitment: 'Move for 30 minutes',
       commitmentCadence: 'weekly' as const,
       commitmentFrequency: {tapInsPerWeek: 4},
+      commitmentType: 'build' as const,
       graceRules: {
         skip: {
           allowance: 2,
@@ -74,8 +75,11 @@ describe('circle service', () => {
       joinMode: 'open' as const,
       maxSize: 12,
       privacy: 'public' as const,
+      stepValue: 1,
+      targetValue: 1,
       timezone: 'America/New_York',
       title: 'Morning movers',
+      unitLabel: 'Tap In',
     };
     mockGetIdToken.mockResolvedValueOnce('id-token-1');
     (global.fetch as jest.Mock).mockResolvedValueOnce({

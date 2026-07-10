@@ -22,9 +22,12 @@ import {
 } from '../notifications';
 import {
   getCommitmentCadence,
+  getCommitmentType,
   getInputCommitmentCadence,
+  getQuantityConfig,
   getRequiredTapIns,
   getStoredCommitmentFrequency,
+  isCoveredCheckInData,
 } from '../shared/commitments';
 import {createCircleThreadActivity, getCircleThreadNudgeText} from '../thread';
 import {getNudgeTargetUids} from './nudge-targets';
@@ -42,16 +45,22 @@ const createCircleSchema = z.object({
   commitment: z.string().trim().min(1).max(160),
   commitmentCadence: z.enum(['daily', 'weekly', 'monthly']).optional(),
   commitmentFrequency: commitmentFrequencySchema,
+  commitmentType: z.enum(['build', 'limit', 'avoid']).default('build'),
   graceRules: z
     .object({
       skip: graceRuleSchema,
     })
     .optional(),
   joinMode: z.enum(['open', 'request_to_join', 'invite_only']),
+  maximumValue: z.number().int().min(0).max(100000).optional(),
   maxSize: z.number().int().min(2).max(100),
+  minimumValue: z.number().int().min(0).max(100000).optional(),
   privacy: z.enum(['public', 'private']),
+  stepValue: z.number().min(0.01).max(100000).default(1),
+  targetValue: z.number().int().min(0).max(100000).optional(),
   timezone: z.string().trim().min(1).max(80).optional(),
   title: z.string().trim().min(1).max(80),
+  unitLabel: z.string().trim().min(1).max(32).default('Tap In'),
 });
 const joinCircleSchema = z.object({
   circleId: z.string().trim().min(1),
@@ -259,10 +268,6 @@ function getCircleRefFromCheckInRef(ref: DocumentReference<DocumentData>) {
   return {circleRef, dayRef};
 }
 
-function isCoveredCheckInStatus(value: unknown) {
-  return value === 'done' || value === 'skip';
-}
-
 function withoutPublicMemberPreview(members: unknown, uid: string) {
   return Array.isArray(members)
     ? members.filter(
@@ -297,12 +302,12 @@ async function deleteCircleCheckInsForMember(circleId: string, uid: string) {
       continue;
     }
 
-    const status = checkInSnapshot.data().status;
+    const checkIn = checkInSnapshot.data();
     const batch = db.batch();
 
     batch.delete(checkInSnapshot.ref);
 
-    if (isCoveredCheckInStatus(status)) {
+    if (isCoveredCheckInData(checkIn)) {
       batch.set(
         dayRef,
         {
@@ -338,12 +343,15 @@ export const createCircle = onCall(
       commitmentCadence,
       input.commitmentFrequency,
     );
+    const commitmentType = getCommitmentType(input);
+    const quantityConfig = getQuantityConfig(input);
     const circle = {
       category: input.category,
       createdAt: now,
       commitment: input.commitment,
       commitmentCadence,
       commitmentFrequency,
+      commitmentType,
       graceRules: input.graceRules ?? {
         skip: {
           allowance: 2,
@@ -352,12 +360,23 @@ export const createCircle = onCall(
       },
       inviteCode,
       joinMode: input.joinMode,
+      ...(typeof quantityConfig.maximumValue === 'number'
+        ? {maximumValue: quantityConfig.maximumValue}
+        : {}),
+      ...(typeof quantityConfig.minimumValue === 'number'
+        ? {minimumValue: quantityConfig.minimumValue}
+        : {}),
       maxSize: input.maxSize,
       memberCount: 1,
       ownerId: uid,
       privacy: input.privacy,
+      stepValue: quantityConfig.stepValue,
+      ...(typeof quantityConfig.targetValue === 'number'
+        ? {targetValue: quantityConfig.targetValue}
+        : {}),
       title: input.title,
       timezone: input.timezone ?? profile.timezone ?? 'UTC',
+      unitLabel: quantityConfig.unitLabel,
       updatedAt: now,
     };
 
@@ -379,11 +398,23 @@ export const createCircle = onCall(
         commitment: input.commitment,
         commitmentCadence,
         commitmentFrequency,
+        commitmentType,
         joinMode: input.joinMode,
+        ...(typeof quantityConfig.maximumValue === 'number'
+          ? {maximumValue: quantityConfig.maximumValue}
+          : {}),
+        ...(typeof quantityConfig.minimumValue === 'number'
+          ? {minimumValue: quantityConfig.minimumValue}
+          : {}),
         maxSize: input.maxSize,
         memberCount: 1,
         members: [buildMemberPublicPreview(profile, uid)],
+        stepValue: quantityConfig.stepValue,
+        ...(typeof quantityConfig.targetValue === 'number'
+          ? {targetValue: quantityConfig.targetValue}
+          : {}),
         title: input.title,
+        unitLabel: quantityConfig.unitLabel,
         updatedAt: now,
       });
     }
@@ -840,7 +871,7 @@ export const nudgeCircleMembers = onCall(
     const todayCoveredUids = new Set<string>();
 
     todayCheckInSnapshots.docs.forEach(doc => {
-      if (['done', 'skip'].includes(doc.data().status)) {
+      if (isCoveredCheckInData(doc.data())) {
         todayCoveredUids.add(asOptionalString(doc.data().uid) ?? doc.id);
       }
     });
@@ -852,7 +883,7 @@ export const nudgeCircleMembers = onCall(
 
     scoringSnapshots.forEach(snapshot => {
       snapshot.docs.forEach(doc => {
-        if (['done', 'skip'].includes(doc.data().status)) {
+        if (isCoveredCheckInData(doc.data())) {
           const targetUid = asOptionalString(doc.data().uid) ?? doc.id;
           coveredCounts.set(targetUid, (coveredCounts.get(targetUid) ?? 0) + 1);
         }
@@ -1085,11 +1116,14 @@ export const updateCircle = onCall(async request => {
     commitmentCadence,
     input.commitmentFrequency,
   );
+  const commitmentType = getCommitmentType(input);
+  const quantityConfig = getQuantityConfig(input);
   const circleUpdate = {
     category: input.category,
     commitment: input.commitment,
     commitmentCadence,
     commitmentFrequency,
+    commitmentType,
     graceRules: input.graceRules ?? {
       skip: {
         allowance: 2,
@@ -1097,10 +1131,24 @@ export const updateCircle = onCall(async request => {
       },
     },
     joinMode: input.joinMode,
+    maximumValue:
+      typeof quantityConfig.maximumValue === 'number'
+        ? quantityConfig.maximumValue
+        : FieldValue.delete(),
     maxSize: input.maxSize,
+    minimumValue:
+      typeof quantityConfig.minimumValue === 'number'
+        ? quantityConfig.minimumValue
+        : FieldValue.delete(),
     privacy: input.privacy,
+    stepValue: quantityConfig.stepValue,
+    targetValue:
+      typeof quantityConfig.targetValue === 'number'
+        ? quantityConfig.targetValue
+        : FieldValue.delete(),
     title: input.title,
     timezone: input.timezone ?? circle?.timezone ?? 'UTC',
+    unitLabel: quantityConfig.unitLabel,
     updatedAt: now,
   };
   const batch = db.batch();
@@ -1108,20 +1156,39 @@ export const updateCircle = onCall(async request => {
   batch.update(circleRef, circleUpdate);
 
   if (input.privacy === 'public') {
-    batch.set(publicIndexRef, {
-      category: input.category,
-      commitment: input.commitment,
-      commitmentCadence,
-      commitmentFrequency,
-      joinMode: input.joinMode,
-      maxSize: input.maxSize,
-      memberCount,
-      members: activeMemberSnapshots.docs.map(snapshot =>
-        buildPublicPreviewFromMember(snapshot.data(), snapshot.id),
-      ),
-      title: input.title,
-      updatedAt: now,
-    });
+    batch.set(
+      publicIndexRef,
+      {
+        category: input.category,
+        commitment: input.commitment,
+        commitmentCadence,
+        commitmentFrequency,
+        commitmentType,
+        joinMode: input.joinMode,
+        maximumValue:
+          typeof quantityConfig.maximumValue === 'number'
+            ? quantityConfig.maximumValue
+            : FieldValue.delete(),
+        maxSize: input.maxSize,
+        memberCount,
+        members: activeMemberSnapshots.docs.map(snapshot =>
+          buildPublicPreviewFromMember(snapshot.data(), snapshot.id),
+        ),
+        minimumValue:
+          typeof quantityConfig.minimumValue === 'number'
+            ? quantityConfig.minimumValue
+            : FieldValue.delete(),
+        stepValue: quantityConfig.stepValue,
+        targetValue:
+          typeof quantityConfig.targetValue === 'number'
+            ? quantityConfig.targetValue
+            : FieldValue.delete(),
+        title: input.title,
+        unitLabel: quantityConfig.unitLabel,
+        updatedAt: now,
+      },
+      {merge: true},
+    );
   } else {
     batch.delete(publicIndexRef);
   }

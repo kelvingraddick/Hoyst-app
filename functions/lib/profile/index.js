@@ -4,6 +4,7 @@ exports.getProfileSummary = void 0;
 exports.summarizeProfileCheckIns = summarizeProfileCheckIns;
 const https_1 = require("firebase-functions/v2/https");
 const firebase_1 = require("../firebase");
+const commitments_1 = require("../shared/commitments");
 const streak_1 = require("./streak");
 async function requireCompletedProfile(uid) {
     if (!uid) {
@@ -36,11 +37,12 @@ function summarizeProfileCheckIns({ activeCircleIds, checkInSnapshots, timezone,
     const coveredCheckInDateKeys = [];
     let totalTapIns = 0;
     checkInSnapshots.forEach(snapshot => {
-        const status = snapshot.data().status;
-        if (status === 'done') {
+        const checkIn = snapshot.data();
+        const status = checkIn.status;
+        if (status === 'done' && (0, commitments_1.isCoveredCheckInData)(checkIn)) {
             totalTapIns += 1;
         }
-        if (status !== 'done' && status !== 'skip') {
+        if (!(0, commitments_1.isCoveredCheckInData)(checkIn)) {
             return;
         }
         const dateKey = getCheckInDateKey(snapshot, timezone);
@@ -76,7 +78,7 @@ exports.getProfileSummary = (0, https_1.onCall)(async (request) => {
         .collectionGroup('checkIns')
         .where('uid', '==', uid)
         .get();
-    const { activeCoveredCheckInDateKeys, coveredCheckInDateKeys, totalTapIns, } = summarizeProfileCheckIns({
+    const { activeCoveredCheckInDateKeys, coveredCheckInDateKeys, totalTapIns } = summarizeProfileCheckIns({
         activeCircleIds,
         checkInSnapshots: checkInsSnapshot.docs,
         timezone,

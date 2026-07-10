@@ -1551,7 +1551,7 @@ async function sendTapInReminders(kind) {
             : periodCheckInSnapshots;
         scoringSnapshots.forEach(snapshot => {
             snapshot.docs.forEach(doc => {
-                if (doc.data().status === 'done' || doc.data().status === 'skip') {
+                if ((0, commitments_1.isCoveredCheckInData)(doc.data())) {
                     const uid = asString(doc.data().uid, doc.id);
                     coveredCounts.set(uid, (coveredCounts.get(uid) ?? 0) + 1);
                 }
@@ -1655,7 +1655,7 @@ async function sendCircleEngagementPrompts() {
         const coveredCounts = new Map();
         periodCheckInSnapshots.forEach(snapshot => {
             snapshot.docs.forEach(doc => {
-                if (doc.data().status === 'done' || doc.data().status === 'skip') {
+                if ((0, commitments_1.isCoveredCheckInData)(doc.data())) {
                     const uid = asString(doc.data().uid, doc.id);
                     coveredCounts.set(uid, (coveredCounts.get(uid) ?? 0) + 1);
                 }

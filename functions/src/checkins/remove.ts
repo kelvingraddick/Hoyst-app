@@ -6,9 +6,11 @@ export type RemoveTapInDecision = {
 };
 
 export function getRemoveTapInDecision({
+  coverageStatus,
   checkInStatus,
   memberStatus,
 }: {
+  coverageStatus?: unknown;
   checkInStatus?: unknown;
   memberStatus?: unknown;
 }): RemoveTapInDecision {
@@ -16,10 +18,28 @@ export function getRemoveTapInDecision({
     throw new HttpsError('permission-denied', 'Join this circle first.');
   }
 
-  if (checkInStatus !== 'done' && checkInStatus !== 'skip') {
+  if (
+    checkInStatus !== 'done' &&
+    checkInStatus !== 'skip' &&
+    checkInStatus !== 'partial' &&
+    checkInStatus !== 'failed'
+  ) {
     return {
       checkInCountDelta: 0,
       removed: false,
+    };
+  }
+
+  if (
+    checkInStatus === 'partial' ||
+    checkInStatus === 'failed' ||
+    (checkInStatus === 'done' &&
+      coverageStatus !== undefined &&
+      coverageStatus !== 'covered')
+  ) {
+    return {
+      checkInCountDelta: 0,
+      removed: true,
     };
   }
 

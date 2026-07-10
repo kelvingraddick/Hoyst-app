@@ -110,6 +110,26 @@ function renderCompleteScreen(
   );
 }
 
+async function renderReadyCompleteScreen(
+  params: Partial<RootStackParamList['TapInComplete']> = {},
+) {
+  let tree: renderer.ReactTestRenderer | undefined;
+
+  await act(async () => {
+    tree = renderCompleteScreen(params);
+  });
+
+  const layoutTarget = tree!.root
+    .findAllByType(View)
+    .find(node => typeof node.props.onLayout === 'function');
+
+  await act(async () => {
+    layoutTarget!.props.onLayout();
+  });
+
+  return tree!;
+}
+
 describe('TapInCompleteScreen', () => {
   beforeEach(() => {
     mockSubscribeToMemberCircleDetail.mockClear();
@@ -172,6 +192,66 @@ describe('TapInCompleteScreen', () => {
     expect(logo.type).toBe(HoystTapInMark);
     expect(logo.props.logoRotation).toBeDefined();
     expect(tree!.root.findAllByType(TapInRingMark)).toHaveLength(0);
+  });
+
+  it('renders covered Build quantity completion context', async () => {
+    const tree = await renderReadyCompleteScreen({
+      commitmentType: 'build',
+      coverageStatus: 'covered',
+      currentValue: 5,
+      status: 'done',
+      targetValue: 5,
+      unitLabel: 'pages',
+    });
+
+    const output = JSON.stringify(tree.toJSON());
+
+    expect(output).toContain('Tap In Complete');
+    expect(output).toContain('Goal covered');
+    expect(output).toContain('5 pages logged');
+    expect(output).toContain('Goal 5 pages');
+    expect(output).toContain('Share Story');
+  });
+
+  it('renders partial Build quantity completion context', async () => {
+    const tree = await renderReadyCompleteScreen({
+      commitmentType: 'build',
+      coverageStatus: 'partial',
+      currentValue: 3,
+      status: 'partial',
+      targetValue: 5,
+      unitLabel: 'pages',
+    });
+
+    const output = JSON.stringify(tree.toJSON());
+
+    expect(output).toContain('Progress Saved');
+    expect(output).toContain('Keep building');
+    expect(output).toContain('3 pages logged');
+    expect(output).toContain('Goal 5 pages');
+    expect(output).toContain('No note added. Your progress was saved.');
+    expect(output).toContain('Share Story');
+  });
+
+  it('renders failed Limit quantity completion context with story sharing', async () => {
+    const tree = await renderReadyCompleteScreen({
+      commitmentType: 'limit',
+      coverageStatus: 'failed',
+      currentValue: 8,
+      maximumValue: 6,
+      minimumValue: 2,
+      status: 'failed',
+      unitLabel: 'servings',
+    });
+
+    const output = JSON.stringify(tree.toJSON());
+
+    expect(output).toContain('Tap In Saved');
+    expect(output).toContain('Outside range');
+    expect(output).toContain('8 servings logged');
+    expect(output).toContain('Range 2 to 6 servings');
+    expect(output).toContain('No note added. Your Tap In was saved.');
+    expect(output).toContain('Share Story');
   });
 
   it('opens the dedicated story share screen from Share Story', async () => {

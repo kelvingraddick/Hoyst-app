@@ -106,6 +106,10 @@ function getPartialProgress(day: WeekProgressDay) {
 }
 
 function getDayAccessibilityLabel(day: WeekProgressDay, weekdayLabel: string) {
+  if (day.quantityLabel) {
+    return `${weekdayLabel}: ${day.quantityLabel}`;
+  }
+
   if (
     typeof day.coveredCount === 'number' &&
     typeof day.totalCount === 'number'
@@ -258,7 +262,19 @@ function DayCell({day}: {day: WeekProgressDay}) {
                 day.state === 'done' ? 'rgba(34,165,101,0.4)' : 'transparent',
             },
           ]}>
-          {day.state === 'done' ? (
+          {day.quantityLabel ? (
+            <HoystText
+              adjustsFontSizeToFit
+              allowFontScaling={false}
+              minimumFontScale={0.65}
+              numberOfLines={1}
+              style={[
+                styles.quantityValue,
+                {color: day.state === 'done' ? '#FFFFFF' : visual.label},
+              ]}>
+              {day.quantityLabel}
+            </HoystText>
+          ) : day.state === 'done' ? (
             <DayCheckIcon />
           ) : partialProgress !== undefined ? (
             <DayPartialRing dateKey={day.dateKey} progress={partialProgress} />
@@ -365,6 +381,14 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.5,
     shadowRadius: 6,
     width: 32,
+  },
+  quantityValue: {
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0,
+    lineHeight: 13,
+    maxWidth: 26,
+    textAlign: 'center',
   },
   todayBadgeSlot: {
     bottom: -7,

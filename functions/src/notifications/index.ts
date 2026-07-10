@@ -13,6 +13,7 @@ import {
   type CommitmentCadence,
   getCommitmentCadence,
   getRequiredTapIns,
+  isCoveredCheckInData,
 } from '../shared/commitments';
 
 export const oneSignalRestApiKey = defineSecret('ONESIGNAL_REST_API_KEY');
@@ -2585,7 +2586,7 @@ async function sendTapInReminders(kind: 'final' | 'midday') {
 
     scoringSnapshots.forEach(snapshot => {
       snapshot.docs.forEach(doc => {
-        if (doc.data().status === 'done' || doc.data().status === 'skip') {
+        if (isCoveredCheckInData(doc.data())) {
           const uid = asString(doc.data().uid, doc.id);
           coveredCounts.set(uid, (coveredCounts.get(uid) ?? 0) + 1);
         }
@@ -2730,7 +2731,7 @@ async function sendCircleEngagementPrompts() {
 
     periodCheckInSnapshots.forEach(snapshot => {
       snapshot.docs.forEach(doc => {
-        if (doc.data().status === 'done' || doc.data().status === 'skip') {
+        if (isCoveredCheckInData(doc.data())) {
           const uid = asString(doc.data().uid, doc.id);
           coveredCounts.set(uid, (coveredCounts.get(uid) ?? 0) + 1);
         }

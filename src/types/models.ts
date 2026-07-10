@@ -5,13 +5,19 @@ export type CirclePrivacyMode = 'link_only' | 'private' | 'public';
 export type CircleJoinMode = 'open' | 'invite_only' | 'request_to_join';
 export type CircleMembershipStatus = 'active' | 'pending';
 export type MemberRole = 'owner' | 'admin' | 'member';
-export type CheckInStatus = 'done' | 'skip' | 'rest';
+export type CheckInStatus = 'done' | 'skip' | 'rest' | 'partial' | 'failed';
+export type CheckInCoverageStatus =
+  | 'covered'
+  | 'skipped'
+  | 'partial'
+  | 'failed';
 export type TodayCircleState = 'active' | 'done' | 'risk';
 export type CircleMemberState = 'done' | 'pending' | 'missed' | 'skipped';
 export type CircleActivityTone = 'success' | 'pending' | 'alert';
 export type ProgressDayState = 'done' | 'missed' | 'today' | 'future';
 export type CircleJoinLabel = 'Open seats' | 'Request to join';
 export type CommitmentCadence = 'daily' | 'weekly' | 'monthly';
+export type CommitmentType = 'build' | 'limit' | 'avoid';
 export type OpportunityStatus =
   | 'upcoming'
   | 'available'
@@ -44,6 +50,14 @@ export type GraceRule = {
 export type CommitmentFrequency = {
   tapInsPerWeek: number;
   opportunitiesPerPeriod?: number;
+};
+
+export type CommitmentQuantityConfig = {
+  maximumValue?: number;
+  minimumValue?: number;
+  stepValue: number;
+  targetValue?: number;
+  unitLabel: string;
 };
 
 export type CommitmentSchedule = {
@@ -88,8 +102,14 @@ export type Circle = {
   title: string;
   category: string;
   commitment: string;
+  commitmentType?: CommitmentType;
   commitmentCadence: CommitmentCadence;
   commitmentFrequency: CommitmentFrequency;
+  maximumValue?: number;
+  minimumValue?: number;
+  stepValue?: number;
+  targetValue?: number;
+  unitLabel?: string;
   timezone: string;
   maxSize: number;
   privacy: CirclePrivacy;
@@ -121,6 +141,8 @@ export type CircleGroupProgressDay = {
   coveredCount: number;
   dateKey: string;
   label: string;
+  quantityLabel?: string;
+  quantityValue?: number;
   state: ProgressDayState;
   totalCount: number;
 };
@@ -222,9 +244,16 @@ export type InboxEvent = {
 };
 
 export type ViewerTodayCheckIn = {
-  status: Extract<CheckInStatus, 'done' | 'skip'>;
+  coverageStatus?: CheckInCoverageStatus;
+  currentValue?: number;
+  maximumValue?: number;
+  minimumValue?: number;
   note?: string;
   photoUrl?: string;
+  status: Exclude<CheckInStatus, 'rest'>;
+  stepValue?: number;
+  targetValue?: number;
+  unitLabel?: string;
 };
 
 export type CircleSummary = {
@@ -232,8 +261,16 @@ export type CircleSummary = {
   title: string;
   category: string;
   commitment: string;
+  commitmentType?: CommitmentType;
   commitmentCadence?: CommitmentCadence;
   commitmentFrequency?: CommitmentFrequency;
+  currentValue?: number;
+  maximumValue?: number;
+  minimumValue?: number;
+  quantityLabel?: string;
+  stepValue?: number;
+  targetValue?: number;
+  unitLabel?: string;
   streakLabel: string;
   members: CircleMemberStatus[];
   state?: TodayCircleState;
@@ -260,9 +297,11 @@ export type CircleSummary = {
   completionLabel?: string;
   progressLabel?: string;
   timezone?: string;
+  viewerCanUpdateTapIn?: boolean;
   viewerHasTappedInToday?: boolean;
   viewerTodayCheckIn?: ViewerTodayCheckIn;
   viewerAvailableSkips?: number;
+  viewerRemainingAmount?: number;
   viewerRemainingTapIns?: number;
 };
 
@@ -306,6 +345,7 @@ export type CircleDetailModel = CircleSummary & {
 
 export type CreateCircleDraft = {
   category: string;
+  commitmentType: CommitmentType;
   commitmentCadence: CommitmentCadence;
   graceRules: {
     skip: GraceRule;
@@ -314,8 +354,13 @@ export type CreateCircleDraft = {
   title: string;
   commitment: string;
   commitmentFrequency: CommitmentFrequency;
+  maximumValue?: number;
+  minimumValue?: number;
   privacy: CirclePrivacy;
   privacyMode: CirclePrivacyMode;
+  stepValue: number;
+  targetValue?: number;
+  unitLabel: string;
   maxSize: number;
   inviteCode: string;
   timezone: string;

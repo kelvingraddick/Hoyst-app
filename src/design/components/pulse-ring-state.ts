@@ -9,6 +9,7 @@ type PulseRingCircleInput = Pick<
   | 'viewerHasCheckedIn'
   | 'viewerHasTappedInToday'
   | 'viewerMembershipStatus'
+  | 'viewerTodayStatus'
 >;
 
 export function getPulseRingStateForCircle(

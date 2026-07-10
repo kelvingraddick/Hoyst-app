@@ -29,17 +29,23 @@ const starterCircleSchema = zod_1.z.object({
     commitment: zod_1.z.string().trim().min(1).max(160),
     commitmentCadence: zod_1.z.enum(['daily', 'weekly', 'monthly']).optional(),
     commitmentFrequency: commitmentFrequencySchema,
+    commitmentType: zod_1.z.enum(['build', 'limit', 'avoid']).default('build'),
     graceRules: zod_1.z
         .object({
         skip: graceRuleSchema,
     })
         .optional(),
     joinMode: zod_1.z.enum(['open', 'request_to_join', 'invite_only']),
+    maximumValue: zod_1.z.number().int().min(0).max(100000).optional(),
     maxSize: zod_1.z.number().int().min(2).max(100),
+    minimumValue: zod_1.z.number().int().min(0).max(100000).optional(),
     privacy: zod_1.z.enum(['public', 'private']),
     setupId: zod_1.z.string().trim().min(1).max(120),
+    stepValue: zod_1.z.number().min(0.01).max(100000).default(1),
+    targetValue: zod_1.z.number().int().min(0).max(100000).optional(),
     timezone: zod_1.z.string().trim().min(1).max(80).optional(),
     title: zod_1.z.string().trim().min(1).max(80),
+    unitLabel: zod_1.z.string().trim().min(1).max(32).default('Tap In'),
 });
 const starterCircleHiddenDefaults = {
     graceRules: {
@@ -164,10 +170,10 @@ async function deleteNonOwnedCheckIns(uid, ownedCircleIds) {
         if (ownedCircleIds.has(circleRef.id)) {
             continue;
         }
-        const status = checkInSnapshot.data().status;
+        const checkIn = checkInSnapshot.data();
         const batch = firebase_1.db.batch();
         batch.delete(checkInSnapshot.ref);
-        if (status === 'done' || status === 'skip') {
+        if ((0, commitments_1.isCoveredCheckInData)(checkIn)) {
             batch.set(dayRef, {
                 checkInCount: firestore_1.FieldValue.increment(-1),
                 updatedAt: firestore_1.FieldValue.serverTimestamp(),
@@ -206,7 +212,10 @@ async function deleteAccountDocuments(uid) {
     handleRefs.forEach(handleRef => {
         batch.delete(handleRef);
     });
-    await Promise.all([batch.commit(), deleteStoragePrefix(`users/${uid}/avatar/`)]);
+    await Promise.all([
+        batch.commit(),
+        deleteStoragePrefix(`users/${uid}/avatar/`),
+    ]);
 }
 async function deleteAuthUser(uid) {
     try {
@@ -265,7 +274,9 @@ exports.completeProfile = (0, https_1.onCall)(async (request) => {
             const existingCircleRef = firebase_1.db
                 .collection('circles')
                 .doc(existingStarterCircleId);
-            const existingMemberRef = existingCircleRef.collection('members').doc(uid);
+            const existingMemberRef = existingCircleRef
+                .collection('members')
+                .doc(uid);
             const [existingCircleSnapshot, existingMemberSnapshot] = await Promise.all([
                 transaction.get(existingCircleRef),
                 transaction.get(existingMemberRef),
@@ -284,7 +295,9 @@ exports.completeProfile = (0, https_1.onCall)(async (request) => {
             setupId: input.starterCircle?.setupId,
         });
         transaction.set(handleRef, {
-            createdAt: handleSnapshot.exists ? handleSnapshot.data()?.createdAt : now,
+            createdAt: handleSnapshot.exists
+                ? handleSnapshot.data()?.createdAt
+                : now,
             handle: input.handle,
             uid,
         }, { merge: true });
@@ -293,25 +306,41 @@ exports.completeProfile = (0, https_1.onCall)(async (request) => {
             (starterCircleDecision === 'create' || starterCircleDecision === 'repair')) {
             const circleRef = firebase_1.db.collection('circles').doc();
             const memberRef = circleRef.collection('members').doc(uid);
-            const publicIndexRef = firebase_1.db.collection('publicCircleIndex').doc(circleRef.id);
+            const publicIndexRef = firebase_1.db
+                .collection('publicCircleIndex')
+                .doc(circleRef.id);
             const inviteCode = createInviteCode();
             const commitmentCadence = (0, commitments_1.getInputCommitmentCadence)(input.starterCircle.commitmentCadence, input.starterCircle.commitmentFrequency);
             const commitmentFrequency = (0, commitments_1.getStoredCommitmentFrequency)(commitmentCadence, input.starterCircle.commitmentFrequency);
+            const commitmentType = (0, commitments_1.getCommitmentType)(input.starterCircle);
+            const quantityConfig = (0, commitments_1.getQuantityConfig)(input.starterCircle);
             const circle = {
                 category: input.starterCircle.category,
                 createdAt: now,
                 commitment: input.starterCircle.commitment,
                 commitmentCadence,
                 commitmentFrequency,
+                commitmentType,
                 graceRules: starterCircleHiddenDefaults.graceRules,
                 inviteCode,
                 joinMode: input.starterCircle.joinMode,
+                ...(typeof quantityConfig.maximumValue === 'number'
+                    ? { maximumValue: quantityConfig.maximumValue }
+                    : {}),
+                ...(typeof quantityConfig.minimumValue === 'number'
+                    ? { minimumValue: quantityConfig.minimumValue }
+                    : {}),
                 maxSize: starterCircleHiddenDefaults.maxSize,
                 memberCount: 1,
                 ownerId: uid,
                 privacy: input.starterCircle.privacy,
+                stepValue: quantityConfig.stepValue,
+                ...(typeof quantityConfig.targetValue === 'number'
+                    ? { targetValue: quantityConfig.targetValue }
+                    : {}),
                 title: input.starterCircle.title,
                 timezone: input.starterCircle.timezone ?? input.timezone,
+                unitLabel: quantityConfig.unitLabel,
                 updatedAt: now,
             };
             transaction.set(circleRef, circle);
@@ -330,7 +359,14 @@ exports.completeProfile = (0, https_1.onCall)(async (request) => {
                     commitment: input.starterCircle.commitment,
                     commitmentCadence,
                     commitmentFrequency,
+                    commitmentType,
                     joinMode: input.starterCircle.joinMode,
+                    ...(typeof quantityConfig.maximumValue === 'number'
+                        ? { maximumValue: quantityConfig.maximumValue }
+                        : {}),
+                    ...(typeof quantityConfig.minimumValue === 'number'
+                        ? { minimumValue: quantityConfig.minimumValue }
+                        : {}),
                     maxSize: starterCircleHiddenDefaults.maxSize,
                     memberCount: 1,
                     members: [
@@ -341,7 +377,12 @@ exports.completeProfile = (0, https_1.onCall)(async (request) => {
                             uid,
                         },
                     ],
+                    stepValue: quantityConfig.stepValue,
+                    ...(typeof quantityConfig.targetValue === 'number'
+                        ? { targetValue: quantityConfig.targetValue }
+                        : {}),
                     title: input.starterCircle.title,
+                    unitLabel: quantityConfig.unitLabel,
                     updatedAt: now,
                 });
             }

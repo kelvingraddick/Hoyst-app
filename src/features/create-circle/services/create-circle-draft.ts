@@ -5,6 +5,7 @@ import type {
   CircleSummary,
   CommitmentCadence,
   CommitmentFrequency,
+  CommitmentType,
   CreateCircleDraft,
   GraceRule,
 } from '../../../types/models';
@@ -14,14 +15,20 @@ export type CreateCirclePayload = {
   commitment: string;
   commitmentCadence: CommitmentCadence;
   commitmentFrequency: CommitmentFrequency;
+  commitmentType: CommitmentType;
   graceRules: {
     skip: GraceRule;
   };
   joinMode: CircleJoinMode;
+  maximumValue?: number;
   maxSize: number;
+  minimumValue?: number;
   privacy: CirclePrivacy;
+  stepValue: number;
+  targetValue?: number;
   timezone: string;
   title: string;
+  unitLabel: string;
 };
 
 export const defaultSkipGraceRule: GraceRule = {
@@ -40,6 +47,10 @@ export const defaultMonthlyCommitmentFrequency: CommitmentFrequency = {
   tapInsPerWeek: 4,
 };
 export const defaultCommitmentCadence: CommitmentCadence = 'daily';
+export const defaultCommitmentType: CommitmentType = 'build';
+export const defaultCommitmentUnitLabel = 'Tap In';
+export const defaultCommitmentStepValue = 1;
+export const defaultCommitmentTargetValue = 1;
 
 export function getLocalTimezone() {
   return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
@@ -51,6 +62,7 @@ export function createInitialCircleDraft(timezone?: string): CreateCircleDraft {
     commitment: '',
     commitmentCadence: defaultCommitmentCadence,
     commitmentFrequency: defaultCommitmentFrequency,
+    commitmentType: defaultCommitmentType,
     graceRules: {
       skip: defaultSkipGraceRule,
     },
@@ -59,8 +71,11 @@ export function createInitialCircleDraft(timezone?: string): CreateCircleDraft {
     maxSize: defaultCircleMaxSize,
     privacy: 'public',
     privacyMode: 'public',
+    stepValue: defaultCommitmentStepValue,
+    targetValue: defaultCommitmentTargetValue,
     timezone: timezone?.trim() || getLocalTimezone(),
     title: '',
+    unitLabel: defaultCommitmentUnitLabel,
   };
 }
 
@@ -110,11 +125,17 @@ export function buildCircleEditDraft(
     | 'commitment'
     | 'commitmentCadence'
     | 'commitmentFrequency'
+    | 'commitmentType'
     | 'graceRules'
     | 'joinMode'
+    | 'maximumValue'
     | 'maxSize'
+    | 'minimumValue'
     | 'privacy'
+    | 'stepValue'
+    | 'targetValue'
     | 'title'
+    | 'unitLabel'
   > & {timezone?: string},
   fallbackTimezone?: string,
 ): CreateCircleDraft {
@@ -134,17 +155,27 @@ export function buildCircleEditDraft(
       circle.commitmentFrequency ?? initialDraft.commitmentFrequency,
       commitmentCadence,
     ),
+    commitmentType: normalizeCommitmentType(circle.commitmentType),
     graceRules: {
       skip: normalizeSkipGraceRule(
         circle.graceRules?.skip ?? initialDraft.graceRules.skip,
       ),
     },
     joinMode: circle.joinMode ?? initialDraft.joinMode,
+    maximumValue: normalizeOptionalQuantityValue(circle.maximumValue),
     maxSize: clampCircleMaxSize(circle.maxSize ?? initialDraft.maxSize),
+    minimumValue: normalizeOptionalQuantityValue(circle.minimumValue),
     privacy: circle.privacy ?? initialDraft.privacy,
     privacyMode,
+    stepValue: normalizeStepValue(circle.stepValue ?? initialDraft.stepValue),
+    targetValue:
+      normalizeCommitmentType(circle.commitmentType) === 'limit'
+        ? undefined
+        : normalizeOptionalQuantityValue(circle.targetValue) ??
+          initialDraft.targetValue,
     timezone: circle.timezone?.trim() || initialDraft.timezone,
     title: circle.title,
+    unitLabel: normalizeUnitLabel(circle.unitLabel ?? initialDraft.unitLabel),
   };
 }
 
@@ -168,6 +199,30 @@ export function normalizeSkipGraceRule(rule: GraceRule): GraceRule {
     allowance: Math.min(30, Math.max(0, Math.round(rule.allowance))),
     windowDays: Math.min(365, Math.max(1, Math.round(rule.windowDays))),
   };
+}
+
+export function normalizeCommitmentType(value: unknown): CommitmentType {
+  return value === 'limit' || value === 'avoid' || value === 'build'
+    ? value
+    : defaultCommitmentType;
+}
+
+export function normalizeStepValue(value: unknown) {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0
+    ? value
+    : defaultCommitmentStepValue;
+}
+
+export function normalizeUnitLabel(value: unknown) {
+  return typeof value === 'string' && value.trim().length > 0
+    ? value.trim().slice(0, 32)
+    : defaultCommitmentUnitLabel;
+}
+
+export function normalizeOptionalQuantityValue(value: unknown) {
+  return typeof value === 'number' && Number.isFinite(value)
+    ? Math.max(0, Math.round(value))
+    : undefined;
 }
 
 export function normalizeCommitmentFrequency(
@@ -227,6 +282,26 @@ export function buildCreateCirclePayload(
     draft.commitmentCadence,
     draft.commitmentFrequency,
   );
+  const commitmentType = normalizeCommitmentType(draft.commitmentType);
+  const maximumValue =
+    commitmentType === 'limit'
+      ? normalizeOptionalQuantityValue(
+          draft.maximumValue ??
+            draft.targetValue ??
+            defaultCommitmentTargetValue,
+        ) ?? defaultCommitmentTargetValue
+      : undefined;
+  const minimumValue =
+    commitmentType === 'limit'
+      ? normalizeOptionalQuantityValue(draft.minimumValue)
+      : undefined;
+  const targetValue =
+    commitmentType === 'build'
+      ? normalizeOptionalQuantityValue(draft.targetValue) ??
+        defaultCommitmentTargetValue
+      : commitmentType === 'avoid'
+      ? defaultCommitmentTargetValue
+      : undefined;
 
   return {
     category: draft.category.trim(),
@@ -236,13 +311,24 @@ export function buildCreateCirclePayload(
       draft.commitmentFrequency,
       commitmentCadence,
     ),
+    commitmentType,
     graceRules: {
       skip: normalizeSkipGraceRule(draft.graceRules.skip),
     },
     joinMode: draft.joinMode,
+    ...(typeof maximumValue === 'number' ? {maximumValue} : {}),
+    ...(typeof minimumValue === 'number'
+      ? {minimumValue: Math.min(minimumValue, maximumValue ?? minimumValue)}
+      : {}),
     maxSize: clampCircleMaxSize(draft.maxSize),
     privacy: draft.privacy,
+    stepValue: defaultCommitmentStepValue,
+    ...(typeof targetValue === 'number' ? {targetValue} : {}),
     timezone: draft.timezone.trim() || getLocalTimezone(),
     title: draft.title.trim(),
+    unitLabel:
+      commitmentType === 'avoid'
+        ? defaultCommitmentUnitLabel
+        : normalizeUnitLabel(draft.unitLabel),
   };
 }

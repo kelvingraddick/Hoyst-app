@@ -2,6 +2,7 @@ import type {QueryDocumentSnapshot} from 'firebase-admin/firestore';
 import {HttpsError, onCall} from 'firebase-functions/v2/https';
 
 import {db} from '../firebase';
+import {isCoveredCheckInData} from '../shared/commitments';
 import {
   calculateLongestPersonalDailyStreak,
   calculatePersonalDailyStreak,
@@ -41,10 +42,7 @@ function getCheckInCircleId(snapshot: QueryDocumentSnapshot) {
   return dayRef?.parent.parent?.id;
 }
 
-function getCheckInDateKey(
-  snapshot: QueryDocumentSnapshot,
-  timezone: string,
-) {
+function getCheckInDateKey(snapshot: QueryDocumentSnapshot, timezone: string) {
   const data = snapshot.data();
   const createdAt = data.createdAt as {toDate?: () => Date} | undefined;
 
@@ -69,13 +67,14 @@ export function summarizeProfileCheckIns({
   let totalTapIns = 0;
 
   checkInSnapshots.forEach(snapshot => {
-    const status = snapshot.data().status;
+    const checkIn = snapshot.data();
+    const status = checkIn.status;
 
-    if (status === 'done') {
+    if (status === 'done' && isCoveredCheckInData(checkIn)) {
       totalTapIns += 1;
     }
 
-    if (status !== 'done' && status !== 'skip') {
+    if (!isCoveredCheckInData(checkIn)) {
       return;
     }
 
@@ -122,15 +121,12 @@ export const getProfileSummary = onCall(async request => {
     .collectionGroup('checkIns')
     .where('uid', '==', uid)
     .get();
-  const {
-    activeCoveredCheckInDateKeys,
-    coveredCheckInDateKeys,
-    totalTapIns,
-  } = summarizeProfileCheckIns({
-    activeCircleIds,
-    checkInSnapshots: checkInsSnapshot.docs,
-    timezone,
-  });
+  const {activeCoveredCheckInDateKeys, coveredCheckInDateKeys, totalTapIns} =
+    summarizeProfileCheckIns({
+      activeCircleIds,
+      checkInSnapshots: checkInsSnapshot.docs,
+      timezone,
+    });
   const streak = calculatePersonalDailyStreak({
     checkInDateKeys: activeCoveredCheckInDateKeys,
     timezone,

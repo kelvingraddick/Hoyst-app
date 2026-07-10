@@ -47,6 +47,7 @@ import type {
   CircleJoinMode,
   CirclePrivacyMode,
   CommitmentCadence,
+  CommitmentType,
   CreateCircleDraft,
 } from '../../../types/models';
 import type {RootStackParamList} from '../../../navigation/types';
@@ -87,6 +88,27 @@ const wizardSteps: WizardStep[] = [
   'maxSize',
   'timezone',
   'review',
+];
+
+const commitmentTypeOptions: Array<Option<CommitmentType>> = [
+  {
+    description: 'Reach at least a target amount each Tap In day.',
+    id: 'build',
+    label: 'Build',
+    tone: 'green',
+  },
+  {
+    description: 'Stay inside a minimum and maximum amount.',
+    id: 'limit',
+    label: 'Limit',
+    tone: 'orange',
+  },
+  {
+    description: 'Confirm you stayed clear for the day.',
+    id: 'avoid',
+    label: 'Avoid',
+    tone: 'purple',
+  },
 ];
 
 const categoryOptions: Array<Option<string>> = [
@@ -549,6 +571,31 @@ export function CreateCircleScreen({navigation}: Props): React.JSX.Element {
   ) => {
     setDraft(current => ({...current, [key]: value}));
   };
+  const setCommitmentType = (commitmentType: CommitmentType) => {
+    setDraft(current => ({
+      ...current,
+      commitmentType,
+      ...(commitmentType === 'build'
+        ? {targetValue: current.targetValue ?? 1}
+        : {}),
+      ...(commitmentType === 'limit'
+        ? {maximumValue: current.maximumValue ?? current.targetValue ?? 1}
+        : {}),
+      ...(commitmentType === 'avoid'
+        ? {maximumValue: undefined, minimumValue: undefined, targetValue: 1}
+        : {}),
+    }));
+  };
+  const setQuantityField = (
+    key: 'maximumValue' | 'minimumValue' | 'targetValue',
+    value: string,
+  ) => {
+    const parsedValue = Number.parseInt(value, 10);
+    const nextValue =
+      Number.isFinite(parsedValue) && parsedValue >= 0 ? parsedValue : 0;
+
+    setField(key, nextValue);
+  };
 
   const setSkipRule = (nextRule: {allowance?: number; windowDays?: number}) => {
     setDraft(current => ({
@@ -721,6 +768,83 @@ export function CreateCircleScreen({navigation}: Props): React.JSX.Element {
       return (
         <View style={styles.stack}>
           {renderOptions(
+            commitmentTypeOptions,
+            draft.commitmentType,
+            setCommitmentType,
+          )}
+          {draft.commitmentType !== 'avoid' ? (
+            <GlassPanel>
+              <View style={styles.sectionHeader}>
+                <HoystText variant="bodyStrong">
+                  {draft.commitmentType === 'limit'
+                    ? 'Daily range'
+                    : 'Daily target'}
+                </HoystText>
+                <HoystChip
+                  label={draft.commitmentType === 'limit' ? 'Range' : 'Target'}
+                  tone={draft.commitmentType === 'limit' ? 'orange' : 'green'}
+                />
+              </View>
+              {draft.commitmentType === 'build' ? (
+                <View style={styles.fieldBlock}>
+                  <HoystText tone="muted" variant="label">
+                    Target amount
+                  </HoystText>
+                  <HoystInput
+                    keyboardType="number-pad"
+                    onChangeText={value =>
+                      setQuantityField('targetValue', value)
+                    }
+                    value={`${draft.targetValue ?? 1}`}
+                  />
+                </View>
+              ) : (
+                <>
+                  <View style={styles.fieldBlock}>
+                    <HoystText tone="muted" variant="label">
+                      Minimum amount
+                    </HoystText>
+                    <HoystInput
+                      keyboardType="number-pad"
+                      onChangeText={value =>
+                        setQuantityField('minimumValue', value)
+                      }
+                      value={`${draft.minimumValue ?? 0}`}
+                    />
+                  </View>
+                  <View style={styles.fieldBlock}>
+                    <HoystText tone="muted" variant="label">
+                      Maximum amount
+                    </HoystText>
+                    <HoystInput
+                      keyboardType="number-pad"
+                      onChangeText={value =>
+                        setQuantityField('maximumValue', value)
+                      }
+                      value={`${draft.maximumValue ?? draft.targetValue ?? 1}`}
+                    />
+                  </View>
+                </>
+              )}
+              <View style={styles.fieldBlock}>
+                <HoystText tone="muted" variant="label">
+                  Unit label
+                </HoystText>
+                <HoystInput
+                  maxLength={32}
+                  onChangeText={value => setField('unitLabel', value)}
+                  placeholder="pages, glasses, minutes"
+                  value={draft.unitLabel}
+                />
+              </View>
+            </GlassPanel>
+          ) : (
+            <HoystText tone="muted">
+              Avoid circles stay binary in this version. Members Tap In once to
+              confirm they stayed clear.
+            </HoystText>
+          )}
+          {renderOptions(
             commitmentCadenceOptions,
             draft.commitmentCadence,
             selectCommitmentCadence,
@@ -765,8 +889,8 @@ export function CreateCircleScreen({navigation}: Props): React.JSX.Element {
             </>
           ) : (
             <HoystText tone="muted">
-              Members need one Tap In or skip each day. Circle Progression resets
-              at midnight in the Circle timezone.
+              Members need one Tap In or skip each day. Circle Progression
+              resets at midnight in the Circle timezone.
             </HoystText>
           )}
         </View>
@@ -905,6 +1029,18 @@ export function CreateCircleScreen({navigation}: Props): React.JSX.Element {
         <CategorySummaryRow category={draft.category} />
         <SummaryRow label="Title" value={draft.title.trim()} />
         <SummaryRow label="Commitment" value={draft.commitment.trim()} />
+        <SummaryRow
+          label="Commitment Type"
+          value={
+            draft.commitmentType === 'limit'
+              ? `Limit: ${draft.minimumValue ?? 0} to ${
+                  draft.maximumValue ?? draft.targetValue ?? 1
+                } ${draft.unitLabel}`
+              : draft.commitmentType === 'avoid'
+              ? 'Avoid: binary Tap In'
+              : `Build: ${draft.targetValue ?? 1} ${draft.unitLabel}`
+          }
+        />
         <SummaryRow
           label="Commitment Frequency"
           value={

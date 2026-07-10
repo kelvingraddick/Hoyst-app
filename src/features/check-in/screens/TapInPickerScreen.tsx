@@ -360,7 +360,11 @@ function PriorityTapCard({
         <View style={styles.priorityFooter}>
           <AvatarPreview circle={circle} inverse size={40} />
           <PickerTapInButton
-            label="Tap In"
+            label={
+              circle.viewerCanUpdateTapIn && circle.viewerHasTappedInToday
+                ? 'Update Tap In'
+                : 'Tap In'
+            }
             onPress={onPress}
             style={styles.priorityAction}
             testID={`tap-in-picker-priority-action-${circle.id}`}
@@ -440,7 +444,11 @@ function DueTapCard({
       <View style={styles.cardFooter}>
         <AvatarPreview circle={circle} />
         <PickerTapInButton
-          label="Tap In Today"
+          label={
+            circle.viewerCanUpdateTapIn && circle.viewerHasTappedInToday
+              ? 'Update Tap In'
+              : 'Tap In Today'
+          }
           onPress={onPress}
           style={styles.primaryActionWrap}
           testID={`tap-in-picker-due-action-${circle.id}`}

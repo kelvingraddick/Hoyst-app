@@ -66,14 +66,21 @@ jest.mock('../src/store/session-store', () => ({
 }));
 
 jest.mock('../src/features/home/services/home-data-service', () => {
+  function needsTapInToday(circle: CircleManagementCard) {
+    return (
+      circle.viewerMembershipStatus === 'active' &&
+      (!circle.viewerHasTappedInToday ||
+        circle.viewerTodayStatus === 'partial' ||
+        circle.viewerTodayStatus === 'failed')
+    );
+  }
+
   function urgencyRank(circle: CircleManagementCard) {
     if (circle.viewerMembershipStatus === 'pending') {
       return 6;
     }
 
-    const needsViewer =
-      circle.viewerMembershipStatus === 'active' &&
-      !circle.viewerHasTappedInToday;
+    const needsViewer = needsTapInToday(circle);
     const isAtRisk = circle.state === 'risk';
     const hasPendingToday =
       circle.state !== 'done' && circle.remainingCheckIns > 0;
@@ -97,11 +104,7 @@ jest.mock('../src/features/home/services/home-data-service', () => {
   }
 
   return {
-    canTapInToday: jest.fn(
-      (circle: CircleManagementCard) =>
-        circle.viewerMembershipStatus === 'active' &&
-        !circle.viewerHasTappedInToday,
-    ),
+    canTapInToday: jest.fn(needsTapInToday),
     createEmptyHomeData: jest.fn(() => ({
       circles: [],
       hasLoadedMemberships: false,
@@ -387,6 +390,91 @@ describe('TapInPickerScreen', () => {
       circleId: 'remaining-due',
       source: 'tap_in',
     });
+  });
+
+  it('keeps covered quantity circles out of Tap Today while partial and failed stay due', () => {
+    mockHomeData = homeData([
+      circle({
+        commitmentType: 'build',
+        currentValue: 3,
+        id: 'build-partial',
+        progressPercent: 45,
+        state: 'active',
+        targetValue: 5,
+        title: 'Build Partial',
+        unitLabel: 'pages',
+        viewerCanUpdateTapIn: true,
+        viewerHasCheckedIn: false,
+        viewerHasTappedInToday: true,
+        viewerRemainingTapIns: 1,
+        viewerTodayStatus: 'partial',
+      }),
+      circle({
+        commitmentType: 'build',
+        currentValue: 5,
+        id: 'build-covered',
+        state: 'done',
+        targetValue: 5,
+        title: 'Build Covered',
+        unitLabel: 'pages',
+        viewerCanUpdateTapIn: true,
+        viewerHasCheckedIn: true,
+        viewerHasTappedInToday: true,
+        viewerRemainingTapIns: 0,
+        viewerTodayStatus: 'done',
+      }),
+      circle({
+        commitmentType: 'limit',
+        currentValue: 8,
+        id: 'limit-failed',
+        maximumValue: 6,
+        minimumValue: 2,
+        progressPercent: 40,
+        state: 'active',
+        title: 'Limit Failed',
+        unitLabel: 'servings',
+        viewerCanUpdateTapIn: true,
+        viewerHasCheckedIn: false,
+        viewerHasTappedInToday: true,
+        viewerRemainingTapIns: 1,
+        viewerTodayStatus: 'failed',
+      }),
+      circle({
+        commitmentType: 'limit',
+        currentValue: 4,
+        id: 'limit-covered',
+        maximumValue: 6,
+        minimumValue: 2,
+        state: 'done',
+        title: 'Limit Covered',
+        unitLabel: 'servings',
+        viewerCanUpdateTapIn: true,
+        viewerHasCheckedIn: true,
+        viewerHasTappedInToday: true,
+        viewerRemainingTapIns: 0,
+        viewerTodayStatus: 'done',
+      }),
+    ]);
+
+    const {tree} = renderScreen();
+    const output = getTextOutput(tree.toJSON());
+
+    expect(output).toContain('2 TAP TODAY');
+    expect(output).toContain('Build Partial');
+    expect(output).toContain('Limit Failed');
+    expect(output).toContain('STILL USEFUL TODAY');
+    expect(output).toContain('Build Covered');
+    expect(output).toContain('Limit Covered');
+    expect(
+      tree.root.findAllByProps({
+        testID: 'tap-in-picker-due-action-build-covered',
+      }),
+    ).toHaveLength(0);
+    expect(
+      tree.root.findAllByProps({
+        testID: 'tap-in-picker-due-action-limit-covered',
+      }),
+    ).toHaveLength(0);
   });
 
   it('keeps the Still Useful empty state when no secondary circles remain', () => {

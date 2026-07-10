@@ -1,6 +1,6 @@
 import {FieldValue, type DocumentData} from 'firebase-admin/firestore';
 import {getAuth} from 'firebase-admin/auth';
-import {onDocumentCreated} from 'firebase-functions/v2/firestore';
+import {onDocumentWritten} from 'firebase-functions/v2/firestore';
 import {
   HttpsError,
   onCall,
@@ -27,12 +27,22 @@ import {
   oneSignalRestApiKey,
   resolveCompanionFeedTargets,
 } from '../notifications';
-import {getCommitmentCadence, getRequiredTapIns} from '../shared/commitments';
+import {
+  getCheckInStatusForCoverage,
+  getCommitmentCadence,
+  getCommitmentType,
+  getCoverageStatusForTapIn,
+  getQuantityConfig,
+  getRequiredTapIns,
+  isCoveredCheckInData,
+  isSingleTapInCommitment,
+} from '../shared/commitments';
 import {createCircleThreadActivity, getCircleThreadStreakText} from '../thread';
 import {getCircleCompleteNotificationTargets} from './notification-plan';
 
 const submitTapInSchema = z.object({
   circleId: z.string().trim().min(1),
+  currentValue: z.number().int().min(0).max(100000).optional(),
   note: z.string().trim().max(1000).optional(),
   photoUrl: z.string().trim().max(2048).optional(),
   status: z.enum(['done', 'skip']).default('done'),
@@ -181,6 +191,39 @@ function asCleanString(value: unknown) {
     : undefined;
 }
 
+function asNonNegativeNumber(value: unknown, fallback: number) {
+  return typeof value === 'number' && Number.isFinite(value)
+    ? Math.max(0, Math.round(value))
+    : fallback;
+}
+
+function canUpdateQuantityTapIn(circle: DocumentData | undefined) {
+  const commitmentType = getCommitmentType(circle);
+
+  return (
+    commitmentType === 'limit' ||
+    (commitmentType === 'build' && !isSingleTapInCommitment(circle))
+  );
+}
+
+function getTapInCurrentValue({
+  circle,
+  existingValue,
+  inputValue,
+}: {
+  circle: DocumentData | undefined;
+  existingValue?: unknown;
+  inputValue?: unknown;
+}) {
+  const commitmentType = getCommitmentType(circle);
+
+  if (commitmentType === 'avoid' || isSingleTapInCommitment(circle)) {
+    return 1;
+  }
+
+  return asNonNegativeNumber(inputValue, asNonNegativeNumber(existingValue, 0));
+}
+
 async function processTapInSideEffectsForCheckIn({
   checkIn,
   circleId,
@@ -235,7 +278,7 @@ async function processTapInSideEffectsForCheckIn({
 
   scoringSnapshots.forEach(snapshot => {
     snapshot.docs.forEach(doc => {
-      if (['done', 'skip'].includes(doc.data().status)) {
+      if (isCoveredCheckInData(doc.data())) {
         coveredCounts.set(doc.id, (coveredCounts.get(doc.id) ?? 0) + 1);
       }
     });
@@ -430,8 +473,15 @@ async function submitTapInHandler(request: CallableRequest) {
       .collection('checkIns')
       .doc(uid);
     const checkInSnapshot = await transaction.get(checkInRef);
+    const existingCheckIn = checkInSnapshot.data();
+    const existingCovered = isCoveredCheckInData(existingCheckIn);
+    const quantityUpdateAllowed =
+      input.status === 'done' &&
+      checkInSnapshot.exists &&
+      canUpdateQuantityTapIn(circle) &&
+      existingCheckIn?.status !== 'skip';
 
-    if (checkInSnapshot.exists) {
+    if (checkInSnapshot.exists && !quantityUpdateAllowed) {
       throw new HttpsError('already-exists', 'You already tapped in today.');
     }
 
@@ -469,44 +519,118 @@ async function submitTapInHandler(request: CallableRequest) {
       }
     }
 
-    const momentum = await getTapInMomentumPreview({
+    const currentValue =
+      input.status === 'done'
+        ? getTapInCurrentValue({
+            circle,
+            existingValue: existingCheckIn?.currentValue,
+            inputValue: input.currentValue,
+          })
+        : undefined;
+    const coverageStatus = getCoverageStatusForTapIn({
       circle,
-      circleId: input.circleId,
-      dateKey,
+      currentValue,
       status: input.status,
-      transaction,
-      uid,
     });
+    const nextStatus = getCheckInStatusForCoverage(coverageStatus);
+    const nextCovered =
+      coverageStatus === 'covered' || coverageStatus === 'skipped';
+    const quantityConfig = getQuantityConfig(circle);
+    const commitmentType = getCommitmentType(circle);
+    let momentum:
+      | Awaited<ReturnType<typeof getTapInMomentumPreview>>
+      | undefined;
 
-    await recordTapInOpportunity({
-      checkInId: uid,
-      circle,
-      circleId: input.circleId,
-      dateKey,
-      memberCount:
-        typeof circle?.memberCount === 'number'
-          ? circle.memberCount
-          : undefined,
-      profile,
-      status: input.status,
-      transaction,
-      uid,
-    });
+    if (nextCovered && !existingCovered) {
+      momentum = await getTapInMomentumPreview({
+        circle,
+        circleId: input.circleId,
+        dateKey,
+        status: nextStatus === 'skip' ? 'skip' : 'done',
+        transaction,
+        uid,
+      });
 
-    transaction.set(checkInRef, {
+      await recordTapInOpportunity({
+        checkInId: uid,
+        circle,
+        circleId: input.circleId,
+        dateKey,
+        memberCount:
+          typeof circle?.memberCount === 'number'
+            ? circle.memberCount
+            : undefined,
+        profile,
+        status: nextStatus === 'skip' ? 'skip' : 'done',
+        transaction,
+        uid,
+      });
+    } else if (!nextCovered && existingCovered) {
+      await removeTapInOpportunity({
+        circle,
+        circleId: input.circleId,
+        dateKey,
+        transaction,
+        uid,
+      });
+    }
+
+    const checkInPayload: DocumentData = {
       avatarUrl: profile.avatarUrl ?? null,
-      createdAt: now,
+      coverageStatus,
       displayName: profile.displayName,
       handle: profile.handle,
       note: input.note ?? null,
       photoUrl: input.photoUrl ?? null,
-      status: input.status,
+      status: nextStatus,
       uid,
-    });
+      updatedAt: now,
+    };
+
+    if (!checkInSnapshot.exists) {
+      checkInPayload.createdAt = now;
+    }
+
+    if (input.status === 'done') {
+      checkInPayload.commitmentType = commitmentType;
+      checkInPayload.currentValue = currentValue;
+      checkInPayload.stepValue = quantityConfig.stepValue;
+      checkInPayload.unitLabel = quantityConfig.unitLabel;
+
+      if (typeof quantityConfig.targetValue === 'number') {
+        checkInPayload.targetValue = quantityConfig.targetValue;
+      } else {
+        checkInPayload.targetValue = FieldValue.delete();
+      }
+
+      if (typeof quantityConfig.maximumValue === 'number') {
+        checkInPayload.maximumValue = quantityConfig.maximumValue;
+      } else {
+        checkInPayload.maximumValue = FieldValue.delete();
+      }
+
+      if (typeof quantityConfig.minimumValue === 'number') {
+        checkInPayload.minimumValue = quantityConfig.minimumValue;
+      } else {
+        checkInPayload.minimumValue = FieldValue.delete();
+      }
+    } else {
+      checkInPayload.commitmentType = commitmentType;
+      checkInPayload.currentValue = FieldValue.delete();
+      checkInPayload.maximumValue = FieldValue.delete();
+      checkInPayload.minimumValue = FieldValue.delete();
+      checkInPayload.stepValue = FieldValue.delete();
+      checkInPayload.targetValue = FieldValue.delete();
+      checkInPayload.unitLabel = FieldValue.delete();
+    }
+
+    transaction.set(checkInRef, checkInPayload, {merge: true});
     transaction.set(
       circleRef.collection('days').doc(dateKey),
       {
-        checkInCount: FieldValue.increment(1),
+        checkInCount: FieldValue.increment(
+          nextCovered === existingCovered ? 0 : nextCovered ? 1 : -1,
+        ),
         dateKey,
         updatedAt: now,
       },
@@ -520,22 +644,35 @@ async function submitTapInHandler(request: CallableRequest) {
       {merge: true},
     );
 
-    return {checkInId: uid, dateKey, momentum};
+    return {
+      checkInId: uid,
+      coverageStatus,
+      currentValue,
+      dateKey,
+      momentum,
+      status: nextStatus,
+    };
   });
 }
 
 export const submitTapIn = onCall(submitTapInHandler);
 
-export const processTapInSideEffects = onDocumentCreated(
+export const processTapInSideEffects = onDocumentWritten(
   {
     document: 'circles/{circleId}/days/{dateKey}/checkIns/{uid}',
     secrets: [oneSignalRestApiKey],
   },
   async event => {
-    const checkIn = event.data?.data();
+    const checkIn = event.data?.after.data();
+    const priorCheckIn = event.data?.before.data();
     const status = checkIn?.status;
 
-    if (!checkIn || (status !== 'done' && status !== 'skip')) {
+    if (
+      !checkIn ||
+      !isCoveredCheckInData(checkIn) ||
+      isCoveredCheckInData(priorCheckIn) ||
+      (status !== 'done' && status !== 'skip')
+    ) {
       return;
     }
 
@@ -577,8 +714,10 @@ export const removeTapIn = onCall(async request => {
       .collection('checkIns')
       .doc(uid);
     const checkInSnapshot = await transaction.get(checkInRef);
+    const checkIn = checkInSnapshot.data();
     const decision = getRemoveTapInDecision({
-      checkInStatus: checkInSnapshot.data()?.status,
+      coverageStatus: checkIn?.coverageStatus,
+      checkInStatus: checkIn?.status,
       memberStatus: memberSnapshot.data()?.status,
     });
 
@@ -586,13 +725,15 @@ export const removeTapIn = onCall(async request => {
       return {dateKey, removed: false};
     }
 
-    await removeTapInOpportunity({
-      circle,
-      circleId: input.circleId,
-      dateKey,
-      transaction,
-      uid,
-    });
+    if (decision.checkInCountDelta < 0) {
+      await removeTapInOpportunity({
+        circle,
+        circleId: input.circleId,
+        dateKey,
+        transaction,
+        uid,
+      });
+    }
 
     transaction.delete(checkInRef);
     transaction.set(

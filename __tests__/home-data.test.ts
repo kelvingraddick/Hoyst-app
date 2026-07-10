@@ -113,6 +113,28 @@ describe('home data mapping', () => {
     });
   });
 
+  it('keeps quantity markers on group last-7-days progress days', () => {
+    const groupDays = buildCircleGroupProgressDays({
+      memberRecords: [{status: 'active', uid: 'user-1'}],
+      now: new Date('2026-05-29T12:00:00.000Z'),
+      recentCheckInStatuses: new Map([
+        ['2026-05-29', new Map([['user-1', 'done']])],
+      ]),
+      recentQuantityMarkers: new Map([
+        ['2026-05-29', {quantityLabel: '4', quantityValue: 4}],
+      ]),
+      timezone: 'UTC',
+    });
+
+    expect(groupDays.find(day => day.dateKey === '2026-05-29')).toMatchObject({
+      coveredCount: 1,
+      quantityLabel: '4',
+      quantityValue: 4,
+      state: 'done',
+      totalCount: 1,
+    });
+  });
+
   it('builds the Today attention list from Tap In and Nudge actions only', () => {
     const needsTapIn = homeCard({
       id: 'needs-tap-in',
@@ -124,6 +146,39 @@ describe('home data mapping', () => {
       progressPercent: 55,
       remainingCheckIns: 2,
       title: 'Needs Nudge',
+      viewerHasCheckedIn: true,
+      viewerHasTappedInToday: true,
+      viewerRemainingTapIns: 0,
+      viewerTodayStatus: 'done',
+    });
+    const coveredQuantityWithNudge = homeCard({
+      commitmentType: 'build',
+      currentValue: 5,
+      id: 'covered-quantity-with-nudge',
+      nudgeTargetCount: 1,
+      progressPercent: 75,
+      remainingCheckIns: 1,
+      targetValue: 5,
+      title: 'Covered Quantity With Nudge',
+      unitLabel: 'pages',
+      viewerCanUpdateTapIn: true,
+      viewerHasCheckedIn: true,
+      viewerHasTappedInToday: true,
+      viewerRemainingTapIns: 0,
+      viewerTodayStatus: 'done',
+    });
+    const coveredQuantityViewOnly = homeCard({
+      commitmentType: 'limit',
+      currentValue: 4,
+      id: 'covered-quantity-view-only',
+      maximumValue: 6,
+      minimumValue: 2,
+      progressPercent: 100,
+      remainingCheckIns: 0,
+      state: 'done',
+      title: 'Covered Quantity View Only',
+      unitLabel: 'servings',
+      viewerCanUpdateTapIn: true,
       viewerHasCheckedIn: true,
       viewerHasTappedInToday: true,
       viewerRemainingTapIns: 0,
@@ -164,6 +219,8 @@ describe('home data mapping', () => {
 
     expect(getHomeCircleActionVariant(needsTapIn)).toBe('check_in');
     expect(getHomeCircleActionVariant(needsNudge)).toBe('nudge');
+    expect(getHomeCircleActionVariant(coveredQuantityWithNudge)).toBe('nudge');
+    expect(getHomeCircleActionVariant(coveredQuantityViewOnly)).toBe('view');
     expect(getHomeCircleActionVariant(shareOnly)).toBe('share');
     expect(getHomeCircleActionVariant(viewOnly)).toBe('view');
     expect(getHomeCircleActionVariant(pending)).toBe('view');
@@ -172,10 +229,12 @@ describe('home data mapping', () => {
         shareOnly,
         viewOnly,
         pending,
+        coveredQuantityViewOnly,
+        coveredQuantityWithNudge,
         needsNudge,
         needsTapIn,
       ]).map(circle => circle.id),
-    ).toEqual(['needs-tap-in', 'needs-nudge']);
+    ).toEqual(['needs-tap-in', 'needs-nudge', 'covered-quantity-with-nudge']);
   });
 
   it('builds Upcoming from soon attention that is not needed today', () => {
@@ -288,6 +347,82 @@ describe('home data mapping', () => {
     expect(matchesHomeCircleFilter(weeklyCompleteNewDay, 'needsYou')).toBe(
       true,
     );
+  });
+
+  it('separates quantity update eligibility from Tap In due attention', () => {
+    const legacyDone = homeCard({
+      state: 'done',
+      viewerHasCheckedIn: true,
+      viewerHasTappedInToday: true,
+      viewerRemainingTapIns: 0,
+      viewerTodayStatus: 'done',
+    });
+    const quantityBuildDone = homeCard({
+      commitmentType: 'build',
+      currentValue: 6,
+      state: 'done',
+      targetValue: 5,
+      unitLabel: 'pages',
+      viewerCanUpdateTapIn: true,
+      viewerHasCheckedIn: true,
+      viewerHasTappedInToday: true,
+      viewerRemainingTapIns: 0,
+      viewerTodayStatus: 'done',
+    });
+    const quantityBuildPartial = homeCard({
+      commitmentType: 'build',
+      currentValue: 3,
+      state: 'active',
+      targetValue: 5,
+      unitLabel: 'pages',
+      viewerCanUpdateTapIn: true,
+      viewerHasCheckedIn: false,
+      viewerHasTappedInToday: true,
+      viewerRemainingTapIns: 1,
+      viewerTodayStatus: 'partial',
+    });
+    const quantityLimitDone = homeCard({
+      commitmentType: 'limit',
+      currentValue: 4,
+      maximumValue: 6,
+      minimumValue: 2,
+      state: 'done',
+      unitLabel: 'servings',
+      viewerCanUpdateTapIn: true,
+      viewerHasCheckedIn: true,
+      viewerHasTappedInToday: true,
+      viewerRemainingTapIns: 0,
+      viewerTodayStatus: 'done',
+    });
+    const quantityLimitFailed = homeCard({
+      commitmentType: 'limit',
+      currentValue: 8,
+      maximumValue: 6,
+      minimumValue: 2,
+      unitLabel: 'servings',
+      viewerCanUpdateTapIn: true,
+      viewerHasCheckedIn: false,
+      viewerHasTappedInToday: true,
+      viewerRemainingTapIns: 1,
+      viewerTodayStatus: 'failed',
+    });
+
+    expect(canTapInToday(legacyDone)).toBe(false);
+    expect(canTapInToday(quantityBuildDone)).toBe(false);
+    expect(canTapInToday(quantityBuildPartial)).toBe(true);
+    expect(canTapInToday(quantityLimitDone)).toBe(false);
+    expect(canTapInToday(quantityLimitFailed)).toBe(true);
+    expect(getHomeCircleActionVariant(quantityBuildDone)).toBe('view');
+    expect(getHomeCircleActionVariant(quantityBuildPartial)).toBe('check_in');
+    expect(getHomeCircleActionVariant(quantityLimitDone)).toBe('view');
+    expect(getHomeCircleActionVariant(quantityLimitFailed)).toBe('check_in');
+    expect(matchesHomeCircleFilter(quantityBuildDone, 'needsYou')).toBe(false);
+    expect(matchesHomeCircleFilter(quantityBuildPartial, 'needsYou')).toBe(
+      true,
+    );
+    expect(matchesHomeCircleFilter(quantityLimitDone, 'needsYou')).toBe(false);
+    expect(matchesHomeCircleFilter(quantityLimitFailed, 'needsYou')).toBe(true);
+    expect(getTodayAttentionCircles([quantityBuildDone])).toEqual([]);
   });
 
   it('maps active membership and today check-ins into a real Home card', () => {

@@ -16,6 +16,7 @@ const thread_1 = require("../thread");
 const notification_plan_1 = require("./notification-plan");
 const submitTapInSchema = zod_1.z.object({
     circleId: zod_1.z.string().trim().min(1),
+    currentValue: zod_1.z.number().int().min(0).max(100000).optional(),
     note: zod_1.z.string().trim().max(1000).optional(),
     photoUrl: zod_1.z.string().trim().max(2048).optional(),
     status: zod_1.z.enum(['done', 'skip']).default('done'),
@@ -124,6 +125,23 @@ function asCleanString(value) {
         ? value.trim()
         : undefined;
 }
+function asNonNegativeNumber(value, fallback) {
+    return typeof value === 'number' && Number.isFinite(value)
+        ? Math.max(0, Math.round(value))
+        : fallback;
+}
+function canUpdateQuantityTapIn(circle) {
+    const commitmentType = (0, commitments_1.getCommitmentType)(circle);
+    return (commitmentType === 'limit' ||
+        (commitmentType === 'build' && !(0, commitments_1.isSingleTapInCommitment)(circle)));
+}
+function getTapInCurrentValue({ circle, existingValue, inputValue, }) {
+    const commitmentType = (0, commitments_1.getCommitmentType)(circle);
+    if (commitmentType === 'avoid' || (0, commitments_1.isSingleTapInCommitment)(circle)) {
+        return 1;
+    }
+    return asNonNegativeNumber(inputValue, asNonNegativeNumber(existingValue, 0));
+}
 async function processTapInSideEffectsForCheckIn({ checkIn, circleId, dateKey, status, uid, }) {
     const circleRef = firebase_1.db.collection('circles').doc(circleId);
     const momentumRef = firebase_1.db
@@ -159,7 +177,7 @@ async function processTapInSideEffectsForCheckIn({ checkIn, circleId, dateKey, s
         : periodCheckInSnapshots;
     scoringSnapshots.forEach(snapshot => {
         snapshot.docs.forEach(doc => {
-            if (['done', 'skip'].includes(doc.data().status)) {
+            if ((0, commitments_1.isCoveredCheckInData)(doc.data())) {
                 coveredCounts.set(doc.id, (coveredCounts.get(doc.id) ?? 0) + 1);
             }
         });
@@ -307,7 +325,13 @@ async function submitTapInHandler(request) {
             .collection('checkIns')
             .doc(uid);
         const checkInSnapshot = await transaction.get(checkInRef);
-        if (checkInSnapshot.exists) {
+        const existingCheckIn = checkInSnapshot.data();
+        const existingCovered = (0, commitments_1.isCoveredCheckInData)(existingCheckIn);
+        const quantityUpdateAllowed = input.status === 'done' &&
+            checkInSnapshot.exists &&
+            canUpdateQuantityTapIn(circle) &&
+            existingCheckIn?.status !== 'skip';
+        if (checkInSnapshot.exists && !quantityUpdateAllowed) {
             throw new https_1.HttpsError('already-exists', 'You already tapped in today.');
         }
         if (input.status === 'skip') {
@@ -327,56 +351,133 @@ async function submitTapInHandler(request) {
                 throw new https_1.HttpsError('resource-exhausted', 'No skips are available for this grace window.');
             }
         }
-        const momentum = await (0, momentum_1.getTapInMomentumPreview)({
+        const currentValue = input.status === 'done'
+            ? getTapInCurrentValue({
+                circle,
+                existingValue: existingCheckIn?.currentValue,
+                inputValue: input.currentValue,
+            })
+            : undefined;
+        const coverageStatus = (0, commitments_1.getCoverageStatusForTapIn)({
             circle,
-            circleId: input.circleId,
-            dateKey,
+            currentValue,
             status: input.status,
-            transaction,
-            uid,
         });
-        await (0, momentum_1.recordTapInOpportunity)({
-            checkInId: uid,
-            circle,
-            circleId: input.circleId,
-            dateKey,
-            memberCount: typeof circle?.memberCount === 'number'
-                ? circle.memberCount
-                : undefined,
-            profile,
-            status: input.status,
-            transaction,
-            uid,
-        });
-        transaction.set(checkInRef, {
+        const nextStatus = (0, commitments_1.getCheckInStatusForCoverage)(coverageStatus);
+        const nextCovered = coverageStatus === 'covered' || coverageStatus === 'skipped';
+        const quantityConfig = (0, commitments_1.getQuantityConfig)(circle);
+        const commitmentType = (0, commitments_1.getCommitmentType)(circle);
+        let momentum;
+        if (nextCovered && !existingCovered) {
+            momentum = await (0, momentum_1.getTapInMomentumPreview)({
+                circle,
+                circleId: input.circleId,
+                dateKey,
+                status: nextStatus === 'skip' ? 'skip' : 'done',
+                transaction,
+                uid,
+            });
+            await (0, momentum_1.recordTapInOpportunity)({
+                checkInId: uid,
+                circle,
+                circleId: input.circleId,
+                dateKey,
+                memberCount: typeof circle?.memberCount === 'number'
+                    ? circle.memberCount
+                    : undefined,
+                profile,
+                status: nextStatus === 'skip' ? 'skip' : 'done',
+                transaction,
+                uid,
+            });
+        }
+        else if (!nextCovered && existingCovered) {
+            await (0, momentum_1.removeTapInOpportunity)({
+                circle,
+                circleId: input.circleId,
+                dateKey,
+                transaction,
+                uid,
+            });
+        }
+        const checkInPayload = {
             avatarUrl: profile.avatarUrl ?? null,
-            createdAt: now,
+            coverageStatus,
             displayName: profile.displayName,
             handle: profile.handle,
             note: input.note ?? null,
             photoUrl: input.photoUrl ?? null,
-            status: input.status,
+            status: nextStatus,
             uid,
-        });
+            updatedAt: now,
+        };
+        if (!checkInSnapshot.exists) {
+            checkInPayload.createdAt = now;
+        }
+        if (input.status === 'done') {
+            checkInPayload.commitmentType = commitmentType;
+            checkInPayload.currentValue = currentValue;
+            checkInPayload.stepValue = quantityConfig.stepValue;
+            checkInPayload.unitLabel = quantityConfig.unitLabel;
+            if (typeof quantityConfig.targetValue === 'number') {
+                checkInPayload.targetValue = quantityConfig.targetValue;
+            }
+            else {
+                checkInPayload.targetValue = firestore_1.FieldValue.delete();
+            }
+            if (typeof quantityConfig.maximumValue === 'number') {
+                checkInPayload.maximumValue = quantityConfig.maximumValue;
+            }
+            else {
+                checkInPayload.maximumValue = firestore_1.FieldValue.delete();
+            }
+            if (typeof quantityConfig.minimumValue === 'number') {
+                checkInPayload.minimumValue = quantityConfig.minimumValue;
+            }
+            else {
+                checkInPayload.minimumValue = firestore_1.FieldValue.delete();
+            }
+        }
+        else {
+            checkInPayload.commitmentType = commitmentType;
+            checkInPayload.currentValue = firestore_1.FieldValue.delete();
+            checkInPayload.maximumValue = firestore_1.FieldValue.delete();
+            checkInPayload.minimumValue = firestore_1.FieldValue.delete();
+            checkInPayload.stepValue = firestore_1.FieldValue.delete();
+            checkInPayload.targetValue = firestore_1.FieldValue.delete();
+            checkInPayload.unitLabel = firestore_1.FieldValue.delete();
+        }
+        transaction.set(checkInRef, checkInPayload, { merge: true });
         transaction.set(circleRef.collection('days').doc(dateKey), {
-            checkInCount: firestore_1.FieldValue.increment(1),
+            checkInCount: firestore_1.FieldValue.increment(nextCovered === existingCovered ? 0 : nextCovered ? 1 : -1),
             dateKey,
             updatedAt: now,
         }, { merge: true });
         transaction.set(firebase_1.db.collection('userPrivate').doc(uid), {
             lastTapInAt: now,
         }, { merge: true });
-        return { checkInId: uid, dateKey, momentum };
+        return {
+            checkInId: uid,
+            coverageStatus,
+            currentValue,
+            dateKey,
+            momentum,
+            status: nextStatus,
+        };
     });
 }
 exports.submitTapIn = (0, https_1.onCall)(submitTapInHandler);
-exports.processTapInSideEffects = (0, firestore_2.onDocumentCreated)({
+exports.processTapInSideEffects = (0, firestore_2.onDocumentWritten)({
     document: 'circles/{circleId}/days/{dateKey}/checkIns/{uid}',
     secrets: [notifications_1.oneSignalRestApiKey],
 }, async (event) => {
-    const checkIn = event.data?.data();
+    const checkIn = event.data?.after.data();
+    const priorCheckIn = event.data?.before.data();
     const status = checkIn?.status;
-    if (!checkIn || (status !== 'done' && status !== 'skip')) {
+    if (!checkIn ||
+        !(0, commitments_1.isCoveredCheckInData)(checkIn) ||
+        (0, commitments_1.isCoveredCheckInData)(priorCheckIn) ||
+        (status !== 'done' && status !== 'skip')) {
         return;
     }
     await processTapInSideEffectsForCheckIn({
@@ -409,20 +510,24 @@ exports.removeTapIn = (0, https_1.onCall)(async (request) => {
             .collection('checkIns')
             .doc(uid);
         const checkInSnapshot = await transaction.get(checkInRef);
+        const checkIn = checkInSnapshot.data();
         const decision = (0, remove_1.getRemoveTapInDecision)({
-            checkInStatus: checkInSnapshot.data()?.status,
+            coverageStatus: checkIn?.coverageStatus,
+            checkInStatus: checkIn?.status,
             memberStatus: memberSnapshot.data()?.status,
         });
         if (!decision.removed) {
             return { dateKey, removed: false };
         }
-        await (0, momentum_1.removeTapInOpportunity)({
-            circle,
-            circleId: input.circleId,
-            dateKey,
-            transaction,
-            uid,
-        });
+        if (decision.checkInCountDelta < 0) {
+            await (0, momentum_1.removeTapInOpportunity)({
+                circle,
+                circleId: input.circleId,
+                dateKey,
+                transaction,
+                uid,
+            });
+        }
         transaction.delete(checkInRef);
         transaction.set(circleRef.collection('days').doc(dateKey), {
             checkInCount: firestore_1.FieldValue.increment(decision.checkInCountDelta),

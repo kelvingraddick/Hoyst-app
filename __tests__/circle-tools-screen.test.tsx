@@ -1,5 +1,5 @@
 import React from 'react';
-import {Alert, Pressable, StyleSheet, TextInput} from 'react-native';
+import {Alert, Pressable, StyleSheet} from 'react-native';
 import renderer, {act, type ReactTestInstance} from 'react-test-renderer';
 
 import {CircleToolsScreen} from '../src/features/circles/screens/CircleToolsScreen';

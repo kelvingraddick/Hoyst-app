@@ -1,4 +1,5 @@
 import type {NavigatorScreenParams} from '@react-navigation/native';
+import type {CheckInCoverageStatus, CommitmentType} from '../types/models';
 
 export type AppTabsParamList = {
   Home: undefined;
@@ -29,6 +30,8 @@ export type TapInCompletionMomentum = {
   streakDelta: number;
 };
 
+export type TapInCompletionStatus = 'done' | 'skip' | 'partial' | 'failed';
+
 export type RootStackParamList = {
   Loading: undefined;
   MainTabs: NavigatorScreenParams<AppTabsParamList> | undefined;
@@ -51,14 +54,21 @@ export type RootStackParamList = {
     circleId: string;
     circleTitle?: string;
     commitment?: string;
+    commitmentType?: CommitmentType;
+    coverageStatus?: CheckInCoverageStatus;
+    currentValue?: number;
     inviteUrl?: string;
+    maximumValue?: number;
     memberCount?: number;
+    minimumValue?: number;
     periodTapInCount?: number;
     progressLabel?: string;
     source: TapInSource;
-    status?: 'done' | 'skip';
+    status?: TapInCompletionStatus;
     streakDays?: number;
     streakLabel?: string;
+    targetValue?: number;
+    unitLabel?: string;
     completionMomentum?: TapInCompletionMomentum;
     note?: string;
     photoUri?: string;

@@ -126,6 +126,14 @@ function getDetailStatusPill(
     return {label: 'Skipped', tone: 'orange'};
   }
 
+  if (detail.viewerTodayStatus === 'failed') {
+    return {label: 'Outside range', tone: 'orange'};
+  }
+
+  if (detail.viewerTodayStatus === 'partial') {
+    return {label: 'Progress saved', tone: 'yellow'};
+  }
+
   if (detail.viewerHasTappedInToday) {
     return {label: 'Tapped today', tone: 'green'};
   }
@@ -492,11 +500,9 @@ function getCompanionProgressSubtitle(detail: CircleDetailModel) {
 function CircleStatRings({
   detail,
   weekCells,
-  weekStreakDays,
 }: {
   detail: CircleDetailModel;
   weekCells: React.ComponentProps<typeof WeekProgressStrip>['days'];
-  weekStreakDays: number;
 }) {
   const theme = useHoystTheme();
   const completion = clampStatPercent(detail.completionRate);
@@ -955,8 +961,6 @@ export function CircleDetailScreen({
   const nudgeTargetCopy = formatNudgeTargetCount(nudgeTargetCount);
   const previewCopy =
     detail.matchCopy ?? 'Preview the circle before you jump in.';
-  const streakValue =
-    detail.streakDays ?? Number.parseInt(detail.streakLabel, 10);
   const privacyLabel = detail.privacy === 'private' ? 'Private' : 'Public';
   const joinActionLabel = joinRequested
     ? detail.joinLabel === 'Open seats'
@@ -967,9 +971,17 @@ export function CircleDetailScreen({
     : 'Request to join';
   const canRemoveTodayCheckIn =
     isMemberCircle &&
-    (detail.viewerTodayStatus === 'done' ||
-      detail.viewerTodayStatus === 'skip');
-  const tapInPrimaryActionLabel = canRemoveTodayCheckIn
+    detail.viewerHasTappedInToday &&
+    Boolean(detail.viewerTodayStatus) &&
+    detail.viewerTodayStatus !== 'rest';
+  const canReviewTodayCheckIn =
+    canRemoveTodayCheckIn && !detail.viewerCanUpdateTapIn;
+  const canUpdateTodayQuantity = Boolean(detail.viewerCanUpdateTapIn);
+  const quantityTapInRemoveCopy =
+    "This will delete today's saved quantity and reopen this Tap In.";
+  const tapInPrimaryActionLabel = canUpdateTodayQuantity
+    ? 'Update Tap In'
+    : canReviewTodayCheckIn
     ? 'View Today'
     : 'Tap In';
   const tapInPulseRingState = getPulseRingStateForCircle(detail);
@@ -977,7 +989,9 @@ export function CircleDetailScreen({
   const removeActionLabel =
     detail.viewerTodayStatus === 'skip' ? 'Remove Skip' : 'Remove Tap In';
   const removeProgressionCopy =
-    detail.commitmentCadence === 'daily'
+    canUpdateTodayQuantity
+      ? quantityTapInRemoveCopy
+      : detail.commitmentCadence === 'daily'
       ? "This will undo today's Progression for this Circle."
       : detail.commitmentCadence === 'monthly'
       ? "This will undo this month's Progression for this Circle."
@@ -997,7 +1011,7 @@ export function CircleDetailScreen({
       : detail.viewerRole === 'admin'
       ? theme.accentSecondaryForeground
       : theme.textMuted;
-  const tapInSupportingText = canRemoveTodayCheckIn
+  const tapInSupportingText = canReviewTodayCheckIn
     ? "Review today's Tap In"
     : detail.commitmentCadence === 'monthly'
     ? 'Log your progress this month'
@@ -1020,9 +1034,6 @@ export function CircleDetailScreen({
 
   const circleProgressionPercent =
     detail.progressPercent ?? detail.completionRate ?? 0;
-  const weekStreakDays = Number.isFinite(streakValue)
-    ? Math.max(0, streakValue)
-    : 0;
   const weekCells =
     detail.groupProgressDays && detail.groupProgressDays.length > 0
       ? detail.groupProgressDays
@@ -1452,11 +1463,7 @@ export function CircleDetailScreen({
             )
           ) : null}
 
-          <CircleStatRings
-            detail={detail}
-            weekCells={weekCells}
-            weekStreakDays={weekStreakDays}
-          />
+          <CircleStatRings detail={detail} weekCells={weekCells} />
 
           {removeTapInAction}
         </View>

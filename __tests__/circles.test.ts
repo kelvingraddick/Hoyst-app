@@ -350,6 +350,28 @@ describe('create circle payload mapping', () => {
     expect(clampCircleMaxSize(52.7)).toBe(53);
   });
 
+  it('builds a Limit commitment payload with minimum and maximum values', () => {
+    const draft = {
+      ...createInitialCircleDraft('America/New_York'),
+      category: 'Wellness',
+      commitment: 'Stay between two and four coffees',
+      commitmentType: 'limit' as const,
+      maximumValue: 4,
+      minimumValue: 2,
+      stepValue: 5,
+      title: 'Coffee guardrails',
+      unitLabel: 'coffee',
+    };
+
+    expect(buildCreateCirclePayload(draft)).toMatchObject({
+      commitmentType: 'limit',
+      maximumValue: 4,
+      minimumValue: 2,
+      stepValue: 1,
+      unitLabel: 'coffee',
+    });
+  });
+
   it('derives edit drafts from existing circle settings', () => {
     const draft = buildCircleEditDraft(
       {

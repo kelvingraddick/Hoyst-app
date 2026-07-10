@@ -84,6 +84,8 @@ describe('Tap In story sharing', () => {
 
   it('shows story sharing for completed Tap Ins but not skips', () => {
     expect(canShareTapInStory('done')).toBe(true);
+    expect(canShareTapInStory('partial')).toBe(true);
+    expect(canShareTapInStory('failed')).toBe(true);
     expect(canShareTapInStory(undefined)).toBe(true);
     expect(canShareTapInStory('skip')).toBe(false);
   });

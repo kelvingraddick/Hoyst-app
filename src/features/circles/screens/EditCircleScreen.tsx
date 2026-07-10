@@ -52,6 +52,7 @@ import type {
   CircleJoinMode,
   CirclePrivacyMode,
   CommitmentCadence,
+  CommitmentType,
   CreateCircleDraft,
 } from '../../../types/models';
 
@@ -100,6 +101,27 @@ const categoryOptions: Array<Option<string>> = [
     id: 'Custom',
     label: 'Custom',
     tone: getCircleCategoryVisual('Custom').tone,
+  },
+];
+
+const commitmentTypeOptions: Array<Option<CommitmentType>> = [
+  {
+    description: 'Reach at least a target amount each Tap In day.',
+    id: 'build',
+    label: 'Build',
+    tone: 'green',
+  },
+  {
+    description: 'Stay inside a minimum and maximum amount.',
+    id: 'limit',
+    label: 'Limit',
+    tone: 'orange',
+  },
+  {
+    description: 'Confirm you stayed clear for the day.',
+    id: 'avoid',
+    label: 'Avoid',
+    tone: 'purple',
   },
 ];
 
@@ -470,6 +492,42 @@ export function EditCircleScreen({
   ) => {
     setDraft(current => (current ? {...current, [key]: value} : current));
   };
+  const setCommitmentType = (commitmentType: CommitmentType) => {
+    setDraft(current =>
+      current
+        ? {
+            ...current,
+            commitmentType,
+            ...(commitmentType === 'build'
+              ? {targetValue: current.targetValue ?? 1}
+              : {}),
+            ...(commitmentType === 'limit'
+              ? {
+                  maximumValue:
+                    current.maximumValue ?? current.targetValue ?? 1,
+                }
+              : {}),
+            ...(commitmentType === 'avoid'
+              ? {
+                  maximumValue: undefined,
+                  minimumValue: undefined,
+                  targetValue: 1,
+                }
+              : {}),
+          }
+        : current,
+    );
+  };
+  const setQuantityField = (
+    key: 'maximumValue' | 'minimumValue' | 'targetValue',
+    value: string,
+  ) => {
+    const parsedValue = Number.parseInt(value, 10);
+    const nextValue =
+      Number.isFinite(parsedValue) && parsedValue >= 0 ? parsedValue : 0;
+
+    setField(key, nextValue);
+  };
 
   const setSkipRule = (nextRule: {allowance?: number; windowDays?: number}) => {
     setDraft(current =>
@@ -682,7 +740,9 @@ export function EditCircleScreen({
           />
           <HoystText
             tone={
-              commitmentLength > 0 && commitmentLength <= 160 ? 'muted' : 'danger'
+              commitmentLength > 0 && commitmentLength <= 160
+                ? 'muted'
+                : 'danger'
             }
             variant="caption">
             {commitmentLength}/160 characters
@@ -755,6 +815,100 @@ export function EditCircleScreen({
             }
           />
         </View>
+        <View style={styles.sectionHeader}>
+          <HoystText variant="bodyStrong">Commitment type</HoystText>
+          <HoystChip
+            label={
+              draft.commitmentType === 'limit'
+                ? 'Limit'
+                : draft.commitmentType === 'avoid'
+                ? 'Avoid'
+                : 'Build'
+            }
+            tone={
+              draft.commitmentType === 'limit'
+                ? 'orange'
+                : draft.commitmentType === 'avoid'
+                ? 'purple'
+                : 'green'
+            }
+          />
+        </View>
+        {renderOptions(
+          commitmentTypeOptions,
+          draft.commitmentType,
+          setCommitmentType,
+        )}
+        {draft.commitmentType !== 'avoid' ? (
+          <View style={styles.nestedBlock}>
+            <View style={styles.sectionHeader}>
+              <HoystText variant="bodyStrong">
+                {draft.commitmentType === 'limit'
+                  ? 'Daily range'
+                  : 'Daily target'}
+              </HoystText>
+              <HoystChip
+                label={draft.commitmentType === 'limit' ? 'Range' : 'Target'}
+                tone={draft.commitmentType === 'limit' ? 'orange' : 'green'}
+              />
+            </View>
+            {draft.commitmentType === 'build' ? (
+              <View style={styles.fieldBlock}>
+                <HoystText tone="muted" variant="label">
+                  Target amount
+                </HoystText>
+                <HoystInput
+                  keyboardType="number-pad"
+                  onChangeText={value => setQuantityField('targetValue', value)}
+                  value={`${draft.targetValue ?? 1}`}
+                />
+              </View>
+            ) : (
+              <>
+                <View style={styles.fieldBlock}>
+                  <HoystText tone="muted" variant="label">
+                    Minimum amount
+                  </HoystText>
+                  <HoystInput
+                    keyboardType="number-pad"
+                    onChangeText={value =>
+                      setQuantityField('minimumValue', value)
+                    }
+                    value={`${draft.minimumValue ?? 0}`}
+                  />
+                </View>
+                <View style={styles.fieldBlock}>
+                  <HoystText tone="muted" variant="label">
+                    Maximum amount
+                  </HoystText>
+                  <HoystInput
+                    keyboardType="number-pad"
+                    onChangeText={value =>
+                      setQuantityField('maximumValue', value)
+                    }
+                    value={`${draft.maximumValue ?? draft.targetValue ?? 1}`}
+                  />
+                </View>
+              </>
+            )}
+            <View style={styles.fieldBlock}>
+              <HoystText tone="muted" variant="label">
+                Unit label
+              </HoystText>
+              <HoystInput
+                maxLength={32}
+                onChangeText={value => setField('unitLabel', value)}
+                placeholder="pages, glasses, minutes"
+                value={draft.unitLabel}
+              />
+            </View>
+          </View>
+        ) : (
+          <HoystText tone="muted">
+            Avoid circles stay binary in this version. Members Tap In once to
+            confirm they stayed clear.
+          </HoystText>
+        )}
         {renderOptions(
           commitmentCadenceOptions,
           draft.commitmentCadence,

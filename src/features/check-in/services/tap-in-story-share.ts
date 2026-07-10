@@ -2,9 +2,9 @@ import type {RefObject} from 'react';
 import {NativeModules, TurboModuleRegistry, type View} from 'react-native';
 import type {ShareSingleOptions, Social} from 'react-native-share';
 
-import type {CircleDetailModel} from '../../../types/models';
+import type {CheckInStatus, CircleDetailModel} from '../../../types/models';
 
-export type TapInStoryShareStatus = 'done' | 'skip' | undefined;
+export type TapInStoryShareStatus = Exclude<CheckInStatus, 'rest'> | undefined;
 export type TapInStoryTemplateId =
   | 'designedPost'
   | 'photoOverlay'

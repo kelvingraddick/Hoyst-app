@@ -207,6 +207,51 @@ describe('PulseRing', () => {
     expect(
       getPulseRingStateForCircle(
         circle({
+          commitmentType: 'build',
+          currentValue: 5,
+          remainingCheckIns: 0,
+          state: 'done',
+          targetValue: 5,
+          unitLabel: 'pages',
+          viewerCanUpdateTapIn: true,
+          viewerHasCheckedIn: true,
+          viewerHasTappedInToday: true,
+          viewerTodayStatus: 'done',
+        }),
+      ),
+    ).toBe('idle');
+    expect(
+      getPulseRingStateForCircle(
+        circle({
+          commitmentType: 'build',
+          currentValue: 3,
+          targetValue: 5,
+          unitLabel: 'pages',
+          viewerCanUpdateTapIn: true,
+          viewerHasCheckedIn: false,
+          viewerHasTappedInToday: true,
+          viewerTodayStatus: 'partial',
+        }),
+      ),
+    ).toBe('active');
+    expect(
+      getPulseRingStateForCircle(
+        circle({
+          commitmentType: 'limit',
+          currentValue: 8,
+          maximumValue: 6,
+          minimumValue: 2,
+          unitLabel: 'servings',
+          viewerCanUpdateTapIn: true,
+          viewerHasCheckedIn: false,
+          viewerHasTappedInToday: true,
+          viewerTodayStatus: 'failed',
+        }),
+      ),
+    ).toBe('active');
+    expect(
+      getPulseRingStateForCircle(
+        circle({
           remainingCheckIns: 0,
           state: 'done',
           viewerHasCheckedIn: true,

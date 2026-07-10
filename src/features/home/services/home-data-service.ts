@@ -14,6 +14,7 @@ import type {
   CircleProgressDay,
   CircleSummary,
   CheckInStatus,
+  CheckInCoverageStatus,
   CommitmentCadence,
   CommitmentFrequency,
   GraceRule,
@@ -22,6 +23,13 @@ import type {
   ViewerTodayCheckIn,
 } from '../../../types/models';
 import {canTapInToday, getHomeCircleActionVariant} from './home-circle-actions';
+import {
+  formatQuantityValue,
+  getCommitmentType,
+  getQuantityConfig,
+  isCoveredCheckInData,
+  isSingleTapInCommitment,
+} from '../../commitments/commitment-logic';
 export {
   canTapInToday,
   getHomeCircleActionVariant,
@@ -31,6 +39,8 @@ export {
 export type HomeProgressCell = {
   dateKey: string;
   label: string;
+  quantityLabel?: string;
+  quantityValue?: number;
   state: ProgressDayState;
 };
 
@@ -95,9 +105,10 @@ type CircleSubscriptionState = {
   periodCheckInKey?: string;
   periodCheckInUnsubscribes: Array<() => void>;
   recentGroupCheckInKey?: string;
+  recentGroupQuantityMarkers: Map<string, QuantityProgressMarker>;
   recentGroupCheckInStatuses: Map<string, Map<string, CheckInStatus>>;
   recentGroupCheckInUnsubscribes: Array<() => void>;
-  recentUserCheckIns: Map<string, boolean>;
+  recentUserCheckIns: Map<string, RecentUserCheckInMarker>;
   skipGraceCheckInStatuses: Map<string, CheckInStatus | undefined>;
   skipGraceDateKeys: string[];
   skipGraceKey?: string;
@@ -106,6 +117,17 @@ type CircleSubscriptionState = {
   todayCheckInStatuses: Map<string, CheckInStatus>;
   viewerTodayCheckIn?: ViewerTodayCheckIn;
 };
+
+type RecentUserCheckInMarker = {
+  covered: boolean;
+  quantityLabel?: string;
+  quantityValue?: number;
+};
+
+type QuantityProgressMarker = Pick<
+  HomeProgressCell,
+  'quantityLabel' | 'quantityValue'
+>;
 
 type HomeSubscriptionOptions = {
   lookbackDays?: number;
@@ -221,13 +243,145 @@ function normalizeJoinMode(value: unknown) {
 }
 
 function normalizeCheckInStatus(value: unknown): CheckInStatus | undefined {
-  return value === 'done' || value === 'skip' ? value : undefined;
+  return value === 'done' ||
+    value === 'skip' ||
+    value === 'partial' ||
+    value === 'failed'
+    ? value
+    : undefined;
+}
+
+function normalizeCoverageStatus(
+  value: unknown,
+): CheckInCoverageStatus | undefined {
+  return value === 'covered' ||
+    value === 'skipped' ||
+    value === 'partial' ||
+    value === 'failed'
+    ? value
+    : undefined;
 }
 
 function isCoveredCheckInStatus(value: unknown) {
   const status = normalizeCheckInStatus(value);
 
   return status === 'done' || status === 'skip';
+}
+
+function asOptionalNonNegativeNumber(value: unknown) {
+  return typeof value === 'number' && Number.isFinite(value)
+    ? Math.max(0, Math.round(value))
+    : undefined;
+}
+
+function getCommitmentSource(
+  circleData?: PlainData,
+  checkInData?: PlainData,
+): Partial<CircleSummary> {
+  return {
+    commitmentType: getCommitmentType(
+      (checkInData ?? circleData) as Partial<CircleSummary> | undefined,
+    ),
+    maximumValue: asOptionalNonNegativeNumber(
+      checkInData?.maximumValue ?? circleData?.maximumValue,
+    ),
+    minimumValue: asOptionalNonNegativeNumber(
+      checkInData?.minimumValue ?? circleData?.minimumValue,
+    ),
+    stepValue: asOptionalNonNegativeNumber(
+      checkInData?.stepValue ?? circleData?.stepValue,
+    ),
+    targetValue: asOptionalNonNegativeNumber(
+      checkInData?.targetValue ?? circleData?.targetValue,
+    ),
+    unitLabel: asString(checkInData?.unitLabel ?? circleData?.unitLabel),
+  };
+}
+
+function getQuantityMarkerForCheckIn(
+  checkInData?: PlainData,
+  circleData?: PlainData,
+): Omit<RecentUserCheckInMarker, 'covered'> | undefined {
+  if (!checkInData) {
+    return undefined;
+  }
+
+  const status = normalizeCheckInStatus(checkInData.status);
+
+  if (status !== 'done' && status !== 'partial' && status !== 'failed') {
+    return undefined;
+  }
+
+  const commitmentSource = getCommitmentSource(circleData, checkInData);
+
+  if (
+    getCommitmentType(commitmentSource) === 'avoid' ||
+    isSingleTapInCommitment(commitmentSource)
+  ) {
+    return undefined;
+  }
+
+  const quantityConfig = getQuantityConfig(commitmentSource);
+  const requiredQuantity =
+    getCommitmentType(commitmentSource) === 'limit'
+      ? quantityConfig.maximumValue ?? 1
+      : quantityConfig.targetValue ?? 1;
+  const quantityValue = asOptionalNonNegativeNumber(checkInData.currentValue);
+
+  if (requiredQuantity <= 1 || typeof quantityValue !== 'number') {
+    return undefined;
+  }
+
+  return {
+    quantityLabel: formatQuantityValue(quantityValue),
+    quantityValue,
+  };
+}
+
+function getRecentUserCheckInMarker(
+  snapshot: FirebaseFirestoreTypes.DocumentSnapshot,
+  circleData?: PlainData,
+): RecentUserCheckInMarker {
+  const data = snapshotData(snapshot);
+
+  if (!snapshot.exists() || !data) {
+    return {covered: false};
+  }
+
+  const status = normalizeCheckInStatus(data.status) ?? 'done';
+  const quantityMarker = getQuantityMarkerForCheckIn(data, circleData);
+
+  return {
+    covered: isCoveredCheckInData({
+      coverageStatus: normalizeCoverageStatus(data.coverageStatus),
+      status,
+    }),
+    ...(quantityMarker ?? {}),
+  };
+}
+
+function getGroupQuantityMarkerFromSnapshot(
+  snapshot: FirebaseFirestoreTypes.QuerySnapshot,
+  circleData?: PlainData,
+): QuantityProgressMarker | undefined {
+  const quantityValues = snapshot.docs
+    .map(doc => getQuantityMarkerForCheckIn(snapshotData(doc), circleData))
+    .map(marker => marker?.quantityValue)
+    .filter((value): value is number => typeof value === 'number');
+
+  if (quantityValues.length === 0) {
+    return undefined;
+  }
+
+  const totalQuantity = quantityValues.reduce(
+    (total, value) => total + value,
+    0,
+  );
+
+  return {
+    quantityLabel: formatQuantityValue(totalQuantity),
+    quantityValue: totalQuantity,
+  };
 }
 
 function normalizeGraceRule(value: unknown): GraceRule {
@@ -488,28 +642,44 @@ function buildProgressDays(
   completedDateKeys: ReadonlySet<string>,
   now?: Date,
   lookbackDays = 7,
+  quantityMarkers?: ReadonlyMap<
+    string,
+    Pick<HomeProgressCell, 'quantityLabel' | 'quantityValue'>
+  >,
 ): HomeProgressCell[] {
   const recentDates = getRecentDates(timezone, now, lookbackDays);
   const todayDateKey = recentDates[recentDates.length - 1]?.dateKey ?? '';
 
-  return recentDates.map(day => ({
-    ...day,
-    state: completedDateKeys.has(day.dateKey)
-      ? 'done'
-      : day.dateKey === todayDateKey
-      ? 'today'
-      : 'future',
-  }));
+  return recentDates.map(day => {
+    const quantityMarker = quantityMarkers?.get(day.dateKey);
+
+    return {
+      ...day,
+      ...(quantityMarker?.quantityLabel
+        ? {
+            quantityLabel: quantityMarker.quantityLabel,
+            quantityValue: quantityMarker.quantityValue,
+          }
+        : {}),
+      state: completedDateKeys.has(day.dateKey)
+        ? 'done'
+        : day.dateKey === todayDateKey
+        ? 'today'
+        : 'future',
+    };
+  });
 }
 
 export function buildCircleGroupProgressDays({
   memberRecords,
   now,
+  recentQuantityMarkers,
   recentCheckInStatuses,
   timezone,
 }: {
   memberRecords: ReadonlyArray<Record<string, unknown>>;
   now?: Date;
+  recentQuantityMarkers?: ReadonlyMap<string, QuantityProgressMarker>;
   recentCheckInStatuses: ReadonlyMap<
     string,
     ReadonlyMap<string, CheckInStatus>
@@ -523,6 +693,7 @@ export function buildCircleGroupProgressDays({
 
   return getRecentDates(timezone, now).map(day => {
     const dayStatuses = recentCheckInStatuses.get(day.dateKey);
+    const quantityMarker = recentQuantityMarkers?.get(day.dateKey);
     const coveredCount = memberUids.reduce(
       (total, memberUid) =>
         isCoveredCheckInStatus(dayStatuses?.get(memberUid)) ? total + 1 : total,
@@ -532,6 +703,12 @@ export function buildCircleGroupProgressDays({
     return {
       ...day,
       coveredCount,
+      ...(quantityMarker?.quantityLabel
+        ? {
+            quantityLabel: quantityMarker.quantityLabel,
+            quantityValue: quantityMarker.quantityValue,
+          }
+        : {}),
       state: totalCount > 0 && coveredCount >= totalCount ? 'done' : 'future',
       totalCount,
     };
@@ -755,6 +932,7 @@ export function buildHomeDataFromCircles({
   hasLoadedMemberships = true,
   lookbackDays = 7,
   membershipCount = circles.length,
+  quantityMarkers,
   timezone,
   now = new Date(),
 }: {
@@ -764,6 +942,10 @@ export function buildHomeDataFromCircles({
   lookbackDays?: number;
   membershipCount?: number;
   now?: Date;
+  quantityMarkers?: ReadonlyMap<
+    string,
+    Pick<HomeProgressCell, 'quantityLabel' | 'quantityValue'>
+  >;
   timezone: string;
 }) {
   const progressDays = buildProgressDays(
@@ -771,6 +953,7 @@ export function buildHomeDataFromCircles({
     completedDateKeys,
     now,
     lookbackDays,
+    quantityMarkers,
   );
   const completedDays = progressDays.filter(day => day.state === 'done').length;
   const today = DateTime.fromJSDate(now, {zone: timezone});
@@ -909,6 +1092,9 @@ export function mapHomeCircleFromData({
     circleData.commitmentFrequency,
     commitmentCadence,
   );
+  const commitmentSource = getCommitmentSource(circleData);
+  const commitmentType = getCommitmentType(commitmentSource);
+  const quantityConfig = getQuantityConfig(commitmentSource);
   const tapInsPerWeek = commitmentFrequency.tapInsPerWeek;
   const requiredTapIns =
     commitmentCadence === 'daily'
@@ -961,17 +1147,42 @@ export function mapHomeCircleFromData({
     todayCheckInStatuses: coveredCheckIns,
     viewerUid: uid,
   });
-  const viewerTodayStatus = uid ? coveredCheckIns.get(uid) : undefined;
+  const coveredViewerTodayStatus = uid ? coveredCheckIns.get(uid) : undefined;
+  const rawViewerTodayStatus = viewerTodayCheckIn?.status;
+  const viewerTodayStatus = rawViewerTodayStatus ?? coveredViewerTodayStatus;
   const visibleViewerTodayCheckIn =
     viewerTodayCheckIn && viewerTodayCheckIn.status === viewerTodayStatus
       ? viewerTodayCheckIn
       : undefined;
   const viewerCoveredCount = uid ? memberCoveredCounts.get(uid) ?? 0 : 0;
-  const viewerHasTappedInToday = Boolean(viewerTodayStatus);
+  const viewerHasTappedInToday = Boolean(
+    visibleViewerTodayCheckIn ?? viewerTodayStatus,
+  );
   const viewerRemainingTapIns = isPending
     ? 0
     : Math.max(requiredTapIns - viewerCoveredCount, 0);
   const viewerHasCheckedIn = isPending ? true : viewerRemainingTapIns === 0;
+  const viewerCurrentValue =
+    visibleViewerTodayCheckIn?.currentValue ??
+    (commitmentType === 'avoid' && viewerTodayStatus === 'done'
+      ? 1
+      : undefined);
+  const viewerCanUpdateTapIn =
+    !isPending &&
+    membershipStatus === 'active' &&
+    viewerHasTappedInToday &&
+    viewerTodayStatus !== 'skip' &&
+    (commitmentType === 'limit' ||
+      (commitmentType === 'build' &&
+        !isSingleTapInCommitment(commitmentSource)));
+  const viewerRemainingAmount =
+    commitmentType === 'build' && typeof viewerCurrentValue === 'number'
+      ? Math.max((quantityConfig.targetValue ?? 1) - viewerCurrentValue, 0)
+      : undefined;
+  const quantityLabel =
+    typeof viewerCurrentValue === 'number'
+      ? formatQuantityValue(viewerCurrentValue)
+      : undefined;
   const remainingCheckIns = isPending
     ? 0
     : Math.max(progressBase - periodCoveredCount, 0);
@@ -1002,22 +1213,34 @@ export function mapHomeCircleFromData({
     commitmentCadence,
     commitment,
     commitmentFrequency,
+    commitmentType,
+    ...(typeof viewerCurrentValue === 'number'
+      ? {currentValue: viewerCurrentValue}
+      : {}),
     graceRules,
     id: circleId,
     inviteUrl: getInviteUrl(circleData),
     joinMode: normalizeJoinMode(circleData.joinMode),
     matchCopy: matchCopy || undefined,
+    ...(typeof quantityConfig.maximumValue === 'number'
+      ? {maximumValue: quantityConfig.maximumValue}
+      : {}),
     maxSize: asNumber(circleData.maxSize, Math.max(memberCount, 1)),
     memberCount,
     members: visibleMembers,
+    ...(typeof quantityConfig.minimumValue === 'number'
+      ? {minimumValue: quantityConfig.minimumValue}
+      : {}),
     nudgeTargetCount,
     periodTapInCount: periodCoveredCount,
     privacy: normalizePrivacy(circleData.privacy),
+    ...(quantityLabel ? {quantityLabel} : {}),
     completionLabel: isPending ? 'Pending approval' : progressLabel,
     progressLabel: isPending ? 'Pending approval' : progressLabel,
     progressPercent,
     remainingCheckIns,
     state,
+    stepValue: quantityConfig.stepValue,
     streakDays,
     streakLabel: isPending
       ? 'Pending approval'
@@ -1030,10 +1253,18 @@ export function mapHomeCircleFromData({
       : 'Start today',
     title,
     timezone: asString(circleData.timezone, 'UTC'),
+    ...(typeof quantityConfig.targetValue === 'number'
+      ? {targetValue: quantityConfig.targetValue}
+      : {}),
+    unitLabel: quantityConfig.unitLabel,
     ...(typeof viewerAvailableSkips === 'number' ? {viewerAvailableSkips} : {}),
+    ...(viewerCanUpdateTapIn ? {viewerCanUpdateTapIn} : {}),
     viewerHasCheckedIn,
     viewerHasTappedInToday,
     viewerMembershipStatus: membershipStatus,
+    ...(typeof viewerRemainingAmount === 'number'
+      ? {viewerRemainingAmount}
+      : {}),
     viewerRemainingTapIns,
     viewerRole: normalizeMemberRole(membershipData.role),
     ...(visibleViewerTodayCheckIn
@@ -1313,10 +1544,15 @@ function getCoveredStatusesFromSnapshot(
   return new Map(
     snapshot.docs
       .map(doc => {
+        const data = doc.data();
         const uidValue = asString(doc.data().uid, doc.id);
-        const status = normalizeCheckInStatus(doc.data().status) ?? 'done';
+        const status = normalizeCheckInStatus(data.status) ?? 'done';
+        const checkIn = {
+          coverageStatus: normalizeCoverageStatus(data.coverageStatus),
+          status,
+        };
 
-        return uidValue && isCoveredCheckInStatus(status)
+        return uidValue && isCoveredCheckInData(checkIn)
           ? ([uidValue, status] as const)
           : undefined;
       })
@@ -1344,17 +1580,36 @@ function getViewerTodayCheckInFromSnapshot(
   const data = checkInSnapshot.data();
   const status = normalizeCheckInStatus(data.status);
 
-  if (status !== 'done' && status !== 'skip') {
+  if (
+    status !== 'done' &&
+    status !== 'skip' &&
+    status !== 'partial' &&
+    status !== 'failed'
+  ) {
     return undefined;
   }
 
   const note = asString(data.note);
   const photoUrl = asString(data.photoUrl);
+  const coverageStatus = normalizeCoverageStatus(data.coverageStatus);
+  const currentValue = asOptionalNonNegativeNumber(data.currentValue);
+  const maximumValue = asOptionalNonNegativeNumber(data.maximumValue);
+  const minimumValue = asOptionalNonNegativeNumber(data.minimumValue);
+  const stepValue = asOptionalNonNegativeNumber(data.stepValue);
+  const targetValue = asOptionalNonNegativeNumber(data.targetValue);
+  const unitLabel = asString(data.unitLabel);
 
   return {
     status,
+    ...(coverageStatus ? {coverageStatus} : {}),
+    ...(typeof currentValue === 'number' ? {currentValue} : {}),
+    ...(typeof maximumValue === 'number' ? {maximumValue} : {}),
+    ...(typeof minimumValue === 'number' ? {minimumValue} : {}),
     ...(note ? {note} : {}),
     ...(photoUrl ? {photoUrl} : {}),
+    ...(typeof stepValue === 'number' ? {stepValue} : {}),
+    ...(typeof targetValue === 'number' ? {targetValue} : {}),
+    ...(unitLabel ? {unitLabel} : {}),
   };
 }
 
@@ -1371,6 +1626,7 @@ function clearRecentGroupCheckInListeners(state: CircleSubscriptionState) {
   state.recentGroupCheckInUnsubscribes.forEach(unsubscribe => unsubscribe());
   state.recentGroupCheckInUnsubscribes = [];
   state.recentGroupCheckInKey = undefined;
+  state.recentGroupQuantityMarkers?.clear();
   state.recentGroupCheckInStatuses.clear();
 }
 
@@ -1520,10 +1776,23 @@ function syncRecentGroupCheckInListeners({
         .doc(dateKey)
         .collection('checkIns')
         .onSnapshot(snapshot => {
+          const quantityMarkers =
+            state.recentGroupQuantityMarkers ??
+            (state.recentGroupQuantityMarkers = new Map());
+          const quantityMarker = getGroupQuantityMarkerFromSnapshot(
+            snapshot,
+            state.circleData,
+          );
+
           state.recentGroupCheckInStatuses.set(
             dateKey,
             getCoveredStatusesFromSnapshot(snapshot),
           );
+          if (quantityMarker) {
+            quantityMarkers.set(dateKey, quantityMarker);
+          } else {
+            quantityMarkers.delete(dateKey);
+          }
           onUpdate();
         }, onError),
     );
@@ -1537,10 +1806,42 @@ function recentCompletedDateKeys(
   return new Set(
     recentDateKeys.filter(dateKey =>
       Array.from(states.values()).some(
-        state => state.recentUserCheckIns.get(dateKey) === true,
+        state => state.recentUserCheckIns.get(dateKey)?.covered === true,
       ),
     ),
   );
+}
+
+function recentQuantityMarkers(
+  states: Map<string, CircleSubscriptionState>,
+  recentDateKeys: string[],
+) {
+  const markers = new Map<
+    string,
+    Pick<HomeProgressCell, 'quantityLabel' | 'quantityValue'>
+  >();
+
+  recentDateKeys.forEach(dateKey => {
+    const quantityValues = Array.from(states.values())
+      .map(state => state.recentUserCheckIns.get(dateKey)?.quantityValue)
+      .filter((value): value is number => typeof value === 'number');
+
+    if (quantityValues.length === 0) {
+      return;
+    }
+
+    const totalQuantity = quantityValues.reduce(
+      (total, value) => total + value,
+      0,
+    );
+
+    markers.set(dateKey, {
+      quantityLabel: formatQuantityValue(totalQuantity),
+      quantityValue: totalQuantity,
+    });
+  });
+
+  return markers;
 }
 
 export function subscribeToHomeData({
@@ -1574,6 +1875,7 @@ export function subscribeToHomeData({
         hasLoadedMemberships: true,
         lookbackDays,
         membershipCount: memberships.size,
+        quantityMarkers: recentQuantityMarkers(states, recentDateKeys),
         timezone,
       }),
     );
@@ -1603,6 +1905,7 @@ export function subscribeToHomeData({
         membersData: [membershipData],
         periodCheckInStatuses: new Map(),
         periodCheckInUnsubscribes: [],
+        recentGroupQuantityMarkers: new Map(),
         recentGroupCheckInStatuses: new Map(),
         recentGroupCheckInUnsubscribes: [],
         recentUserCheckIns: new Map(),
@@ -1690,8 +1993,7 @@ export function subscribeToHomeData({
             .onSnapshot(snapshot => {
               state.recentUserCheckIns.set(
                 dateKey,
-                snapshot.exists() &&
-                  isCoveredCheckInStatus(snapshot.data()?.status),
+                getRecentUserCheckInMarker(snapshot, state.circleData),
               );
               emit();
             }, onError),
@@ -1740,6 +2042,7 @@ export function subscribeToMemberCircleDetail({
     memberProfileUnsubscribes: new Map(),
     periodCheckInStatuses: new Map(),
     periodCheckInUnsubscribes: [],
+    recentGroupQuantityMarkers: new Map(),
     recentGroupCheckInStatuses: new Map(),
     recentGroupCheckInUnsubscribes: [],
     recentUserCheckIns: new Map(),
@@ -1773,6 +2076,7 @@ export function subscribeToMemberCircleDetail({
     });
     const groupProgressDays = buildCircleGroupProgressDays({
       memberRecords: state.membersData ?? [],
+      recentQuantityMarkers: state.recentGroupQuantityMarkers ?? new Map(),
       recentCheckInStatuses: state.recentGroupCheckInStatuses,
       timezone: asString(state.circleData?.timezone, timezone),
     });
@@ -1869,8 +2173,7 @@ export function subscribeToMemberCircleDetail({
           .onSnapshot(snapshot => {
             state.recentUserCheckIns.set(
               dateKey,
-              snapshot.exists() &&
-                isCoveredCheckInStatus(snapshot.data()?.status),
+              getRecentUserCheckInMarker(snapshot, state.circleData),
             );
             emit();
           }, onError),

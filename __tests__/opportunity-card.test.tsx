@@ -55,6 +55,7 @@ function circle(
     streakLabel: 'Already tapped in',
     title: 'Deep Work Crew',
     viewerHasCheckedIn: true,
+    viewerHasTappedInToday: true,
     viewerMembershipStatus: 'active',
     viewerRole: 'member',
     viewerTodayStatus: 'done',
@@ -133,5 +134,33 @@ describe('OpportunityCard', () => {
 
     expect(output).toContain('Tap today');
     expect(button.props.ringState).toBe('active');
+  });
+
+  it('does not show a Tap In action for covered quantity commitments', () => {
+    let tree: renderer.ReactTestRenderer | undefined;
+
+    act(() => {
+      tree = renderer.create(
+        <OpportunityCard
+          card={circle({
+            commitmentType: 'build',
+            currentValue: 5,
+            targetValue: 5,
+            unitLabel: 'pages',
+            viewerCanUpdateTapIn: true,
+            viewerHasCheckedIn: true,
+            viewerHasTappedInToday: true,
+            viewerRemainingTapIns: 0,
+            viewerTodayStatus: 'done',
+          })}
+        />,
+      );
+    });
+
+    const output = JSON.stringify(tree!.toJSON());
+
+    expect(tree!.root.findAllByType(CircleCardTapInButton)).toHaveLength(0);
+    expect(output).toContain('Momentum strong');
+    expect(output).toContain('View');
   });
 });

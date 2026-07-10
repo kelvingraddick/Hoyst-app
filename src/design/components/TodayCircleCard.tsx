@@ -123,7 +123,9 @@ function getActionLabel({
   isNudging: boolean;
 }) {
   if (actionVariant === 'check_in') {
-    return 'Tap In';
+    return card.viewerCanUpdateTapIn && card.viewerHasTappedInToday
+      ? 'Update Tap In'
+      : 'Tap In';
   }
 
   if (actionVariant === 'nudge') {
@@ -624,7 +626,11 @@ export function TodayCircleCard({
                   </HoystText>
                 </View>
               </View>
-              <HoystChip density="compact" label={statusLabel} tone={statusTone} />
+              <HoystChip
+                density="compact"
+                label={statusLabel}
+                tone={statusTone}
+              />
             </View>
 
             <HoystText

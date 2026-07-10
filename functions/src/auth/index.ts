@@ -10,8 +10,11 @@ import {z} from 'zod';
 
 import {db} from '../firebase';
 import {
+  getCommitmentType,
   getInputCommitmentCadence,
+  getQuantityConfig,
   getStoredCommitmentFrequency,
+  isCoveredCheckInData,
 } from '../shared/commitments';
 import {resolveStarterCircleDecision} from './starter-circle-plan';
 
@@ -33,19 +36,25 @@ const commitmentFrequencySchema = z.object({
 const starterCircleSchema = z.object({
   category: z.string().trim().min(1).max(40),
   commitment: z.string().trim().min(1).max(160),
-    commitmentCadence: z.enum(['daily', 'weekly', 'monthly']).optional(),
+  commitmentCadence: z.enum(['daily', 'weekly', 'monthly']).optional(),
   commitmentFrequency: commitmentFrequencySchema,
+  commitmentType: z.enum(['build', 'limit', 'avoid']).default('build'),
   graceRules: z
     .object({
       skip: graceRuleSchema,
     })
     .optional(),
   joinMode: z.enum(['open', 'request_to_join', 'invite_only']),
+  maximumValue: z.number().int().min(0).max(100000).optional(),
   maxSize: z.number().int().min(2).max(100),
+  minimumValue: z.number().int().min(0).max(100000).optional(),
   privacy: z.enum(['public', 'private']),
   setupId: z.string().trim().min(1).max(120),
+  stepValue: z.number().min(0.01).max(100000).default(1),
+  targetValue: z.number().int().min(0).max(100000).optional(),
   timezone: z.string().trim().min(1).max(80).optional(),
   title: z.string().trim().min(1).max(80),
+  unitLabel: z.string().trim().min(1).max(32).default('Tap In'),
 });
 const starterCircleHiddenDefaults = {
   graceRules: {
@@ -124,7 +133,10 @@ async function deleteCircleServerMetadata(circleId: string) {
   ]);
 }
 
-async function deleteNonOwnedMemberships(uid: string, ownedCircleIds: Set<string>) {
+async function deleteNonOwnedMemberships(
+  uid: string,
+  ownedCircleIds: Set<string>,
+) {
   const memberSnapshots = await db
     .collectionGroup('members')
     .where('uid', '==', uid)
@@ -197,7 +209,10 @@ async function deleteJoinRequests(uid: string, ownedCircleIds: Set<string>) {
   }
 }
 
-async function deleteNonOwnedCheckIns(uid: string, ownedCircleIds: Set<string>) {
+async function deleteNonOwnedCheckIns(
+  uid: string,
+  ownedCircleIds: Set<string>,
+) {
   const checkInSnapshots = await db
     .collectionGroup('checkIns')
     .where('uid', '==', uid)
@@ -210,12 +225,12 @@ async function deleteNonOwnedCheckIns(uid: string, ownedCircleIds: Set<string>) 
       continue;
     }
 
-    const status = checkInSnapshot.data().status;
+    const checkIn = checkInSnapshot.data();
     const batch = db.batch();
 
     batch.delete(checkInSnapshot.ref);
 
-    if (status === 'done' || status === 'skip') {
+    if (isCoveredCheckInData(checkIn)) {
       batch.set(
         dayRef,
         {
@@ -269,7 +284,10 @@ async function deleteAccountDocuments(uid: string) {
     batch.delete(handleRef);
   });
 
-  await Promise.all([batch.commit(), deleteStoragePrefix(`users/${uid}/avatar/`)]);
+  await Promise.all([
+    batch.commit(),
+    deleteStoragePrefix(`users/${uid}/avatar/`),
+  ]);
 }
 
 async function deleteAuthUser(uid: string) {
@@ -300,11 +318,12 @@ export const completeProfile = onCall(async request => {
     | undefined;
 
   await db.runTransaction(async transaction => {
-    const [userSnapshot, handleSnapshot, userPrivateSnapshot] = await Promise.all([
-      transaction.get(userRef),
-      transaction.get(handleRef),
-      transaction.get(userPrivateRef),
-    ]);
+    const [userSnapshot, handleSnapshot, userPrivateSnapshot] =
+      await Promise.all([
+        transaction.get(userRef),
+        transaction.get(handleRef),
+        transaction.get(userPrivateRef),
+      ]);
     const existingUser = userSnapshot.data();
     const existingHandleOwner = handleSnapshot.data()?.uid;
     const userPrivate = userPrivateSnapshot.data();
@@ -348,7 +367,9 @@ export const completeProfile = onCall(async request => {
       const existingCircleRef = db
         .collection('circles')
         .doc(existingStarterCircleId);
-      const existingMemberRef = existingCircleRef.collection('members').doc(uid);
+      const existingMemberRef = existingCircleRef
+        .collection('members')
+        .doc(uid);
       const [existingCircleSnapshot, existingMemberSnapshot] =
         await Promise.all([
           transaction.get(existingCircleRef),
@@ -373,7 +394,9 @@ export const completeProfile = onCall(async request => {
     transaction.set(
       handleRef,
       {
-        createdAt: handleSnapshot.exists ? handleSnapshot.data()?.createdAt : now,
+        createdAt: handleSnapshot.exists
+          ? handleSnapshot.data()?.createdAt
+          : now,
         handle: input.handle,
         uid,
       },
@@ -388,7 +411,9 @@ export const completeProfile = onCall(async request => {
     ) {
       const circleRef = db.collection('circles').doc();
       const memberRef = circleRef.collection('members').doc(uid);
-      const publicIndexRef = db.collection('publicCircleIndex').doc(circleRef.id);
+      const publicIndexRef = db
+        .collection('publicCircleIndex')
+        .doc(circleRef.id);
       const inviteCode = createInviteCode();
       const commitmentCadence = getInputCommitmentCadence(
         input.starterCircle.commitmentCadence,
@@ -398,21 +423,35 @@ export const completeProfile = onCall(async request => {
         commitmentCadence,
         input.starterCircle.commitmentFrequency,
       );
+      const commitmentType = getCommitmentType(input.starterCircle);
+      const quantityConfig = getQuantityConfig(input.starterCircle);
       const circle = {
         category: input.starterCircle.category,
         createdAt: now,
         commitment: input.starterCircle.commitment,
         commitmentCadence,
         commitmentFrequency,
+        commitmentType,
         graceRules: starterCircleHiddenDefaults.graceRules,
         inviteCode,
         joinMode: input.starterCircle.joinMode,
+        ...(typeof quantityConfig.maximumValue === 'number'
+          ? {maximumValue: quantityConfig.maximumValue}
+          : {}),
+        ...(typeof quantityConfig.minimumValue === 'number'
+          ? {minimumValue: quantityConfig.minimumValue}
+          : {}),
         maxSize: starterCircleHiddenDefaults.maxSize,
         memberCount: 1,
         ownerId: uid,
         privacy: input.starterCircle.privacy,
+        stepValue: quantityConfig.stepValue,
+        ...(typeof quantityConfig.targetValue === 'number'
+          ? {targetValue: quantityConfig.targetValue}
+          : {}),
         title: input.starterCircle.title,
         timezone: input.starterCircle.timezone ?? input.timezone,
+        unitLabel: quantityConfig.unitLabel,
         updatedAt: now,
       };
 
@@ -433,7 +472,14 @@ export const completeProfile = onCall(async request => {
           commitment: input.starterCircle.commitment,
           commitmentCadence,
           commitmentFrequency,
+          commitmentType,
           joinMode: input.starterCircle.joinMode,
+          ...(typeof quantityConfig.maximumValue === 'number'
+            ? {maximumValue: quantityConfig.maximumValue}
+            : {}),
+          ...(typeof quantityConfig.minimumValue === 'number'
+            ? {minimumValue: quantityConfig.minimumValue}
+            : {}),
           maxSize: starterCircleHiddenDefaults.maxSize,
           memberCount: 1,
           members: [
@@ -444,7 +490,12 @@ export const completeProfile = onCall(async request => {
               uid,
             },
           ],
+          stepValue: quantityConfig.stepValue,
+          ...(typeof quantityConfig.targetValue === 'number'
+            ? {targetValue: quantityConfig.targetValue}
+            : {}),
           title: input.starterCircle.title,
+          unitLabel: quantityConfig.unitLabel,
           updatedAt: now,
         });
       }
