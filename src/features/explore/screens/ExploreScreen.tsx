@@ -702,7 +702,7 @@ export function ExploreScreen({navigation}: Props): React.JSX.Element {
               Explore
             </HoystText>
             <Pressable
-              accessibilityLabel="Create Circle"
+              accessibilityLabel="Create commitment"
               accessibilityRole="button"
               onPress={() => rootNavigation?.navigate('CreateCircle')}
               style={({pressed}) => [

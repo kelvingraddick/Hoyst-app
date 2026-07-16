@@ -3,6 +3,7 @@ import {firebaseAuth} from '../../../lib/firebase/auth';
 import {firebaseFunctions} from '../../../lib/firebase/functions';
 import type {
   CircleJoinMode,
+  CircleMode,
   CirclePrivacy,
   CommitmentCadence,
   CommitmentFrequency,
@@ -12,6 +13,7 @@ import type {
 
 export type CreateCircleInput = {
   category: string;
+  circleMode?: CircleMode;
   commitment: string;
   commitmentCadence: CommitmentCadence;
   commitmentFrequency: CommitmentFrequency;
@@ -32,6 +34,14 @@ export type CreateCircleInput = {
 };
 export type UpdateCircleInput = CreateCircleInput & {
   circleId: string;
+};
+
+export type ConvertPersonalCircleInput = {
+  circleId: string;
+  joinMode: CircleJoinMode;
+  maxSize: number;
+  privacy: CirclePrivacy;
+  title: string;
 };
 
 export async function createCircle(input: CreateCircleInput) {
@@ -77,6 +87,17 @@ export async function updateCircle(input: UpdateCircleInput) {
   }
 
   return payload.result;
+}
+
+export async function convertPersonalCircle(input: ConvertPersonalCircleInput) {
+  const callable = firebaseFunctions().httpsCallable('convertPersonalCircle');
+  const result = await callable(input);
+
+  return result.data as {
+    circleId: string;
+    inviteCode: string;
+    inviteUrl: string;
+  };
 }
 
 export async function joinCircle(circleId: string, inviteCode?: string) {

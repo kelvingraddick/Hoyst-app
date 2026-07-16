@@ -1,11 +1,15 @@
 export type OnboardingStep =
   | 'welcome'
   | 'coach'
-  | 'focusArea'
-  | 'circleTitle'
   | 'circleCommitment'
-  | 'circleCadence'
+  | 'circleMode'
+  | 'circleCategory'
+  | 'circleTitle'
+  | 'circleRules'
+  | 'circleGrace'
   | 'circlePrivacy'
+  | 'circleCapacity'
+  | 'circleTimezone'
   | 'circleReview'
   | 'notifications'
   | 'auth'
@@ -27,17 +31,22 @@ export type OnboardingOption<T extends string> = {
 };
 
 export type OnboardingPreferences = {
+  categories?: string[];
   focusArea?: OnboardingFocusArea;
 };
 
 export const onboardingSteps: OnboardingStep[] = [
   'welcome',
   'coach',
-  'focusArea',
-  'circleTitle',
   'circleCommitment',
-  'circleCadence',
+  'circleMode',
+  'circleCategory',
+  'circleTitle',
+  'circleRules',
+  'circleGrace',
   'circlePrivacy',
+  'circleCapacity',
+  'circleTimezone',
   'circleReview',
   'notifications',
   'auth',
@@ -47,6 +56,24 @@ export const onboardingSteps: OnboardingStep[] = [
 export const onboardingProgressSteps = onboardingSteps.filter(
   step => step !== 'welcome',
 );
+
+export function getOnboardingSteps(
+  circleMode: 'personal' | 'group',
+): OnboardingStep[] {
+  return onboardingSteps.filter(step =>
+    circleMode === 'personal'
+      ? step !== 'circleTitle' &&
+        step !== 'circlePrivacy' &&
+        step !== 'circleCapacity'
+      : true,
+  );
+}
+
+export function getOnboardingProgressSteps(
+  circleMode: 'personal' | 'group',
+) {
+  return getOnboardingSteps(circleMode).filter(step => step !== 'welcome');
+}
 
 export const focusAreaOptions: OnboardingOption<OnboardingFocusArea>[] = [
   {
@@ -93,4 +120,22 @@ export function getOptionLabel<T extends string>(
   fallback = 'Not set yet',
 ) {
   return options.find(option => option.id === id)?.label ?? fallback;
+}
+
+export function getLegacyFocusAreaCategory(
+  focusArea?: OnboardingFocusArea,
+) {
+  if (focusArea === 'fitness') {
+    return 'Fitness';
+  }
+  if (focusArea === 'focus') {
+    return 'Deep Work';
+  }
+  if (focusArea === 'wellness') {
+    return 'Wellness';
+  }
+  if (focusArea === 'sobriety') {
+    return 'Sobriety';
+  }
+  return 'Custom';
 }

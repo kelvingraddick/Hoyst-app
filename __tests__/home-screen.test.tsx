@@ -351,10 +351,38 @@ describe('HomeScreen companion updates', () => {
     ).toHaveLength(0);
   });
 
+  it('renders a dedicated personal commitment section', () => {
+    mockHomeData = {
+      ...homeData(),
+      circles: [
+        attentionCircle({
+          circleMode: 'personal',
+          commitment: 'Read every day',
+          id: 'personal-1',
+          inviteUrl: undefined,
+          joinMode: 'invite_only',
+          maxSize: 1,
+          memberCount: 1,
+          privacy: 'private',
+          title: 'Read every day',
+        }),
+      ],
+      hasLoadedMemberships: true,
+      membershipCount: 1,
+    };
+    const tree = renderScreenTree();
+    const output = JSON.stringify(tree.toJSON());
+
+    expect(output).toContain('PERSONAL COMMITMENTS');
+    expect(output).toContain('Read every day');
+    expect(output).toContain('Personal');
+    expect(output).not.toContain('1/1 members');
+  });
+
   it('opens the private Circles screen from the Home attention section', () => {
     const tree = renderScreenTree();
     const allMyCirclesButton = tree.root.findByProps({
-      accessibilityLabel: 'All my circles',
+      accessibilityLabel: 'All my commitments',
     });
 
     expect(allMyCirclesButton).toBeTruthy();
@@ -372,7 +400,7 @@ describe('HomeScreen companion updates', () => {
       .findAllByProps({testID: 'all-my-circles-card'})
       .find(node => node.props.style);
     const allMyCirclesTitleStyle = tree.root
-      .findAll(node => node.props.children === 'All my circles')
+      .findAll(node => node.props.children === 'All my commitments')
       .map(node => StyleSheet.flatten(node.props.style))
       .find(style => style?.fontSize === 15);
     const allMyCirclesSubtitleStyle = tree.root
@@ -382,7 +410,7 @@ describe('HomeScreen companion updates', () => {
       .map(node => StyleSheet.flatten(node.props.style))
       .find(style => style?.fontSize === 14);
 
-    expect(JSON.stringify(tree.toJSON())).toContain('All my circles');
+    expect(JSON.stringify(tree.toJSON())).toContain('All my commitments');
     expect(JSON.stringify(tree.toJSON())).toContain(
       'View commitments and join requests',
     );

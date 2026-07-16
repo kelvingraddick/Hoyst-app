@@ -730,6 +730,9 @@ async function getActorActiveCircleIds(actorUid) {
         .filter((circleId) => Boolean(circleId));
 }
 async function resolveCompanionFeedTargets({ actorUid, circle, circleId, }) {
+    if (circle?.circleMode === 'personal') {
+        return [];
+    }
     const sourceMemberUids = await getActiveCircleMemberUids(circleId);
     const sharedMemberUids = canShareCircleOutsideMembers(circle)
         ? (await Promise.all(Array.from(new Set(await getActorActiveCircleIds(actorUid))).map(activeCircleId => getActiveCircleMemberUids(activeCircleId)))).flat()
@@ -1635,7 +1638,7 @@ async function sendCircleEngagementPrompts() {
         const circle = circleSnapshot.data();
         const timezone = asString(circle.timezone, 'UTC');
         const local = getLocalDateTimeParts(now, timezone);
-        if (local.hour !== targetHour) {
+        if (local.hour !== targetHour || circle.circleMode === 'personal') {
             continue;
         }
         const commitmentCadence = (0, commitments_1.getCommitmentCadence)(circle);
@@ -1706,6 +1709,9 @@ async function sendCircleEngagementPrompts() {
 async function getEligibleDiscoveryCircleForUser({ publicCircleSnapshots, uid, }) {
     for (const circleSnapshot of publicCircleSnapshots.docs) {
         const circle = circleSnapshot.data();
+        if (circle.circleMode === 'personal') {
+            continue;
+        }
         const memberCount = typeof circle.memberCount === 'number' &&
             Number.isFinite(circle.memberCount)
             ? circle.memberCount

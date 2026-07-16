@@ -41,6 +41,7 @@ export type RootStackParamList = {
   EditProfile: undefined;
   EditCircle: {circleId: string};
   CircleTools: {circleId: string};
+  ConvertPersonalCircle: {circleId: string};
   CircleThread: {circleId: string};
   TapInPicker: undefined;
   CreateCircle: undefined;

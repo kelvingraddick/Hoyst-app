@@ -4,6 +4,7 @@ import {HttpsError, onCall} from 'firebase-functions/v2/https';
 import {z} from 'zod';
 
 import {db} from './firebase';
+import {ensureGroupCircle} from './shared/circle-mode';
 
 type ThreadActor = {
   avatarUrl?: string | null;
@@ -205,6 +206,7 @@ export const sendCircleThreadMessage = onCall(async request => {
       throw new HttpsError('not-found', 'Circle not found.');
     }
 
+    ensureGroupCircle(circleSnapshot.data(), 'using the Circle thread');
     ensureActiveMember(memberSnapshot.data());
 
     if (itemSnapshot.exists) {
@@ -246,6 +248,7 @@ export const toggleCircleThreadItemLike = onCall(async request => {
       throw new HttpsError('not-found', 'Circle not found.');
     }
 
+    ensureGroupCircle(circleSnapshot.data(), 'using the Circle thread');
     ensureActiveMember(memberSnapshot.data());
 
     if (!itemSnapshot.exists) {
@@ -254,6 +257,13 @@ export const toggleCircleThreadItemLike = onCall(async request => {
 
     const item = itemSnapshot.data() ?? {};
     const actor = item.actor as DocumentData | undefined;
+
+    if (item.readOnly === true) {
+      throw new HttpsError(
+        'failed-precondition',
+        'Historical activity is read-only.',
+      );
+    }
 
     if (asOptionalString(actor?.uid) === uid) {
       throw new HttpsError(
@@ -288,8 +298,16 @@ export const markCircleThreadRead = onCall(async request => {
   const {uid} = await requireCompletedProfile(request.auth?.uid);
   const input = markCircleThreadReadSchema.parse(request.data);
   const circleRef = db.collection('circles').doc(input.circleId);
-  const memberSnapshot = await circleRef.collection('members').doc(uid).get();
+  const [circleSnapshot, memberSnapshot] = await Promise.all([
+    circleRef.get(),
+    circleRef.collection('members').doc(uid).get(),
+  ]);
 
+  if (!circleSnapshot.exists) {
+    throw new HttpsError('not-found', 'Circle not found.');
+  }
+
+  ensureGroupCircle(circleSnapshot.data(), 'using the Circle thread');
   ensureActiveMember(memberSnapshot.data());
 
   await circleRef.collection('threadReads').doc(uid).set(

@@ -14,6 +14,7 @@ import {
   LogOut,
   Pencil,
   Trash2,
+  UserPlus,
   type LucideIcon,
 } from 'lucide-react-native';
 import type {NativeStackScreenProps} from '@react-navigation/native-stack';
@@ -231,6 +232,7 @@ function DeleteCircleConfirmModal({
   circleTitle,
   confirmText,
   isDeleting,
+  isPersonal,
   onCancel,
   onConfirm,
   onConfirmTextChange,
@@ -240,6 +242,7 @@ function DeleteCircleConfirmModal({
   circleTitle: string;
   confirmText: string;
   isDeleting: boolean;
+  isPersonal: boolean;
   onCancel: () => void;
   onConfirm: () => void;
   onConfirmTextChange: (value: string) => void;
@@ -266,21 +269,24 @@ function DeleteCircleConfirmModal({
               />
               <HoystText
                 style={[styles.modalTitle, {color: theme.dangerForeground}]}>
-                Delete circle
+                {isPersonal ? 'Delete commitment' : 'Delete circle'}
               </HoystText>
             </View>
             <View style={styles.modalCopy}>
               <HoystText tone="muted">
-                This permanently deletes the circle, members, requests, and Tap
-                In history.
+                {isPersonal
+                  ? 'This permanently deletes the personal Commitment and its Tap In history.'
+                  : 'This permanently deletes the circle, members, requests, and Tap In history.'}
               </HoystText>
               <HoystText variant="bodyStrong">{circleTitle}</HoystText>
               <HoystText tone="muted" variant="caption">
-                Type the circle name to confirm.
+                Type the {isPersonal ? 'Commitment' : 'circle name'} to confirm.
               </HoystText>
             </View>
             <HoystInput
-              accessibilityLabel="Confirm circle name"
+              accessibilityLabel={
+                isPersonal ? 'Confirm Commitment' : 'Confirm circle name'
+              }
               autoCapitalize="none"
               autoCorrect={false}
               editable={!isDeleting}
@@ -306,7 +312,13 @@ function DeleteCircleConfirmModal({
                     strokeWidth={2.3}
                   />
                 }
-                label={isDeleting ? 'Deleting...' : 'Delete Circle'}
+                label={
+                  isDeleting
+                    ? 'Deleting...'
+                    : isPersonal
+                    ? 'Delete Commitment'
+                    : 'Delete Circle'
+                }
                 onPress={onConfirm}
                 textColor={theme.dangerForeground}
                 variant="outline"
@@ -335,6 +347,7 @@ export function CircleToolsScreen({
   const [isDeletingCircle, setIsDeletingCircle] = useState(false);
   const [isLeavingCircle, setIsLeavingCircle] = useState(false);
   const isPendingMembership = detail?.viewerMembershipStatus === 'pending';
+  const isPersonal = detail?.circleMode === 'personal';
   const canEditCircle = detail?.viewerRole === 'owner' && !isPendingMembership;
   const canLeaveCircle = Boolean(
     detail?.viewerRole && detail.viewerRole !== 'owner',
@@ -416,7 +429,10 @@ export function CircleToolsScreen({
       setIsDeleteConfirmVisible(false);
       setDeleteConfirmText('');
       exitCircleFlow();
-      Alert.alert('Circle deleted', `${detail.title} has been deleted.`);
+      Alert.alert(
+        isPersonal ? 'Commitment deleted' : 'Circle deleted',
+        `${detail.title} has been deleted.`,
+      );
     } catch (error) {
       const message =
         (error as {message?: string}).message ??
@@ -482,7 +498,7 @@ export function CircleToolsScreen({
           <IconButton accessibilityLabel="Go back" onPress={navigateBack} />
         </View>
         <HoystText numberOfLines={1} style={styles.navTitle}>
-          Circle Settings
+          {isPersonal ? 'Commitment Settings' : 'Circle Settings'}
         </HoystText>
         <View style={styles.navSide} />
       </View>
@@ -490,7 +506,9 @@ export function CircleToolsScreen({
       {isLoadingSettings ? (
         <GlassPanel padding="compact" style={styles.statusPanel}>
           <View style={styles.statusContent}>
-            <HoystText variant="bodyStrong">Loading circle settings...</HoystText>
+            <HoystText variant="bodyStrong">
+              Loading circle settings...
+            </HoystText>
           </View>
         </GlassPanel>
       ) : hasSettings ? (
@@ -498,13 +516,17 @@ export function CircleToolsScreen({
           {canEditCircle && detail ? (
             <>
               <SettingsRow
-                detail="Change name, access, cadence, and skip rules."
+                detail={
+                  isPersonal
+                    ? 'Change the Commitment, rules, rhythm, timing, and skips.'
+                    : 'Change the name, rules, access, timing, and capacity.'
+                }
                 icon={Pencil}
                 iconTone="blue"
                 onPress={() =>
                   navigation.navigate('EditCircle', {circleId: detail.id})
                 }
-                title="Edit Circle"
+                title={isPersonal ? 'Edit Commitment' : 'Edit Circle'}
                 trailing={
                   <ChevronRight
                     color={theme.textSubtle}
@@ -513,13 +535,35 @@ export function CircleToolsScreen({
                   />
                 }
               />
+              {isPersonal ? (
+                <SettingsRow
+                  detail="Convert this into a Circle, then invite someone."
+                  icon={UserPlus}
+                  iconTone="purple"
+                  onPress={() =>
+                    navigation.navigate('ConvertPersonalCircle', {
+                      circleId: detail.id,
+                    })
+                  }
+                  title="Invite someone"
+                  trailing={
+                    <ChevronRight
+                      color={theme.textSubtle}
+                      size={18}
+                      strokeWidth={2.2}
+                    />
+                  }
+                />
+              ) : null}
               <SettingsRow
-                detail="Permanently remove this circle and its history."
+                detail={`Permanently remove this ${
+                  isPersonal ? 'Commitment' : 'circle'
+                } and its history.`}
                 icon={Trash2}
                 iconColor={theme.dangerForeground}
                 iconTone="danger"
                 onPress={openDeleteCircleConfirm}
-                title="Delete Circle"
+                title={isPersonal ? 'Delete Commitment' : 'Delete Circle'}
                 titleColor={theme.dangerForeground}
               />
             </>
@@ -545,7 +589,9 @@ export function CircleToolsScreen({
         <GlassPanel padding="compact" style={styles.statusPanel}>
           <View style={styles.statusContent}>
             <HoystText variant="bodyStrong">No settings yet</HoystText>
-            <HoystText tone="muted">No circle settings are available yet.</HoystText>
+            <HoystText tone="muted">
+              No circle settings are available yet.
+            </HoystText>
           </View>
         </GlassPanel>
       )}
@@ -555,6 +601,7 @@ export function CircleToolsScreen({
         circleTitle={detail?.title ?? ''}
         confirmText={deleteConfirmText}
         isDeleting={isDeletingCircle}
+        isPersonal={isPersonal}
         onCancel={closeDeleteCircleConfirm}
         onConfirm={() => {
           handleDeleteCircle().catch(() => undefined);

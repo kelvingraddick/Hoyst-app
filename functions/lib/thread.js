@@ -10,6 +10,7 @@ const auth_1 = require("firebase-admin/auth");
 const https_1 = require("firebase-functions/v2/https");
 const zod_1 = require("zod");
 const firebase_1 = require("./firebase");
+const circle_mode_1 = require("./shared/circle-mode");
 const sendCircleThreadMessageSchema = zod_1.z.object({
     circleId: zod_1.z.string().trim().min(1),
     mediaImageUrl: zod_1.z.string().trim().max(2048).optional(),
@@ -138,6 +139,7 @@ exports.sendCircleThreadMessage = (0, https_1.onCall)(async (request) => {
         if (!circleSnapshot.exists) {
             throw new https_1.HttpsError('not-found', 'Circle not found.');
         }
+        (0, circle_mode_1.ensureGroupCircle)(circleSnapshot.data(), 'using the Circle thread');
         ensureActiveMember(memberSnapshot.data());
         if (itemSnapshot.exists) {
             throw new https_1.HttpsError('already-exists', 'Message already sent.');
@@ -172,12 +174,16 @@ exports.toggleCircleThreadItemLike = (0, https_1.onCall)(async (request) => {
         if (!circleSnapshot.exists) {
             throw new https_1.HttpsError('not-found', 'Circle not found.');
         }
+        (0, circle_mode_1.ensureGroupCircle)(circleSnapshot.data(), 'using the Circle thread');
         ensureActiveMember(memberSnapshot.data());
         if (!itemSnapshot.exists) {
             throw new https_1.HttpsError('not-found', 'Thread item not found.');
         }
         const item = itemSnapshot.data() ?? {};
         const actor = item.actor;
+        if (item.readOnly === true) {
+            throw new https_1.HttpsError('failed-precondition', 'Historical activity is read-only.');
+        }
         if (asOptionalString(actor?.uid) === uid) {
             throw new https_1.HttpsError('failed-precondition', 'You cannot like your own item.');
         }
@@ -199,7 +205,14 @@ exports.markCircleThreadRead = (0, https_1.onCall)(async (request) => {
     const { uid } = await requireCompletedProfile(request.auth?.uid);
     const input = markCircleThreadReadSchema.parse(request.data);
     const circleRef = firebase_1.db.collection('circles').doc(input.circleId);
-    const memberSnapshot = await circleRef.collection('members').doc(uid).get();
+    const [circleSnapshot, memberSnapshot] = await Promise.all([
+        circleRef.get(),
+        circleRef.collection('members').doc(uid).get(),
+    ]);
+    if (!circleSnapshot.exists) {
+        throw new https_1.HttpsError('not-found', 'Circle not found.');
+    }
+    (0, circle_mode_1.ensureGroupCircle)(circleSnapshot.data(), 'using the Circle thread');
     ensureActiveMember(memberSnapshot.data());
     await circleRef.collection('threadReads').doc(uid).set({
         readAt: firestore_1.FieldValue.serverTimestamp(),

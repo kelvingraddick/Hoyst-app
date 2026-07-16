@@ -135,26 +135,36 @@ export function CirclesScreen({navigation}: Props): React.JSX.Element {
     () => sortHomeCircles(homeData.circles),
     [homeData.circles],
   );
+  const personalCommitments = useMemo(
+    () => allCircles.filter(circle => circle.circleMode === 'personal'),
+    [allCircles],
+  );
+  const groupCircles = useMemo(
+    () => allCircles.filter(circle => circle.circleMode !== 'personal'),
+    [allCircles],
+  );
   const counts = useMemo(
     () => ({
-      done: allCircles.filter(circle => matchesCirclesFilter(circle, 'done'))
+      done: groupCircles.filter(circle => matchesCirclesFilter(circle, 'done'))
         .length,
-      needsYou: allCircles.filter(circle =>
+      needsYou: groupCircles.filter(circle =>
         matchesCirclesFilter(circle, 'needsYou'),
       ).length,
-      onTrack: allCircles.filter(circle =>
+      onTrack: groupCircles.filter(circle =>
         matchesCirclesFilter(circle, 'onTrack'),
       ).length,
-      pending: allCircles.filter(circle =>
+      pending: groupCircles.filter(circle =>
         matchesCirclesFilter(circle, 'pending'),
       ).length,
     }),
-    [allCircles],
+    [groupCircles],
   );
   const visibleCircles = useMemo(
     () =>
-      allCircles.filter(circle => matchesCirclesFilter(circle, selectedFilter)),
-    [allCircles, selectedFilter],
+      groupCircles.filter(circle =>
+        matchesCirclesFilter(circle, selectedFilter),
+      ),
+    [groupCircles, selectedFilter],
   );
 
   const toneColor = {
@@ -274,7 +284,7 @@ export function CirclesScreen({navigation}: Props): React.JSX.Element {
 
   const newButton = (
     <Pressable
-      accessibilityLabel="Create Circle"
+      accessibilityLabel="Create commitment"
       accessibilityRole="button"
       onPress={() => navigation.navigate('CreateCircle')}
       style={({pressed}) => ({
@@ -290,7 +300,7 @@ export function CirclesScreen({navigation}: Props): React.JSX.Element {
         <HoystText
           numberOfLines={1}
           style={[styles.newPillLabel, {color: theme.onPurpleAccent}]}>
-          New
+          Create commitment
         </HoystText>
       </View>
     </Pressable>
@@ -387,11 +397,11 @@ export function CirclesScreen({navigation}: Props): React.JSX.Element {
   );
 
   const emptyState =
-    allCircles.length === 0 ? (
+    groupCircles.length === 0 ? (
       <GlassPanel style={styles.emptyPanel}>
         <HoystText style={styles.emptyTitle}>No circles yet</HoystText>
         <HoystText tone="muted" variant="caption">
-          Joined circles and the requests you have made will collect here.
+          Circles you create or join will collect here.
         </HoystText>
       </GlassPanel>
     ) : (
@@ -438,11 +448,33 @@ export function CirclesScreen({navigation}: Props): React.JSX.Element {
         <View style={styles.headingBlock}>
           <HoystText style={styles.heading}>Your commitments</HoystText>
           <HoystText style={styles.headingSubtitle} tone="muted">
-            Active circles and join requests.
+            Personal commitments, active circles, and join requests.
           </HoystText>
         </View>
 
         <View style={styles.body}>
+          {personalCommitments.length > 0 ? (
+            <View
+              style={styles.listBlock}
+              testID="personal-commitments-section">
+              <View style={styles.listHeaderRow}>
+                <HoystText
+                  style={[styles.listHeaderLabel, {color: theme.textMuted}]}>
+                  Personal Commitments
+                </HoystText>
+              </View>
+              {personalCommitments.map(commitment => (
+                <TodayCircleCard
+                  card={commitment}
+                  key={commitment.id}
+                  onActionPress={() => handleCircleAction(commitment)}
+                  onCardPress={() => openCircle(commitment.id)}
+                  variant="list"
+                />
+              ))}
+            </View>
+          ) : null}
+
           {overviewRow}
 
           <View style={styles.listBlock}>

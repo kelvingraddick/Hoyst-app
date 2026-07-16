@@ -12,16 +12,24 @@ import {useSessionStore} from '../src/store/session-store';
 import {useSettingsStore} from '../src/store/settings-store';
 import {resolveHoystThemeScheme} from '../src/design/theme/useHoystTheme';
 import {
+  migratePersistedOnboardingState,
   normalizeOnboardingStep,
+  normalizeOnboardingStepForMode,
   useOnboardingStore,
 } from '../src/store/onboarding-store';
 import {continueAsGuestFromAuth} from '../src/features/auth/services/auth-dismiss';
 import {finalizeReadyProfileOnboardingSetup} from '../src/features/auth/services/onboarding-finalizer';
 import {
   applyStarterCircleHiddenDefaults,
+  buildStarterCirclePayload,
   isStarterCircleDraftReady,
 } from '../src/features/auth/services/onboarding-circle';
 import {buildOnboardingPreferences} from '../src/features/auth/services/onboarding-payload';
+import {getOnboardingStepCopy} from '../src/features/auth/services/onboarding-copy';
+import {
+  getOnboardingProgressSteps,
+  getOnboardingSteps,
+} from '../src/features/auth/services/onboarding-options';
 import {
   completeOnboardingSetup,
   shouldCreateStarterCircle,
@@ -717,26 +725,106 @@ describe('onboarding store', () => {
   it('moves through the Duolingo-style stepper', () => {
     const store = useOnboardingStore.getState();
 
-    store.setCurrentStep('focusArea');
+    store.setCurrentStep('circleCategory');
     store.nextStep();
     expect(useOnboardingStore.getState().currentStep).toBe('circleTitle');
 
     useOnboardingStore.getState().previousStep();
-    expect(useOnboardingStore.getState().currentStep).toBe('focusArea');
+    expect(useOnboardingStore.getState().currentStep).toBe('circleCategory');
   });
 
-  it('places starter cadence between commitment and privacy', () => {
+  it('places the circle mode choice between commitment and group setup', () => {
     const store = useOnboardingStore.getState();
 
     store.setCurrentStep('circleCommitment');
     store.nextStep();
-    expect(useOnboardingStore.getState().currentStep).toBe('circleCadence');
+    expect(useOnboardingStore.getState().currentStep).toBe('circleMode');
 
     useOnboardingStore.getState().nextStep();
-    expect(useOnboardingStore.getState().currentStep).toBe('circlePrivacy');
+    expect(useOnboardingStore.getState().currentStep).toBe('circleCategory');
 
     useOnboardingStore.getState().previousStep();
-    expect(useOnboardingStore.getState().currentStep).toBe('circleCadence');
+    expect(useOnboardingStore.getState().currentStep).toBe('circleMode');
+  });
+
+  it('uses the complete personal path while skipping group-only steps', () => {
+    const store = useOnboardingStore.getState();
+
+    store.setStarterCircleField('circleMode', 'personal');
+    store.setCurrentStep('circleMode');
+    store.nextStep();
+    expect(useOnboardingStore.getState().currentStep).toBe('circleCategory');
+
+    useOnboardingStore.getState().nextStep();
+    expect(useOnboardingStore.getState().currentStep).toBe('circleRules');
+
+    useOnboardingStore.getState().setCurrentStep('circleGrace');
+    useOnboardingStore.getState().nextStep();
+    expect(useOnboardingStore.getState().currentStep).toBe('circleTimezone');
+  });
+
+  it('defines the complete Personal and group onboarding paths', () => {
+    expect(getOnboardingSteps('personal')).toEqual([
+      'welcome',
+      'coach',
+      'circleCommitment',
+      'circleMode',
+      'circleCategory',
+      'circleRules',
+      'circleGrace',
+      'circleTimezone',
+      'circleReview',
+      'notifications',
+      'auth',
+      'finishProfile',
+    ]);
+    expect(getOnboardingSteps('group')).toEqual([
+      'welcome',
+      'coach',
+      'circleCommitment',
+      'circleMode',
+      'circleCategory',
+      'circleTitle',
+      'circleRules',
+      'circleGrace',
+      'circlePrivacy',
+      'circleCapacity',
+      'circleTimezone',
+      'circleReview',
+      'notifications',
+      'auth',
+      'finishProfile',
+    ]);
+    expect(getOnboardingProgressSteps('personal')).toHaveLength(11);
+    expect(getOnboardingProgressSteps('group')).toHaveLength(14);
+  });
+
+  it('uses exact mode-aware onboarding copy', () => {
+    expect(getOnboardingStepCopy('circleCategory', true).prompt).toBe(
+      'What kind of Commitment is this?',
+    );
+    expect(getOnboardingStepCopy('circleRules', true).body).toContain(
+      'You Tap In',
+    );
+    expect(getOnboardingStepCopy('circleRules', false).body).toContain(
+      'Each member taps in',
+    );
+    expect(getOnboardingStepCopy('circleGrace', true).body).toContain(
+      'your Progression',
+    );
+    expect(getOnboardingStepCopy('circleGrace', false).body).toContain(
+      'Circle Progression',
+    );
+    expect(getOnboardingStepCopy('circleTimezone', true)).toMatchObject({
+      body: expect.stringContaining('this Commitment'),
+      prompt: 'Which timezone should this Commitment use?',
+    });
+    expect(getOnboardingStepCopy('notifications', true).prompt).not.toContain(
+      'companion',
+    );
+    expect(getOnboardingStepCopy('notifications', false).prompt).toContain(
+      'Circle and companion updates',
+    );
   });
 
   it('routes circle review through notification opt-in before auth', () => {
@@ -756,7 +844,41 @@ describe('onboarding store', () => {
     store.setFocusArea('fitness');
 
     expect(useOnboardingStore.getState().getPreferences()).toEqual({
+      categories: ['Fitness'],
       focusArea: 'fitness',
+    });
+  });
+
+  it('keeps account and Commitment timezones independent after selection', () => {
+    const store = useOnboardingStore.getState();
+
+    store.setStarterCircleField('timezone', 'Asia/Katmandu');
+    store.setTimezone('America/New_York');
+
+    expect(useOnboardingStore.getState()).toMatchObject({
+      starterCircleDraft: {timezone: 'Asia/Katmandu'},
+      timezone: 'America/New_York',
+    });
+  });
+
+  it('preserves hidden group settings while switching modes', () => {
+    const store = useOnboardingStore.getState();
+
+    store.setStarterCircleField('title', 'Readers Together');
+    store.setStarterCircleField('maxSize', 25);
+    store.setStarterCircleField('privacyMode', 'private');
+    store.setStarterCircleField('graceRules', {
+      skip: {allowance: 4, windowDays: 14},
+    });
+    store.setStarterCircleField('circleMode', 'personal');
+    store.setStarterCircleField('circleMode', 'group');
+
+    expect(useOnboardingStore.getState().starterCircleDraft).toMatchObject({
+      circleMode: 'group',
+      graceRules: {skip: {allowance: 4, windowDays: 14}},
+      maxSize: 25,
+      privacyMode: 'private',
+      title: 'Readers Together',
     });
   });
 
@@ -857,10 +979,11 @@ describe('onboarding store', () => {
   });
 
   it('normalizes removed persisted steps to active onboarding steps', () => {
-    expect(normalizeOnboardingStep('categories')).toBe('circleTitle');
-    expect(normalizeOnboardingStep('circleFrequency')).toBe('circleCadence');
+    expect(normalizeOnboardingStep('categories')).toBe('circleCategory');
+    expect(normalizeOnboardingStep('focusArea')).toBe('circleCategory');
+    expect(normalizeOnboardingStep('circleFrequency')).toBe('circleRules');
     expect(normalizeOnboardingStep('commitmentFrequency')).toBe(
-      'circleCadence',
+      'circleRules',
     );
     expect(normalizeOnboardingStep('reminders')).toBe('circleTitle');
     expect(normalizeOnboardingStep('pace')).toBe('circleTitle');
@@ -868,6 +991,52 @@ describe('onboarding store', () => {
     expect(normalizeOnboardingStep('preview')).toBe('circleReview');
     expect(normalizeOnboardingStep('notifications')).toBe('notifications');
     expect(normalizeOnboardingStep('finishProfile')).toBe('finishProfile');
+    expect(normalizeOnboardingStepForMode('circleTitle', 'personal')).toBe(
+      'circleRules',
+    );
+    expect(normalizeOnboardingStepForMode('circlePrivacy', 'personal')).toBe(
+      'circleTimezone',
+    );
+  });
+
+  it('migrates legacy category and Rules steps without losing draft choices', () => {
+    const migrated = migratePersistedOnboardingState({
+      currentStep: 'circleCadence',
+      focusArea: 'focus',
+      starterCircleDraft: {
+        ...useOnboardingStore.getState().starterCircleDraft,
+        category: undefined,
+        graceRules: {skip: {allowance: 3, windowDays: 10}},
+        maxSize: 25,
+        privacyMode: 'private',
+        title: 'Maker Mornings',
+      },
+      timezone: 'America/New_York',
+    });
+
+    expect(migrated).toMatchObject({
+      categories: ['Deep Work'],
+      currentStep: 'circleRules',
+      starterCircleDraft: {
+        category: 'Deep Work',
+        graceRules: {skip: {allowance: 3, windowDays: 10}},
+        maxSize: 25,
+        privacyMode: 'private',
+        title: 'Maker Mornings',
+      },
+    });
+  });
+
+  it('moves a Personal draft off persisted group-only steps', () => {
+    const migrated = migratePersistedOnboardingState({
+      currentStep: 'circleCapacity',
+      starterCircleDraft: {
+        ...useOnboardingStore.getState().starterCircleDraft,
+        circleMode: 'personal',
+      },
+    });
+
+    expect(migrated.currentStep).toBe('circleTimezone');
   });
 
   it('does not repeat first-run onboarding after guest continuation', () => {
@@ -1102,11 +1271,11 @@ describe('onboarding completion finalizer', () => {
           commitmentFrequency: {tapInsPerWeek: 4},
           graceRules: {
             skip: {
-              allowance: 2,
+              allowance: 1,
               windowDays: 7,
             },
           },
-          maxSize: 10,
+          maxSize: 2,
           setupId: 'setup-1',
           title: 'Readers',
         }),
@@ -1166,6 +1335,24 @@ describe('onboarding completion finalizer', () => {
         starterCircleDraft: useOnboardingStore.getState().starterCircleDraft,
       }),
     ).toBe(false);
+  });
+
+  it('allows a personal starter Commitment without a Circle name', () => {
+    const draft = {
+      ...useOnboardingStore.getState().starterCircleDraft,
+      circleMode: 'personal' as const,
+      commitment: 'Read 20 pages',
+      title: '',
+    };
+
+    expect(isStarterCircleDraftReady(draft)).toBe(true);
+    expect(buildStarterCirclePayload(draft)).toMatchObject({
+      circleMode: 'personal',
+      joinMode: 'invite_only',
+      maxSize: 1,
+      privacy: 'private',
+      title: 'Read 20 pages',
+    });
   });
 
   it('treats legacy starter drafts without commitments as incomplete', () => {
@@ -1270,8 +1457,9 @@ describe('starter circle callable decision', () => {
     });
 
     expect(dailyCadence).toBe('daily');
-    expect(getStoredCommitmentFrequency(dailyCadence, {tapInsPerWeek: 4}))
-      .toEqual({tapInsPerWeek: 7});
+    expect(
+      getStoredCommitmentFrequency(dailyCadence, {tapInsPerWeek: 4}),
+    ).toEqual({tapInsPerWeek: 7});
   });
 
   it('creates, reuses, and repairs starter circles per setup id', () => {

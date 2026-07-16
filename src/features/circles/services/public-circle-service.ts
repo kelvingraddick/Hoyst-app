@@ -72,7 +72,8 @@ function mapPublicMemberPreview(
   index: number,
   fallbackState: CircleMemberState = 'pending',
 ): CircleMemberStatus | undefined {
-  const data = value && typeof value === 'object' ? (value as PlainData) : undefined;
+  const data =
+    value && typeof value === 'object' ? (value as PlainData) : undefined;
 
   if (!data) {
     return undefined;
@@ -109,7 +110,10 @@ function snapshotData(
   return data ? ({...data, id: snapshot.id} as PlainData) : undefined;
 }
 
-function mergeMemberProfileData(memberData: PlainData, profileData?: PlainData) {
+function mergeMemberProfileData(
+  memberData: PlainData,
+  profileData?: PlainData,
+) {
   if (!profileData) {
     return memberData;
   }
@@ -126,7 +130,10 @@ function mergeMemberProfileData(memberData: PlainData, profileData?: PlainData) 
   );
   const displayName = asString(
     memberData.displayName,
-    asString(memberData.name, asString(profileData.displayName, asString(profileData.name))),
+    asString(
+      memberData.name,
+      asString(profileData.displayName, asString(profileData.name)),
+    ),
   );
   const handle = asString(memberData.handle, asString(profileData.handle));
 
@@ -185,17 +192,20 @@ function subscribeToReadableMemberPreviews(
       const unsubscribe = firestore
         .collection(collections.users)
         .doc(uid)
-        .onSnapshot(snapshot => {
-          const profileData = snapshotData(snapshot);
+        .onSnapshot(
+          snapshot => {
+            const profileData = snapshotData(snapshot);
 
-          if (profileData) {
-            memberProfiles.set(uid, profileData);
-          } else {
-            memberProfiles.delete(uid);
-          }
+            if (profileData) {
+              memberProfiles.set(uid, profileData);
+            } else {
+              memberProfiles.delete(uid);
+            }
 
-          emit();
-        }, () => undefined);
+            emit();
+          },
+          () => undefined,
+        );
 
       profileUnsubscribes.set(uid, unsubscribe);
     });
@@ -210,9 +220,8 @@ function subscribeToReadableMemberPreviews(
       snapshot => {
         memberRecords = snapshot.docs
           .map(snapshotData)
-          .filter(
-            (memberData): memberData is PlainData =>
-              Boolean(memberData && asString(memberData.status) === 'active'),
+          .filter((memberData): memberData is PlainData =>
+            Boolean(memberData && asString(memberData.status) === 'active'),
           );
         syncProfileListeners();
         emit();
@@ -233,6 +242,10 @@ export function mapPublicCircleIndexSnapshot(
   const data = snapshot.data();
 
   if (!snapshot.exists || !data) {
+    return undefined;
+  }
+
+  if (data.circleMode === 'personal') {
     return undefined;
   }
 
@@ -287,6 +300,7 @@ export function mapPublicCircleIndexSnapshot(
 
   return {
     category: asString(data.category, 'General'),
+    circleMode: 'group',
     completionLabel: progressLabel,
     completionRate,
     commitment,
@@ -296,8 +310,7 @@ export function mapPublicCircleIndexSnapshot(
       tapInsPerWeek,
     },
     id: snapshot.id,
-    joinLabel:
-      data.joinMode === 'open' ? 'Open seats' : 'Request to join',
+    joinLabel: data.joinMode === 'open' ? 'Open seats' : 'Request to join',
     joinMode:
       data.joinMode === 'request_to_join' ||
       data.joinMode === 'invite_only' ||

@@ -9,6 +9,7 @@ import {CircleThreadScreen} from '../features/circles/screens/CircleThreadScreen
 import {CircleToolsScreen} from '../features/circles/screens/CircleToolsScreen';
 import {CirclesScreen} from '../features/circles/screens/CirclesScreen';
 import {EditCircleScreen} from '../features/circles/screens/EditCircleScreen';
+import {ConvertPersonalCircleScreen} from '../features/circles/screens/ConvertPersonalCircleScreen';
 import {EditProfileScreen} from '../features/settings/screens/EditProfileScreen';
 import {TapInCompleteScreen} from '../features/check-in/screens/TapInCompleteScreen';
 import {TapInComposerScreen} from '../features/check-in/screens/TapInComposerScreen';
@@ -121,6 +122,14 @@ export function RootNavigator(): React.JSX.Element {
       <Stack.Screen
         component={CircleToolsScreen}
         name="CircleTools"
+        options={{
+          animation: 'slide_from_right',
+          headerShown: false,
+        }}
+      />
+      <Stack.Screen
+        component={ConvertPersonalCircleScreen}
+        name="ConvertPersonalCircle"
         options={{
           animation: 'slide_from_right',
           headerShown: false,

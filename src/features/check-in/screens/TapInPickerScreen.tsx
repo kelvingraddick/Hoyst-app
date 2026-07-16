@@ -133,6 +133,14 @@ function AvatarPreview({
   inverse?: boolean;
   size?: number;
 }) {
+  if (circle.circleMode === 'personal') {
+    return (
+      <HoystText tone={inverse ? undefined : 'muted'} variant="caption">
+        Personal
+      </HoystText>
+    );
+  }
+
   return (
     <View style={styles.avatarRow}>
       {circle.members.slice(0, 3).map((member, index) => (
@@ -332,30 +340,34 @@ function PriorityTapCard({
             {circle.title}
           </HoystText>
           <HoystText numberOfLines={2} style={styles.priorityDescription}>
-            {circle.commitment}
+            {circle.circleMode === 'personal'
+              ? 'Private personal commitment'
+              : circle.commitment}
           </HoystText>
         </View>
 
-        <View style={styles.priorityStatsRow}>
-          <UsersRound
-            color="rgba(255,255,255,0.72)"
-            size={16}
-            strokeWidth={2.3}
-          />
-          <HoystText
-            numberOfLines={1}
-            style={styles.priorityStat}
-            variant="button">
-            {circle.memberCount}/{circle.maxSize} members
-          </HoystText>
-          <View style={styles.priorityDot} />
-          <HoystText
-            numberOfLines={1}
-            style={styles.priorityStat}
-            variant="button">
-            {getShownUpLabel(circle)}
-          </HoystText>
-        </View>
+        {circle.circleMode !== 'personal' ? (
+          <View style={styles.priorityStatsRow}>
+            <UsersRound
+              color="rgba(255,255,255,0.72)"
+              size={16}
+              strokeWidth={2.3}
+            />
+            <HoystText
+              numberOfLines={1}
+              style={styles.priorityStat}
+              variant="button">
+              {circle.memberCount}/{circle.maxSize} members
+            </HoystText>
+            <View style={styles.priorityDot} />
+            <HoystText
+              numberOfLines={1}
+              style={styles.priorityStat}
+              variant="button">
+              {getShownUpLabel(circle)}
+            </HoystText>
+          </View>
+        ) : null}
 
         <View style={styles.priorityFooter}>
           <AvatarPreview circle={circle} inverse size={40} />
@@ -421,21 +433,30 @@ function DueTapCard({
         <View style={styles.taskRow}>
           {privacyIcon}
           <HoystText numberOfLines={2} style={styles.taskCopy} tone="muted">
-            {circle.commitment}
+            {circle.circleMode === 'personal'
+              ? 'Personal commitment'
+              : circle.commitment}
           </HoystText>
         </View>
       </View>
 
       <View style={styles.cardMetaRow}>
-        <View style={styles.managementItem}>
-          <UsersRound color={theme.textSubtle} size={15} strokeWidth={2.1} />
-          <HoystText style={styles.cardMetaText} tone="muted">
-            {circle.memberCount}/{circle.maxSize} members
-          </HoystText>
-        </View>
-        <View
-          style={[styles.managementDot, {backgroundColor: theme.borderStrong}]}
-        />
+        {circle.circleMode !== 'personal' ? (
+          <View style={styles.managementItem}>
+            <UsersRound color={theme.textSubtle} size={15} strokeWidth={2.1} />
+            <HoystText style={styles.cardMetaText} tone="muted">
+              {circle.memberCount}/{circle.maxSize} members
+            </HoystText>
+          </View>
+        ) : null}
+        {circle.circleMode !== 'personal' ? (
+          <View
+            style={[
+              styles.managementDot,
+              {backgroundColor: theme.borderStrong},
+            ]}
+          />
+        ) : null}
         <HoystText style={[styles.cardMetaText, {color: progressTone}]}>
           {getRemainingTapInsLabel(circle)}
         </HoystText>
@@ -743,21 +764,21 @@ export function TapInPickerScreen({navigation}: Props): React.JSX.Element {
       ) : showLoadingState ? (
         <EmptyState
           body="Pulling your live Tap In status from Hoyst."
-          title="Loading your circles"
+          title="Loading your commitments"
         />
       ) : showDataErrorState ? (
         <EmptyState
-          body="Your account is connected, but Hoyst could not load your live circle status."
+          body="Your account is connected, but Hoyst could not load your live Commitment status."
           title="Could not load Tap In"
         />
       ) : showNoActiveCirclesState ? (
         <EmptyState
-          body="Join or create a circle before Tap In has anything to track."
-          title="No active circles yet"
+          body="Create or join a Commitment before Tap In has anything to track."
+          title="No active commitments yet"
         />
       ) : showAllTappedInState ? (
         <EmptyState
-          body="Every active Circle has today's Tap In covered. You can still keep Members moving below."
+          body="Every active Commitment has today's Tap In covered."
           title="Today is covered"
         />
       ) : null}

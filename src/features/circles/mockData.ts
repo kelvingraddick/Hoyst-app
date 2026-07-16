@@ -21,6 +21,7 @@ export const initialTapInDraft: TapInDraft = {
 
 export const initialCreateCircleDraft: CreateCircleDraft = {
   category: 'Fitness',
+  circleMode: 'group',
   commitmentCadence: 'daily',
   commitmentFrequency: {tapInsPerWeek: 7},
   commitmentType: 'build',

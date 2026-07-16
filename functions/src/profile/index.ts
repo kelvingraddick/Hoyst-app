@@ -3,6 +3,7 @@ import {HttpsError, onCall} from 'firebase-functions/v2/https';
 
 import {db} from '../firebase';
 import {isCoveredCheckInData} from '../shared/commitments';
+import {getCircleMode} from '../shared/circle-mode';
 import {
   calculateLongestPersonalDailyStreak,
   calculatePersonalDailyStreak,
@@ -11,6 +12,7 @@ import {
 
 export type ProfileSummary = {
   activeCircleCount: number;
+  activePersonalCommitmentCount: number;
   hasTappedInToday: boolean;
   longestStreakDays: number;
   personalStreakDays: number;
@@ -116,6 +118,18 @@ export const getProfileSummary = onCall(async request => {
       .map(getMembershipCircleId)
       .filter((circleId): circleId is string => Boolean(circleId)),
   );
+  const activeCircleSnapshots = await Promise.all(
+    Array.from(activeCircleIds).map(circleId =>
+      db.collection('circles').doc(circleId).get(),
+    ),
+  );
+  const activePersonalCommitmentCount = activeCircleSnapshots.filter(
+    snapshot =>
+      snapshot.exists && getCircleMode(snapshot.data()) === 'personal',
+  ).length;
+  const activeGroupCircleCount = activeCircleSnapshots.filter(
+    snapshot => snapshot.exists && getCircleMode(snapshot.data()) === 'group',
+  ).length;
 
   const checkInsSnapshot = await db
     .collectionGroup('checkIns')
@@ -136,7 +150,8 @@ export const getProfileSummary = onCall(async request => {
   });
 
   return {
-    activeCircleCount: activeCircleIds.size,
+    activeCircleCount: activeGroupCircleCount,
+    activePersonalCommitmentCount,
     longestStreakDays,
     totalTapIns,
     ...streak,

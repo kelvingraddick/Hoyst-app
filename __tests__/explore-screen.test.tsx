@@ -177,7 +177,7 @@ describe('ExploreScreen', () => {
     );
     const createButtonStyle = StyleSheet.flatten(
       screen.root
-        .findByProps({accessibilityLabel: 'Create Circle'})
+        .findByProps({accessibilityLabel: 'Create commitment'})
         .props.style({
           pressed: false,
         }),
@@ -555,7 +555,7 @@ describe('ExploreScreen', () => {
   it('routes plus, View, and Join actions through the root stack', () => {
     const {rootNavigate, screen} = renderScreenWithNavigation();
     const createButton = screen.root.findByProps({
-      accessibilityLabel: 'Create Circle',
+      accessibilityLabel: 'Create commitment',
     });
     const viewButton = screen.root.findByProps({
       testID: 'explore-featured-view-sleep-circle',

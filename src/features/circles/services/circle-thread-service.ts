@@ -145,6 +145,7 @@ export function mapCircleThreadItemSnapshot(
     isLikedByViewer: Boolean(viewerUid && likedBy[viewerUid]),
     kind,
     likeCount: Math.max(0, Math.round(asNumber(data.likeCount, 0))),
+    readOnly: data.readOnly === true,
   };
 }
 

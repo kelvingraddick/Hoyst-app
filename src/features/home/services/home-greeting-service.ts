@@ -20,7 +20,7 @@ type CachedHomeGreeting = {
   source: 'gemini';
 };
 
-const homeGreetingCachePrefix = '@hoyst/homeGreeting/v1/';
+const homeGreetingCachePrefix = '@hoyst/homeGreeting/v2/';
 const homeGreetingCacheMaxAgeMs = 48 * 60 * 60 * 1000;
 const inFlightHomeGreetingRequests = new Map<
   string,
@@ -60,6 +60,8 @@ export function buildHomeGreetingCacheKey({
     circleSummary.atRiskCount,
     circleSummary.doneCount,
     circleSummary.pendingCount,
+    circleSummary.groupCircleCount ?? circleSummary.circleCount,
+    circleSummary.personalCommitmentCount ?? 0,
   ].join(':');
 }
 

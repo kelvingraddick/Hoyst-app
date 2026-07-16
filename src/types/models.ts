@@ -1,6 +1,7 @@
 import type {ImageSourcePropType} from 'react-native';
 
 export type CirclePrivacy = 'private' | 'public';
+export type CircleMode = 'personal' | 'group';
 export type CirclePrivacyMode = 'link_only' | 'private' | 'public';
 export type CircleJoinMode = 'open' | 'invite_only' | 'request_to_join';
 export type CircleMembershipStatus = 'active' | 'pending';
@@ -99,6 +100,7 @@ export type Opportunity = {
 
 export type Circle = {
   id: string;
+  circleMode?: CircleMode;
   title: string;
   category: string;
   commitment: string;
@@ -184,6 +186,7 @@ export type CircleThreadItem = {
   likeCount: number;
   mediaImageUrl?: string;
   note?: string;
+  readOnly?: boolean;
   targetActor?: CircleThreadActor;
   text?: string;
   tone?: CircleThreadTone;
@@ -258,6 +261,7 @@ export type ViewerTodayCheckIn = {
 
 export type CircleSummary = {
   id: string;
+  circleMode?: CircleMode;
   title: string;
   category: string;
   commitment: string;
@@ -345,6 +349,7 @@ export type CircleDetailModel = CircleSummary & {
 
 export type CreateCircleDraft = {
   category: string;
+  circleMode: CircleMode;
   commitmentType: CommitmentType;
   commitmentCadence: CommitmentCadence;
   graceRules: {

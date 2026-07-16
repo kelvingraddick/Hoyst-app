@@ -2,6 +2,7 @@ import {firebaseFunctions} from '../../../lib/firebase/functions';
 
 export type ProfileSummary = {
   activeCircleCount: number;
+  activePersonalCommitmentCount: number;
   hasTappedInToday: boolean;
   longestStreakDays: number;
   personalStreakDays: number;

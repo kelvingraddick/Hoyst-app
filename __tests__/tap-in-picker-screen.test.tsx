@@ -356,6 +356,35 @@ describe('TapInPickerScreen', () => {
     });
   });
 
+  it('shows personal commitments without member or companion metadata', () => {
+    mockHomeData = homeData([
+      circle({
+        circleMode: 'personal',
+        commitment: 'Read every day',
+        id: 'personal-1',
+        inviteUrl: undefined,
+        joinMode: 'invite_only',
+        maxSize: 1,
+        memberCount: 1,
+        privacy: 'private',
+        progressPercent: 20,
+        state: 'risk',
+        title: 'Read every day',
+        viewerHasCheckedIn: false,
+        viewerHasTappedInToday: false,
+        viewerRemainingTapIns: 1,
+      }),
+    ]);
+
+    const {tree} = renderScreen();
+    const output = getTextOutput(tree.toJSON());
+
+    expect(output).toContain('Read every day');
+    expect(output).toContain('Personal');
+    expect(output).toContain('Private personal commitment');
+    expect(output).not.toContain('1/1 members');
+  });
+
   it('opens the composer from a remaining Tap Today card', () => {
     mockHomeData = homeData([
       circle({
@@ -500,7 +529,7 @@ describe('TapInPickerScreen', () => {
     mockSubscriptionMode = 'loading';
     let rendered = renderScreen();
     expect(getTextOutput(rendered.tree.toJSON())).toContain(
-      'Loading your circles',
+      'Loading your commitments',
     );
 
     mockSubscriptionMode = 'error';
@@ -513,7 +542,7 @@ describe('TapInPickerScreen', () => {
     mockHomeData = homeData([]);
     rendered = renderScreen();
     expect(getTextOutput(rendered.tree.toJSON())).toContain(
-      'No active circles yet',
+      'No active commitments yet',
     );
 
     mockHomeData = homeData([

@@ -21,8 +21,10 @@ const homeGreetingSchema = zod_1.z.object({
         atRiskCount: zod_1.z.number().int().min(0).max(99),
         circleCount: zod_1.z.number().int().min(0).max(99),
         doneCount: zod_1.z.number().int().min(0).max(99),
+        groupCircleCount: zod_1.z.number().int().min(0).max(99).optional(),
         needsYouCount: zod_1.z.number().int().min(0).max(99),
         pendingCount: zod_1.z.number().int().min(0).max(99),
+        personalCommitmentCount: zod_1.z.number().int().min(0).max(99).optional(),
     }),
     dateKey: zod_1.z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
     firstName: zod_1.z.string().trim().max(24).optional(),
@@ -53,7 +55,7 @@ function cleanCachePart(value) {
 function buildHomeGreetingCacheKey({ input, uid, }) {
     const { circleSummary } = input;
     return [
-        'v1',
+        'v2',
         cleanCachePart(uid),
         input.dateKey,
         input.timeWindow,
@@ -63,6 +65,8 @@ function buildHomeGreetingCacheKey({ input, uid, }) {
         circleSummary.atRiskCount,
         circleSummary.doneCount,
         circleSummary.pendingCount,
+        circleSummary.groupCircleCount ?? circleSummary.circleCount,
+        circleSummary.personalCommitmentCount ?? 0,
     ].join('_');
 }
 function withName(firstName, copy, copyWithoutName) {
@@ -73,10 +77,13 @@ function buildHomeGreetingFallback(input, reason) {
     const { circleSummary, timeWindow } = input;
     let headline;
     if (circleSummary.circleCount === 0) {
-        headline = withName(firstName, 'no circles yet. Bold strategy, let us fix it.', 'No circles yet. Bold strategy, let us fix it.');
+        headline = withName(firstName, 'no commitments yet. Bold strategy, let us fix it.', 'No commitments yet. Bold strategy, let us fix it.');
     }
     else if (circleSummary.needsYouCount > 0) {
-        headline = withName(firstName, 'your circles are waiting. Make it quick and undeniable.', 'Your circles are waiting. Make it quick and undeniable.');
+        const waitingLabel = (circleSummary.groupCircleCount ?? circleSummary.circleCount) === 0
+            ? 'commitments'
+            : 'circles';
+        headline = withName(firstName, `your ${waitingLabel} are waiting. Make it quick and undeniable.`, `Your ${waitingLabel} are waiting. Make it quick and undeniable.`);
     }
     else if (circleSummary.atRiskCount > 0) {
         headline = withName(firstName, 'pressure is up. Perfect, now it counts.', 'Pressure is up. Perfect, now it counts.');
@@ -114,7 +121,10 @@ function getGeminiApiKey() {
 }
 const firestoreHomeGreetingCacheStore = {
     async getCachedGreeting(cacheKey, input) {
-        const snapshot = await firebase_1.db.collection('homeGreetingCache').doc(cacheKey).get();
+        const snapshot = await firebase_1.db
+            .collection('homeGreetingCache')
+            .doc(cacheKey)
+            .get();
         const data = snapshot.data();
         const headline = validateHomeGreetingHeadline({
             firstName: input.firstName,

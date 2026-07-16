@@ -513,6 +513,7 @@ function CircleStatRings({
   const maxSize =
     detail.maxSize > 0 ? detail.maxSize : Math.max(detail.memberCount, 1);
   const memberProgress = Math.max(0, Math.min(1, detail.memberCount / maxSize));
+  const isPersonal = detail.circleMode === 'personal';
   const statsRangeLabel =
     detail.commitmentCadence === 'monthly' ? 'This month' : 'This week';
 
@@ -530,22 +531,24 @@ function CircleStatRings({
         />
       </GlassPanel>
       <View style={styles.statRingsRow}>
-        <StatBarCard
-          accessibilityLabel={`Completion ${completion}%.`}
-          barColor="#10B967"
-          chipColor="#E8F8EF"
-          chipTestID="circle-stats-completion-disc"
-          label="Completion"
-          progress={completion / 100}
-          surfaceStyle={styles.statBarCardSurface}
-          trackColor="rgba(16,185,103,0.2)"
-          value={`${completion}%`}>
-          <CircleDetailArtworkIcon
-            color={theme.successForeground}
-            kind="completion"
-            size={STAT_ARTWORK_SIZE}
-          />
-        </StatBarCard>
+        {!isPersonal ? (
+          <StatBarCard
+            accessibilityLabel={`Completion ${completion}%.`}
+            barColor="#10B967"
+            chipColor="#E8F8EF"
+            chipTestID="circle-stats-completion-disc"
+            label="Completion"
+            progress={completion / 100}
+            surfaceStyle={styles.statBarCardSurface}
+            trackColor="rgba(16,185,103,0.2)"
+            value={`${completion}%`}>
+            <CircleDetailArtworkIcon
+              color={theme.successForeground}
+              kind="completion"
+              size={STAT_ARTWORK_SIZE}
+            />
+          </StatBarCard>
+        ) : null}
         <StatBarCard
           accessibilityLabel={`Streak ${streakValue} ${
             streakValue === 1 ? 'day' : 'days'
@@ -564,22 +567,24 @@ function CircleStatRings({
             size={STAT_ARTWORK_SIZE}
           />
         </StatBarCard>
-        <StatBarCard
-          accessibilityLabel={`Members ${detail.memberCount} of ${maxSize}.`}
-          barColor="#7A55FF"
-          chipColor="#ECE6FF"
-          chipTestID="circle-stats-members-disc"
-          label="Members"
-          progress={memberProgress}
-          surfaceStyle={styles.statBarCardSurface}
-          trackColor="rgba(122,85,255,0.22)"
-          value={`${detail.memberCount}/${maxSize}`}>
-          <CircleDetailArtworkIcon
-            color={theme.accentSecondaryForeground}
-            kind="members"
-            size={STAT_ARTWORK_SIZE}
-          />
-        </StatBarCard>
+        {!isPersonal ? (
+          <StatBarCard
+            accessibilityLabel={`Members ${detail.memberCount} of ${maxSize}.`}
+            barColor="#7A55FF"
+            chipColor="#ECE6FF"
+            chipTestID="circle-stats-members-disc"
+            label="Members"
+            progress={memberProgress}
+            surfaceStyle={styles.statBarCardSurface}
+            trackColor="rgba(122,85,255,0.22)"
+            value={`${detail.memberCount}/${maxSize}`}>
+            <CircleDetailArtworkIcon
+              color={theme.accentSecondaryForeground}
+              kind="members"
+              size={STAT_ARTWORK_SIZE}
+            />
+          </StatBarCard>
+        ) : null}
       </View>
     </View>
   );
@@ -864,7 +869,8 @@ export function CircleDetailScreen({
       !canLoadMemberCircle ||
       !user?.uid ||
       !detail?.viewerRole ||
-      detail.viewerMembershipStatus === 'pending'
+      detail.viewerMembershipStatus === 'pending' ||
+      detail.circleMode === 'personal'
     ) {
       setThreadPreview(undefined);
       return undefined;
@@ -880,6 +886,7 @@ export function CircleDetailScreen({
     canLoadMemberCircle,
     detail?.viewerMembershipStatus,
     detail?.viewerRole,
+    detail?.circleMode,
     route.params.circleId,
     user?.uid,
   ]);
@@ -952,6 +959,7 @@ export function CircleDetailScreen({
 
   const isPendingMembership = detail.viewerMembershipStatus === 'pending';
   const isMemberCircle = Boolean(detail.viewerRole) && !isPendingMembership;
+  const isPersonal = detail.circleMode === 'personal';
   const canInvite =
     Boolean(detail.inviteUrl) &&
     (detail.viewerRole === 'owner' || detail.viewerRole === 'admin');
@@ -985,17 +993,17 @@ export function CircleDetailScreen({
     ? 'View Today'
     : 'Tap In';
   const tapInPulseRingState = getPulseRingStateForCircle(detail);
-  const canReviewJoinRequests = isMemberCircle && detail.viewerRole === 'owner';
+  const canReviewJoinRequests =
+    !isPersonal && isMemberCircle && detail.viewerRole === 'owner';
   const removeActionLabel =
     detail.viewerTodayStatus === 'skip' ? 'Remove Skip' : 'Remove Tap In';
-  const removeProgressionCopy =
-    canUpdateTodayQuantity
-      ? quantityTapInRemoveCopy
-      : detail.commitmentCadence === 'daily'
-      ? "This will undo today's Progression for this Circle."
-      : detail.commitmentCadence === 'monthly'
-      ? "This will undo this month's Progression for this Circle."
-      : "This will undo this week's Progression for this Circle.";
+  const removeProgressionCopy = canUpdateTodayQuantity
+    ? quantityTapInRemoveCopy
+    : detail.commitmentCadence === 'daily'
+    ? "This will undo today's Progression for this Circle."
+    : detail.commitmentCadence === 'monthly'
+    ? "This will undo this month's Progression for this Circle."
+    : "This will undo this week's Progression for this Circle.";
   const commitmentPrefix =
     detail.commitmentCadence === 'monthly'
       ? 'Monthly Goal'
@@ -1247,25 +1255,26 @@ export function CircleDetailScreen({
       supportingText="Undo today"
     />
   ) : null;
-  const companionFooterAction = isMemberCircle ? (
-    <View
-      style={styles.companionActionStack}
-      testID="circle-detail-companion-actions">
-      {canNudgeTargets ? (
-        <NudgePanel
-          isNudging={isNudging}
-          nudged={nudged}
-          onPress={handleSendNudge}
-          targetCopy={nudgeTargetCopy}
-          targetCount={nudgeTargetCount}
+  const companionFooterAction =
+    isMemberCircle && !isPersonal ? (
+      <View
+        style={styles.companionActionStack}
+        testID="circle-detail-companion-actions">
+        {canNudgeTargets ? (
+          <NudgePanel
+            isNudging={isNudging}
+            nudged={nudged}
+            onPress={handleSendNudge}
+            targetCopy={nudgeTargetCopy}
+            targetCount={nudgeTargetCount}
+          />
+        ) : null}
+        <CircleThreadPreviewCard
+          onPress={openCircleThread}
+          preview={threadPreview}
         />
-      ) : null}
-      <CircleThreadPreviewCard
-        onPress={openCircleThread}
-        preview={threadPreview}
-      />
-    </View>
-  ) : undefined;
+      </View>
+    ) : undefined;
 
   return (
     <HoystScreen
@@ -1314,49 +1323,69 @@ export function CircleDetailScreen({
                 />
               ) : null}
               <View style={styles.heroInlineMetaRow}>
-                <HeroInlineMetaItem
-                  color={heroMetaColor}
-                  icon={
-                    detail.privacy === 'private' ? (
+                {isPersonal ? (
+                  <HeroInlineMetaItem
+                    color={theme.successForeground}
+                    icon={
                       <Lock
-                        color={heroMetaIconColor}
+                        color={theme.successForeground}
                         size={15}
                         strokeWidth={2.2}
                       />
-                    ) : (
-                      <Globe2
-                        color={heroMetaIconColor}
-                        size={15}
-                        strokeWidth={2.2}
-                      />
-                    )
-                  }
-                  label={privacyLabel}
-                />
-                <View style={styles.heroInlineMetaDot} />
-                <HeroInlineMetaItem
-                  color={heroMetaColor}
-                  icon={
-                    <UsersRound
-                      color={heroMetaIconColor}
-                      size={15}
-                      strokeWidth={2.2}
+                    }
+                    label="Personal commitment"
+                  />
+                ) : (
+                  <>
+                    <HeroInlineMetaItem
+                      color={heroMetaColor}
+                      icon={
+                        detail.privacy === 'private' ? (
+                          <Lock
+                            color={heroMetaIconColor}
+                            size={15}
+                            strokeWidth={2.2}
+                          />
+                        ) : (
+                          <Globe2
+                            color={heroMetaIconColor}
+                            size={15}
+                            strokeWidth={2.2}
+                          />
+                        )
+                      }
+                      label={privacyLabel}
                     />
-                  }
-                  label={`${detail.memberCount}/${detail.maxSize}`}
-                />
-                <View style={styles.heroInlineMetaDot} />
-                <HeroInlineMetaItem
-                  color={roleMetaColor}
-                  icon={
-                    <Crown color={roleMetaColor} size={15} strokeWidth={2.2} />
-                  }
-                  label={roleOrJoinLabel}
-                />
+                    <View style={styles.heroInlineMetaDot} />
+                    <HeroInlineMetaItem
+                      color={heroMetaColor}
+                      icon={
+                        <UsersRound
+                          color={heroMetaIconColor}
+                          size={15}
+                          strokeWidth={2.2}
+                        />
+                      }
+                      label={`${detail.memberCount}/${detail.maxSize}`}
+                    />
+                    <View style={styles.heroInlineMetaDot} />
+                    <HeroInlineMetaItem
+                      color={roleMetaColor}
+                      icon={
+                        <Crown
+                          color={roleMetaColor}
+                          size={15}
+                          strokeWidth={2.2}
+                        />
+                      }
+                      label={roleOrJoinLabel}
+                    />
+                  </>
+                )}
               </View>
             </>
           }
-          navTitle="Circle"
+          navTitle={isPersonal ? 'Personal Commitment' : 'Circle'}
           onBack={navigateBack}
           primaryAction={
             isMemberCircle ? (
@@ -1371,7 +1400,7 @@ export function CircleDetailScreen({
           }
           progress={{
             color: categoryProgressColor,
-            label: 'Circle progression',
+            label: isPersonal ? 'Personal progress' : 'Circle progression',
             percent: circleProgressionPercent,
           }}
           subtitle={detailStatusPill ? undefined : previewCopy}
@@ -1379,30 +1408,32 @@ export function CircleDetailScreen({
         />
 
         <View style={styles.bodyStack} testID="circle-detail-body-stack">
-          <CircleCompanionGrid
-            canTapInViewer={isMemberCircle && !canRemoveTodayCheckIn}
-            footerAction={companionFooterAction}
-            inviteAction={
-              canInvite
-                ? {
-                    accessibilityLabel: 'Invite companions',
-                    onPress: shareInvite,
-                  }
-                : undefined
-            }
-            members={detail.members}
-            nudgedMemberIds={nudgedMemberIds}
-            nudgingMemberIds={nudgingMemberIds}
-            onNudgeMember={isMemberCircle ? handleSendMemberNudge : undefined}
-            onReviewPendingMember={
-              canReviewJoinRequests ? openReviewJoinRequestSheet : undefined
-            }
-            onTapInViewer={openTapInComposer}
-            reviewingPendingMemberId={reviewingRequestId}
-            subtitle={getCompanionProgressSubtitle(detail)}
-            tapInRingState={tapInPulseRingState}
-            viewerUid={user?.uid}
-          />
+          {!isPersonal ? (
+            <CircleCompanionGrid
+              canTapInViewer={isMemberCircle && !canRemoveTodayCheckIn}
+              footerAction={companionFooterAction}
+              inviteAction={
+                canInvite
+                  ? {
+                      accessibilityLabel: 'Invite companions',
+                      onPress: shareInvite,
+                    }
+                  : undefined
+              }
+              members={detail.members}
+              nudgedMemberIds={nudgedMemberIds}
+              nudgingMemberIds={nudgingMemberIds}
+              onNudgeMember={isMemberCircle ? handleSendMemberNudge : undefined}
+              onReviewPendingMember={
+                canReviewJoinRequests ? openReviewJoinRequestSheet : undefined
+              }
+              onTapInViewer={openTapInComposer}
+              reviewingPendingMemberId={reviewingRequestId}
+              subtitle={getCompanionProgressSubtitle(detail)}
+              tapInRingState={tapInPulseRingState}
+              viewerUid={user?.uid}
+            />
+          ) : null}
 
           {!isMemberCircle ? (
             isPendingMembership ? (

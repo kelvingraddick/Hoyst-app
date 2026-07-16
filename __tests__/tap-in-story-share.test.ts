@@ -197,6 +197,16 @@ describe('Tap In story sharing', () => {
     );
   });
 
+  it('forwards and releases raw iOS temporary image paths for clipboard', async () => {
+    const ref = {current: {}} as RefObject<never>;
+    mockCaptureRef.mockResolvedValue('/tmp/hoyst-story.png');
+
+    await copyTapInStoryImageToClipboard(ref);
+
+    expect(mockCopyImage).toHaveBeenCalledWith('/tmp/hoyst-story.png');
+    expect(mockReleaseCapture).toHaveBeenCalledWith('/tmp/hoyst-story.png');
+  });
+
   it('shares generated story images directly to Instagram Stories', async () => {
     const ref = {current: {}} as RefObject<never>;
 

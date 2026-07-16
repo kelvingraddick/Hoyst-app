@@ -26,6 +26,7 @@ const commitmentFrequencySchema = zod_1.z.object({
 });
 const starterCircleSchema = zod_1.z.object({
     category: zod_1.z.string().trim().min(1).max(40),
+    circleMode: zod_1.z.enum(['personal', 'group']).optional().default('group'),
     commitment: zod_1.z.string().trim().min(1).max(160),
     commitmentCadence: zod_1.z.enum(['daily', 'weekly', 'monthly']).optional(),
     commitmentFrequency: commitmentFrequencySchema,
@@ -37,7 +38,7 @@ const starterCircleSchema = zod_1.z.object({
         .optional(),
     joinMode: zod_1.z.enum(['open', 'request_to_join', 'invite_only']),
     maximumValue: zod_1.z.number().int().min(0).max(100000).optional(),
-    maxSize: zod_1.z.number().int().min(2).max(100),
+    maxSize: zod_1.z.number().int().min(1).max(100),
     minimumValue: zod_1.z.number().int().min(0).max(100000).optional(),
     privacy: zod_1.z.enum(['public', 'private']),
     setupId: zod_1.z.string().trim().min(1).max(120),
@@ -309,36 +310,47 @@ exports.completeProfile = (0, https_1.onCall)(async (request) => {
             const publicIndexRef = firebase_1.db
                 .collection('publicCircleIndex')
                 .doc(circleRef.id);
-            const inviteCode = createInviteCode();
+            const circleMode = input.starterCircle.circleMode;
+            const isPersonal = circleMode === 'personal';
+            const inviteCode = isPersonal ? undefined : createInviteCode();
+            const joinMode = isPersonal
+                ? 'invite_only'
+                : input.starterCircle.joinMode;
+            const maxSize = isPersonal ? 1 : starterCircleHiddenDefaults.maxSize;
+            const privacy = isPersonal ? 'private' : input.starterCircle.privacy;
+            const title = isPersonal
+                ? input.starterCircle.commitment
+                : input.starterCircle.title;
             const commitmentCadence = (0, commitments_1.getInputCommitmentCadence)(input.starterCircle.commitmentCadence, input.starterCircle.commitmentFrequency);
             const commitmentFrequency = (0, commitments_1.getStoredCommitmentFrequency)(commitmentCadence, input.starterCircle.commitmentFrequency);
             const commitmentType = (0, commitments_1.getCommitmentType)(input.starterCircle);
             const quantityConfig = (0, commitments_1.getQuantityConfig)(input.starterCircle);
             const circle = {
                 category: input.starterCircle.category,
+                circleMode,
                 createdAt: now,
                 commitment: input.starterCircle.commitment,
                 commitmentCadence,
                 commitmentFrequency,
                 commitmentType,
                 graceRules: starterCircleHiddenDefaults.graceRules,
-                inviteCode,
-                joinMode: input.starterCircle.joinMode,
+                ...(inviteCode ? { inviteCode } : {}),
+                joinMode,
                 ...(typeof quantityConfig.maximumValue === 'number'
                     ? { maximumValue: quantityConfig.maximumValue }
                     : {}),
                 ...(typeof quantityConfig.minimumValue === 'number'
                     ? { minimumValue: quantityConfig.minimumValue }
                     : {}),
-                maxSize: starterCircleHiddenDefaults.maxSize,
+                maxSize,
                 memberCount: 1,
                 ownerId: uid,
-                privacy: input.starterCircle.privacy,
+                privacy,
                 stepValue: quantityConfig.stepValue,
                 ...(typeof quantityConfig.targetValue === 'number'
                     ? { targetValue: quantityConfig.targetValue }
                     : {}),
-                title: input.starterCircle.title,
+                title,
                 timezone: input.starterCircle.timezone ?? input.timezone,
                 unitLabel: quantityConfig.unitLabel,
                 updatedAt: now,
@@ -353,21 +365,22 @@ exports.completeProfile = (0, https_1.onCall)(async (request) => {
                 status: 'active',
                 uid,
             });
-            if (input.starterCircle.privacy === 'public') {
+            if (!isPersonal && privacy === 'public') {
                 transaction.set(publicIndexRef, {
                     category: input.starterCircle.category,
+                    circleMode,
                     commitment: input.starterCircle.commitment,
                     commitmentCadence,
                     commitmentFrequency,
                     commitmentType,
-                    joinMode: input.starterCircle.joinMode,
+                    joinMode,
                     ...(typeof quantityConfig.maximumValue === 'number'
                         ? { maximumValue: quantityConfig.maximumValue }
                         : {}),
                     ...(typeof quantityConfig.minimumValue === 'number'
                         ? { minimumValue: quantityConfig.minimumValue }
                         : {}),
-                    maxSize: starterCircleHiddenDefaults.maxSize,
+                    maxSize,
                     memberCount: 1,
                     members: [
                         {
@@ -381,12 +394,15 @@ exports.completeProfile = (0, https_1.onCall)(async (request) => {
                     ...(typeof quantityConfig.targetValue === 'number'
                         ? { targetValue: quantityConfig.targetValue }
                         : {}),
-                    title: input.starterCircle.title,
+                    title,
                     unitLabel: quantityConfig.unitLabel,
                     updatedAt: now,
                 });
             }
-            starterCircle = { circleId: circleRef.id, inviteCode };
+            starterCircle = {
+                circleId: circleRef.id,
+                ...(inviteCode ? { inviteCode } : {}),
+            };
         }
         else if (starterCircleDecision === 'reuse' && existingStarterCircleId) {
             starterCircle = {

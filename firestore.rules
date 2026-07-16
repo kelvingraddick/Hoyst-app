@@ -22,8 +22,13 @@ service cloud.firestore {
         get(/databases/$(database)/documents/circles/$(circleId)/members/$(request.auth.uid)).data.status in ['active', 'pending'];
     }
 
+    function isGroupCircle(circleId) {
+      return get(/databases/$(database)/documents/circles/$(circleId)).data.get('circleMode', 'group') == 'group';
+    }
+
     function isPublicCircle() {
-      return resource.data.privacy == 'public';
+      return resource.data.privacy == 'public' &&
+        resource.data.get('circleMode', 'group') == 'group';
     }
 
     function marksReadAtOnly() {
@@ -67,7 +72,7 @@ service cloud.firestore {
     }
 
     match /publicCircleIndex/{circleId} {
-      allow read: if true;
+      allow read: if resource.data.get('circleMode', 'group') == 'group';
       allow write: if false;
     }
 
@@ -106,12 +111,12 @@ service cloud.firestore {
       }
 
       match /feedItems/{itemId} {
-        allow read: if isActiveMember(circleId);
+        allow read: if isActiveMember(circleId) && isGroupCircle(circleId);
         allow write: if false;
       }
 
       match /threadReads/{uid} {
-        allow read: if isSelf(uid);
+        allow read: if isSelf(uid) && isGroupCircle(circleId);
         allow write: if false;
       }
     }

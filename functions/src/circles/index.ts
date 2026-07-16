@@ -2,9 +2,12 @@ import {randomUUID} from 'node:crypto';
 
 import {getAuth} from 'firebase-admin/auth';
 import {
+  FieldPath,
   FieldValue,
+  Timestamp,
   type DocumentData,
   type DocumentReference,
+  type QueryDocumentSnapshot,
 } from 'firebase-admin/firestore';
 import {getStorage} from 'firebase-admin/storage';
 import {HttpsError, onCall} from 'firebase-functions/v2/https';
@@ -29,6 +32,7 @@ import {
   getStoredCommitmentFrequency,
   isCoveredCheckInData,
 } from '../shared/commitments';
+import {ensureGroupCircle, getCircleMode} from '../shared/circle-mode';
 import {createCircleThreadActivity, getCircleThreadNudgeText} from '../thread';
 import {getNudgeTargetUids} from './nudge-targets';
 
@@ -40,28 +44,64 @@ const commitmentFrequencySchema = z.object({
   opportunitiesPerPeriod: z.number().int().min(1).max(31).optional(),
   tapInsPerWeek: z.number().int().min(1).max(7),
 });
-const createCircleSchema = z.object({
-  category: z.string().trim().min(1).max(40),
-  commitment: z.string().trim().min(1).max(160),
-  commitmentCadence: z.enum(['daily', 'weekly', 'monthly']).optional(),
-  commitmentFrequency: commitmentFrequencySchema,
-  commitmentType: z.enum(['build', 'limit', 'avoid']).default('build'),
-  graceRules: z
-    .object({
-      skip: graceRuleSchema,
-    })
-    .optional(),
-  joinMode: z.enum(['open', 'request_to_join', 'invite_only']),
-  maximumValue: z.number().int().min(0).max(100000).optional(),
-  maxSize: z.number().int().min(2).max(100),
-  minimumValue: z.number().int().min(0).max(100000).optional(),
-  privacy: z.enum(['public', 'private']),
-  stepValue: z.number().min(0.01).max(100000).default(1),
-  targetValue: z.number().int().min(0).max(100000).optional(),
-  timezone: z.string().trim().min(1).max(80).optional(),
-  title: z.string().trim().min(1).max(80),
-  unitLabel: z.string().trim().min(1).max(32).default('Tap In'),
-});
+const createCircleSchema = z
+  .object({
+    category: z.string().trim().min(1).max(40),
+    circleMode: z.enum(['personal', 'group']).optional().default('group'),
+    commitment: z.string().trim().min(1).max(160),
+    commitmentCadence: z.enum(['daily', 'weekly', 'monthly']).optional(),
+    commitmentFrequency: commitmentFrequencySchema,
+    commitmentType: z.enum(['build', 'limit', 'avoid']).default('build'),
+    graceRules: z
+      .object({
+        skip: graceRuleSchema,
+      })
+      .optional(),
+    joinMode: z.enum(['open', 'request_to_join', 'invite_only']).optional(),
+    maximumValue: z.number().int().min(0).max(100000).optional(),
+    maxSize: z.number().int().min(1).max(100).optional(),
+    minimumValue: z.number().int().min(0).max(100000).optional(),
+    privacy: z.enum(['public', 'private']).optional(),
+    stepValue: z.number().min(0.01).max(100000).default(1),
+    targetValue: z.number().int().min(0).max(100000).optional(),
+    timezone: z.string().trim().min(1).max(80).optional(),
+    title: z.string().trim().min(1).max(80).optional(),
+    unitLabel: z.string().trim().min(1).max(32).default('Tap In'),
+  })
+  .superRefine((input, context) => {
+    if (input.circleMode !== 'group') {
+      return;
+    }
+
+    if (!input.title) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Circle name is required.',
+        path: ['title'],
+      });
+    }
+    if (!input.joinMode) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Join mode is required.',
+        path: ['joinMode'],
+      });
+    }
+    if (!input.privacy) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Privacy is required.',
+        path: ['privacy'],
+      });
+    }
+    if (!input.maxSize || input.maxSize < 2) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Capacity must be at least 2.',
+        path: ['maxSize'],
+      });
+    }
+  });
 const joinCircleSchema = z.object({
   circleId: z.string().trim().min(1),
   inviteCode: z.string().trim().optional(),
@@ -81,9 +121,18 @@ const leaveCircleSchema = z.object({
 const deleteCircleSchema = z.object({
   circleId: z.string().trim().min(1),
 });
-const updateCircleSchema = createCircleSchema.extend({
+const updateCircleSchema = createCircleSchema.and(
+  z.object({
+    circleId: z.string().trim().min(1),
+    idToken: z.string().trim().min(1).optional(),
+  }),
+);
+const convertPersonalCircleSchema = z.object({
   circleId: z.string().trim().min(1),
-  idToken: z.string().trim().min(1).optional(),
+  joinMode: z.enum(['open', 'request_to_join', 'invite_only']),
+  maxSize: z.number().int().min(2).max(100),
+  privacy: z.enum(['public', 'private']),
+  title: z.string().trim().min(1).max(80),
 });
 
 async function getAuthenticatedUid(uid?: string, idToken?: string) {
@@ -325,6 +374,137 @@ async function deleteCircleCheckInsForMember(circleId: string, uid: string) {
   }
 }
 
+function getHistoricalActivityCopy(checkIn: DocumentData, actorName: string) {
+  const coverageStatus = asOptionalString(checkIn.coverageStatus);
+  const status = asOptionalString(checkIn.status);
+
+  if (status === 'skip' || coverageStatus === 'skipped') {
+    return {text: `${actorName} used a skip`, tone: 'pending' as const};
+  }
+
+  if (status === 'failed' || coverageStatus === 'failed') {
+    return {text: `${actorName} missed the target`, tone: 'alert' as const};
+  }
+
+  if (status === 'partial' || coverageStatus === 'partial') {
+    return {
+      text: `${actorName} logged partial progress`,
+      tone: 'pending' as const,
+    };
+  }
+
+  return {text: `${actorName} tapped in`, tone: 'success' as const};
+}
+
+function getHistoricalActivityCreatedAt(
+  checkIn: DocumentData,
+  dateKey: string,
+) {
+  if (checkIn.createdAt) {
+    return checkIn.createdAt;
+  }
+
+  if (checkIn.updatedAt) {
+    return checkIn.updatedAt;
+  }
+
+  const date = new Date(`${dateKey}T12:00:00.000Z`);
+
+  return Number.isNaN(date.getTime())
+    ? FieldValue.serverTimestamp()
+    : Timestamp.fromDate(date);
+}
+
+async function backfillPersonalCircleActivity({
+  circleId,
+  owner,
+  uid,
+}: {
+  circleId: string;
+  owner: DocumentData;
+  uid: string;
+}) {
+  const circleRef = db.collection('circles').doc(circleId);
+  const actorName =
+    asOptionalString(owner.displayName) ??
+    asOptionalString(owner.name) ??
+    asOptionalString(owner.handle) ??
+    'Hoyst member';
+  let lastDaySnapshot: QueryDocumentSnapshot<DocumentData> | undefined;
+
+  do {
+    let query = circleRef
+      .collection('days')
+      .orderBy(FieldPath.documentId())
+      .limit(350);
+
+    if (lastDaySnapshot) {
+      query = query.startAfter(lastDaySnapshot);
+    }
+
+    const daySnapshots = await query.get();
+
+    if (daySnapshots.empty) {
+      break;
+    }
+
+    const checkInSnapshots = await Promise.all(
+      daySnapshots.docs.map(daySnapshot =>
+        daySnapshot.ref.collection('checkIns').doc(uid).get(),
+      ),
+    );
+    const batch = db.batch();
+
+    checkInSnapshots.forEach((checkInSnapshot, index) => {
+      if (!checkInSnapshot.exists) {
+        return;
+      }
+
+      const checkIn = checkInSnapshot.data() ?? {};
+      const dateKey = daySnapshots.docs[index].id;
+      const copy = getHistoricalActivityCopy(checkIn, actorName);
+      const itemRef = circleRef
+        .collection('feedItems')
+        .doc(`personal_history_${dateKey}_${uid}`);
+
+      batch.set(
+        itemRef,
+        {
+          actor: {
+            avatarUrl: owner.avatarUrl ?? null,
+            displayName: actorName,
+            handle: owner.handle ?? null,
+            uid,
+          },
+          createdAt: getHistoricalActivityCreatedAt(checkIn, dateKey),
+          dateKey,
+          historical: true,
+          kind: 'activity',
+          likeCount: 0,
+          likedBy: {},
+          mediaImageUrl: checkIn.photoUrl ?? null,
+          note: checkIn.note ?? null,
+          outcomeStatus: checkIn.coverageStatus ?? checkIn.status ?? 'covered',
+          readOnly: true,
+          source: 'personal_conversion',
+          text: copy.text,
+          tone: copy.tone,
+          type: 'tap_in',
+          updatedAt: FieldValue.serverTimestamp(),
+        },
+        {merge: true},
+      );
+    });
+
+    await batch.commit();
+    lastDaySnapshot = daySnapshots.docs[daySnapshots.docs.length - 1];
+
+    if (daySnapshots.size < 350) {
+      break;
+    }
+  } while (lastDaySnapshot);
+}
+
 export const createCircle = onCall(
   {secrets: [oneSignalRestApiKey]},
   async request => {
@@ -334,7 +514,13 @@ export const createCircle = onCall(
     const memberRef = circleRef.collection('members').doc(uid);
     const publicIndexRef = db.collection('publicCircleIndex').doc(circleRef.id);
     const now = FieldValue.serverTimestamp();
-    const inviteCode = createInviteCode();
+    const circleMode = input.circleMode;
+    const isPersonal = circleMode === 'personal';
+    const inviteCode = isPersonal ? undefined : createInviteCode();
+    const joinMode = isPersonal ? 'invite_only' : input.joinMode!;
+    const maxSize = isPersonal ? 1 : input.maxSize!;
+    const privacy = isPersonal ? 'private' : input.privacy!;
+    const title = isPersonal ? input.commitment : input.title!;
     const commitmentCadence = getInputCommitmentCadence(
       input.commitmentCadence,
       input.commitmentFrequency,
@@ -347,6 +533,7 @@ export const createCircle = onCall(
     const quantityConfig = getQuantityConfig(input);
     const circle = {
       category: input.category,
+      circleMode,
       createdAt: now,
       commitment: input.commitment,
       commitmentCadence,
@@ -358,23 +545,23 @@ export const createCircle = onCall(
           windowDays: 7,
         },
       },
-      inviteCode,
-      joinMode: input.joinMode,
+      ...(inviteCode ? {inviteCode} : {}),
+      joinMode,
       ...(typeof quantityConfig.maximumValue === 'number'
         ? {maximumValue: quantityConfig.maximumValue}
         : {}),
       ...(typeof quantityConfig.minimumValue === 'number'
         ? {minimumValue: quantityConfig.minimumValue}
         : {}),
-      maxSize: input.maxSize,
+      maxSize,
       memberCount: 1,
       ownerId: uid,
-      privacy: input.privacy,
+      privacy,
       stepValue: quantityConfig.stepValue,
       ...(typeof quantityConfig.targetValue === 'number'
         ? {targetValue: quantityConfig.targetValue}
         : {}),
-      title: input.title,
+      title,
       timezone: input.timezone ?? profile.timezone ?? 'UTC',
       unitLabel: quantityConfig.unitLabel,
       updatedAt: now,
@@ -392,28 +579,29 @@ export const createCircle = onCall(
       uid,
     });
 
-    if (input.privacy === 'public') {
+    if (!isPersonal && privacy === 'public') {
       batch.set(publicIndexRef, {
         category: input.category,
+        circleMode,
         commitment: input.commitment,
         commitmentCadence,
         commitmentFrequency,
         commitmentType,
-        joinMode: input.joinMode,
+        joinMode,
         ...(typeof quantityConfig.maximumValue === 'number'
           ? {maximumValue: quantityConfig.maximumValue}
           : {}),
         ...(typeof quantityConfig.minimumValue === 'number'
           ? {minimumValue: quantityConfig.minimumValue}
           : {}),
-        maxSize: input.maxSize,
+        maxSize,
         memberCount: 1,
         members: [buildMemberPublicPreview(profile, uid)],
         stepValue: quantityConfig.stepValue,
         ...(typeof quantityConfig.targetValue === 'number'
           ? {targetValue: quantityConfig.targetValue}
           : {}),
-        title: input.title,
+        title,
         unitLabel: quantityConfig.unitLabel,
         updatedAt: now,
       });
@@ -421,22 +609,27 @@ export const createCircle = onCall(
 
     await batch.commit();
 
-    await notifyCompanionCircleCreated({
-      actor: {
-        avatarUrl: profile.avatarUrl ?? null,
-        displayName: profile.displayName,
-        handle: profile.handle,
-        uid,
-      },
-      circle,
-      circleId: circleRef.id,
-      circleTitle: input.title,
-      dateKey: getDateKeyForTimezone(circle.timezone),
-    }).catch(error =>
-      console.error('notify_companion_circle_created_failed', error),
-    );
+    if (!isPersonal) {
+      await notifyCompanionCircleCreated({
+        actor: {
+          avatarUrl: profile.avatarUrl ?? null,
+          displayName: profile.displayName,
+          handle: profile.handle,
+          uid,
+        },
+        circle,
+        circleId: circleRef.id,
+        circleTitle: title,
+        dateKey: getDateKeyForTimezone(circle.timezone),
+      }).catch(error =>
+        console.error('notify_companion_circle_created_failed', error),
+      );
+    }
 
-    return {circleId: circleRef.id, inviteCode};
+    return {
+      circleId: circleRef.id,
+      ...(inviteCode ? {inviteCode} : {}),
+    };
   },
 );
 
@@ -469,6 +662,8 @@ export const joinCircle = onCall(
       const circle = circleSnapshot.data();
       const member = memberSnapshot.data();
       const joinRequest = joinRequestSnapshot.data();
+
+      ensureGroupCircle(circle, 'inviting or joining');
 
       if (member?.status === 'active') {
         return {shouldNotifyOwner: false, status: 'active' as const};
@@ -682,6 +877,8 @@ export const reviewJoinRequest = onCall(
       const circle = circleSnapshot.data();
       const ownerMember = memberSnapshot.data();
 
+      ensureGroupCircle(circle, 'reviewing join requests');
+
       if (
         circle?.ownerId !== uid ||
         ownerMember?.role !== 'owner' ||
@@ -843,6 +1040,8 @@ export const nudgeCircleMembers = onCall(
     }
 
     const circle = circleSnapshot.data();
+
+    ensureGroupCircle(circle, 'sending nudges');
     const timezone = asOptionalString(circle?.timezone) ?? 'UTC';
     const dateKey = getDateKeyForTimezone(timezone, now);
     const commitmentCadence = getCommitmentCadence(circle);
@@ -1061,6 +1260,173 @@ export const leaveCircle = onCall(async request => {
   return {status};
 });
 
+export const convertPersonalCircle = onCall(async request => {
+  const {uid} = await requireCompletedProfile(request.auth?.uid);
+  const input = convertPersonalCircleSchema.parse(request.data);
+  const circleRef = db.collection('circles').doc(input.circleId);
+  const ownerRef = circleRef.collection('members').doc(uid);
+  const publicIndexRef = db.collection('publicCircleIndex').doc(input.circleId);
+  const [circleSnapshot, ownerSnapshot, activeMemberSnapshots] =
+    await Promise.all([
+      circleRef.get(),
+      ownerRef.get(),
+      circleRef.collection('members').where('status', '==', 'active').get(),
+    ]);
+
+  if (!circleSnapshot.exists) {
+    throw new HttpsError('not-found', 'Personal commitment not found.');
+  }
+
+  const circle = circleSnapshot.data();
+  const owner = ownerSnapshot.data();
+
+  if (
+    circle?.ownerId !== uid ||
+    owner?.role !== 'owner' ||
+    owner?.status !== 'active'
+  ) {
+    throw new HttpsError(
+      'permission-denied',
+      'Only the personal commitment owner can convert it.',
+    );
+  }
+
+  if (getCircleMode(circle) === 'group') {
+    if (circle?.convertedFromPersonal === true) {
+      const inviteCode = asOptionalString(circle.inviteCode);
+
+      if (inviteCode) {
+        return {
+          circleId: input.circleId,
+          inviteCode,
+          inviteUrl: `https://hoyst.app/join/${inviteCode}`,
+        };
+      }
+    }
+
+    throw new HttpsError(
+      'failed-precondition',
+      'This commitment is already a Circle.',
+    );
+  }
+
+  if (
+    activeMemberSnapshots.size !== 1 ||
+    activeMemberSnapshots.docs[0]?.id !== uid ||
+    circle?.memberCount !== 1
+  ) {
+    throw new HttpsError(
+      'failed-precondition',
+      'A personal commitment must have exactly one active owner before conversion.',
+    );
+  }
+
+  await backfillPersonalCircleActivity({
+    circleId: input.circleId,
+    owner,
+    uid,
+  });
+
+  const inviteCode = createInviteCode();
+  const result = await db.runTransaction(async transaction => {
+    const [latestCircleSnapshot, latestOwnerSnapshot] = await Promise.all([
+      transaction.get(circleRef),
+      transaction.get(ownerRef),
+    ]);
+    const latestCircle = latestCircleSnapshot.data();
+    const latestOwner = latestOwnerSnapshot.data();
+
+    if (
+      latestCircle?.ownerId !== uid ||
+      latestOwner?.role !== 'owner' ||
+      latestOwner?.status !== 'active'
+    ) {
+      throw new HttpsError(
+        'permission-denied',
+        'Only the personal commitment owner can convert it.',
+      );
+    }
+
+    if (getCircleMode(latestCircle) === 'group') {
+      const existingInviteCode = asOptionalString(latestCircle?.inviteCode);
+
+      if (latestCircle?.convertedFromPersonal && existingInviteCode) {
+        return existingInviteCode;
+      }
+
+      throw new HttpsError(
+        'failed-precondition',
+        'This commitment is already a Circle.',
+      );
+    }
+
+    if (latestCircle?.memberCount !== 1) {
+      throw new HttpsError(
+        'failed-precondition',
+        'The personal commitment membership changed. Try again.',
+      );
+    }
+
+    const now = FieldValue.serverTimestamp();
+    const commitment =
+      asOptionalString(latestCircle?.commitment) ?? input.title;
+    const commitmentCadence = getCommitmentCadence(latestCircle);
+    const commitmentFrequency = getStoredCommitmentFrequency(
+      commitmentCadence,
+      latestCircle?.commitmentFrequency,
+    );
+    transaction.update(circleRef, {
+      circleMode: 'group',
+      convertedAt: now,
+      convertedFromPersonal: true,
+      inviteCode,
+      joinMode: input.joinMode,
+      maxSize: input.maxSize,
+      privacy: input.privacy,
+      title: input.title,
+      updatedAt: now,
+    });
+
+    if (input.privacy === 'public') {
+      transaction.set(publicIndexRef, {
+        category: latestCircle?.category ?? 'General',
+        circleMode: 'group',
+        commitment,
+        commitmentCadence,
+        commitmentFrequency,
+        commitmentType: latestCircle?.commitmentType ?? 'build',
+        joinMode: input.joinMode,
+        ...(typeof latestCircle?.maximumValue === 'number'
+          ? {maximumValue: latestCircle.maximumValue}
+          : {}),
+        ...(typeof latestCircle?.minimumValue === 'number'
+          ? {minimumValue: latestCircle.minimumValue}
+          : {}),
+        maxSize: input.maxSize,
+        memberCount: 1,
+        members: [buildPublicPreviewFromMember(latestOwner ?? {}, uid)],
+        stepValue: latestCircle?.stepValue ?? 1,
+        ...(typeof latestCircle?.targetValue === 'number'
+          ? {targetValue: latestCircle.targetValue}
+          : {}),
+        title: input.title,
+        unitLabel: latestCircle?.unitLabel ?? 'Tap In',
+        updatedAt: now,
+      });
+    } else {
+      transaction.delete(publicIndexRef);
+    }
+
+    return inviteCode;
+  });
+
+  return {
+    circleId: input.circleId,
+    inviteCode: result,
+    inviteUrl: `https://hoyst.app/join/${result}`,
+  };
+});
+
 export const updateCircle = onCall(async request => {
   const input = updateCircleSchema.parse(request.data);
   const {uid} = await requireCompletedProfile(request.auth?.uid, input.idToken);
@@ -1081,6 +1447,15 @@ export const updateCircle = onCall(async request => {
 
   const circle = circleSnapshot.data();
   const member = memberSnapshot.data();
+  const circleMode = getCircleMode(circle);
+  const isPersonal = circleMode === 'personal';
+
+  if (input.circleMode !== circleMode) {
+    throw new HttpsError(
+      'failed-precondition',
+      'Circle mode cannot be changed through editing.',
+    );
+  }
 
   if (
     circle?.ownerId !== uid ||
@@ -1100,7 +1475,12 @@ export const updateCircle = onCall(async request => {
       : 0;
   const memberCount = Math.max(storedMemberCount, activeMemberSnapshots.size);
 
-  if (input.maxSize < memberCount) {
+  const maxSize = isPersonal ? 1 : input.maxSize!;
+  const title = isPersonal ? input.commitment : input.title!;
+  const joinMode = isPersonal ? 'invite_only' : input.joinMode!;
+  const privacy = isPersonal ? 'private' : input.privacy!;
+
+  if (maxSize < memberCount) {
     throw new HttpsError(
       'failed-precondition',
       'Max size cannot be below the current member count.',
@@ -1120,6 +1500,7 @@ export const updateCircle = onCall(async request => {
   const quantityConfig = getQuantityConfig(input);
   const circleUpdate = {
     category: input.category,
+    circleMode,
     commitment: input.commitment,
     commitmentCadence,
     commitmentFrequency,
@@ -1130,23 +1511,23 @@ export const updateCircle = onCall(async request => {
         windowDays: 7,
       },
     },
-    joinMode: input.joinMode,
+    joinMode,
     maximumValue:
       typeof quantityConfig.maximumValue === 'number'
         ? quantityConfig.maximumValue
         : FieldValue.delete(),
-    maxSize: input.maxSize,
+    maxSize,
     minimumValue:
       typeof quantityConfig.minimumValue === 'number'
         ? quantityConfig.minimumValue
         : FieldValue.delete(),
-    privacy: input.privacy,
+    privacy,
     stepValue: quantityConfig.stepValue,
     targetValue:
       typeof quantityConfig.targetValue === 'number'
         ? quantityConfig.targetValue
         : FieldValue.delete(),
-    title: input.title,
+    title,
     timezone: input.timezone ?? circle?.timezone ?? 'UTC',
     unitLabel: quantityConfig.unitLabel,
     updatedAt: now,
@@ -1155,21 +1536,22 @@ export const updateCircle = onCall(async request => {
 
   batch.update(circleRef, circleUpdate);
 
-  if (input.privacy === 'public') {
+  if (!isPersonal && privacy === 'public') {
     batch.set(
       publicIndexRef,
       {
         category: input.category,
+        circleMode,
         commitment: input.commitment,
         commitmentCadence,
         commitmentFrequency,
         commitmentType,
-        joinMode: input.joinMode,
+        joinMode,
         maximumValue:
           typeof quantityConfig.maximumValue === 'number'
             ? quantityConfig.maximumValue
             : FieldValue.delete(),
-        maxSize: input.maxSize,
+        maxSize,
         memberCount,
         members: activeMemberSnapshots.docs.map(snapshot =>
           buildPublicPreviewFromMember(snapshot.data(), snapshot.id),
@@ -1183,7 +1565,7 @@ export const updateCircle = onCall(async request => {
           typeof quantityConfig.targetValue === 'number'
             ? quantityConfig.targetValue
             : FieldValue.delete(),
-        title: input.title,
+        title,
         unitLabel: quantityConfig.unitLabel,
         updatedAt: now,
       },

@@ -1,5 +1,6 @@
 import type {
   CircleJoinMode,
+  CircleMode,
   CirclePrivacy,
   CirclePrivacyMode,
   CircleSummary,
@@ -12,6 +13,7 @@ import type {
 
 export type CreateCirclePayload = {
   category: string;
+  circleMode: CircleMode;
   commitment: string;
   commitmentCadence: CommitmentCadence;
   commitmentFrequency: CommitmentFrequency;
@@ -35,6 +37,7 @@ export const defaultSkipGraceRule: GraceRule = {
   allowance: 2,
   windowDays: 7,
 };
+export const defaultCircleMode: CircleMode = 'group';
 export const defaultCircleMaxSize = 10;
 export const defaultCommitmentFrequency: CommitmentFrequency = {
   tapInsPerWeek: 7,
@@ -59,6 +62,7 @@ export function getLocalTimezone() {
 export function createInitialCircleDraft(timezone?: string): CreateCircleDraft {
   return {
     category: 'Fitness',
+    circleMode: defaultCircleMode,
     commitment: '',
     commitmentCadence: defaultCommitmentCadence,
     commitmentFrequency: defaultCommitmentFrequency,
@@ -122,6 +126,7 @@ export function buildCircleEditDraft(
   circle: Pick<
     CircleSummary,
     | 'category'
+    | 'circleMode'
     | 'commitment'
     | 'commitmentCadence'
     | 'commitmentFrequency'
@@ -149,6 +154,7 @@ export function buildCircleEditDraft(
   return {
     ...initialDraft,
     category: circle.category,
+    circleMode: normalizeCircleMode(circle.circleMode),
     commitment: circle.commitment,
     commitmentCadence,
     commitmentFrequency: normalizeCommitmentFrequency(
@@ -205,6 +211,10 @@ export function normalizeCommitmentType(value: unknown): CommitmentType {
   return value === 'limit' || value === 'avoid' || value === 'build'
     ? value
     : defaultCommitmentType;
+}
+
+export function normalizeCircleMode(value: unknown): CircleMode {
+  return value === 'personal' ? 'personal' : 'group';
 }
 
 export function normalizeStepValue(value: unknown) {
@@ -278,6 +288,7 @@ export function normalizeCommitmentCadence(
 export function buildCreateCirclePayload(
   draft: CreateCircleDraft,
 ): CreateCirclePayload {
+  const circleMode = normalizeCircleMode(draft.circleMode);
   const commitmentCadence = normalizeCommitmentCadence(
     draft.commitmentCadence,
     draft.commitmentFrequency,
@@ -305,6 +316,7 @@ export function buildCreateCirclePayload(
 
   return {
     category: draft.category.trim(),
+    circleMode,
     commitment: draft.commitment.trim(),
     commitmentCadence,
     commitmentFrequency: normalizeCommitmentFrequency(
@@ -315,17 +327,18 @@ export function buildCreateCirclePayload(
     graceRules: {
       skip: normalizeSkipGraceRule(draft.graceRules.skip),
     },
-    joinMode: draft.joinMode,
+    joinMode: circleMode === 'personal' ? 'invite_only' : draft.joinMode,
     ...(typeof maximumValue === 'number' ? {maximumValue} : {}),
     ...(typeof minimumValue === 'number'
       ? {minimumValue: Math.min(minimumValue, maximumValue ?? minimumValue)}
       : {}),
-    maxSize: clampCircleMaxSize(draft.maxSize),
-    privacy: draft.privacy,
+    maxSize: circleMode === 'personal' ? 1 : clampCircleMaxSize(draft.maxSize),
+    privacy: circleMode === 'personal' ? 'private' : draft.privacy,
     stepValue: defaultCommitmentStepValue,
     ...(typeof targetValue === 'number' ? {targetValue} : {}),
     timezone: draft.timezone.trim() || getLocalTimezone(),
-    title: draft.title.trim(),
+    title:
+      circleMode === 'personal' ? draft.commitment.trim() : draft.title.trim(),
     unitLabel:
       commitmentType === 'avoid'
         ? defaultCommitmentUnitLabel

@@ -43,6 +43,20 @@ function publicCircle(overrides: Partial<ExploreCircle>): ExploreCircle {
 }
 
 describe('public circle discovery mapping', () => {
+  it('does not expose personal commitments through Explore', () => {
+    const snapshot = {
+      data: () => ({
+        circleMode: 'personal',
+        commitment: 'Read 20 pages',
+        title: 'Read 20 pages',
+      }),
+      exists: true,
+      id: 'personal-1',
+    };
+
+    expect(mapPublicCircleIndexSnapshot(snapshot as never)).toBeUndefined();
+  });
+
   it('maps publicCircleIndex documents into explore circles', () => {
     const snapshot = {
       data: () => ({
@@ -350,6 +364,27 @@ describe('create circle payload mapping', () => {
     expect(clampCircleMaxSize(52.7)).toBe(53);
   });
 
+  it('builds a private single-member personal commitment payload', () => {
+    const draft = {
+      ...createInitialCircleDraft('America/New_York'),
+      circleMode: 'personal' as const,
+      commitment: 'Read 20 pages',
+      joinMode: 'open' as const,
+      maxSize: 25,
+      privacy: 'public' as const,
+      title: 'Ignored group name',
+    };
+
+    expect(buildCreateCirclePayload(draft)).toMatchObject({
+      circleMode: 'personal',
+      commitment: 'Read 20 pages',
+      joinMode: 'invite_only',
+      maxSize: 1,
+      privacy: 'private',
+      title: 'Read 20 pages',
+    });
+  });
+
   it('builds a Limit commitment payload with minimum and maximum values', () => {
     const draft = {
       ...createInitialCircleDraft('America/New_York'),
@@ -452,7 +487,7 @@ describe('create circle payload mapping', () => {
     });
   });
 
-  it('builds starter circle payloads with create-circle defaults', () => {
+  it('builds starter circle payloads without resetting chosen values', () => {
     const draft = {
       ...createInitialStarterCircleDraft({focusArea: 'wellness'}),
       commitment: ' Meditate for ten minutes ',
@@ -473,11 +508,11 @@ describe('create circle payload mapping', () => {
       commitmentFrequency: {tapInsPerWeek: 7},
       graceRules: {
         skip: {
-          allowance: 2,
+          allowance: 1,
           windowDays: 7,
         },
       },
-      maxSize: 10,
+      maxSize: 2,
       title: 'Calm Crew',
     });
   });
@@ -497,7 +532,7 @@ describe('create circle payload mapping', () => {
       commitment: 'Ship focused blocks',
       commitmentCadence: 'weekly',
       commitmentFrequency: {tapInsPerWeek: 4},
-      maxSize: 10,
+      maxSize: 2,
       title: 'Maker Mornings',
     });
   });

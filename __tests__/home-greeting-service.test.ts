@@ -61,7 +61,7 @@ describe('Home greeting client cache', () => {
     });
 
     expect(cacheKey).toBe(
-      '@hoyst/homeGreeting/v1/:user-1:2026-05-17:midday:Aaron:1:1:0:0:0',
+      '@hoyst/homeGreeting/v2/:user-1:2026-05-17:midday:Aaron:1:1:0:0:0:1:0',
     );
     expect(changedStatusKey).not.toBe(cacheKey);
   });

@@ -303,7 +303,7 @@ function ThreadActivityItem({
               ) : null}
             </GlassPanel>
             <LikeButton
-              disabled={isViewer}
+              disabled={isViewer || item.readOnly}
               item={item}
               onPress={() => onLike(item)}
             />
@@ -312,7 +312,7 @@ function ThreadActivityItem({
       ) : (
         <View style={styles.activityLikeRow}>
           <LikeButton
-            disabled={isViewer}
+            disabled={isViewer || item.readOnly}
             item={item}
             onPress={() => onLike(item)}
           />
@@ -669,10 +669,7 @@ export function CircleThreadScreen({
           ) : null}
 
           <View
-            style={[
-              styles.composerRow,
-              {backgroundColor: theme.surfaceStrong},
-            ]}
+            style={[styles.composerRow, {backgroundColor: theme.surfaceStrong}]}
             testID="circle-thread-composer-row">
             <TextInput
               editable={!isSending}
@@ -727,9 +724,10 @@ export function CircleThreadScreen({
                 style={({pressed}) => [
                   styles.composerActionButton,
                   {
-                    opacity: pressed && canSendMessage
-                      ? actionMotion.pressedOpacity
-                      : 1,
+                    opacity:
+                      pressed && canSendMessage
+                        ? actionMotion.pressedOpacity
+                        : 1,
                   },
                 ]}>
                 <View

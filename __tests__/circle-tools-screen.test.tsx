@@ -246,7 +246,9 @@ describe('CircleToolsScreen', () => {
     expect(output).not.toContain('Morning Movers');
     expect(output).not.toContain('CIRCLE');
     expect(output).toContain('Edit Circle');
-    expect(output).toContain('Change name, access, cadence, and skip rules.');
+    expect(output).toContain(
+      'Change the name, rules, access, timing, and capacity.',
+    );
     expect(output).toContain('Delete Circle');
     expect(output).toContain('Permanently remove this circle and its history.');
     expect(output).not.toContain('Leave Circle');
@@ -301,6 +303,35 @@ describe('CircleToolsScreen', () => {
       'Circle deleted',
       'Morning Movers has been deleted.',
     );
+  });
+
+  it('offers edit, conversion, and delete actions for a personal commitment', () => {
+    mockMemberDetail = detail({
+      circleMode: 'personal',
+      commitment: 'Read every day',
+      inviteUrl: undefined,
+      joinMode: 'invite_only',
+      maxSize: 1,
+      memberCount: 1,
+      privacy: 'private',
+      title: 'Read every day',
+    });
+    const {navigation, tree} = renderScreen();
+    const output = outputOf(tree);
+
+    expect(output).toContain('Commitment Settings');
+    expect(output).toContain('Edit Commitment');
+    expect(output).toContain(
+      'Change the Commitment, rules, rhythm, timing, and skips.',
+    );
+    expect(output).toContain('Invite someone');
+    expect(output).toContain('Delete Commitment');
+    expect(output).not.toContain('Leave Circle');
+
+    pressByAccessibilityLabel(tree, 'Invite someone');
+    expect(navigation.navigate).toHaveBeenCalledWith('ConvertPersonalCircle', {
+      circleId: 'circle-1',
+    });
   });
 
   it('shows active member leave settings', async () => {

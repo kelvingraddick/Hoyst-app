@@ -5,6 +5,7 @@ exports.summarizeProfileCheckIns = summarizeProfileCheckIns;
 const https_1 = require("firebase-functions/v2/https");
 const firebase_1 = require("../firebase");
 const commitments_1 = require("../shared/commitments");
+const circle_mode_1 = require("../shared/circle-mode");
 const streak_1 = require("./streak");
 async function requireCompletedProfile(uid) {
     if (!uid) {
@@ -74,6 +75,9 @@ exports.getProfileSummary = (0, https_1.onCall)(async (request) => {
         .filter(snapshot => snapshot.data().status === 'active')
         .map(getMembershipCircleId)
         .filter((circleId) => Boolean(circleId)));
+    const activeCircleSnapshots = await Promise.all(Array.from(activeCircleIds).map(circleId => firebase_1.db.collection('circles').doc(circleId).get()));
+    const activePersonalCommitmentCount = activeCircleSnapshots.filter(snapshot => snapshot.exists && (0, circle_mode_1.getCircleMode)(snapshot.data()) === 'personal').length;
+    const activeGroupCircleCount = activeCircleSnapshots.filter(snapshot => snapshot.exists && (0, circle_mode_1.getCircleMode)(snapshot.data()) === 'group').length;
     const checkInsSnapshot = await firebase_1.db
         .collectionGroup('checkIns')
         .where('uid', '==', uid)
@@ -91,7 +95,8 @@ exports.getProfileSummary = (0, https_1.onCall)(async (request) => {
         checkInDateKeys: coveredCheckInDateKeys,
     });
     return {
-        activeCircleCount: activeCircleIds.size,
+        activeCircleCount: activeGroupCircleCount,
+        activePersonalCommitmentCount,
         longestStreakDays,
         totalTapIns,
         ...streak,

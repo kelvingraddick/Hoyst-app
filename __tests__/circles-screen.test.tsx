@@ -197,7 +197,9 @@ describe('CirclesScreen render paths', () => {
     const output = renderScreen();
 
     expect(output).toContain('Your commitments');
-    expect(output).toContain('Active circles and join requests.');
+    expect(output).toContain(
+      'Personal commitments, active circles, and join requests.',
+    );
     expect(output).toContain('Needs You');
     expect(output).toContain('Pending');
     expect(output).toContain('On Track');
@@ -217,6 +219,30 @@ describe('CirclesScreen render paths', () => {
     expect(output).not.toContain('Discover Circles');
   });
 
+  it('renders personal commitments above the group Circle list', () => {
+    mockHomeData = homeData([
+      circle({
+        circleMode: 'personal',
+        commitment: 'Read every day',
+        id: 'personal-1',
+        inviteUrl: undefined,
+        joinMode: 'invite_only',
+        maxSize: 1,
+        memberCount: 1,
+        privacy: 'private',
+        title: 'Read every day',
+      }),
+      circle({id: 'group-1'}),
+    ]);
+    const output = renderScreen();
+
+    expect(output).toContain('Personal Commitments');
+    expect(output).toContain('Read every day');
+    expect(output.indexOf('Personal Commitments')).toBeLessThan(
+      output.indexOf('Sorted by urgency'),
+    );
+  });
+
   it('uses compact commitment header type and full-width stat cards', () => {
     mockHomeData = homeData([circle({})]);
     const {screen} = renderScreenWithNavigation();
@@ -225,7 +251,9 @@ describe('CirclesScreen render paths', () => {
       .map(node => StyleSheet.flatten(node.props.style));
     const subtitleStyles = screen.root
       .findAll(
-        node => node.props.children === 'Active circles and join requests.',
+        node =>
+          node.props.children ===
+          'Personal commitments, active circles, and join requests.',
       )
       .map(node => StyleSheet.flatten(node.props.style));
     const needsYouStat = screen.root
@@ -309,7 +337,7 @@ describe('CirclesScreen render paths', () => {
     expect(output).toContain('Your commitments');
     expect(output).toContain('No circles yet');
     expect(output).toContain('Find more circles');
-    expect(output).toContain('New');
+    expect(output).toContain('Create commitment');
     expect(output).not.toContain('Need Attention');
     expect(output).not.toContain('All Circles');
     expect(output).not.toContain('Discover Circles');
@@ -425,11 +453,11 @@ describe('CirclesScreen render paths', () => {
     expect(filtered).not.toContain('Limit Covered');
   });
 
-  it('opens Create Circle from the header New button', () => {
+  it('opens commitment creation from the header button', () => {
     mockHomeData = homeData([]);
     const {rootNavigate, screen} = renderScreenWithNavigation();
     const createButton = screen.root.findByProps({
-      accessibilityLabel: 'Create Circle',
+      accessibilityLabel: 'Create commitment',
     });
 
     act(() => {
@@ -465,7 +493,9 @@ describe('CirclesScreen render paths', () => {
       .map(node => StyleSheet.flatten(node.props.style))
       .find(style => style?.fontSize === 15);
     const findMoreSubtitleStyle = screen.root
-      .findAll(node => node.props.children === 'Browse public circles in Explore')
+      .findAll(
+        node => node.props.children === 'Browse public circles in Explore',
+      )
       .map(node => StyleSheet.flatten(node.props.style))
       .find(style => style?.fontSize === 14);
 

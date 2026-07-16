@@ -201,6 +201,10 @@ function getProgressTone(
 }
 
 function AvatarPreview({card}: {card: CircleManagementCard}) {
+  if (card.circleMode === 'personal') {
+    return <HoystChip density="compact" label="Personal" tone="green" />;
+  }
+
   return (
     <View style={styles.avatarRow}>
       {card.members.slice(0, 3).map((member, index) => (
@@ -274,7 +278,10 @@ export function TodayCircleCard({
       : card.remainingCheckIns > 0
       ? othersNeededLabel
       : 'Commitment complete';
-  const description = card.matchCopy ?? card.commitment;
+  const isPersonal = card.circleMode === 'personal';
+  const description = isPersonal
+    ? 'Personal commitment'
+    : card.matchCopy ?? card.commitment;
   const supportingLabel = card.matchCopy
     ? card.commitment
     : fallbackContextLabel;
@@ -581,7 +588,7 @@ export function TodayCircleCard({
         ? [listPrimaryMeta]
         : [
             listPrimaryMeta,
-            shownUpCount > 0
+            !isPersonal && shownUpCount > 0
               ? `${shownUpCount} companion${
                   shownUpCount === 1 ? '' : 's'
                 } showed up`
@@ -764,12 +771,14 @@ export function TodayCircleCard({
           ) : null}
 
           <View style={styles.todayStats}>
-            <View style={styles.statRow}>
-              <UsersRound color={categoryColor} size={17} strokeWidth={2.4} />
-              <HoystText tone="muted" variant="caption">
-                {shownUpLabel}
-              </HoystText>
-            </View>
+            {!isPersonal ? (
+              <View style={styles.statRow}>
+                <UsersRound color={categoryColor} size={17} strokeWidth={2.4} />
+                <HoystText tone="muted" variant="caption">
+                  {shownUpLabel}
+                </HoystText>
+              </View>
+            ) : null}
             <View style={styles.statRow}>
               <GradientRing
                 flatColor={categoryColor}

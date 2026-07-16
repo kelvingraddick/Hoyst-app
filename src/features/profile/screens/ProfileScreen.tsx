@@ -794,11 +794,11 @@ export function ProfileScreen({navigation}: Props): React.JSX.Element {
               style={styles.loggedOutLogo}
             />
             <HoystText variant="title">
-              Join circles and keep accountability visible.
+              Build commitments and keep accountability visible.
             </HoystText>
             <HoystText tone="muted">
-              Sign in to unlock joins, create circles, Tap In, and keep your
-              circle history attached to your profile.
+              Sign in to unlock joins, create commitments, Tap In, and keep
+              your history attached to your profile.
             </HoystText>
           </View>
 
@@ -966,6 +966,15 @@ export function ProfileScreen({navigation}: Props): React.JSX.Element {
             label="Circles"
             tone="purple"
             value={formatSummaryStatValue(profileSummary?.activeCircleCount)}
+          />
+          <ProfileHeroStat
+            detail="Active now"
+            icon={CheckCircle2}
+            label="Personal Commitments"
+            tone="green"
+            value={formatSummaryStatValue(
+              profileSummary?.activePersonalCommitmentCount,
+            )}
           />
         </View>
       </View>

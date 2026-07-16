@@ -7,6 +7,8 @@ import {
   type OnboardingIntentDraft,
 } from '../features/auth/services/onboarding-payload';
 import {
+  getLegacyFocusAreaCategory,
+  getOnboardingSteps,
   onboardingSteps,
   type OnboardingFocusArea,
   type OnboardingPreferences,
@@ -66,6 +68,7 @@ export type OnboardingStoreState = OnboardingIntentDraft & {
 };
 
 const initialState = {
+  categories: undefined as string[] | undefined,
   currentStep: 'welcome' as OnboardingStep,
   displayName: '',
   firstCircleSkipped: false,
@@ -81,12 +84,14 @@ const initialState = {
 };
 
 const legacyStepFallbacks: Record<string, OnboardingStep> = {
-  categories: 'circleTitle',
+  categories: 'circleCategory',
   comfort: 'circleTitle',
-  circleFrequency: 'circleCadence',
+  circleCadence: 'circleRules',
+  circleFrequency: 'circleRules',
   circleDailyTask: 'circleCommitment',
-  commitmentFrequency: 'circleCadence',
-  goal: 'focusArea',
+  commitmentFrequency: 'circleRules',
+  focusArea: 'circleCategory',
+  goal: 'circleCategory',
   pace: 'circleTitle',
   profile: 'circleTitle',
   preview: 'circleReview',
@@ -105,20 +110,82 @@ export function normalizeOnboardingStep(value: unknown): OnboardingStep {
   return 'welcome';
 }
 
-function getNextStep(currentStep: OnboardingStep, direction: 1 | -1) {
-  const currentIndex = onboardingSteps.indexOf(currentStep);
+export function normalizeOnboardingStepForMode(
+  value: unknown,
+  circleMode: 'personal' | 'group',
+): OnboardingStep {
+  const normalizedStep = normalizeOnboardingStep(value);
+  const availableSteps = getOnboardingSteps(circleMode);
+
+  if (availableSteps.includes(normalizedStep)) {
+    return normalizedStep;
+  }
+
+  const originalIndex = onboardingSteps.indexOf(normalizedStep);
+  const nextAvailableStep = onboardingSteps
+    .slice(originalIndex + 1)
+    .find(step => availableSteps.includes(step));
+
+  return nextAvailableStep ?? availableSteps.at(-1) ?? 'welcome';
+}
+
+function getNextStep(
+  currentStep: OnboardingStep,
+  direction: 1 | -1,
+  circleMode: 'personal' | 'group',
+) {
+  const steps = getOnboardingSteps(circleMode);
+  const currentIndex = steps.indexOf(currentStep);
   const nextIndex = Math.max(
     0,
-    Math.min(onboardingSteps.length - 1, currentIndex + direction),
+    Math.min(steps.length - 1, currentIndex + direction),
   );
 
-  return onboardingSteps[nextIndex];
+  return steps[nextIndex];
 }
 
 function createStarterCircleSetupId() {
   return `starter-${Date.now().toString(36)}-${Math.random()
     .toString(36)
     .slice(2, 10)}`;
+}
+
+export function migratePersistedOnboardingState(persistedState: unknown) {
+  const state = (persistedState ?? {}) as Partial<OnboardingStoreState> & {
+    currentStep?: unknown;
+  };
+  const focusArea = state.focusArea;
+  const normalizedStarterCircleDraft = applyStarterCircleHiddenDefaults(
+    state.starterCircleDraft ??
+      createInitialStarterCircleDraft({
+        focusArea,
+        timezone: state.timezone,
+      }),
+    {timezone: state.timezone},
+  );
+  const starterCircleDraft = {
+    ...normalizedStarterCircleDraft,
+    category:
+      normalizedStarterCircleDraft.category?.trim() ||
+      getLegacyFocusAreaCategory(focusArea),
+  };
+
+  return {
+    ...state,
+    categories:
+      state.categories?.length
+        ? state.categories
+        : focusArea
+        ? [getLegacyFocusAreaCategory(focusArea)]
+        : starterCircleDraft.category
+        ? [starterCircleDraft.category]
+        : undefined,
+    currentStep: normalizeOnboardingStepForMode(
+      state.currentStep,
+      starterCircleDraft.circleMode,
+    ),
+    starterCircleDraft,
+  };
 }
 
 export const useOnboardingStore = create<OnboardingStoreState>()(
@@ -136,6 +203,7 @@ export const useOnboardingStore = create<OnboardingStoreState>()(
         }),
       getPreferences: () =>
         buildOnboardingPreferences({
+          categories: [get().starterCircleDraft.category],
           focusArea: get().focusArea,
         }),
       markSeen: () =>
@@ -145,7 +213,11 @@ export const useOnboardingStore = create<OnboardingStoreState>()(
         }),
       nextStep: () =>
         set(state => ({
-          currentStep: getNextStep(state.currentStep, 1),
+          currentStep: getNextStep(
+            state.currentStep,
+            1,
+            state.starterCircleDraft.circleMode,
+          ),
         })),
       prepareStarterCircleSetup: () => {
         const existingSetupId = get().starterCircleSetupId;
@@ -169,7 +241,11 @@ export const useOnboardingStore = create<OnboardingStoreState>()(
         }),
       previousStep: () =>
         set(state => ({
-          currentStep: getNextStep(state.currentStep, -1),
+          currentStep: getNextStep(
+            state.currentStep,
+            -1,
+            state.starterCircleDraft.circleMode,
+          ),
         })),
       reset: () =>
         set({
@@ -194,6 +270,7 @@ export const useOnboardingStore = create<OnboardingStoreState>()(
         }),
       setFocusArea: focusArea =>
         set(state => ({
+          categories: [getLegacyFocusAreaCategory(focusArea)],
           firstCircleSkipped: false,
           focusArea,
           starterCircleDraft: updateStarterCircleFocusArea(
@@ -206,6 +283,7 @@ export const useOnboardingStore = create<OnboardingStoreState>()(
       setStarterCircleDraft: starterCircleDraft => set({starterCircleDraft}),
       setStarterCircleField: (key, value) =>
         set(state => ({
+          ...(key === 'category' ? {categories: [String(value)]} : {}),
           firstCircleSkipped: false,
           starterCircleDraft: {
             ...state.starterCircleDraft,
@@ -229,13 +307,7 @@ export const useOnboardingStore = create<OnboardingStoreState>()(
           ),
         })),
       setTimezone: timezone =>
-        set(state => ({
-          starterCircleDraft: {
-            ...state.starterCircleDraft,
-            timezone,
-          },
-          timezone,
-        })),
+        set({timezone}),
       startOnboardingWizard: () =>
         set(state => ({
           currentStep: 'welcome',
@@ -252,23 +324,28 @@ export const useOnboardingStore = create<OnboardingStoreState>()(
     }),
     {
       name: 'hoyst-onboarding-v1',
+      migrate: migratePersistedOnboardingState,
       onRehydrateStorage: () => state => {
         if (!state) {
           return;
         }
 
-        state.setCurrentStep(normalizeOnboardingStep(state.currentStep));
-        state.setStarterCircleDraft(
-          applyStarterCircleHiddenDefaults(
-            state.starterCircleDraft ??
-              createInitialStarterCircleDraft({
-                focusArea: state.focusArea,
-                timezone: state.timezone,
-              }),
-            {
+        const starterCircleDraft = applyStarterCircleHiddenDefaults(
+          state.starterCircleDraft ??
+            createInitialStarterCircleDraft({
               focusArea: state.focusArea,
               timezone: state.timezone,
-            },
+            }),
+          {
+            focusArea: state.focusArea,
+            timezone: state.timezone,
+          },
+        );
+        state.setStarterCircleDraft(starterCircleDraft);
+        state.setCurrentStep(
+          normalizeOnboardingStepForMode(
+            state.currentStep,
+            starterCircleDraft.circleMode,
           ),
         );
         state.setFirstCircleSkipped(Boolean(state.firstCircleSkipped));
@@ -281,6 +358,7 @@ export const useOnboardingStore = create<OnboardingStoreState>()(
         state.setHasHydrated(true);
       },
       partialize: state => ({
+        categories: state.categories,
         currentStep: state.currentStep,
         displayName: state.displayName,
         firstCircleSkipped: state.firstCircleSkipped,
@@ -294,6 +372,7 @@ export const useOnboardingStore = create<OnboardingStoreState>()(
         timezone: state.timezone,
       }),
       storage: createJSONStorage(() => AsyncStorage),
+      version: 2,
     },
   ),
 );

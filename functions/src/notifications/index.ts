@@ -165,6 +165,7 @@ export type CompanionFeedTarget = {
 };
 
 export type CompanionFeedSourceCircle = {
+  circleMode?: unknown;
   joinMode?: unknown;
   privacy?: unknown;
 };
@@ -1261,6 +1262,10 @@ export async function resolveCompanionFeedTargets({
   circle?: CompanionFeedSourceCircle;
   circleId: string;
 }) {
+  if (circle?.circleMode === 'personal') {
+    return [];
+  }
+
   const sourceMemberUids = await getActiveCircleMemberUids(circleId);
   const sharedMemberUids = canShareCircleOutsideMembers(circle)
     ? (
@@ -2703,7 +2708,7 @@ async function sendCircleEngagementPrompts() {
     const timezone = asString(circle.timezone, 'UTC');
     const local = getLocalDateTimeParts(now, timezone);
 
-    if (local.hour !== targetHour) {
+    if (local.hour !== targetHour || circle.circleMode === 'personal') {
       continue;
     }
 
@@ -2805,6 +2810,10 @@ async function getEligibleDiscoveryCircleForUser({
 }) {
   for (const circleSnapshot of publicCircleSnapshots.docs) {
     const circle = circleSnapshot.data();
+
+    if (circle.circleMode === 'personal') {
+      continue;
+    }
     const memberCount =
       typeof circle.memberCount === 'number' &&
       Number.isFinite(circle.memberCount)

@@ -25,6 +25,7 @@ jest.mock('../src/lib/firebase/app', () => ({
 }));
 
 import {
+  convertPersonalCircle,
   deleteCircle,
   leaveCircle,
   nudgeCircleMembers,
@@ -47,6 +48,34 @@ describe('circle service', () => {
 
     expect(mockHttpsCallable).toHaveBeenCalledWith('deleteCircle');
     expect(mockCallable).toHaveBeenCalledWith({circleId: 'circle-1'});
+  });
+
+  it('converts a personal commitment with group settings', async () => {
+    mockCallable.mockResolvedValueOnce({
+      data: {
+        circleId: 'circle-1',
+        inviteCode: 'invite-1',
+        inviteUrl: 'https://hoyst.app/join/invite-1',
+      },
+    });
+
+    await expect(
+      convertPersonalCircle({
+        circleId: 'circle-1',
+        joinMode: 'request_to_join',
+        maxSize: 10,
+        privacy: 'public',
+        title: 'Morning movers',
+      }),
+    ).resolves.toMatchObject({inviteCode: 'invite-1'});
+    expect(mockHttpsCallable).toHaveBeenCalledWith('convertPersonalCircle');
+    expect(mockCallable).toHaveBeenCalledWith({
+      circleId: 'circle-1',
+      joinMode: 'request_to_join',
+      maxSize: 10,
+      privacy: 'public',
+      title: 'Morning movers',
+    });
   });
 
   it('calls the leaveCircle callable with the circle id', async () => {

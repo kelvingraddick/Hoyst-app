@@ -54,8 +54,10 @@ export type HomeGreetingCircleSummary = {
   atRiskCount: number;
   circleCount: number;
   doneCount: number;
+  groupCircleCount?: number;
   needsYouCount: number;
   pendingCount: number;
+  personalCommitmentCount?: number;
 };
 
 export type HomeGreetingContext = {
@@ -761,6 +763,13 @@ export function getHomeGreetingCircleSummary(
 ): HomeGreetingCircleSummary {
   return circles.reduce(
     (summary, circle) => {
+      if (circle.circleMode === 'personal') {
+        summary.personalCommitmentCount =
+          (summary.personalCommitmentCount ?? 0) + 1;
+      } else {
+        summary.groupCircleCount = (summary.groupCircleCount ?? 0) + 1;
+      }
+
       if (circle.viewerMembershipStatus === 'pending') {
         summary.pendingCount += 1;
         return summary;
@@ -782,8 +791,10 @@ export function getHomeGreetingCircleSummary(
       atRiskCount: 0,
       circleCount: circles.length,
       doneCount: 0,
+      groupCircleCount: 0,
       needsYouCount: 0,
       pendingCount: 0,
+      personalCommitmentCount: 0,
     },
   );
 }
@@ -831,16 +842,21 @@ export function getHomeGreetingFallback({
   if (circleSummary.circleCount === 0) {
     return buildGreetingWithName(
       context.firstName,
-      'no circles yet. Bold strategy, let us fix it.',
-      'No circles yet. Bold strategy, let us fix it.',
+      'no commitments yet. Bold strategy, let us fix it.',
+      'No commitments yet. Bold strategy, let us fix it.',
     );
   }
 
   if (circleSummary.needsYouCount > 0) {
+    const waitingLabel =
+      (circleSummary.groupCircleCount ?? circleSummary.circleCount) === 0
+        ? 'commitments'
+        : 'circles';
+
     return buildGreetingWithName(
       context.firstName,
-      'your circles are waiting. Make it quick and undeniable.',
-      'Your circles are waiting. Make it quick and undeniable.',
+      `your ${waitingLabel} are waiting. Make it quick and undeniable.`,
+      `Your ${waitingLabel} are waiting. Make it quick and undeniable.`,
     );
   }
 
@@ -1065,6 +1081,8 @@ export function mapHomeCircleFromData({
 
   const title = asString(circleData.title);
   const commitment = asString(circleData.commitment);
+  const circleMode =
+    circleData.circleMode === 'personal' ? 'personal' : 'group';
 
   if (!title || !commitment) {
     return undefined;
@@ -1209,6 +1227,7 @@ export function mapHomeCircleFromData({
 
   return {
     category: asString(circleData.category, 'General'),
+    circleMode,
     completionRate: progressPercent,
     commitmentCadence,
     commitment,
@@ -1219,7 +1238,7 @@ export function mapHomeCircleFromData({
       : {}),
     graceRules,
     id: circleId,
-    inviteUrl: getInviteUrl(circleData),
+    inviteUrl: circleMode === 'personal' ? undefined : getInviteUrl(circleData),
     joinMode: normalizeJoinMode(circleData.joinMode),
     matchCopy: matchCopy || undefined,
     ...(typeof quantityConfig.maximumValue === 'number'
@@ -1231,7 +1250,7 @@ export function mapHomeCircleFromData({
     ...(typeof quantityConfig.minimumValue === 'number'
       ? {minimumValue: quantityConfig.minimumValue}
       : {}),
-    nudgeTargetCount,
+    nudgeTargetCount: circleMode === 'personal' ? 0 : nudgeTargetCount,
     periodTapInCount: periodCoveredCount,
     privacy: normalizePrivacy(circleData.privacy),
     ...(quantityLabel ? {quantityLabel} : {}),

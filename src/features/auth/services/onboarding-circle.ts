@@ -6,32 +6,18 @@ import type {
 import {
   buildCreateCirclePayload,
   createInitialCircleDraft,
-  defaultCircleMaxSize,
-  defaultSkipGraceRule,
   getPrivacyChoiceFields,
   normalizeCommitmentCadence,
   normalizeCommitmentFrequency,
+  normalizeSkipGraceRule,
 } from '../../create-circle/services/create-circle-draft';
-import type {OnboardingFocusArea} from './onboarding-options';
+import {
+  getLegacyFocusAreaCategory,
+  type OnboardingFocusArea,
+} from './onboarding-options';
 
 export function getStarterCircleCategory(focusArea?: OnboardingFocusArea) {
-  if (focusArea === 'fitness') {
-    return 'Fitness';
-  }
-
-  if (focusArea === 'focus') {
-    return 'Deep Work';
-  }
-
-  if (focusArea === 'wellness') {
-    return 'Wellness';
-  }
-
-  if (focusArea === 'sobriety') {
-    return 'Sobriety';
-  }
-
-  return 'Custom';
+  return getLegacyFocusAreaCategory(focusArea);
 }
 
 export function createInitialStarterCircleDraft({
@@ -52,7 +38,6 @@ export function createInitialStarterCircleDraft({
 export function applyStarterCircleHiddenDefaults(
   draft: CreateCircleDraft,
   {
-    focusArea,
     timezone,
   }: {
     focusArea?: OnboardingFocusArea;
@@ -63,10 +48,9 @@ export function applyStarterCircleHiddenDefaults(
     ...createInitialCircleDraft(timezone),
     ...draft,
     graceRules: {
-      skip: {
-        ...defaultSkipGraceRule,
-        ...draft.graceRules?.skip,
-      },
+      skip: normalizeSkipGraceRule(
+        draft.graceRules?.skip ?? createInitialCircleDraft().graceRules.skip,
+      ),
     },
   };
   const commitmentCadence = normalizeCommitmentCadence(
@@ -80,16 +64,11 @@ export function applyStarterCircleHiddenDefaults(
 
   return {
     ...normalizedDraft,
-    ...(focusArea ? {category: getStarterCircleCategory(focusArea)} : {}),
-    graceRules: {
-      skip: {...defaultSkipGraceRule},
-    },
     commitmentCadence,
     commitmentFrequency: normalizeCommitmentFrequency(
       normalizedDraft.commitmentFrequency,
       commitmentCadence,
     ),
-    maxSize: defaultCircleMaxSize,
     timezone: normalizedDraft.timezone.trim() || fallbackTimezone,
   };
 }
@@ -98,7 +77,10 @@ export function updateStarterCircleFocusArea(
   draft: CreateCircleDraft,
   focusArea: OnboardingFocusArea,
 ): CreateCircleDraft {
-  return applyStarterCircleHiddenDefaults(draft, {focusArea});
+  return applyStarterCircleHiddenDefaults({
+    ...draft,
+    category: getStarterCircleCategory(focusArea),
+  });
 }
 
 export function updateStarterCirclePrivacyMode(
@@ -136,8 +118,8 @@ export function isStarterCircleDraftReady(draft: CreateCircleDraft) {
     typeof draft.commitment === 'string' ? draft.commitment.trim() : '';
 
   return (
-    title.length > 0 &&
-    title.length <= 80 &&
+    (draft.circleMode === 'personal' ||
+      (title.length > 0 && title.length <= 80)) &&
     commitment.length > 0 &&
     commitment.length <= 160
   );

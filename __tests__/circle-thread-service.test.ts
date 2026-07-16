@@ -112,6 +112,26 @@ describe('circle thread service', () => {
     ).toBe('Priya: shared a photo');
   });
 
+  it('marks converted history as read-only', () => {
+    const item = mapCircleThreadItemSnapshot(
+      snapshot({
+        actor: {displayName: 'Kelvin', uid: 'user-1'},
+        createdAt: {toDate: () => new Date('2026-07-08T13:40:00.000Z')},
+        kind: 'activity',
+        readOnly: true,
+        text: 'Kelvin tapped in',
+        type: 'tap_in',
+      }),
+      'user-2',
+    );
+
+    expect(item).toMatchObject({
+      kind: 'activity',
+      readOnly: true,
+      text: 'Kelvin tapped in',
+    });
+  });
+
   it('creates deterministic message ids and uploads message images to the circle path', async () => {
     expect(createCircleThreadMessageId('circle-1')).toBe(
       'generated-message-id',

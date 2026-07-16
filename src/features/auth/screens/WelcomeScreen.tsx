@@ -1,4 +1,4 @@
-import React, {useEffect, useMemo, useState} from 'react';
+import React, {useEffect, useMemo, useRef, useState} from 'react';
 import {
   Alert,
   KeyboardAvoidingView,
@@ -14,7 +14,6 @@ import type {
 } from '@react-navigation/native-stack';
 import type {FirebaseAuthTypes} from '@react-native-firebase/auth';
 import {SafeAreaView} from 'react-native-safe-area-context';
-import LinearGradient from 'react-native-linear-gradient';
 import {
   Apple,
   ArrowLeft,
@@ -22,15 +21,12 @@ import {
   CalendarCheck,
   CalendarDays,
   CalendarRange,
-  Check,
   Chrome,
   Clock3,
   Globe2,
   ImagePlus,
   Mail,
-  Minus,
   Phone,
-  Plus,
   Shield,
   Share2,
   Sparkles,
@@ -43,13 +39,15 @@ import {
 import {launchImageLibrary} from 'react-native-image-picker';
 
 import {BrandMark} from '../../../design/components/BrandMark';
+import {FrostedBackdrop} from '../../../design/components/FrostedBackdrop';
+import {GlassPanel} from '../../../design/components/GlassPanel';
 import {HoystButton} from '../../../design/components/HoystButton';
 import {HoystInput} from '../../../design/components/HoystInput';
 import {HoystText} from '../../../design/components/HoystText';
+import {HoystTapInMark} from '../../../design/components/HoystTapInMark';
 import {LayeredAvatar} from '../../../design/components/LayeredAvatar';
-import {TapInRingMark} from '../../../design/components/TapInRingMark';
+import {SetupProgressBar} from '../../../design/components/SetupProgressBar';
 import {useHoystTheme} from '../../../design/theme/useHoystTheme';
-import {gradients} from '../../../design/tokens/gradients';
 import {radius} from '../../../design/tokens/radius';
 import {firebaseAuth} from '../../../lib/firebase/auth';
 import {requestPushNotificationPermission} from '../../../lib/notifications';
@@ -63,27 +61,42 @@ import {useOnboardingStore} from '../../../store/onboarding-store';
 import {useSessionStore} from '../../../store/session-store';
 import {useUserProfileStore} from '../../../store/profile-store';
 import {
-  getOptionLabel,
-  focusAreaOptions,
-  onboardingProgressSteps,
+  getOnboardingProgressSteps,
   type OnboardingOption,
   type OnboardingStep,
 } from '../services/onboarding-options';
+import {getOnboardingStepCopy} from '../services/onboarding-copy';
 import type {
-  CircleJoinMode,
-  CirclePrivacyMode,
   CommitmentCadence,
+  CommitmentType,
   CreateCircleDraft,
 } from '../../../types/models';
 import {TimezonePicker} from '../components/TimezonePicker';
 import {normalizeHandle, validateHandle} from '../services/profile-validation';
 import {isStarterCircleDraftReady} from '../services/onboarding-circle';
 import {
+  defaultCommitmentTargetValue,
   defaultMonthlyCommitmentFrequency,
   defaultWeeklyCommitmentFrequency,
   normalizeCommitmentCadence,
   normalizeCommitmentFrequency,
+  normalizeSkipGraceRule,
 } from '../../create-circle/services/create-circle-draft';
+import {
+  categoryOptions as setupCategoryOptions,
+  circleModeOptions as setupCircleModeOptions,
+  commitmentCadenceOptions as setupCommitmentCadenceOptions,
+  commitmentTypeOptions as setupCommitmentTypeOptions,
+  formatAccessSummary,
+  formatCadenceSummary,
+  formatCommitmentRulesSummary,
+  formatSkipSummary,
+  formatTimezoneSummary,
+  privacyOptions as setupPrivacyOptions,
+  publicJoinOptions as setupPublicJoinOptions,
+  SetupNumericStepper,
+  SetupOptionList,
+} from '../../create-circle/components/CommitmentSetupFields';
 import {
   confirmPhoneSignIn,
   registerWithEmail,
@@ -108,138 +121,22 @@ import {formatPhoneNumberForDisplay} from '../services/phone-number';
 
 type Props = NativeStackScreenProps<AuthStackParamList, 'Welcome'>;
 
-type StepCopy = {
-  body: string;
-  prompt: string;
-  title: string;
-};
-
-const stepCopy: Record<Exclude<OnboardingStep, 'welcome'>, StepCopy> = {
-  auth: {
-    body: 'Create an account when you are ready to join, Tap In, or keep your rhythm across devices.',
-    prompt: 'Pick the sign-in path that feels easiest.',
-    title: 'Save your rhythm',
-  },
-  coach: {
-    body: "Let's help you create your account and a first circle you can invite people into.",
-    prompt:
-      'A circle works best when the promise is small, visible, and repeatable.',
-    title: "Let's get started",
-  },
-  focusArea: {
-    body: 'This helps Hoyst shape the first circle around the kind of accountability you want.',
-    prompt: 'What are you trying to stay consistent with?',
-    title: 'Start with the why',
-  },
-  circleCommitment: {
-    body: 'Make the Commitment specific enough that members know what counts.',
-    prompt: 'What is the shared Commitment?',
-    title: 'Define the promise',
-  },
-  circleCadence: {
-    body: 'Daily circles reset every day. Weekly circles work toward a set number of covered days each week.',
-    prompt: 'How often should members commit?',
-    title: 'Set the rhythm',
-  },
-  circlePrivacy: {
-    body: 'Choose who can discover it and how new members enter.',
-    prompt: 'Who can find and join it?',
-    title: 'Set the doors',
-  },
-  circleReview: {
-    body: 'After account creation, Hoyst will save your profile and create this circle.',
-    prompt: 'Ready to save your setup?',
-    title: 'Review your first circle',
-  },
-  notifications: {
-    body: 'Hoyst can nudge you before Progression slips and warn you when today is almost closed.',
-    prompt: 'Keep your first Circle moving with timely reminders.',
-    title: 'Protect your Progression',
-  },
-  circleTitle: {
-    body: 'Give the circle a name people can recognize and rally around.',
-    prompt: 'What should this circle be called?',
-    title: 'Name the circle',
-  },
-  finishProfile: {
-    body: 'Add the profile details your circles will see. Handles are locked once saved.',
-    prompt: 'Finish your profile',
-    title: 'Last step',
-  },
-};
-
 const stepIcons: Record<Exclude<OnboardingStep, 'welcome'>, LucideIcon> = {
   auth: UserRound,
-  circleCadence: CalendarRange,
+  circleCapacity: UsersRound,
+  circleCategory: Target,
   circleCommitment: Target,
+  circleGrace: Shield,
+  circleMode: UsersRound,
   circlePrivacy: Globe2,
+  circleRules: CalendarRange,
   circleReview: Sparkles,
+  circleTimezone: Clock3,
   circleTitle: UsersRound,
   coach: Sparkles,
   finishProfile: UserRound,
-  focusArea: Target,
   notifications: BellRing,
 };
-
-const circlePrivacyOptions: OnboardingOption<CirclePrivacyMode>[] = [
-  {
-    accent: 'green',
-    description: 'Discoverable in Circles with your chosen join rule.',
-    id: 'public',
-    label: 'Public',
-  },
-  {
-    accent: 'blue',
-    description: 'Hidden from Circles and joinable only with your invite link.',
-    id: 'link_only',
-    label: 'Link-only',
-  },
-  {
-    accent: 'purple',
-    description: 'Hidden from Circles with invite-only requests for approval.',
-    id: 'private',
-    label: 'Private',
-  },
-];
-
-const publicJoinOptions: OnboardingOption<
-  Extract<CircleJoinMode, 'open' | 'request_to_join'>
->[] = [
-  {
-    accent: 'green',
-    description: 'People can join immediately while seats are open.',
-    id: 'open',
-    label: 'Open seats',
-  },
-  {
-    accent: 'orange',
-    description: 'People request access before they can Tap In.',
-    id: 'request_to_join',
-    label: 'Request approval',
-  },
-];
-
-const commitmentCadenceOptions: OnboardingOption<CommitmentCadence>[] = [
-  {
-    accent: 'green',
-    description: 'Every member covers the Commitment once each day.',
-    id: 'daily',
-    label: 'Daily',
-  },
-  {
-    accent: 'blue',
-    description: 'Each member covers a set number of days each week.',
-    id: 'weekly',
-    label: 'Weekly',
-  },
-  {
-    accent: 'orange',
-    description:
-      'Each member covers a set number of scheduled days each month.',
-    id: 'monthly',
-    label: 'Monthly',
-  },
-];
 
 const commitmentCadenceIcons: Record<CommitmentCadence, LucideIcon> = {
   daily: CalendarDays,
@@ -276,18 +173,7 @@ function getStarterCircleCadenceLabel(draft: CreateCircleDraft) {
     commitmentCadence,
   );
 
-  if (commitmentCadence === 'daily') {
-    return 'Daily';
-  }
-
-  if (commitmentCadence === 'monthly') {
-    return `Monthly: ${
-      commitmentFrequency.opportunitiesPerPeriod ??
-      commitmentFrequency.tapInsPerWeek
-    } Tap Ins / month`;
-  }
-
-  return `Weekly: ${commitmentFrequency.tapInsPerWeek} Tap Ins / week`;
+  return formatCadenceSummary(commitmentCadence, commitmentFrequency);
 }
 
 function useAccentColor(accent: OnboardingOption<string>['accent']) {
@@ -324,6 +210,8 @@ function IconButton({
   return (
     <Pressable
       accessibilityLabel={accessibilityLabel}
+      accessibilityRole="button"
+      accessibilityState={{disabled: Boolean(disabled)}}
       disabled={disabled}
       hitSlop={8}
       onPress={onPress}
@@ -344,22 +232,21 @@ function ProgressHeader({
   currentStep,
   onBack,
   onClose,
+  progressSteps,
 }: {
   currentStep: OnboardingStep;
   onBack: () => void;
   onClose: () => void;
+  progressSteps: OnboardingStep[];
 }) {
-  const theme = useHoystTheme();
   if (currentStep === 'welcome') {
     return null;
   }
 
   const progressIndex = Math.max(
     0,
-    onboardingProgressSteps.indexOf(currentStep),
+    progressSteps.indexOf(currentStep),
   );
-  const progress = (progressIndex + 1) / onboardingProgressSteps.length;
-
   return (
     <View style={styles.progressHeader}>
       <IconButton
@@ -368,21 +255,11 @@ function ProgressHeader({
         icon={ArrowLeft}
         onPress={onBack}
       />
-      <View
-        style={[
-          styles.progressTrack,
-          {backgroundColor: theme.surfaceHigh, borderColor: theme.border},
-        ]}>
-        <LinearGradient
-          colors={[...gradients.primaryRing]}
-          end={{x: 1, y: 0}}
-          start={{x: 0, y: 0}}
-          style={[
-            styles.progressFill,
-            {width: `${Math.round(progress * 100)}%`},
-          ]}
-        />
-      </View>
+      <SetupProgressBar
+        current={progressIndex + 1}
+        testID="onboarding-setup-progress"
+        total={progressSteps.length}
+      />
       <IconButton
         accessibilityLabel="Continue as guest"
         icon={X}
@@ -394,24 +271,26 @@ function ProgressHeader({
 
 function CoachPrompt({
   currentStep,
+  isPersonal,
 }: {
   currentStep: Exclude<OnboardingStep, 'welcome'>;
+  isPersonal: boolean;
 }) {
   const theme = useHoystTheme();
-  const copy = stepCopy[currentStep];
+  const copy = getOnboardingStepCopy(currentStep, isPersonal);
   const Icon = stepIcons[currentStep];
 
   return (
     <View style={styles.coachRow}>
       <View style={styles.coachMark}>
-        <TapInRingMark innerSize={34} outerSize={62} />
+        <HoystTapInMark size={62} testID="onboarding-floating-logo" />
       </View>
       <View
         style={[
           styles.speechBubble,
           {
-            backgroundColor: theme.surface,
-            borderColor: theme.borderStrong,
+            backgroundColor: theme.glassSurfaceStrong,
+            borderColor: theme.glassBorder,
           },
         ]}>
         <View style={styles.speechHeader}>
@@ -435,80 +314,6 @@ function CoachPrompt({
   );
 }
 
-function OptionCard<T extends string>({
-  icon: Icon,
-  isSelected,
-  option,
-  onPress,
-}: {
-  icon: LucideIcon;
-  isSelected: boolean;
-  option: OnboardingOption<T>;
-  onPress: () => void;
-}) {
-  const theme = useHoystTheme();
-  const accentColor = useAccentColor(option.accent);
-
-  return (
-    <Pressable
-      accessibilityRole="radio"
-      accessibilityState={{selected: isSelected}}
-      onPress={onPress}
-      style={({pressed}) => [
-        styles.optionPressable,
-        {opacity: pressed ? 0.9 : 1, transform: [{scale: pressed ? 0.985 : 1}]},
-      ]}>
-      <View
-        style={[
-          styles.optionCard,
-          {
-            backgroundColor: isSelected ? `${accentColor}20` : theme.surface,
-            borderColor: isSelected ? accentColor : theme.border,
-          },
-        ]}>
-        <View
-          style={[
-            styles.optionIcon,
-            {
-              backgroundColor: isSelected
-                ? `${accentColor}24`
-                : theme.surfaceSoft,
-              borderColor: isSelected ? accentColor : theme.border,
-            },
-          ]}>
-          <Icon color={accentColor} size={20} strokeWidth={2.3} />
-        </View>
-        <View style={styles.optionCopy}>
-          <HoystText
-            numberOfLines={1}
-            style={styles.optionTitle}
-            variant="bodyStrong">
-            {option.label}
-          </HoystText>
-          <HoystText
-            numberOfLines={2}
-            style={styles.optionDescription}
-            tone="muted">
-            {option.description}
-          </HoystText>
-        </View>
-        <View
-          style={[
-            styles.optionCheck,
-            {
-              backgroundColor: isSelected ? accentColor : undefined,
-              borderColor: isSelected ? accentColor : theme.borderStrong,
-            },
-          ]}>
-          {isSelected ? (
-            <Check color={theme.onBrightAccent} size={16} strokeWidth={3} />
-          ) : null}
-        </View>
-      </View>
-    </Pressable>
-  );
-}
-
 function PreviewRow({
   accent,
   detail,
@@ -527,7 +332,7 @@ function PreviewRow({
     <View
       style={[
         styles.previewRow,
-        {backgroundColor: theme.surface, borderColor: theme.border},
+        {backgroundColor: theme.glassSurfaceStrong, borderColor: theme.glassBorder},
       ]}>
       <View
         style={[
@@ -547,55 +352,6 @@ function PreviewRow({
   );
 }
 
-function NumericStepper({
-  label,
-  max,
-  min,
-  onChange,
-  value,
-}: {
-  label: string;
-  max: number;
-  min: number;
-  onChange: (value: number) => void;
-  value: number;
-}) {
-  const theme = useHoystTheme();
-  const decrementDisabled = value <= min;
-  const incrementDisabled = value >= max;
-
-  return (
-    <View
-      style={[
-        styles.stepper,
-        {backgroundColor: theme.surface, borderColor: theme.border},
-      ]}>
-      <View style={styles.stepperCopy}>
-        <HoystText tone="muted" variant="label">
-          {label}
-        </HoystText>
-        <HoystText style={styles.stepperValue} variant="title">
-          {value}
-        </HoystText>
-      </View>
-      <View style={styles.stepperControls}>
-        <IconButton
-          accessibilityLabel={`Decrease ${label}`}
-          disabled={decrementDisabled}
-          icon={Minus}
-          onPress={() => onChange(Math.max(min, value - 1))}
-        />
-        <IconButton
-          accessibilityLabel={`Increase ${label}`}
-          disabled={incrementDisabled}
-          icon={Plus}
-          onPress={() => onChange(Math.min(max, value + 1))}
-        />
-      </View>
-    </View>
-  );
-}
-
 function StickyCta({
   label,
   onPress,
@@ -609,14 +365,8 @@ function StickyCta({
   secondaryLabel?: string;
   secondaryOnPress?: () => void;
 }) {
-  const theme = useHoystTheme();
-
   return (
-    <View
-      style={[
-        styles.footer,
-        {backgroundColor: theme.background, borderTopColor: theme.border},
-      ]}>
+    <GlassPanel padding="compact" style={styles.footer} variant="nav">
       <HoystButton
         disabled={disabled}
         label={label}
@@ -630,12 +380,13 @@ function StickyCta({
           </HoystText>
         </Pressable>
       ) : null}
-    </View>
+    </GlassPanel>
   );
 }
 
 export function WelcomeScreen({navigation}: Props): React.JSX.Element {
   const theme = useHoystTheme();
+  const scrollRef = useRef<ScrollView>(null);
   const [authMethod, setAuthMethod] = useState<SignInMethod>();
   const [circleSetupError, setCircleSetupError] = useState<string>();
   const [registrationEmail, setRegistrationEmail] = useState('');
@@ -657,7 +408,6 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
   const getOnboardingPreferences = useOnboardingStore(
     state => state.getPreferences,
   );
-  const focusArea = useOnboardingStore(state => state.focusArea);
   const handle = useOnboardingStore(state => state.handle);
   const starterCircleDraft = useOnboardingStore(
     state => state.starterCircleDraft,
@@ -686,7 +436,6 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
   const setFirstCircleSkipped = useOnboardingStore(
     state => state.setFirstCircleSkipped,
   );
-  const setFocusArea = useOnboardingStore(state => state.setFocusArea);
   const setHandle = useOnboardingStore(state => state.setHandle);
   const setStarterCircleField = useOnboardingStore(
     state => state.setStarterCircleField,
@@ -720,6 +469,10 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
     starterCircleDraft.joinMode === 'request_to_join'
       ? starterCircleDraft.joinMode
       : 'request_to_join';
+  const isPersonal = starterCircleDraft.circleMode === 'personal';
+  const progressSteps = getOnboardingProgressSteps(
+    starterCircleDraft.circleMode,
+  );
   const starterCircleTitle =
     typeof starterCircleDraft.title === 'string'
       ? starterCircleDraft.title
@@ -741,8 +494,8 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
   const StarterCircleCadenceIcon =
     commitmentCadenceIcons[starterCircleCommitmentCadence];
   const canContinue =
-    currentStep === 'focusArea'
-      ? Boolean(focusArea)
+    currentStep === 'circleCategory'
+      ? starterCircleDraft.category.trim().length > 0
       : currentStep === 'finishProfile'
       ? displayName.trim().length > 0 &&
         handleValidation.isValid &&
@@ -753,9 +506,18 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
       : currentStep === 'circleCommitment'
       ? starterCircleCommitment.trim().length > 0 &&
         starterCircleCommitment.trim().length <= 160
+      : currentStep === 'circleCapacity'
+      ? starterCircleDraft.maxSize >= 2 && starterCircleDraft.maxSize <= 100
+      : currentStep === 'circleTimezone'
+      ? starterCircleDraft.timezone.trim().length > 0 &&
+        starterCircleDraft.timezone.trim().length <= 80
       : currentStep === 'circleReview'
       ? firstCircleSkipped || isStarterCircleDraftReady(starterCircleDraft)
       : true;
+
+  useEffect(() => {
+    scrollRef.current?.scrollTo({animated: false, y: 0});
+  }, [currentStep]);
   const authProviderColors = {
     apple: {
       backgroundColor: theme.isDark
@@ -997,10 +759,7 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
             ...(onboardingPreferences ? {onboardingPreferences} : {}),
             timezone: timezone.trim() || getLocalTimezone(),
           },
-          starterCircleDraft: {
-            ...starterCircleDraft,
-            timezone: timezone.trim() || starterCircleDraft.timezone,
-          },
+          starterCircleDraft,
           starterCircleSetupId: setupId,
         },
         {
@@ -1053,6 +812,49 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
     }
 
     nextStep();
+  };
+
+  const selectStarterCommitmentType = (commitmentType: CommitmentType) => {
+    setStarterCircleField('commitmentType', commitmentType);
+    if (commitmentType === 'build' && starterCircleDraft.targetValue == null) {
+      setStarterCircleField('targetValue', defaultCommitmentTargetValue);
+    }
+    if (commitmentType === 'limit') {
+      setStarterCircleField(
+        'maximumValue',
+        starterCircleDraft.maximumValue ??
+          starterCircleDraft.targetValue ??
+          defaultCommitmentTargetValue,
+      );
+    }
+    if (commitmentType === 'avoid') {
+      setStarterCircleField('minimumValue', undefined);
+      setStarterCircleField('maximumValue', undefined);
+      setStarterCircleField('targetValue', defaultCommitmentTargetValue);
+    }
+  };
+
+  const setStarterQuantityField = (
+    key: 'maximumValue' | 'minimumValue' | 'targetValue',
+    value: string,
+  ) => {
+    const parsedValue = Number.parseInt(value, 10);
+    setStarterCircleField(
+      key,
+      Number.isFinite(parsedValue) && parsedValue >= 0 ? parsedValue : 0,
+    );
+  };
+
+  const setStarterSkipRule = (nextRule: {
+    allowance?: number;
+    windowDays?: number;
+  }) => {
+    setStarterCircleField('graceRules', {
+      skip: normalizeSkipGraceRule({
+        ...starterCircleDraft.graceRules.skip,
+        ...nextRule,
+      }),
+    });
   };
 
   const selectStarterCircleCadence = (commitmentCadence: CommitmentCadence) => {
@@ -1136,36 +938,17 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
     previousStep();
   };
 
-  const renderOptions = <T extends string>(
-    options: OnboardingOption<T>[],
-    selected: T | undefined,
-    onSelect: (id: T) => void,
-    Icon: LucideIcon,
-  ) => (
-    <View style={styles.optionStack}>
-      {options.map(option => (
-        <OptionCard
-          icon={Icon}
-          isSelected={selected === option.id}
-          key={option.id}
-          onPress={() => onSelect(option.id)}
-          option={option}
-        />
-      ))}
-    </View>
-  );
-
   const renderContent = () => {
     if (currentStep === 'welcome') {
       return (
         <View style={styles.welcomeBody}>
           <BrandMark isDark={theme.isDark} kind="logo" style={styles.logo} />
           <View style={styles.heroMark}>
-            <TapInRingMark innerSize={68} outerSize={118} />
+            <HoystTapInMark size={104} testID="welcome-floating-logo" />
           </View>
           <View style={styles.heroCopy}>
             <HoystText style={styles.heroTitle} variant="largeTitle">
-              Consistency feels lighter in a circle.
+              Consistency feels lighter with the right support.
             </HoystText>
             <HoystText style={styles.heroText} tone="muted">
               Shape your rhythm, explore public circles, and create an account
@@ -1178,7 +961,7 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
 
     return (
       <>
-        <CoachPrompt currentStep={currentStep} />
+        <CoachPrompt currentStep={currentStep} isPersonal={isPersonal} />
         {currentStep === 'coach' ? (
           <View style={styles.coachPreview}>
             <PreviewRow
@@ -1189,7 +972,7 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
             />
             <PreviewRow
               accent="orange"
-              detail="Shape a first circle, or skip it and start from Home."
+              detail="Choose Personal commitment or Create a circle, or skip setup for now."
               icon={Clock3}
               label="Step two"
             />
@@ -1201,9 +984,6 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
             />
           </View>
         ) : null}
-        {currentStep === 'focusArea'
-          ? renderOptions(focusAreaOptions, focusArea, setFocusArea, Target)
-          : null}
         {currentStep === 'finishProfile' ? (
           <View style={styles.profileFields}>
             <View
@@ -1222,7 +1002,7 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
               <View style={styles.avatarCopy}>
                 <HoystText variant="bodyStrong">Profile photo</HoystText>
                 <HoystText tone="muted">
-                  Use your account photo or add one your circles will recognize.
+                  Use your account photo or add one for your Hoyst profile.
                 </HoystText>
                 <View style={styles.avatarActions}>
                   <HoystButton
@@ -1290,14 +1070,18 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
             {shouldCreateCircle ? (
               <View style={styles.fieldBlock}>
                 <HoystText tone="muted" variant="label">
-                  First circle
+                  {isPersonal ? 'Personal commitment' : 'First Circle'}
                 </HoystText>
                 <HoystText variant="bodyStrong">
-                  {starterCircleTitle.trim()}
+                  {isPersonal
+                    ? starterCircleCommitment.trim()
+                    : starterCircleTitle.trim()}
                 </HoystText>
-                <HoystText tone="muted">
-                  {starterCircleCommitment.trim()}
-                </HoystText>
+                {!isPersonal ? (
+                  <HoystText tone="muted">
+                    {starterCircleCommitment.trim()}
+                  </HoystText>
+                ) : null}
                 <HoystText tone="muted">{starterCircleCadenceLabel}</HoystText>
               </View>
             ) : null}
@@ -1305,18 +1089,18 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
               <View style={styles.recoveryPanel}>
                 <View style={styles.fieldBlock}>
                   <HoystText variant="bodyStrong">
-                    Profile saved. Circle creation needs another try.
+                    Profile saved. Commitment setup needs another try.
                   </HoystText>
                   <HoystText tone="muted">{circleSetupError}</HoystText>
                 </View>
                 <HoystButton
-                  label={isBusy ? 'Retrying...' : 'Retry first circle'}
+                  label={isBusy ? 'Retrying...' : 'Retry setup'}
                   onPress={
                     canContinue && !isBusy ? submitFinishProfile : undefined
                   }
                 />
                 <HoystButton
-                  label="Skip first circle"
+                  label="Skip for now"
                   onPress={skipFirstCircleAfterProfile}
                   variant="ghost"
                 />
@@ -1327,7 +1111,7 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
         {currentStep === 'circleTitle' ? (
           <View style={styles.fieldBlock}>
             <HoystText tone="muted" variant="label">
-              Circle title
+              Circle name
             </HoystText>
             <HoystInput
               autoCapitalize="words"
@@ -1346,7 +1130,7 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
         {currentStep === 'circleCommitment' ? (
           <View style={styles.fieldBlock}>
             <HoystText tone="muted" variant="label">
-              Commitment description
+              Commitment statement
             </HoystText>
             <HoystInput
               maxLength={160}
@@ -1365,22 +1149,108 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
             </HoystText>
           </View>
         ) : null}
-        {currentStep === 'circleCadence' ? (
+        {currentStep === 'circleMode' ? (
+          <SetupOptionList
+            onSelect={value => setStarterCircleField('circleMode', value)}
+            options={setupCircleModeOptions}
+            selected={starterCircleDraft.circleMode}
+          />
+        ) : null}
+        {currentStep === 'circleCategory' ? (
+          <SetupOptionList
+            onSelect={value => setStarterCircleField('category', value)}
+            options={setupCategoryOptions}
+            selected={starterCircleDraft.category}
+          />
+        ) : null}
+        {currentStep === 'circleRules' ? (
           <View style={styles.stack}>
-            <View style={styles.optionStack}>
-              {commitmentCadenceOptions.map(option => (
-                <OptionCard
-                  icon={commitmentCadenceIcons[option.id]}
-                  isSelected={starterCircleCommitmentCadence === option.id}
-                  key={option.id}
-                  onPress={() => selectStarterCircleCadence(option.id)}
-                  option={option}
-                />
-              ))}
-            </View>
+            <SetupOptionList
+              onSelect={selectStarterCommitmentType}
+              options={setupCommitmentTypeOptions}
+              selected={starterCircleDraft.commitmentType}
+            />
+            {starterCircleDraft.commitmentType !== 'avoid' ? (
+              <GlassPanel style={styles.rulePanel}>
+                <HoystText variant="bodyStrong">
+                  {starterCircleDraft.commitmentType === 'limit'
+                    ? 'Tap In range'
+                    : 'Tap In target'}
+                </HoystText>
+                {starterCircleDraft.commitmentType === 'build' ? (
+                  <View style={styles.fieldBlock}>
+                    <HoystText tone="muted" variant="label">
+                      Target amount
+                    </HoystText>
+                    <HoystInput
+                      keyboardType="number-pad"
+                      onChangeText={value =>
+                        setStarterQuantityField('targetValue', value)
+                      }
+                      value={`${starterCircleDraft.targetValue ?? 1}`}
+                    />
+                  </View>
+                ) : (
+                  <>
+                    <View style={styles.fieldBlock}>
+                      <HoystText tone="muted" variant="label">
+                        Minimum amount
+                      </HoystText>
+                      <HoystInput
+                        keyboardType="number-pad"
+                        onChangeText={value =>
+                          setStarterQuantityField('minimumValue', value)
+                        }
+                        value={`${starterCircleDraft.minimumValue ?? 0}`}
+                      />
+                    </View>
+                    <View style={styles.fieldBlock}>
+                      <HoystText tone="muted" variant="label">
+                        Maximum amount
+                      </HoystText>
+                      <HoystInput
+                        keyboardType="number-pad"
+                        onChangeText={value =>
+                          setStarterQuantityField('maximumValue', value)
+                        }
+                        value={`${
+                          starterCircleDraft.maximumValue ??
+                          starterCircleDraft.targetValue ??
+                          1
+                        }`}
+                      />
+                    </View>
+                  </>
+                )}
+                <View style={styles.fieldBlock}>
+                  <HoystText tone="muted" variant="label">
+                    Unit label
+                  </HoystText>
+                  <HoystInput
+                    maxLength={32}
+                    onChangeText={value =>
+                      setStarterCircleField('unitLabel', value)
+                    }
+                    placeholder="pages, glasses, minutes"
+                    value={starterCircleDraft.unitLabel}
+                  />
+                </View>
+              </GlassPanel>
+            ) : (
+              <HoystText tone="muted">
+                {isPersonal
+                  ? 'Avoid Commitments stay binary. Tap In once to confirm you stayed clear.'
+                  : 'Avoid Circles stay binary. Each member taps in once to confirm they stayed clear.'}
+              </HoystText>
+            )}
+            <SetupOptionList
+              onSelect={selectStarterCircleCadence}
+              options={setupCommitmentCadenceOptions}
+              selected={starterCircleCommitmentCadence}
+            />
             {starterCircleCommitmentCadence === 'weekly' ? (
               <>
-                <NumericStepper
+                <SetupNumericStepper
                   label="Tap Ins per week"
                   max={7}
                   min={1}
@@ -1388,13 +1258,14 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
                   value={starterCircleCommitmentFrequency.tapInsPerWeek}
                 />
                 <HoystText tone="muted">
-                  Members complete the Commitment this many days from Monday to
-                  Sunday in the Circle timezone.
+                  {isPersonal
+                    ? 'You Tap In this many days from Monday to Sunday in this Commitment timezone.'
+                    : 'Each member taps in this many days from Monday to Sunday in the Circle timezone.'}
                 </HoystText>
               </>
             ) : starterCircleCommitmentCadence === 'monthly' ? (
               <>
-                <NumericStepper
+                <SetupNumericStepper
                   label="Tap Ins per month"
                   max={31}
                   min={1}
@@ -1411,58 +1282,180 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
               </>
             ) : (
               <HoystText tone="muted">
-                Members need one Tap In or skip each day. Circle Progression
-                resets at midnight in the Circle timezone.
+                {isPersonal
+                  ? 'You Tap In or skip once each day. Your Progression resets at midnight in this Commitment timezone.'
+                  : 'Each member taps in or skips once each day. Circle Progression resets at midnight in the Circle timezone.'}
               </HoystText>
             )}
           </View>
         ) : null}
+        {currentStep === 'circleGrace' ? (
+          <View style={styles.stack}>
+            <Pressable
+              accessibilityRole="switch"
+              accessibilityState={{
+                checked: starterCircleDraft.graceRules.skip.allowance > 0,
+              }}
+              onPress={() =>
+                setStarterSkipRule({
+                  allowance:
+                    starterCircleDraft.graceRules.skip.allowance > 0 ? 0 : 1,
+                })
+              }
+              style={({pressed}) => [
+                styles.toggleRow,
+                {
+                  backgroundColor: theme.glassSurfaceStrong,
+                  borderColor:
+                    starterCircleDraft.graceRules.skip.allowance > 0
+                      ? theme.warningForeground
+                      : theme.glassBorder,
+                  opacity: pressed ? 0.88 : 1,
+                },
+              ]}>
+              <View style={styles.optionCopy}>
+                <HoystText variant="bodyStrong">
+                  Optional skips protect Progression
+                </HoystText>
+                <HoystText tone="muted">
+                  {isPersonal
+                    ? 'Skips count as covered for your Progression.'
+                    : 'Skips count as covered for Circle Progression.'}
+                </HoystText>
+              </View>
+              <HoystText variant="bodyStrong">
+                {starterCircleDraft.graceRules.skip.allowance > 0
+                  ? 'On'
+                  : 'Off'}
+              </HoystText>
+            </Pressable>
+            <SetupNumericStepper
+              label="Skips allowed"
+              max={30}
+              min={0}
+              onChange={allowance => setStarterSkipRule({allowance})}
+              value={starterCircleDraft.graceRules.skip.allowance}
+            />
+            <SetupNumericStepper
+              label="Window days"
+              max={365}
+              min={1}
+              onChange={windowDays => setStarterSkipRule({windowDays})}
+              value={starterCircleDraft.graceRules.skip.windowDays}
+            />
+          </View>
+        ) : null}
         {currentStep === 'circlePrivacy' ? (
           <View style={styles.optionStack}>
-            {renderOptions(
-              circlePrivacyOptions,
-              starterCircleDraft.privacyMode,
-              setStarterCirclePrivacyMode,
-              Globe2,
-            )}
+            <SetupOptionList
+              onSelect={setStarterCirclePrivacyMode}
+              options={setupPrivacyOptions}
+              selected={starterCircleDraft.privacyMode}
+            />
             {starterCircleDraft.privacyMode === 'public' ? (
               <View style={styles.nestedOptionStack}>
                 <HoystText tone="muted" variant="label">
                   Public join rule
                 </HoystText>
-                {renderOptions(
-                  publicJoinOptions,
-                  publicJoinMode,
-                  setStarterCirclePublicJoinMode,
-                  Shield,
-                )}
+                <SetupOptionList
+                  onSelect={setStarterCirclePublicJoinMode}
+                  options={setupPublicJoinOptions}
+                  selected={publicJoinMode}
+                />
               </View>
             ) : null}
           </View>
         ) : null}
+        {currentStep === 'circleCapacity' ? (
+          <View style={styles.stack}>
+            <SetupNumericStepper
+              label="Maximum members"
+              max={100}
+              min={2}
+              onChange={value => setStarterCircleField('maxSize', value)}
+              value={starterCircleDraft.maxSize}
+            />
+            <View style={styles.sizePresets}>
+              {[2, 5, 10, 25, 100].map(size => (
+                <Pressable
+                  accessibilityRole="button"
+                  key={size}
+                  onPress={() => setStarterCircleField('maxSize', size)}
+                  style={({pressed}) => [
+                    styles.presetButton,
+                    {
+                      backgroundColor:
+                        starterCircleDraft.maxSize === size
+                          ? `${theme.accentSecondaryForeground}24`
+                          : theme.glassSurfaceStrong,
+                      borderColor:
+                        starterCircleDraft.maxSize === size
+                          ? theme.accentSecondaryForeground
+                          : theme.glassBorder,
+                      opacity: pressed ? 0.86 : 1,
+                    },
+                  ]}>
+                  <HoystText variant="bodyStrong">{size}</HoystText>
+                </Pressable>
+              ))}
+            </View>
+          </View>
+        ) : null}
+        {currentStep === 'circleTimezone' ? (
+          <TimezonePicker
+            helperText={`This controls when each Tap In day resets for this ${
+              isPersonal ? 'Commitment' : 'Circle'
+            }.`}
+            modalTitle={`${isPersonal ? 'Commitment' : 'Circle'} timezone`}
+            onChange={value => setStarterCircleField('timezone', value)}
+            value={starterCircleDraft.timezone}
+          />
+        ) : null}
         {currentStep === 'circleReview' ? (
           <View style={styles.coachPreview}>
             <PreviewRow
-              accent="green"
-              detail={getOptionLabel(
-                focusAreaOptions,
-                focusArea,
-                'Discover momentum circles',
-              )}
-              icon={Target}
-              label="Primary focus area"
+              accent="purple"
+              detail={
+                starterCircleDraft.circleMode === 'personal'
+                  ? 'Personal commitment'
+                  : 'Circle'
+              }
+              icon={UsersRound}
+              label="Setup"
             />
             <PreviewRow
-              accent="blue"
-              detail={starterCircleTitle.trim()}
-              icon={UsersRound}
-              label="Circle name"
+              accent="green"
+              detail={starterCircleDraft.category}
+              icon={Target}
+              label="Category"
             />
+            {starterCircleDraft.circleMode === 'group' ? (
+              <PreviewRow
+                accent="blue"
+                detail={starterCircleTitle.trim()}
+                icon={UsersRound}
+                label="Circle name"
+              />
+            ) : null}
             <PreviewRow
               accent="orange"
               detail={starterCircleCommitment.trim()}
               icon={Target}
               label="Commitment"
+            />
+            <PreviewRow
+              accent={
+                starterCircleDraft.commitmentType === 'limit'
+                  ? 'orange'
+                  : starterCircleDraft.commitmentType === 'avoid'
+                  ? 'purple'
+                  : 'green'
+              }
+              detail={
+                formatCommitmentRulesSummary(starterCircleDraft)
+              }
+              icon={Target}
+              label="Commitment rules"
             />
             <PreviewRow
               accent={
@@ -1477,20 +1470,38 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
               label="Rhythm"
             />
             <PreviewRow
-              accent="purple"
-              detail={`${
-                starterCircleDraft.privacyMode === 'link_only'
-                  ? 'Link-only'
-                  : starterCircleDraft.privacyMode
-              }: ${
-                starterCircleDraft.joinMode === 'open'
-                  ? 'Open seats'
-                  : starterCircleDraft.joinMode === 'request_to_join'
-                  ? 'Request approval'
-                  : 'Invite link'
-              }`}
-              icon={Share2}
-              label="Access"
+              accent="orange"
+              detail={formatSkipSummary(
+                starterCircleDraft.graceRules.skip.allowance,
+                starterCircleDraft.graceRules.skip.windowDays,
+              )}
+              icon={Shield}
+              label="Skips"
+            />
+            {starterCircleDraft.circleMode === 'group' ? (
+              <>
+                <PreviewRow
+                  accent="purple"
+                  detail={formatAccessSummary(
+                    starterCircleDraft.privacyMode,
+                    starterCircleDraft.joinMode,
+                  )}
+                  icon={Share2}
+                  label="Access"
+                />
+                <PreviewRow
+                  accent="blue"
+                  detail={`${starterCircleDraft.maxSize} members`}
+                  icon={UsersRound}
+                  label="Capacity"
+                />
+              </>
+            ) : null}
+            <PreviewRow
+              accent="blue"
+              detail={formatTimezoneSummary(starterCircleDraft.timezone)}
+              icon={Clock3}
+              label="Timezone"
             />
           </View>
         ) : null}
@@ -1508,12 +1519,21 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
               icon={Clock3}
               label="2-hour warnings"
             />
-            <PreviewRow
-              accent="purple"
-              detail="Urgent alerts right away, companion activity in an evening recap."
-              icon={Shield}
-              label="Quieter updates"
-            />
+            {isPersonal ? (
+              <PreviewRow
+                accent="purple"
+                detail="Commitment reminders and Progression updates stay focused on you."
+                icon={Shield}
+                label="Commitment updates"
+              />
+            ) : (
+              <PreviewRow
+                accent="purple"
+                detail="Urgent Circle alerts right away, companion activity in an evening recap."
+                icon={Shield}
+                label="Circle and companion updates"
+              />
+            )}
           </View>
         ) : null}
         {currentStep === 'auth' ? (
@@ -1695,7 +1715,9 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
       ? isBusy
         ? 'Saving...'
         : shouldCreateCircle
-        ? 'Finish setup'
+        ? isPersonal
+          ? 'Create Personal Commitment'
+          : 'Create Circle'
         : 'Complete account'
       : currentStep === 'auth'
       ? 'Continue as guest'
@@ -1703,8 +1725,13 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
   const isCircleSetupStep =
     currentStep === 'circleTitle' ||
     currentStep === 'circleCommitment' ||
-    currentStep === 'circleCadence' ||
+    currentStep === 'circleMode' ||
+    currentStep === 'circleCategory' ||
+    currentStep === 'circleRules' ||
+    currentStep === 'circleGrace' ||
     currentStep === 'circlePrivacy' ||
+    currentStep === 'circleCapacity' ||
+    currentStep === 'circleTimezone' ||
     currentStep === 'circleReview';
   const secondaryLabel =
     currentStep === 'welcome'
@@ -1712,7 +1739,7 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
       : currentStep === 'notifications'
       ? 'Not now'
       : isCircleSetupStep
-      ? 'Skip first circle'
+      ? 'Skip for now'
       : undefined;
   const primaryAction =
     currentStep === 'welcome'
@@ -1744,6 +1771,7 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
   return (
     <SafeAreaView
       style={[styles.safeArea, {backgroundColor: theme.background}]}>
+      <FrostedBackdrop />
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.keyboardView}>
@@ -1751,11 +1779,15 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
           currentStep={currentStep}
           onBack={goBack}
           onClose={continueAsGuest}
+          progressSteps={progressSteps}
         />
         <ScrollView
+          automaticallyAdjustKeyboardInsets
           bounces={false}
           contentContainerStyle={styles.scrollContent}
+          keyboardDismissMode="interactive"
           keyboardShouldPersistTaps="handled"
+          ref={scrollRef}
           showsVerticalScrollIndicator={false}>
           <View style={styles.content}>{renderContent()}</View>
         </ScrollView>
@@ -1782,8 +1814,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flexDirection: 'row',
     gap: 12,
-    paddingHorizontal: 18,
-    paddingTop: 22,
+    paddingHorizontal: 20,
+    paddingTop: 20,
     paddingBottom: 8,
   },
   iconButton: {
@@ -1794,21 +1826,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     width: 46,
   },
-  progressTrack: {
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    flex: 1,
-    height: 12,
-    overflow: 'hidden',
-  },
-  progressFill: {
-    borderRadius: radius.pill,
-    height: '100%',
-  },
   scrollContent: {
     flexGrow: 1,
-    paddingBottom: 28,
-    paddingHorizontal: 18,
+    paddingBottom: 36,
+    paddingHorizontal: 20,
     paddingTop: 16,
   },
   content: {
@@ -1914,6 +1935,7 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   optionDescription: {
+    flexShrink: 1,
     lineHeight: 19,
   },
   optionCheck: {
@@ -1993,6 +2015,32 @@ const styles = StyleSheet.create({
   fieldBlock: {
     gap: 8,
   },
+  rulePanel: {
+    gap: 14,
+  },
+  toggleRow: {
+    alignItems: 'center',
+    borderRadius: 20,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: 12,
+    minHeight: 84,
+    padding: 14,
+  },
+  sizePresets: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  presetButton: {
+    alignItems: 'center',
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    justifyContent: 'center',
+    minHeight: 44,
+    minWidth: 52,
+    paddingHorizontal: 14,
+  },
   textArea: {
     minHeight: 118,
   },
@@ -2006,11 +2054,8 @@ const styles = StyleSheet.create({
     padding: 14,
   },
   footer: {
-    borderTopWidth: StyleSheet.hairlineWidth,
-    gap: 12,
-    paddingBottom: 14,
-    paddingHorizontal: 18,
-    paddingTop: 14,
+    marginBottom: 6,
+    marginHorizontal: 12,
   },
   cta: {
     minHeight: 54,

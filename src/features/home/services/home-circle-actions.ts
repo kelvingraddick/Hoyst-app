@@ -38,6 +38,10 @@ export function getHomeCircleActionVariant(
     return 'check_in';
   }
 
+  if (circle.circleMode === 'personal') {
+    return 'view';
+  }
+
   if ((circle.nudgeTargetCount ?? 0) > 0) {
     return 'nudge';
   }

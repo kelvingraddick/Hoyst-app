@@ -111,16 +111,49 @@ function isValidTimezone(timezoneId: string) {
 
 export function getTimezoneOffsetLabel(timezoneId: string, date = new Date()) {
   try {
-    const timezoneName = Intl.DateTimeFormat('en-US', {
+    const parts = Intl.DateTimeFormat('en-US', {
+      day: '2-digit',
       hour: '2-digit',
+      hour12: false,
+      hourCycle: 'h23',
       minute: '2-digit',
+      month: '2-digit',
+      second: '2-digit',
       timeZone: timezoneId,
-      timeZoneName: 'longOffset',
+      year: 'numeric',
     })
       .formatToParts(date)
-      .find(part => part.type === 'timeZoneName')?.value;
+      .reduce<Record<string, number>>((values, part) => {
+        if (part.type !== 'literal') {
+          values[part.type] = Number.parseInt(part.value, 10);
+        }
 
-    return timezoneName?.replace('GMT', 'UTC') ?? 'UTC';
+        return values;
+      }, {});
+    const timezoneTimestamp = Date.UTC(
+      parts.year,
+      parts.month - 1,
+      parts.day,
+      parts.hour === 24 ? 0 : parts.hour,
+      parts.minute,
+      parts.second,
+    );
+    const offsetMinutes = Math.round(
+      (timezoneTimestamp - date.getTime()) / 60_000,
+    );
+
+    if (!Number.isFinite(offsetMinutes) || offsetMinutes === 0) {
+      return 'UTC';
+    }
+
+    const sign = offsetMinutes < 0 ? '-' : '+';
+    const absoluteMinutes = Math.abs(offsetMinutes);
+    const hours = Math.floor(absoluteMinutes / 60)
+      .toString()
+      .padStart(2, '0');
+    const minutes = (absoluteMinutes % 60).toString().padStart(2, '0');
+
+    return `UTC${sign}${hours}:${minutes}`;
   } catch {
     return 'UTC';
   }

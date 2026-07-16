@@ -15,6 +15,7 @@ export {
 export {completeProfile, deleteAccount} from './auth';
 export {processTapInSideEffects, removeTapIn, submitTapIn} from './checkins';
 export {
+  convertPersonalCircle,
   createCircle,
   deleteCircle,
   joinCircle,

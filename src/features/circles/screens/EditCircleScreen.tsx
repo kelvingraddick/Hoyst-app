@@ -1,34 +1,15 @@
-import React, {useEffect, useMemo, useState} from 'react';
+import React, {useEffect, useMemo, useRef, useState} from 'react';
 import {Alert, Pressable, StyleSheet, View} from 'react-native';
-import {
-  ArrowLeft,
-  CalendarCheck,
-  CalendarDays,
-  CalendarRange,
-  Check,
-  Globe2,
-  Lock,
-  Minus,
-  Plus,
-  Save,
-  Share2,
-  Shield,
-  UsersRound,
-  type LucideIcon,
-} from 'lucide-react-native';
+import {ArrowLeft} from 'lucide-react-native';
 import type {NativeStackScreenProps} from '@react-navigation/native-stack';
 
 import {GlassPanel} from '../../../design/components/GlassPanel';
-import {HoystButton} from '../../../design/components/HoystButton';
+import {FrostedBackdrop} from '../../../design/components/FrostedBackdrop';
 import {HoystChip} from '../../../design/components/HoystChip';
 import {HoystInput} from '../../../design/components/HoystInput';
 import {HoystScreen} from '../../../design/components/HoystScreen';
 import {HoystText} from '../../../design/components/HoystText';
-import {
-  CircleCategoryIcon,
-  CircleCategoryPill,
-  getCircleCategoryVisual,
-} from '../../../design/components/CircleCategoryIcon';
+import {CircleCategoryPill} from '../../../design/components/CircleCategoryIcon';
 import {radius} from '../../../design/tokens/radius';
 import {useHoystTheme} from '../../../design/theme/useHoystTheme';
 import type {RootStackParamList} from '../../../navigation/types';
@@ -47,6 +28,20 @@ import {
 } from '../../create-circle/services/create-circle-draft';
 import {subscribeToMemberCircleDetail} from '../../home/services/home-data-service';
 import {updateCircle} from '../services/circle-service';
+import {CommitmentSetupScaffold} from '../../create-circle/components/CommitmentSetupScaffold';
+import {
+  categoryOptions as setupCategoryOptions,
+  commitmentCadenceOptions as setupCommitmentCadenceOptions,
+  commitmentTypeOptions as setupCommitmentTypeOptions,
+  formatAccessSummary,
+  formatJoinMode,
+  privacyOptions as setupPrivacyOptions,
+  publicJoinOptions as setupPublicJoinOptions,
+  SetupIconButton,
+  SetupNumericStepper,
+  SetupOptionList,
+  SetupSummaryRow,
+} from '../../create-circle/components/CommitmentSetupFields';
 import type {
   CircleDetailModel,
   CircleJoinMode,
@@ -57,351 +52,6 @@ import type {
 } from '../../../types/models';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'EditCircle'>;
-type Option<T extends string> = {
-  category?: string;
-  description: string;
-  icon?: LucideIcon;
-  id: T;
-  label: string;
-  tone: 'blue' | 'green' | 'neutral' | 'orange' | 'purple';
-};
-
-const categoryOptions: Array<Option<string>> = [
-  {
-    category: 'Fitness',
-    description: 'Training plans, walks, lifts, runs, and recovery.',
-    id: 'Fitness',
-    label: 'Fitness',
-    tone: getCircleCategoryVisual('Fitness').tone,
-  },
-  {
-    category: 'Wellness',
-    description: 'Sleep, mindfulness, nutrition, and care routines.',
-    id: 'Wellness',
-    label: 'Wellness',
-    tone: getCircleCategoryVisual('Wellness').tone,
-  },
-  {
-    category: 'Deep Work',
-    description: 'Focused sessions, study blocks, and maker momentum.',
-    id: 'Deep Work',
-    label: 'Deep work',
-    tone: getCircleCategoryVisual('Deep Work').tone,
-  },
-  {
-    category: 'Sobriety',
-    description: 'Private, steady check-ins for staying grounded.',
-    id: 'Sobriety',
-    label: 'Sobriety',
-    tone: getCircleCategoryVisual('Sobriety').tone,
-  },
-  {
-    category: 'Custom',
-    description: 'A flexible lane for anything specific to your people.',
-    id: 'Custom',
-    label: 'Custom',
-    tone: getCircleCategoryVisual('Custom').tone,
-  },
-];
-
-const commitmentTypeOptions: Array<Option<CommitmentType>> = [
-  {
-    description: 'Reach at least a target amount each Tap In day.',
-    id: 'build',
-    label: 'Build',
-    tone: 'green',
-  },
-  {
-    description: 'Stay inside a minimum and maximum amount.',
-    id: 'limit',
-    label: 'Limit',
-    tone: 'orange',
-  },
-  {
-    description: 'Confirm you stayed clear for the day.',
-    id: 'avoid',
-    label: 'Avoid',
-    tone: 'purple',
-  },
-];
-
-const privacyOptions: Array<Option<CirclePrivacyMode>> = [
-  {
-    description: 'Discoverable in Circles with your chosen join rule.',
-    icon: Globe2,
-    id: 'public',
-    label: 'Public',
-    tone: 'green',
-  },
-  {
-    description: 'Hidden from Circles and joinable only with your invite link.',
-    icon: Share2,
-    id: 'link_only',
-    label: 'Link-only',
-    tone: 'blue',
-  },
-  {
-    description: 'Hidden from Circles with requests for approval.',
-    icon: Lock,
-    id: 'private',
-    label: 'Private',
-    tone: 'purple',
-  },
-];
-
-const publicJoinOptions: Array<
-  Option<Extract<CircleJoinMode, 'open' | 'request_to_join'>>
-> = [
-  {
-    description: 'People can join immediately while seats are open.',
-    icon: UsersRound,
-    id: 'open',
-    label: 'Open seats',
-    tone: 'green',
-  },
-  {
-    description: 'People request access before they can Tap In.',
-    icon: Shield,
-    id: 'request_to_join',
-    label: 'Request approval',
-    tone: 'orange',
-  },
-];
-
-const commitmentCadenceOptions: Array<Option<CommitmentCadence>> = [
-  {
-    description: 'Every member covers the Commitment once each day.',
-    icon: CalendarDays,
-    id: 'daily',
-    label: 'Daily',
-    tone: 'green',
-  },
-  {
-    description: 'Each member covers a set number of days each week.',
-    icon: CalendarRange,
-    id: 'weekly',
-    label: 'Weekly',
-    tone: 'blue',
-  },
-  {
-    description: 'Each member covers scheduled days across the month.',
-    icon: CalendarCheck,
-    id: 'monthly',
-    label: 'Monthly',
-    tone: 'orange',
-  },
-];
-
-function getToneColor(
-  theme: ReturnType<typeof useHoystTheme>,
-  tone: Option<string>['tone'],
-) {
-  if (tone === 'green') {
-    return theme.successForeground;
-  }
-
-  if (tone === 'orange') {
-    return theme.warningForeground;
-  }
-
-  if (tone === 'blue') {
-    return theme.accentTertiaryForeground;
-  }
-
-  if (tone === 'neutral') {
-    return theme.textMuted;
-  }
-
-  return theme.accentSecondaryForeground;
-}
-
-function getJoinModeLabel(joinMode: CircleJoinMode) {
-  if (joinMode === 'open') {
-    return 'Open seats';
-  }
-
-  if (joinMode === 'request_to_join') {
-    return 'Request approval';
-  }
-
-  return 'Invite link';
-}
-
-function getPrivacyLabel(privacyMode: CirclePrivacyMode) {
-  if (privacyMode === 'public') {
-    return 'Public';
-  }
-
-  if (privacyMode === 'link_only') {
-    return 'Link-only';
-  }
-
-  return 'Private';
-}
-
-function IconButton({
-  accessibilityLabel,
-  disabled,
-  icon: Icon,
-  onPress,
-}: {
-  accessibilityLabel: string;
-  disabled?: boolean;
-  icon: LucideIcon;
-  onPress: () => void;
-}) {
-  const theme = useHoystTheme();
-
-  return (
-    <Pressable
-      accessibilityLabel={accessibilityLabel}
-      accessibilityRole="button"
-      disabled={disabled}
-      onPress={disabled ? undefined : onPress}
-      style={({pressed}) => [
-        styles.iconButton,
-        {
-          backgroundColor: theme.surfaceSoft,
-          borderColor: theme.border,
-          opacity: disabled ? 0.36 : pressed ? 0.88 : 1,
-        },
-      ]}>
-      <Icon color={theme.text} size={18} strokeWidth={2.4} />
-    </Pressable>
-  );
-}
-
-function OptionCard<T extends string>({
-  isSelected,
-  onPress,
-  option,
-}: {
-  isSelected: boolean;
-  onPress: () => void;
-  option: Option<T>;
-}) {
-  const theme = useHoystTheme();
-  const accentColor = getToneColor(theme, option.tone);
-  const Icon = option.icon;
-  const hasCategoryIcon = Boolean(option.category);
-
-  return (
-    <Pressable
-      accessibilityRole="radio"
-      accessibilityState={{selected: isSelected}}
-      onPress={onPress}
-      style={({pressed}) => [
-        styles.optionPressable,
-        {opacity: pressed ? 0.9 : 1, transform: [{scale: pressed ? 0.985 : 1}]},
-      ]}>
-      <View
-        style={[
-          styles.optionCard,
-          {
-            backgroundColor: isSelected ? `${accentColor}20` : theme.surface,
-            borderColor: isSelected ? accentColor : theme.border,
-          },
-        ]}>
-        <View
-          style={[
-            styles.optionIcon,
-            hasCategoryIcon
-              ? styles.optionCategoryIcon
-              : {
-                  backgroundColor: isSelected
-                    ? `${accentColor}24`
-                    : theme.surfaceSoft,
-                  borderColor: isSelected ? accentColor : theme.border,
-                },
-          ]}>
-          {option.category ? (
-            <CircleCategoryIcon category={option.category} size={38} />
-          ) : Icon ? (
-            <Icon color={accentColor} size={20} strokeWidth={2.3} />
-          ) : null}
-        </View>
-        <View style={styles.optionCopy}>
-          <HoystText numberOfLines={1} variant="bodyStrong">
-            {option.label}
-          </HoystText>
-          <HoystText numberOfLines={2} tone="muted">
-            {option.description}
-          </HoystText>
-        </View>
-        <View
-          style={[
-            styles.optionCheck,
-            {
-              backgroundColor: isSelected ? accentColor : undefined,
-              borderColor: isSelected ? accentColor : theme.borderStrong,
-            },
-          ]}>
-          {isSelected ? (
-            <Check color={theme.onBrightAccent} size={15} strokeWidth={3} />
-          ) : null}
-        </View>
-      </View>
-    </Pressable>
-  );
-}
-
-function NumericStepper({
-  label,
-  max,
-  min,
-  onChange,
-  value,
-}: {
-  label: string;
-  max: number;
-  min: number;
-  onChange: (value: number) => void;
-  value: number;
-}) {
-  const theme = useHoystTheme();
-  const update = (nextValue: number) =>
-    onChange(Math.min(max, Math.max(min, Math.round(nextValue))));
-
-  return (
-    <View
-      style={[
-        styles.stepper,
-        {backgroundColor: theme.surfaceSoft, borderColor: theme.border},
-      ]}>
-      <View style={styles.stepperCopy}>
-        <HoystText tone="muted" variant="label">
-          {label}
-        </HoystText>
-        <HoystText variant="title">{value}</HoystText>
-      </View>
-      <View style={styles.stepperControls}>
-        <IconButton
-          accessibilityLabel={`Decrease ${label}`}
-          disabled={value <= min}
-          icon={Minus}
-          onPress={() => update(value - 1)}
-        />
-        <IconButton
-          accessibilityLabel={`Increase ${label}`}
-          disabled={value >= max}
-          icon={Plus}
-          onPress={() => update(value + 1)}
-        />
-      </View>
-    </View>
-  );
-}
-
-function SummaryRow({label, value}: {label: string; value: string}) {
-  return (
-    <View style={styles.summaryRow}>
-      <HoystText tone="muted" variant="label">
-        {label}
-      </HoystText>
-      <HoystText style={styles.summaryValue}>{value}</HoystText>
-    </View>
-  );
-}
 
 function serializePayload(payload: unknown) {
   return JSON.stringify(payload);
@@ -412,6 +62,7 @@ export function EditCircleScreen({
   route,
 }: Props): React.JSX.Element {
   const theme = useHoystTheme();
+  const allowExitRef = useRef(false);
   const profile = useUserProfileStore(state => state.profile);
   const user = useSessionStore(state => state.user);
   const status = useSessionStore(state => state.status);
@@ -465,6 +116,7 @@ export function EditCircleScreen({
   const maxSizeError =
     draft &&
     detail &&
+    draft.circleMode !== 'personal' &&
     isCircleMaxSizeBelowMemberCount(draft.maxSize, detail.memberCount)
       ? `Max size cannot be below ${detail.memberCount} current members.`
       : undefined;
@@ -475,8 +127,8 @@ export function EditCircleScreen({
     detail?.viewerRole === 'owner' &&
       draft &&
       payload &&
-      titleLength > 0 &&
-      titleLength <= 80 &&
+      (draft.circleMode === 'personal' ||
+        (titleLength > 0 && titleLength <= 80)) &&
       commitmentLength > 0 &&
       commitmentLength <= 160 &&
       timezoneLength > 0 &&
@@ -484,6 +136,37 @@ export function EditCircleScreen({
       !maxSizeError &&
       payloadKey !== originalPayloadKey &&
       !isSaving,
+  );
+  const isDirty = Boolean(
+    originalPayloadKey && payloadKey && payloadKey !== originalPayloadKey,
+  );
+
+  useEffect(
+    () => {
+      if (typeof navigation.addListener !== 'function') {
+        return undefined;
+      }
+
+      return navigation.addListener('beforeRemove', event => {
+        if (allowExitRef.current || !isDirty) {
+          return;
+        }
+
+        event.preventDefault();
+        Alert.alert('Discard changes?', 'Your unsaved changes will be lost.', [
+          {style: 'cancel', text: 'Keep editing'},
+          {
+            onPress: () => {
+              allowExitRef.current = true;
+              navigation.dispatch(event.data.action);
+            },
+            style: 'destructive',
+            text: 'Discard',
+          },
+        ]);
+      });
+    },
+    [isDirty, navigation],
   );
 
   const setField = <Key extends keyof CreateCircleDraft>(
@@ -610,45 +293,33 @@ export function EditCircleScreen({
         circleId: route.params.circleId,
         ...payload,
       });
+      allowExitRef.current = true;
       navigation.goBack();
     } catch (error) {
       const message =
         (error as {message?: string}).message ??
-        'Could not save circle changes.';
+        (draft?.circleMode === 'personal'
+          ? 'Could not save Commitment changes.'
+          : 'Could not save Circle changes.');
       Alert.alert('Save failed', message);
     } finally {
       setIsSaving(false);
     }
   };
 
-  const renderOptions = <T extends string>(
-    options: Array<Option<T>>,
-    selected: T,
-    onSelect: (id: T) => void,
-  ) => (
-    <View style={styles.optionStack}>
-      {options.map(option => (
-        <OptionCard
-          isSelected={selected === option.id}
-          key={option.id}
-          onPress={() => onSelect(option.id)}
-          option={option}
-        />
-      ))}
-    </View>
-  );
-
   if (detail && detail.viewerRole !== 'owner') {
     return (
-      <HoystScreen contentContainerStyle={styles.content}>
+      <HoystScreen
+        background={<FrostedBackdrop />}
+        contentContainerStyle={styles.content}>
         <View style={styles.header}>
-          <IconButton
+          <SetupIconButton
             accessibilityLabel="Go back"
             icon={ArrowLeft}
             onPress={() => navigation.goBack()}
           />
           <View style={styles.headerCopy}>
-            <HoystText variant="headline">Edit Circle</HoystText>
+            <HoystText variant="largeTitle">Edit Circle</HoystText>
             <HoystText tone="muted">
               Only the circle owner can edit these settings.
             </HoystText>
@@ -660,15 +331,17 @@ export function EditCircleScreen({
 
   if (!detail || !draft) {
     return (
-      <HoystScreen contentContainerStyle={styles.content}>
+      <HoystScreen
+        background={<FrostedBackdrop />}
+        contentContainerStyle={styles.content}>
         <View style={styles.header}>
-          <IconButton
+          <SetupIconButton
             accessibilityLabel="Go back"
             icon={ArrowLeft}
             onPress={() => navigation.goBack()}
           />
           <View style={styles.headerCopy}>
-            <HoystText variant="headline">Edit Circle</HoystText>
+            <HoystText variant="largeTitle">Edit Circle</HoystText>
             <HoystText tone="muted">Loading owner settings...</HoystText>
           </View>
         </View>
@@ -677,6 +350,7 @@ export function EditCircleScreen({
   }
 
   const skipRule = draft.graceRules.skip;
+  const isPersonal = draft.circleMode === 'personal';
   const graceEnabled = skipRule.allowance > 0;
   const publicJoinMode =
     draft.joinMode === 'open' || draft.joinMode === 'request_to_join'
@@ -684,49 +358,52 @@ export function EditCircleScreen({
       : 'request_to_join';
 
   return (
-    <HoystScreen contentContainerStyle={styles.content}>
-      <View style={styles.header}>
-        <IconButton
-          accessibilityLabel="Go back"
-          icon={ArrowLeft}
-          onPress={() => navigation.goBack()}
-        />
-        <View style={styles.headerCopy}>
-          <HoystText tone="muted" variant="label">
-            Owner settings
-          </HoystText>
-          <HoystText variant="headline">Edit Circle</HoystText>
-        </View>
-      </View>
-
+    <CommitmentSetupScaffold
+      body={
+        isPersonal
+          ? 'Update the Commitment rules, rhythm, timing, and skips.'
+          : 'Update the Circle name, rules, access, timing, and capacity.'
+      }
+      eyebrow="Owner settings"
+      onBack={() => navigation.goBack()}
+      primaryAction={{
+        disabled: !canSave,
+        label: isSaving ? 'Saving...' : 'Save changes',
+        onPress: () => handleSave().catch(() => undefined),
+      }}
+      title={isPersonal ? 'Edit Commitment' : 'Edit Circle'}>
       <GlassPanel>
         <View style={styles.sectionHeader}>
           <HoystText variant="title">Basics</HoystText>
           <CircleCategoryPill category={draft.category} />
         </View>
-        {renderOptions(categoryOptions, draft.category, value =>
-          setField('category', value),
-        )}
+        <SetupOptionList
+          onSelect={value => setField('category', value)}
+          options={setupCategoryOptions}
+          selected={draft.category}
+        />
+        {!isPersonal ? (
+          <View style={styles.fieldBlock}>
+            <HoystText tone="muted" variant="label">
+              Circle name
+            </HoystText>
+            <HoystInput
+              autoCapitalize="words"
+              maxLength={80}
+              onChangeText={value => setField('title', value)}
+              placeholder="The 5AM Vanguard"
+              value={draft.title}
+            />
+            <HoystText
+              tone={titleLength > 0 && titleLength <= 80 ? 'muted' : 'danger'}
+              variant="caption">
+              {titleLength}/80 characters
+            </HoystText>
+          </View>
+        ) : null}
         <View style={styles.fieldBlock}>
           <HoystText tone="muted" variant="label">
-            Circle title
-          </HoystText>
-          <HoystInput
-            autoCapitalize="words"
-            maxLength={80}
-            onChangeText={value => setField('title', value)}
-            placeholder="The 5AM Vanguard"
-            value={draft.title}
-          />
-          <HoystText
-            tone={titleLength > 0 && titleLength <= 80 ? 'muted' : 'danger'}
-            variant="caption">
-            {titleLength}/80 characters
-          </HoystText>
-        </View>
-        <View style={styles.fieldBlock}>
-          <HoystText tone="muted" variant="label">
-            Commitment description
+            Commitment statement
           </HoystText>
           <HoystInput
             maxLength={160}
@@ -750,70 +427,82 @@ export function EditCircleScreen({
         </View>
       </GlassPanel>
 
-      <GlassPanel>
-        <View style={styles.sectionHeader}>
-          <HoystText variant="title">Access</HoystText>
-          <HoystChip
-            label={`${getPrivacyLabel(draft.privacyMode)}: ${getJoinModeLabel(
-              draft.joinMode,
-            )}`}
-            tone="green"
+      {!isPersonal ? (
+        <GlassPanel>
+          <View style={styles.sectionHeader}>
+            <HoystText variant="title">Access and capacity</HoystText>
+            <HoystChip
+              label={formatAccessSummary(draft.privacyMode, draft.joinMode)}
+              tone="green"
+            />
+          </View>
+          <SetupOptionList
+            onSelect={selectPrivacyMode}
+            options={setupPrivacyOptions}
+            selected={draft.privacyMode}
           />
-        </View>
-        {renderOptions(privacyOptions, draft.privacyMode, selectPrivacyMode)}
-        {draft.privacyMode === 'public' ? (
-          <View style={styles.nestedBlock}>
-            <View style={styles.sectionHeader}>
-              <HoystText variant="bodyStrong">Public join rule</HoystText>
-              <HoystChip
-                label={getJoinModeLabel(draft.joinMode)}
-                tone="green"
+          {draft.privacyMode === 'public' ? (
+            <View style={styles.nestedBlock}>
+              <View style={styles.sectionHeader}>
+                <HoystText variant="bodyStrong">Public join rule</HoystText>
+                <HoystChip
+                  label={formatJoinMode(draft.joinMode)}
+                  tone="green"
+                />
+              </View>
+              <SetupOptionList
+                onSelect={selectPublicJoinMode}
+                options={setupPublicJoinOptions}
+                selected={publicJoinMode}
               />
             </View>
-            {renderOptions(
-              publicJoinOptions,
-              publicJoinMode,
-              selectPublicJoinMode,
-            )}
+          ) : null}
+          <SetupSummaryRow
+            label="Visible setting"
+            value={formatAccessSummary(draft.privacyMode, draft.joinMode)}
+          />
+          <SetupNumericStepper
+            label="Maximum members"
+            max={100}
+            min={2}
+            onChange={value => setField('maxSize', clampCircleMaxSize(value))}
+            value={draft.maxSize}
+          />
+          <View style={styles.sizePresets}>
+            {[2, 5, 10, 25, 100].map(size => (
+              <Pressable
+                accessibilityRole="button"
+                key={size}
+                onPress={() => setField('maxSize', size)}
+                style={({pressed}) => [
+                  styles.presetButton,
+                  {
+                    backgroundColor:
+                      draft.maxSize === size
+                        ? `${theme.accentSecondaryForeground}22`
+                        : theme.glassSurfaceStrong,
+                    borderColor:
+                      draft.maxSize === size
+                        ? theme.accentSecondaryForeground
+                        : theme.glassBorder,
+                    opacity: pressed ? 0.9 : 1,
+                  },
+                ]}>
+                <HoystText variant="caption">{size}</HoystText>
+              </Pressable>
+            ))}
           </View>
-        ) : null}
-        <SummaryRow
-          label="Visible setting"
-          value={`${getPrivacyLabel(draft.privacyMode)}: ${getJoinModeLabel(
-            draft.joinMode,
-          )}`}
-        />
-      </GlassPanel>
+          {maxSizeError ? (
+            <HoystText tone="danger" variant="caption">
+              {maxSizeError}
+            </HoystText>
+          ) : null}
+        </GlassPanel>
+      ) : null}
 
       <GlassPanel>
         <View style={styles.sectionHeader}>
-          <HoystText variant="title">Limits and Timing</HoystText>
-          <HoystChip
-            label={`${detail.memberCount}/${draft.maxSize} members`}
-            tone={maxSizeError ? 'orange' : 'neutral'}
-          />
-        </View>
-        <View style={styles.sectionHeader}>
-          <HoystText variant="bodyStrong">Commitment rhythm</HoystText>
-          <HoystChip
-            label={
-              draft.commitmentCadence === 'daily'
-                ? 'Daily'
-                : draft.commitmentCadence === 'monthly'
-                ? `${
-                    draft.commitmentFrequency.opportunitiesPerPeriod ??
-                    draft.commitmentFrequency.tapInsPerWeek
-                  }/month`
-                : `${draft.commitmentFrequency.tapInsPerWeek}/week`
-            }
-            tone={
-              draft.commitmentCadence === 'daily'
-                ? 'green'
-                : draft.commitmentCadence === 'monthly'
-                ? 'orange'
-                : 'neutral'
-            }
-          />
+          <HoystText variant="title">Commitment rules</HoystText>
         </View>
         <View style={styles.sectionHeader}>
           <HoystText variant="bodyStrong">Commitment type</HoystText>
@@ -834,18 +523,18 @@ export function EditCircleScreen({
             }
           />
         </View>
-        {renderOptions(
-          commitmentTypeOptions,
-          draft.commitmentType,
-          setCommitmentType,
-        )}
+        <SetupOptionList
+          onSelect={setCommitmentType}
+          options={setupCommitmentTypeOptions}
+          selected={draft.commitmentType}
+        />
         {draft.commitmentType !== 'avoid' ? (
           <View style={styles.nestedBlock}>
             <View style={styles.sectionHeader}>
               <HoystText variant="bodyStrong">
                 {draft.commitmentType === 'limit'
-                  ? 'Daily range'
-                  : 'Daily target'}
+                  ? 'Tap In range'
+                  : 'Tap In target'}
               </HoystText>
               <HoystChip
                 label={draft.commitmentType === 'limit' ? 'Range' : 'Target'}
@@ -905,18 +594,38 @@ export function EditCircleScreen({
           </View>
         ) : (
           <HoystText tone="muted">
-            Avoid circles stay binary in this version. Members Tap In once to
-            confirm they stayed clear.
+            {isPersonal
+              ? 'Avoid Commitments stay binary. Tap In once to confirm you stayed clear.'
+              : 'Avoid Circles stay binary. Each member taps in once to confirm they stayed clear.'}
           </HoystText>
         )}
-        {renderOptions(
-          commitmentCadenceOptions,
-          draft.commitmentCadence,
-          selectCommitmentCadence,
-        )}
+      </GlassPanel>
+
+      <GlassPanel>
+        <View style={styles.sectionHeader}>
+          <HoystText variant="title">Rhythm and timing</HoystText>
+          <HoystChip
+            label={
+              draft.commitmentCadence === 'daily'
+                ? 'Daily'
+                : draft.commitmentCadence === 'monthly'
+                ? `${
+                    draft.commitmentFrequency.opportunitiesPerPeriod ??
+                    draft.commitmentFrequency.tapInsPerWeek
+                  }/month`
+                : `${draft.commitmentFrequency.tapInsPerWeek}/week`
+            }
+            tone={draft.commitmentCadence === 'monthly' ? 'orange' : 'green'}
+          />
+        </View>
+        <SetupOptionList
+          onSelect={selectCommitmentCadence}
+          options={setupCommitmentCadenceOptions}
+          selected={draft.commitmentCadence}
+        />
         {draft.commitmentCadence === 'weekly' ? (
           <>
-            <NumericStepper
+            <SetupNumericStepper
               label="Tap Ins per week"
               max={7}
               min={1}
@@ -926,13 +635,14 @@ export function EditCircleScreen({
               value={draft.commitmentFrequency.tapInsPerWeek}
             />
             <HoystText tone="muted">
-              Weekly Commitment Frequency runs Monday to Sunday in the Circle
-              timezone.
+              {isPersonal
+                ? 'You Tap In this many days from Monday to Sunday in this Commitment timezone.'
+                : 'Each member taps in this many days from Monday to Sunday in the Circle timezone.'}
             </HoystText>
           </>
         ) : draft.commitmentCadence === 'monthly' ? (
           <>
-            <NumericStepper
+            <SetupNumericStepper
               label="Tap Ins per month"
               max={31}
               min={1}
@@ -948,52 +658,21 @@ export function EditCircleScreen({
               }
             />
             <HoystText tone="muted">
-              Monthly opportunities are spaced across the Circle timezone.
+              Monthly opportunities are spaced across the selected timezone.
             </HoystText>
           </>
         ) : (
           <HoystText tone="muted">
-            Daily circles need one Tap In or skip from each member every day.
+            {isPersonal
+              ? 'This Commitment needs one Tap In or skip each day.'
+              : 'Daily circles need one Tap In or skip from each member every day.'}
           </HoystText>
         )}
-        <NumericStepper
-          label="Maximum members"
-          max={100}
-          min={2}
-          onChange={value => setField('maxSize', clampCircleMaxSize(value))}
-          value={draft.maxSize}
-        />
-        <View style={styles.sizePresets}>
-          {[2, 5, 10, 25, 100].map(size => (
-            <Pressable
-              key={size}
-              onPress={() => setField('maxSize', size)}
-              style={({pressed}) => [
-                styles.presetButton,
-                {
-                  backgroundColor:
-                    draft.maxSize === size
-                      ? `${theme.accentSecondaryForeground}22`
-                      : theme.surfaceSoft,
-                  borderColor:
-                    draft.maxSize === size
-                      ? theme.accentSecondaryForeground
-                      : theme.border,
-                  opacity: pressed ? 0.9 : 1,
-                },
-              ]}>
-              <HoystText variant="caption">{size}</HoystText>
-            </Pressable>
-          ))}
-        </View>
-        {maxSizeError ? (
-          <HoystText tone="danger" variant="caption">
-            {maxSizeError}
-          </HoystText>
-        ) : null}
         <TimezonePicker
-          helperText="This controls when each Tap In day resets."
-          modalTitle="Circle timezone"
+          helperText={`This controls when each Tap In day resets for this ${
+            isPersonal ? 'Commitment' : 'Circle'
+          }.`}
+          modalTitle={`${isPersonal ? 'Commitment' : 'Circle'} timezone`}
           onChange={value => setField('timezone', value)}
           value={draft.timezone}
         />
@@ -1019,10 +698,10 @@ export function EditCircleScreen({
           style={({pressed}) => [
             styles.toggleRow,
             {
-              backgroundColor: theme.surface,
+              backgroundColor: theme.glassSurfaceStrong,
               borderColor: graceEnabled
                 ? theme.warningForeground
-                : theme.border,
+                : theme.glassBorder,
               opacity: pressed ? 0.92 : 1,
             },
           ]}>
@@ -1031,7 +710,9 @@ export function EditCircleScreen({
               Optional skips protect Progression
             </HoystText>
             <HoystText tone="muted">
-              Skips count as covered for Circle Progression.
+              {isPersonal
+                ? 'Skips count as covered for your Progression.'
+                : 'Skips count as covered for Circle Progression.'}
             </HoystText>
           </View>
           <HoystChip
@@ -1039,14 +720,14 @@ export function EditCircleScreen({
             tone={graceEnabled ? 'orange' : 'neutral'}
           />
         </Pressable>
-        <NumericStepper
+        <SetupNumericStepper
           label="Skips allowed"
           max={30}
           min={0}
           onChange={allowance => setSkipRule({allowance})}
           value={skipRule.allowance}
         />
-        <NumericStepper
+        <SetupNumericStepper
           label="Window days"
           max={365}
           min={1}
@@ -1055,17 +736,7 @@ export function EditCircleScreen({
         />
       </GlassPanel>
 
-      <HoystButton
-        disabled={!canSave}
-        icon={
-          <Save color={theme.actionForeground} size={18} strokeWidth={2.4} />
-        }
-        label={isSaving ? 'Saving...' : 'Save Changes'}
-        onPress={() => {
-          handleSave().catch(() => undefined);
-        }}
-      />
-    </HoystScreen>
+    </CommitmentSetupScaffold>
   );
 }
 
@@ -1086,62 +757,21 @@ const styles = StyleSheet.create({
     gap: 3,
     minWidth: 0,
   },
-  iconButton: {
-    alignItems: 'center',
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    height: 42,
-    justifyContent: 'center',
-    width: 42,
-  },
   nestedBlock: {
     gap: 12,
     paddingTop: 4,
-  },
-  optionCard: {
-    alignItems: 'center',
-    borderRadius: radius.md,
-    borderWidth: 1,
-    flexDirection: 'row',
-    gap: 12,
-    minHeight: 84,
-    padding: 14,
-  },
-  optionCheck: {
-    alignItems: 'center',
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    height: 24,
-    justifyContent: 'center',
-    width: 24,
   },
   optionCopy: {
     flex: 1,
     gap: 4,
     minWidth: 0,
   },
-  optionCategoryIcon: {
-    backgroundColor: 'transparent',
-    borderColor: 'transparent',
-  },
-  optionIcon: {
-    alignItems: 'center',
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    height: 42,
-    justifyContent: 'center',
-    width: 42,
-  },
-  optionPressable: {
-    borderRadius: radius.md,
-  },
-  optionStack: {
-    gap: 10,
-  },
   presetButton: {
     alignItems: 'center',
     borderRadius: radius.pill,
     borderWidth: 1,
+    justifyContent: 'center',
+    minHeight: 44,
     minWidth: 46,
     paddingHorizontal: 12,
     paddingVertical: 8,
@@ -1156,33 +786,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
-  },
-  stepper: {
-    alignItems: 'center',
-    borderRadius: radius.md,
-    borderWidth: 1,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    minHeight: 76,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-  },
-  stepperControls: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  stepperCopy: {
-    gap: 4,
-  },
-  summaryRow: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 12,
-  },
-  summaryValue: {
-    flex: 1,
-    textAlign: 'right',
   },
   textArea: {
     minHeight: 116,

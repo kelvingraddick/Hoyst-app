@@ -66,6 +66,21 @@ function homeCard(
 }
 
 describe('home data mapping', () => {
+  it('keeps personal commitments out of social card actions', () => {
+    const personal = homeCard({
+      circleMode: 'personal',
+      inviteUrl: 'https://hoyst.app/join/should-not-be-used',
+      nudgeTargetCount: 2,
+      viewerHasCheckedIn: true,
+      viewerHasTappedInToday: true,
+      viewerRemainingTapIns: 0,
+      viewerRole: 'owner',
+      viewerTodayStatus: 'done',
+    });
+
+    expect(getHomeCircleActionVariant(personal)).toBe('view');
+  });
+
   it('builds group last-7-days progress with partial, empty, complete, and skip-covered days', () => {
     const groupDays = buildCircleGroupProgressDays({
       memberRecords: [
@@ -1261,7 +1276,7 @@ describe('Home greeting fallback', () => {
         firstName: 'Aaron',
         timezone: 'UTC',
       }),
-    ).toBe('Aaron, no circles yet. Bold strategy, let us fix it.');
+    ).toBe('Aaron, no commitments yet. Bold strategy, let us fix it.');
     expect(
       getHomeGreetingFallback({
         circles: [needsYouCard],
@@ -1305,8 +1320,10 @@ describe('Home greeting fallback', () => {
         atRiskCount: 0,
         circleCount: 1,
         doneCount: 0,
+        groupCircleCount: 1,
         needsYouCount: 0,
         pendingCount: 0,
+        personalCommitmentCount: 0,
       },
       firstName: 'Aaron',
       timeWindow: 'midday',

@@ -16,6 +16,10 @@ service firebase.storage {
         firestore.get(/databases/(default)/documents/circles/$(circleId)/members/$(request.auth.uid)).data.status == 'active';
     }
 
+    function isGroupCircle(circleId) {
+      return firestore.get(/databases/(default)/documents/circles/$(circleId)).data.get('circleMode', 'group') == 'group';
+    }
+
     match /users/{uid}/avatar/{fileName} {
       allow read: if true;
       allow write: if isSelf(uid) && request.resource.size < 5 * 1024 * 1024;
@@ -29,9 +33,10 @@ service firebase.storage {
     }
 
     match /circles/{circleId}/messages/{uid}/{fileName} {
-      allow read: if isActiveMember(circleId);
+      allow read: if isActiveMember(circleId) && isGroupCircle(circleId);
       allow write: if isSelf(uid) &&
         isActiveMember(circleId) &&
+        isGroupCircle(circleId) &&
         request.resource.size < 10 * 1024 * 1024;
     }
 

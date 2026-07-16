@@ -555,12 +555,12 @@ describe('CircleDetailScreen reference redesign', () => {
       accessibilityLabel: 'Open circle chat',
     });
     const previewFillStyle = StyleSheet.flatten(
-      tree.root.findByProps({testID: 'circle-detail-thread-preview-fill'})
-        .props.style,
+      tree.root.findByProps({testID: 'circle-detail-thread-preview-fill'}).props
+        .style,
     );
     const previewIconStyle = StyleSheet.flatten(
-      tree.root.findByProps({testID: 'circle-detail-thread-preview-icon'})
-        .props.style,
+      tree.root.findByProps({testID: 'circle-detail-thread-preview-icon'}).props
+        .style,
     );
     const previewTitle = tree.root
       .findAllByType(Text)
@@ -620,8 +620,8 @@ describe('CircleDetailScreen reference redesign', () => {
         .style,
     );
     const previewFillStyle = StyleSheet.flatten(
-      tree.root.findByProps({testID: 'circle-detail-thread-preview-fill'})
-        .props.style,
+      tree.root.findByProps({testID: 'circle-detail-thread-preview-fill'}).props
+        .style,
     );
 
     expect(output).toContain('Start the chat');
@@ -1022,6 +1022,41 @@ describe('CircleDetailScreen reference redesign', () => {
     expect(output).toContain('3');
     expect(output).toContain('Members');
     expect(output).toContain('5/8');
+  });
+
+  it('keeps personal commitment details private and free of group surfaces', () => {
+    mockMemberDetail = detail({
+      circleMode: 'personal',
+      commitment: 'Move for 30 minutes',
+      inviteUrl: undefined,
+      maxSize: 1,
+      memberCount: 1,
+      members: [
+        {
+          id: 'user-1',
+          initials: 'KM',
+          name: 'Kelvin',
+          state: 'pending',
+        },
+      ],
+      nudgeTargetCount: 0,
+      privacy: 'private',
+      title: 'Move for 30 minutes',
+      viewerRole: 'owner',
+    });
+
+    const {tree} = renderScreen();
+    const output = outputOf(tree);
+
+    expect(output).toContain('Personal Commitment');
+    expect(output).toContain('Personal commitment');
+    expect(output).toContain('Personal progress');
+    expect(output).not.toContain('Circle Companions');
+    expect(output).not.toContain('Circle chat');
+    expect(output).not.toContain('Completion');
+    expect(output).not.toContain('Members');
+    expect(tree.root.findAllByType(StatBarCard)).toHaveLength(1);
+    expect(mockSubscribeToCircleThreadPreview).not.toHaveBeenCalled();
   });
 
   it('opens circle settings from the header gear', () => {

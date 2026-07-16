@@ -37,6 +37,7 @@ import {
   isCoveredCheckInData,
   isSingleTapInCommitment,
 } from '../shared/commitments';
+import {getCircleMode} from '../shared/circle-mode';
 import {createCircleThreadActivity, getCircleThreadStreakText} from '../thread';
 import {getCircleCompleteNotificationTargets} from './notification-plan';
 
@@ -251,6 +252,7 @@ async function processTapInSideEffectsForCheckIn({
     circleRef.collection('members').where('status', '==', 'active').get(),
   ]);
   const circle = circleSnapshot.data();
+  const isPersonal = getCircleMode(circle) === 'personal';
   const timezone = asCleanString(circle?.timezone) ?? 'UTC';
   const commitmentCadence = getCommitmentCadence(circle);
   const requiredTapIns = getRequiredTapIns(circle);
@@ -325,11 +327,13 @@ async function processTapInSideEffectsForCheckIn({
     handle: asCleanString(checkIn.handle) ?? null,
     uid,
   };
-  const companionTargets = await resolveCompanionFeedTargets({
-    actorUid: uid,
-    circle,
-    circleId,
-  });
+  const companionTargets = isPersonal
+    ? []
+    : await resolveCompanionFeedTargets({
+        actorUid: uid,
+        circle,
+        circleId,
+      });
   const mediaImageUrl = asCleanString(checkIn.photoUrl);
   const note = asCleanString(checkIn.note);
   const circleCompleteTargetUids = getCircleCompleteNotificationTargets({
@@ -337,7 +341,7 @@ async function processTapInSideEffectsForCheckIn({
     remainingTapIns: totalRemainingCount,
   });
 
-  if (status === 'done') {
+  if (status === 'done' && !isPersonal) {
     await createCircleThreadActivity({
       actor,
       circleId,
@@ -366,7 +370,7 @@ async function processTapInSideEffectsForCheckIn({
     ).catch(error => console.error('notify_companion_tapped_in_failed', error));
   }
 
-  if (status === 'skip') {
+  if (status === 'skip' && !isPersonal) {
     await notifyCompanionSkipped({
       actor,
       circle,
@@ -385,21 +389,23 @@ async function processTapInSideEffectsForCheckIn({
       event => event.type === 'companion_streak_milestone',
     );
 
-    await Promise.all(
-      streakMilestones.map(event =>
-        createCircleThreadActivity({
-          actor,
-          circleId,
-          createdAt: checkIn.createdAt,
-          itemId: `streak_${dateKey}_${uid}_${event.key}`,
-          text: getCircleThreadStreakText(event.streakDays),
-          tone: 'alert',
-          type: 'streak_milestone',
-        }),
-      ),
-    ).catch(error =>
-      console.error('create_thread_streak_activity_failed', error),
-    );
+    if (!isPersonal) {
+      await Promise.all(
+        streakMilestones.map(event =>
+          createCircleThreadActivity({
+            actor,
+            circleId,
+            createdAt: checkIn.createdAt,
+            itemId: `streak_${dateKey}_${uid}_${event.key}`,
+            text: getCircleThreadStreakText(event.streakDays),
+            tone: 'alert',
+            type: 'streak_milestone',
+          }),
+        ),
+      ).catch(error =>
+        console.error('create_thread_streak_activity_failed', error),
+      );
+    }
 
     await notifyCompanionMilestones({
       actor,
@@ -413,7 +419,7 @@ async function processTapInSideEffectsForCheckIn({
     );
   }
 
-  if (circleCompleteTargetUids.length > 0) {
+  if (!isPersonal && circleCompleteTargetUids.length > 0) {
     await Promise.all(
       circleCompleteTargetUids.map(targetUid =>
         notifyCircleComplete({
@@ -428,7 +434,7 @@ async function processTapInSideEffectsForCheckIn({
     ).catch(error => console.error('notify_circle_complete_failed', error));
   }
 
-  if (remainingCount > 0 && remainingCount <= 2) {
+  if (!isPersonal && remainingCount > 0 && remainingCount <= 2) {
     await Promise.all(
       pendingMembers.map(memberData =>
         notifyCircleAtRisk({

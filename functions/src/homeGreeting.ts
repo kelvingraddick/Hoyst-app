@@ -16,8 +16,10 @@ export type HomeGreetingCircleSummary = {
   atRiskCount: number;
   circleCount: number;
   doneCount: number;
+  groupCircleCount?: number;
   needsYouCount: number;
   pendingCount: number;
+  personalCommitmentCount?: number;
 };
 
 export type HomeGreetingInput = {
@@ -66,8 +68,10 @@ const homeGreetingSchema = z.object({
     atRiskCount: z.number().int().min(0).max(99),
     circleCount: z.number().int().min(0).max(99),
     doneCount: z.number().int().min(0).max(99),
+    groupCircleCount: z.number().int().min(0).max(99).optional(),
     needsYouCount: z.number().int().min(0).max(99),
     pendingCount: z.number().int().min(0).max(99),
+    personalCommitmentCount: z.number().int().min(0).max(99).optional(),
   }),
   dateKey: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   firstName: z.string().trim().max(24).optional(),
@@ -114,7 +118,7 @@ export function buildHomeGreetingCacheKey({
   const {circleSummary} = input;
 
   return [
-    'v1',
+    'v2',
     cleanCachePart(uid),
     input.dateKey,
     input.timeWindow,
@@ -124,6 +128,8 @@ export function buildHomeGreetingCacheKey({
     circleSummary.atRiskCount,
     circleSummary.doneCount,
     circleSummary.pendingCount,
+    circleSummary.groupCircleCount ?? circleSummary.circleCount,
+    circleSummary.personalCommitmentCount ?? 0,
   ].join('_');
 }
 
@@ -146,14 +152,19 @@ export function buildHomeGreetingFallback(
   if (circleSummary.circleCount === 0) {
     headline = withName(
       firstName,
-      'no circles yet. Bold strategy, let us fix it.',
-      'No circles yet. Bold strategy, let us fix it.',
+      'no commitments yet. Bold strategy, let us fix it.',
+      'No commitments yet. Bold strategy, let us fix it.',
     );
   } else if (circleSummary.needsYouCount > 0) {
+    const waitingLabel =
+      (circleSummary.groupCircleCount ?? circleSummary.circleCount) === 0
+        ? 'commitments'
+        : 'circles';
+
     headline = withName(
       firstName,
-      'your circles are waiting. Make it quick and undeniable.',
-      'Your circles are waiting. Make it quick and undeniable.',
+      `your ${waitingLabel} are waiting. Make it quick and undeniable.`,
+      `Your ${waitingLabel} are waiting. Make it quick and undeniable.`,
     );
   } else if (circleSummary.atRiskCount > 0) {
     headline = withName(
@@ -216,7 +227,10 @@ function getGeminiApiKey() {
 
 const firestoreHomeGreetingCacheStore: HomeGreetingCacheStore = {
   async getCachedGreeting(cacheKey, input) {
-    const snapshot = await db.collection('homeGreetingCache').doc(cacheKey).get();
+    const snapshot = await db
+      .collection('homeGreetingCache')
+      .doc(cacheKey)
+      .get();
     const data = snapshot.data();
     const headline = validateHomeGreetingHeadline({
       firstName: input.firstName,

@@ -323,13 +323,21 @@ export function HomeScreen(): React.JSX.Element {
     });
   }, [isAuthenticatedHome, user?.uid]);
 
-  const todayActionCircles = useMemo(
-    () => getTodayAttentionCircles(homeData.circles),
+  const personalCommitments = useMemo(
+    () => homeData.circles.filter(circle => circle.circleMode === 'personal'),
     [homeData.circles],
   );
-  const upcomingActionCircles = useMemo(
-    () => getUpcomingAttentionCircles(homeData.circles),
+  const groupCircles = useMemo(
+    () => homeData.circles.filter(circle => circle.circleMode !== 'personal'),
     [homeData.circles],
+  );
+  const todayActionCircles = useMemo(
+    () => getTodayAttentionCircles(groupCircles),
+    [groupCircles],
+  );
+  const upcomingActionCircles = useMemo(
+    () => getUpcomingAttentionCircles(groupCircles),
+    [groupCircles],
   );
   const homeGreetingContext = useMemo(
     () =>
@@ -705,6 +713,22 @@ export function HomeScreen(): React.JSX.Element {
 
           {isAuthenticatedHome ? (
             <View style={styles.circlesSection}>
+              {personalCommitments.length > 0 ? (
+                <View style={styles.circleSectionGroup}>
+                  <SectionEyebrow>PERSONAL COMMITMENTS</SectionEyebrow>
+                  {personalCommitments.map(commitment => (
+                    <TodayCircleCard
+                      card={commitment}
+                      key={commitment.id}
+                      onActionPress={() => handleCircleAction(commitment)}
+                      onCardPress={() => openCircleDetail(commitment.id)}
+                      surfaceStyle={homeCardLiftStyle}
+                      variant="list"
+                    />
+                  ))}
+                </View>
+              ) : null}
+
               <SectionEyebrow>CIRCLES THAT NEED ATTENTION NOW</SectionEyebrow>
 
               {todayActionCircles.length > 0 ? (
@@ -738,14 +762,14 @@ export function HomeScreen(): React.JSX.Element {
               ) : null}
 
               <CircleActionCard
-                accessibilityLabel="All my circles"
+                accessibilityLabel="All my commitments"
                 onPress={() => rootNavigation?.navigate('Circles')}
                 renderIcon={color => (
                   <UsersRound color={color} size={24} strokeWidth={2.4} />
                 )}
                 subtitle="View commitments and join requests"
                 testID="all-my-circles-card"
-                title="All my circles"
+                title="All my commitments"
               />
             </View>
           ) : null}
