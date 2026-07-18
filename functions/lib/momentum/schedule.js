@@ -7,6 +7,7 @@ exports.getOpportunityStatusForSlot = getOpportunityStatusForSlot;
 exports.getMomentumStatus = getMomentumStatus;
 exports.getMomentumLabel = getMomentumLabel;
 exports.calculateMomentumSummary = calculateMomentumSummary;
+exports.calculateMomentumStreaks = calculateMomentumStreaks;
 const commitments_1 = require("../shared/commitments");
 function padDatePart(value) {
     return value.toString().padStart(2, '0');
@@ -28,11 +29,7 @@ function getLocalDateParts(timezone, now = new Date()) {
 }
 function getDateKey(timezone, now = new Date()) {
     const local = getLocalDateParts(timezone, now);
-    return [
-        local.year,
-        padDatePart(local.month),
-        padDatePart(local.day),
-    ].join('-');
+    return [local.year, padDatePart(local.month), padDatePart(local.day)].join('-');
 }
 function parseDateKey(dateKey) {
     const [year = '1970', month = '01', day = '01'] = dateKey.split('-');
@@ -75,11 +72,7 @@ function getPeriodShape(schedule, now = new Date()) {
     }
     if (schedule.cadence === 'monthly') {
         const local = getLocalDateParts(schedule.timezone, now);
-        const startDateKey = [
-            local.year,
-            padDatePart(local.month),
-            '01',
-        ].join('-');
+        const startDateKey = [local.year, padDatePart(local.month), '01'].join('-');
         return {
             dayCount: getDaysInMonth(local.year, local.month),
             periodKey: `${local.year}-${padDatePart(local.month)}`,
@@ -182,10 +175,32 @@ function getMomentumLabel(status) {
 }
 function calculateMomentumSummary({ opportunities, periodKey, priorBestStreak = 0, }) {
     const availableOpportunities = opportunities.filter(opportunity => opportunity.status !== 'upcoming').length;
-    const completedOpportunities = opportunities.filter(opportunity => opportunity.status === 'completed').length;
+    const tapInOpportunities = opportunities.filter(opportunity => opportunity.status === 'completed').length;
+    const skippedOpportunities = opportunities.filter(opportunity => opportunity.status === 'skipped').length;
+    const creditedOpportunities = tapInOpportunities + skippedOpportunities;
     const percentage = availableOpportunities > 0
-        ? Math.round((completedOpportunities / availableOpportunities) * 100)
+        ? Math.round((creditedOpportunities / availableOpportunities) * 100)
         : 0;
+    const { bestStreak, currentStreak } = calculateMomentumStreaks({
+        opportunities,
+        priorBestStreak,
+    });
+    const status = getMomentumStatus(percentage);
+    return {
+        availableOpportunities,
+        bestStreak,
+        creditedOpportunities,
+        completedOpportunities: creditedOpportunities,
+        currentStreak,
+        label: getMomentumLabel(status),
+        percentage,
+        periodKey,
+        skippedOpportunities,
+        status,
+        tapInOpportunities,
+    };
+}
+function calculateMomentumStreaks({ opportunities, priorBestStreak = 0, }) {
     let currentStreak = 0;
     let bestStreak = priorBestStreak;
     [...opportunities]
@@ -195,25 +210,15 @@ function calculateMomentumSummary({ opportunities, periodKey, priorBestStreak = 
         return dateDelta !== 0 ? dateDelta : left.slotIndex - right.slotIndex;
     })
         .forEach(opportunity => {
-        if (opportunity.status === 'completed') {
+        if (opportunity.status === 'completed' ||
+            opportunity.status === 'skipped') {
             currentStreak += 1;
             bestStreak = Math.max(bestStreak, currentStreak);
             return;
         }
-        if (opportunity.status === 'missed' ||
-            opportunity.status === 'expired') {
+        if (opportunity.status === 'missed' || opportunity.status === 'expired') {
             currentStreak = 0;
         }
     });
-    const status = getMomentumStatus(percentage);
-    return {
-        availableOpportunities,
-        bestStreak,
-        completedOpportunities,
-        currentStreak,
-        label: getMomentumLabel(status),
-        percentage,
-        periodKey,
-        status,
-    };
+    return { bestStreak, currentStreak };
 }

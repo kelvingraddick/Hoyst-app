@@ -241,12 +241,15 @@ function momentumSummary(
   return {
     availableOpportunities: 0,
     bestStreak: 0,
+    creditedOpportunities: 0,
     completedOpportunities: 0,
     currentStreak: 0,
     label: 'Getting started',
     percentage: 0,
     periodKey: '2026-05-26',
+    skippedOpportunities: 0,
     status: 'getting_started',
+    tapInOpportunities: 0,
     ...overrides,
   };
 }

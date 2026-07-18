@@ -285,9 +285,11 @@ describe('TapInComposerScreen', () => {
 
     const navigation =
       tree!.root.findByType(TapInComposerScreen).props.navigation;
-    const tapInButton = tree!.root
+    const progressButton = tree!.root
       .findAllByType(TapInActionButton)
-      .find(button => button.props.label === 'Tap In');
+      .find(button => button.props.label === 'Log Progress');
+
+    expect(progressButton).toBeTruthy();
 
     for (let index = 0; index < 3; index += 1) {
       await act(async () => {
@@ -296,6 +298,12 @@ describe('TapInComposerScreen', () => {
           .props.onPress();
       });
     }
+
+    const tapInButton = tree!.root
+      .findAllByType(TapInActionButton)
+      .find(button => button.props.label === 'Tap In');
+
+    expect(tapInButton).toBeTruthy();
 
     await act(async () => {
       tapInButton!.props.onPress();
@@ -364,7 +372,7 @@ describe('TapInComposerScreen', () => {
     });
     const updateButton = tree!.root
       .findAllByType(TapInActionButton)
-      .find(button => button.props.label === 'Update Tap In');
+      .find(button => button.props.label === 'Update Progress');
 
     expect(JSON.stringify(tree!.toJSON())).toContain('Current total today');
     expect(updateButton?.props.disabled).toBe(false);
@@ -432,7 +440,7 @@ describe('TapInComposerScreen', () => {
       tree!.root.findByType(TapInComposerScreen).props.navigation;
     const actionButtons = tree!.root.findAllByType(TapInActionButton);
     const updateButton = actionButtons.find(
-      button => button.props.label === 'Update Tap In',
+      button => button.props.label === 'Update Progress',
     );
     const removeButton = actionButtons.find(
       button => button.props.label === 'Remove Tap In',

@@ -15,6 +15,11 @@ import {
   getRequiredTapIns,
   isCoveredCheckInData,
 } from '../shared/commitments';
+import {
+  getOpportunitySlots,
+  normalizeCommitmentSchedule,
+} from '../momentum/schedule';
+import {isMemberExpectedForSlot} from '../momentum/eligibility';
 
 export const oneSignalRestApiKey = defineSecret('ONESIGNAL_REST_API_KEY');
 export const oneSignalAppId = defineString('ONESIGNAL_APP_ID', {default: ''});
@@ -75,6 +80,8 @@ export type CreateNotificationInput = {
   preferenceKey: NotificationPreferenceKey;
   pushData?: Record<string, string>;
   routineTimezone?: string;
+  sourceKey?: string;
+  sourceRevision?: number;
   title: string;
   type: NotificationType;
   uid: string;
@@ -134,12 +141,16 @@ export type NotificationSendResult = {
 };
 
 export type ReminderCandidate = {
+  cadence?: CommitmentCadence;
   circleId: string;
   dateKey: string;
   kind: 'final' | 'midday';
   memberStatus?: unknown;
   notificationSettings?: Record<string, unknown>;
+  opportunityStatus?: unknown;
+  periodKey?: string;
   remainingTapIns?: number;
+  slotIndex?: number;
   todayStatus?: unknown;
   uid: string;
 };
@@ -147,6 +158,8 @@ export type ReminderCandidate = {
 export type TapInReminderCircle = {
   circleId: string;
   circleTitle: string;
+  dedupeKey?: string;
+  opportunityKey?: string;
 };
 
 export type TapInReminderNotificationPlan = {
@@ -1504,6 +1517,8 @@ export async function createInboxEvent({
   preferenceKey,
   pushData,
   routineTimezone = 'UTC',
+  sourceKey,
+  sourceRevision,
   title,
   type,
   uid,
@@ -1562,6 +1577,8 @@ export async function createInboxEvent({
       status: pushStatus,
     },
     readAt: null,
+    sourceKey: sourceKey ?? null,
+    sourceRevision: sourceRevision ?? null,
     title,
     type,
   });
@@ -1805,6 +1822,8 @@ type CompanionFeedEventInput = {
   fallbackBody: string;
   fallbackTitle: string;
   mediaImageUrl?: string | null;
+  sourceKey?: string;
+  sourceRevision?: number;
   type:
     | 'companion_achievement_unlocked'
     | 'companion_circle_created'
@@ -1825,6 +1844,8 @@ async function notifyCompanionFeedEvent({
   fallbackBody,
   fallbackTitle,
   mediaImageUrl,
+  sourceKey,
+  sourceRevision,
   type,
 }: CompanionFeedEventInput) {
   const actorUid = asOptionalString(actor.uid);
@@ -1847,7 +1868,9 @@ async function notifyCompanionFeedEvent({
         const targetMediaImageUrl = target.canViewMedia
           ? asOptionalString(mediaImageUrl)
           : undefined;
-        const dedupeKey = `${type}_${circleId}_${dateKey}_${actorUid}_${dedupeSubject}_${target.uid}`;
+        const revisionKey =
+          typeof sourceRevision === 'number' ? `_r${sourceRevision}` : '';
+        const dedupeKey = `${type}_${circleId}_${dateKey}_${actorUid}_${dedupeSubject}_${target.uid}${revisionKey}`;
         const copy = resolveNotificationCopy({
           context,
           dedupeKey,
@@ -1871,6 +1894,8 @@ async function notifyCompanionFeedEvent({
             feedCategory: 'companion',
             ...(targetMediaImageUrl ? {hasMedia: 'true'} : {}),
           },
+          sourceKey,
+          sourceRevision,
           title: copy.title,
           type,
           uid: target.uid,
@@ -1885,12 +1910,16 @@ export async function notifyCompanionSkipped({
   circleId,
   circleTitle,
   dateKey,
+  sourceKey,
+  sourceRevision,
 }: {
   actor: NotificationActor;
   circle?: CompanionFeedSourceCircle;
   circleId: string;
   circleTitle: string;
   dateKey: string;
+  sourceKey?: string;
+  sourceRevision?: number;
 }) {
   const actorName = actor.displayName ?? 'Someone';
 
@@ -1903,6 +1932,8 @@ export async function notifyCompanionSkipped({
     dedupeSubject: 'skip',
     fallbackBody: `${actorName} used a skip for ${circleTitle}.`,
     fallbackTitle: 'A companion used a skip',
+    sourceKey,
+    sourceRevision,
     type: 'companion_skipped',
   });
 }
@@ -2018,6 +2049,8 @@ export async function notifyCompanionMilestones({
   circleId,
   dateKey,
   events,
+  sourceKey,
+  sourceRevision,
   targetUid,
 }: {
   actor: NotificationActor;
@@ -2025,6 +2058,8 @@ export async function notifyCompanionMilestones({
   circleId: string;
   dateKey: string;
   events: CompanionMilestoneEvent[];
+  sourceKey?: string;
+  sourceRevision?: number;
   targetUid: string;
 }) {
   const actorUid = asOptionalString(actor.uid);
@@ -2044,7 +2079,9 @@ export async function notifyCompanionMilestones({
     const fallback = getCompanionMilestoneFallback({actorName, event});
 
     return targets.map(target => {
-      const dedupeKey = `${event.type}_${circleId}_${dateKey}_${actorUid}_${event.key}_${target.uid}`;
+      const revisionKey =
+        typeof sourceRevision === 'number' ? `_r${sourceRevision}` : '';
+      const dedupeKey = `${event.type}_${circleId}_${dateKey}_${actorUid}_${event.key}_${target.uid}${revisionKey}`;
       const copy = resolveNotificationCopy({
         context,
         dedupeKey,
@@ -2064,6 +2101,8 @@ export async function notifyCompanionMilestones({
         feedCategory: 'companion',
         preferenceKey: 'socialActivity',
         pushData: {feedCategory: 'companion'},
+        sourceKey,
+        sourceRevision,
         title: copy.title,
         type: event.type,
         uid: target.uid,
@@ -2073,7 +2112,9 @@ export async function notifyCompanionMilestones({
   const selfSends = events.map(event => {
     const context = getCompanionMilestoneContext(event, 'You');
     const fallback = getCompanionMilestoneFallback({actorName: 'You', event});
-    const dedupeKey = `self_${event.type}_${dateKey}_${actorUid}_${event.key}`;
+    const revisionKey =
+      typeof sourceRevision === 'number' ? `_r${sourceRevision}` : '';
+    const dedupeKey = `self_${event.type}_${dateKey}_${actorUid}_${event.key}${revisionKey}`;
     const copy = resolveNotificationCopy({
       context,
       dedupeKey,
@@ -2091,6 +2132,8 @@ export async function notifyCompanionMilestones({
       deeplink: {circleId, screen: 'CircleDetail'},
       deliveryPriority: 'suppressed',
       preferenceKey: 'socialActivity',
+      sourceKey,
+      sourceRevision,
       title: copy.title,
       type: event.type,
       uid: targetUid,
@@ -2132,6 +2175,8 @@ export async function notifyCompanionTappedIn({
   circleTitle,
   dateKey,
   mediaImageUrl,
+  sourceKey,
+  sourceRevision,
   targetUid,
 }: {
   actor?: DocumentData;
@@ -2139,13 +2184,17 @@ export async function notifyCompanionTappedIn({
   circleTitle: string;
   dateKey: string;
   mediaImageUrl?: string | null;
+  sourceKey?: string;
+  sourceRevision?: number;
   targetUid: string;
 }) {
   const notificationActor = buildActor(actor);
   const actorName = notificationActor?.displayName ?? 'Someone';
+  const revisionKey =
+    typeof sourceRevision === 'number' ? `_r${sourceRevision}` : '';
   const dedupeKey = `companion_tapped_in_${circleId}_${dateKey}_${
     notificationActor?.uid ?? 'unknown'
-  }_${targetUid}`;
+  }_${targetUid}${revisionKey}`;
   const copy = resolveNotificationCopy({
     context: {actorName, circleTitle},
     dedupeKey,
@@ -2169,6 +2218,8 @@ export async function notifyCompanionTappedIn({
       feedCategory: 'companion',
       ...(mediaImageUrl ? {hasMedia: 'true'} : {}),
     },
+    sourceKey,
+    sourceRevision,
     title: copy.title,
     type: 'companion_tapped_in',
     uid: targetUid,
@@ -2181,6 +2232,8 @@ export async function notifyCircleComplete({
   circleTitle,
   commitmentCadence,
   periodKey,
+  sourceKey,
+  sourceRevision,
   targetUid,
 }: {
   actorUid?: string;
@@ -2188,10 +2241,14 @@ export async function notifyCircleComplete({
   circleTitle: string;
   commitmentCadence: CommitmentCadence;
   periodKey: string;
+  sourceKey?: string;
+  sourceRevision?: number;
   targetUid: string;
 }) {
   const periodCopy = getCommitmentPeriodCopy(commitmentCadence);
-  const dedupeKey = `circle_complete_${circleId}_${periodKey}_${targetUid}`;
+  const revisionKey =
+    typeof sourceRevision === 'number' ? `_r${sourceRevision}` : '';
+  const dedupeKey = `circle_complete_${circleId}_${periodKey}_${targetUid}${revisionKey}`;
   const copy = resolveNotificationCopy({
     context: {circleTitle, periodCopy},
     dedupeKey,
@@ -2209,6 +2266,8 @@ export async function notifyCircleComplete({
     deliveryPriority: actorUid === targetUid ? 'suppressed' : 'deferred',
     feedCategory: 'companion',
     preferenceKey: 'socialActivity',
+    sourceKey,
+    sourceRevision,
     title: copy.title,
     type: 'circle_complete',
     uid: targetUid,
@@ -2393,12 +2452,16 @@ export async function notifyCircleAtRisk({
 }
 
 export function getReminderEligibility({
+  cadence,
   circleId,
   dateKey,
   kind,
   memberStatus,
   notificationSettings,
+  opportunityStatus,
+  periodKey,
   remainingTapIns,
+  slotIndex,
   todayStatus,
   uid,
 }: ReminderCandidate) {
@@ -2410,7 +2473,12 @@ export function getReminderEligibility({
     return {eligible: false, reason: 'inactive-member'};
   }
 
-  if (todayStatus === 'done' || todayStatus === 'skip') {
+  if (
+    opportunityStatus === 'completed' ||
+    opportunityStatus === 'skipped' ||
+    todayStatus === 'done' ||
+    todayStatus === 'skip'
+  ) {
     return {eligible: false, reason: 'already-covered'};
   }
 
@@ -2423,7 +2491,13 @@ export function getReminderEligibility({
   }
 
   return {
-    dedupeKey: `tap_in_${kind}_${circleId}_${dateKey}_${uid}`,
+    dedupeKey:
+      cadence &&
+      cadence !== 'daily' &&
+      periodKey &&
+      typeof slotIndex === 'number'
+        ? `tap_in_${kind}_${circleId}_${periodKey}_${slotIndex}_${uid}`
+        : `tap_in_${kind}_${circleId}_${dateKey}_${uid}`,
     eligible: true,
     reason: 'eligible',
   };
@@ -2438,13 +2512,24 @@ function getTapInReminderType(kind: 'final' | 'midday') {
 function getTapInReminderSummaryDedupeKey({
   dateKey,
   kind,
+  reminders,
   uid,
 }: {
   dateKey: string;
   kind: 'final' | 'midday';
+  reminders: TapInReminderCircle[];
   uid: string;
 }) {
-  return `tap_in_${kind}_summary_${dateKey}_${uid}`;
+  const opportunityKeys = reminders
+    .map(reminder => reminder.opportunityKey)
+    .filter((value): value is string => Boolean(value))
+    .sort();
+  const opportunitySuffix =
+    opportunityKeys.length > 0
+      ? `_${hashString(opportunityKeys.join('|')).toString(36)}`
+      : '';
+
+  return `tap_in_${kind}_summary_${dateKey}_${uid}${opportunitySuffix}`;
 }
 
 function getTapInReminderCircleListCopy(reminders: TapInReminderCircle[]) {
@@ -2482,7 +2567,9 @@ export function buildTapInReminderNotification({
 
   if (reminders.length === 1) {
     const reminder = reminders[0];
-    const dedupeKey = `tap_in_${kind}_${reminder.circleId}_${dateKey}_${uid}`;
+    const dedupeKey =
+      reminder.dedupeKey ??
+      `tap_in_${kind}_${reminder.circleId}_${dateKey}_${uid}`;
     const copy = resolveNotificationCopy({
       context: {circleTitle: reminder.circleTitle},
       dedupeKey,
@@ -2512,7 +2599,12 @@ export function buildTapInReminderNotification({
   const circleCount = reminders.length;
   const circleCopy = `${circleCount} circle${circleCount === 1 ? '' : 's'}`;
   const listCopy = getTapInReminderCircleListCopy(reminders);
-  const dedupeKey = getTapInReminderSummaryDedupeKey({dateKey, kind, uid});
+  const dedupeKey = getTapInReminderSummaryDedupeKey({
+    dateKey,
+    kind,
+    reminders,
+    uid,
+  });
 
   return {
     body:
@@ -2525,6 +2617,27 @@ export function buildTapInReminderNotification({
     title: kind === 'midday' ? 'Tap In reminder' : 'Final Tap In warning',
     type,
   };
+}
+
+export function getOpportunityReminderSlots({
+  dateKey,
+  kind,
+  slots,
+}: {
+  dateKey: string;
+  kind: 'final' | 'midday';
+  slots: Array<{
+    availableDateKey: string;
+    expiresDateKey: string;
+    periodKey: string;
+    slotIndex: number;
+  }>;
+}) {
+  return slots.filter(slot =>
+    kind === 'midday'
+      ? slot.availableDateKey === dateKey
+      : slot.expiresDateKey === dateKey,
+  );
 }
 
 async function sendTapInReminders(kind: 'final' | 'midday') {
@@ -2546,67 +2659,70 @@ async function sendTapInReminders(kind: 'final' | 'midday') {
     const timezone = asString(circle.timezone, 'UTC');
     const local = getLocalDateTimeParts(now, timezone);
     const commitmentCadence = getCommitmentCadence(circle);
-    const periodDateKeys = getCommitmentPeriodDateKeys(
-      commitmentCadence,
-      timezone,
+    const slots = getOpportunitySlots(
+      normalizeCommitmentSchedule(circle, timezone),
       now,
     );
-    const requiredTapIns = getRequiredTapIns(circle);
+    const reminderSlots = getOpportunityReminderSlots({
+      dateKey: local.dateKey,
+      kind,
+      slots,
+    });
 
-    if (local.hour !== targetHour) {
+    if (local.hour !== targetHour || reminderSlots.length === 0) {
       continue;
     }
 
-    const [memberSnapshots, todayCheckInSnapshots, ...periodCheckInSnapshots] =
-      await Promise.all([
+    const memberSnapshots = await circleSnapshot.ref
+      .collection('members')
+      .where('status', '==', 'active')
+      .get();
+    const slotSnapshots = await Promise.all(
+      reminderSlots.map(slot =>
         circleSnapshot.ref
-          .collection('members')
-          .where('status', '==', 'active')
+          .collection('opportunities')
+          .doc(slot.periodKey)
+          .collection('slots')
+          .doc(String(slot.slotIndex))
           .get(),
-        circleSnapshot.ref
-          .collection('days')
-          .doc(local.dateKey)
-          .collection('checkIns')
-          .get(),
-        ...periodDateKeys.map(dateKey =>
-          circleSnapshot.ref
-            .collection('days')
-            .doc(dateKey)
-            .collection('checkIns')
-            .get(),
-        ),
-      ]);
-    const checkInStatuses = new Map(
-      todayCheckInSnapshots.docs.map(snapshot => {
-        const data = snapshot.data();
-
-        return [asString(data.uid, snapshot.id), data.status] as const;
-      }),
+      ),
     );
-    const coveredCounts = new Map<string, number>();
-    const scoringSnapshots =
-      commitmentCadence === 'daily'
-        ? [todayCheckInSnapshots]
-        : periodCheckInSnapshots;
-
-    scoringSnapshots.forEach(snapshot => {
-      snapshot.docs.forEach(doc => {
-        if (isCoveredCheckInData(doc.data())) {
-          const uid = asString(doc.data().uid, doc.id);
-          coveredCounts.set(uid, (coveredCounts.get(uid) ?? 0) + 1);
-        }
-      });
-    });
     const circleTitle = asString(circle.title, 'Your circle');
 
     for (const memberSnapshot of memberSnapshots.docs) {
       const uid = asString(memberSnapshot.data().uid, memberSnapshot.id);
+      const eligibleSlotIndex = reminderSlots.findIndex((slot, index) => {
+        const expectedMemberUids =
+          slotSnapshots[index].data()?.expectedMemberUids;
+
+        return Array.isArray(expectedMemberUids)
+          ? expectedMemberUids.includes(uid)
+          : isMemberExpectedForSlot({
+              member: memberSnapshot.data(),
+              slot,
+              timezone,
+            });
+      });
+
+      if (eligibleSlotIndex < 0) {
+        continue;
+      }
+
+      const slot = reminderSlots[eligibleSlotIndex];
+      const opportunitySnapshot = await db
+        .collection('userPrivate')
+        .doc(uid)
+        .collection('opportunities')
+        .doc(`${circleSnapshot.id}_${slot.periodKey}_${slot.slotIndex}`)
+        .get();
+      const opportunityStatus = opportunitySnapshot.data()?.status;
       const userPrivateSnapshot = await db
         .collection('userPrivate')
         .doc(uid)
         .get();
       const userPrivate = userPrivateSnapshot.data();
       const eligibility = getReminderEligibility({
+        cadence: commitmentCadence,
         circleId: circleSnapshot.id,
         dateKey: local.dateKey,
         kind,
@@ -2614,11 +2730,13 @@ async function sendTapInReminders(kind: 'final' | 'midday') {
         notificationSettings: userPrivate?.notificationSettings as
           | Record<string, unknown>
           | undefined,
-        remainingTapIns: Math.max(
-          requiredTapIns - (coveredCounts.get(uid) ?? 0),
-          0,
-        ),
-        todayStatus: checkInStatuses.get(uid),
+        opportunityStatus,
+        periodKey: slot.periodKey,
+        remainingTapIns:
+          opportunityStatus === 'completed' || opportunityStatus === 'skipped'
+            ? 0
+            : 1,
+        slotIndex: slot.slotIndex,
         uid,
       });
 
@@ -2644,6 +2762,11 @@ async function sendTapInReminders(kind: 'final' | 'midday') {
       group.reminders.push({
         circleId: circleSnapshot.id,
         circleTitle,
+        dedupeKey: eligibility.dedupeKey,
+        opportunityKey:
+          commitmentCadence === 'daily'
+            ? undefined
+            : `${circleSnapshot.id}_${slot.periodKey}_${slot.slotIndex}`,
       });
       reminderGroups.set(groupKey, group);
     }

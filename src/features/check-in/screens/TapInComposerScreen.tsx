@@ -189,8 +189,14 @@ export function TapInComposerScreen({
         )}`;
   const quantityFieldLabel =
     commitmentType === 'limit' ? 'Current used today' : 'Current total today';
+  const isBuildProgress =
+    commitmentType === 'build' && quantityCoverageStatus === 'partial';
   const submitActionLabel =
-    isQuantityTapIn && detail.viewerHasTappedInToday
+    isBuildProgress && detail.viewerHasTappedInToday
+      ? 'Update Progress'
+      : isBuildProgress
+      ? 'Log Progress'
+      : isQuantityTapIn && detail.viewerHasTappedInToday
       ? 'Update Tap In'
       : isQuantityTapIn
       ? 'Tap In'
@@ -272,7 +278,11 @@ export function TapInComposerScreen({
     ? "This will undo today's Progression for this Circle."
     : "This will undo this week's Progression for this Circle.";
   const heroTitle =
-    isQuantityTapIn && detail.viewerHasTappedInToday
+    isBuildProgress && detail.viewerHasTappedInToday
+      ? 'Update Progress'
+      : isBuildProgress
+      ? 'Log Progress'
+      : isQuantityTapIn && detail.viewerHasTappedInToday
       ? 'Update Tap In'
       : isViewingLoggedTapIn
       ? 'Tap In logged'

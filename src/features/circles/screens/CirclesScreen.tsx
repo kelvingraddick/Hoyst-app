@@ -10,6 +10,8 @@ import {
 import {
   ArrowLeft,
   CalendarClock,
+  ChevronRight,
+  History,
   Plus,
   Star,
   TrendingUp,
@@ -42,6 +44,10 @@ import {
 import {useUserProfileStore} from '../../../store/profile-store';
 import {CircleActionCard} from '../components/CircleActionCard';
 import {nudgeCircleMembers} from '../services/circle-service';
+import {
+  subscribeToPastCircles,
+  type PastCircleSummary,
+} from '../services/past-circle-service';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Circles'>;
 
@@ -98,6 +104,7 @@ export function CirclesScreen({navigation}: Props): React.JSX.Element {
   const [homeData, setHomeData] = useState<HomeData>(() =>
     createEmptyHomeData(),
   );
+  const [pastCircles, setPastCircles] = useState<PastCircleSummary[]>([]);
   const [selectedFilter, setSelectedFilter] = useState<CirclesFilter>('all');
   const [nudgedCircleIds, setNudgedCircleIds] = useState<Set<string>>(
     () => new Set(),
@@ -130,6 +137,19 @@ export function CirclesScreen({navigation}: Props): React.JSX.Element {
       uid: user.uid,
     });
   }, [canLoad, timezone, user?.uid]);
+
+  useEffect(() => {
+    if (!canLoad || !user?.uid) {
+      setPastCircles([]);
+      return undefined;
+    }
+
+    return subscribeToPastCircles({
+      onCircles: setPastCircles,
+      onError: () => undefined,
+      uid: user.uid,
+    });
+  }, [canLoad, user?.uid]);
 
   const allCircles = useMemo(
     () => sortHomeCircles(homeData.circles),
@@ -494,6 +514,48 @@ export function CirclesScreen({navigation}: Props): React.JSX.Element {
               : emptyState}
           </View>
 
+          {pastCircles.length > 0 ? (
+            <View style={styles.listBlock} testID="past-circles-section">
+              <View style={styles.listHeaderRow}>
+                <HoystText
+                  style={[styles.listHeaderLabel, {color: theme.textMuted}]}>
+                  Past Circles
+                </HoystText>
+              </View>
+              {pastCircles.map(circle => (
+                <Pressable
+                  accessibilityLabel={`View past Circle ${circle.title}`}
+                  accessibilityRole="button"
+                  key={circle.id}
+                  onPress={() =>
+                    navigation.navigate('PastCircle', {summary: circle})
+                  }
+                  style={({pressed}) => ({
+                    opacity: pressed ? actionMotion.pressedOpacity : 1,
+                  })}>
+                  <GlassPanel style={styles.pastCircleCard}>
+                    <View
+                      style={[
+                        styles.pastCircleIcon,
+                        {backgroundColor: theme.tabActiveBackground},
+                      ]}>
+                      <History color={theme.accent} size={20} strokeWidth={2.3} />
+                    </View>
+                    <View style={styles.pastCircleCopy}>
+                      <HoystText style={styles.pastCircleTitle}>
+                        {circle.title}
+                      </HoystText>
+                      <HoystText numberOfLines={2} tone="muted" variant="caption">
+                        {circle.commitment}
+                      </HoystText>
+                    </View>
+                    <ChevronRight color={theme.textMuted} size={20} strokeWidth={2.2} />
+                  </GlassPanel>
+                </Pressable>
+              ))}
+            </View>
+          ) : null}
+
           {findMore}
         </View>
       </View>
@@ -588,6 +650,27 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     letterSpacing: 0,
     lineHeight: 15,
+  },
+  pastCircleCard: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 12,
+  },
+  pastCircleCopy: {
+    flex: 1,
+    gap: 2,
+  },
+  pastCircleIcon: {
+    alignItems: 'center',
+    borderRadius: 14,
+    height: 44,
+    justifyContent: 'center',
+    width: 44,
+  },
+  pastCircleTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    lineHeight: 20,
   },
   newPill: {
     alignItems: 'center',

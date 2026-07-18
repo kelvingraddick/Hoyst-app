@@ -9,6 +9,7 @@ const zod_1 = require("zod");
 const firebase_1 = require("../firebase");
 const commitments_1 = require("../shared/commitments");
 const starter_circle_plan_1 = require("./starter-circle-plan");
+const momentum_1 = require("../momentum");
 const onboardingPreferencesSchema = zod_1.z.object({
     categories: zod_1.z.array(zod_1.z.string().trim().min(1).max(40)).max(8).default([]),
     focusArea: zod_1.z.string().trim().min(1).max(80).optional(),
@@ -108,6 +109,55 @@ async function deleteCircleServerMetadata(circleId) {
         deleteStoragePrefix(`circles/${circleId}/`),
     ]);
 }
+async function deleteDocumentRefsInBatches(refs) {
+    for (let index = 0; index < refs.length; index += 400) {
+        const batch = firebase_1.db.batch();
+        refs.slice(index, index + 400).forEach(ref => batch.delete(ref));
+        await batch.commit();
+    }
+}
+async function collectNonOwnedCircleIds(uid, ownedCircleIds) {
+    const [memberSnapshots, historySnapshots, checkInSnapshots] = await Promise.all([
+        firebase_1.db.collectionGroup('members').where('uid', '==', uid).get(),
+        firebase_1.db.collectionGroup('membershipHistory').where('uid', '==', uid).get(),
+        firebase_1.db.collectionGroup('checkIns').where('uid', '==', uid).get(),
+    ]);
+    const circleIds = new Set();
+    memberSnapshots.docs.forEach(snapshot => {
+        circleIds.add(getParentDocument(snapshot.ref, 'member').id);
+    });
+    historySnapshots.docs.forEach(snapshot => {
+        circleIds.add(getParentDocument(snapshot.ref, 'membership history').id);
+    });
+    checkInSnapshots.docs.forEach(snapshot => {
+        circleIds.add(getCircleRefFromCheckInRef(snapshot.ref).circleRef.id);
+    });
+    ownedCircleIds.forEach(circleId => circleIds.delete(circleId));
+    return circleIds;
+}
+async function deleteCircleFeedItemsForUser(circleId, uid) {
+    const feedItemsRef = firebase_1.db
+        .collection('circles')
+        .doc(circleId)
+        .collection('feedItems');
+    const [actorSnapshots, targetSnapshots] = await Promise.all([
+        feedItemsRef.where('actor.uid', '==', uid).get(),
+        feedItemsRef.where('targetActor.uid', '==', uid).get(),
+    ]);
+    const refs = new Map();
+    [...actorSnapshots.docs, ...targetSnapshots.docs].forEach(snapshot => {
+        refs.set(snapshot.ref.path, snapshot.ref);
+    });
+    await deleteDocumentRefsInBatches(Array.from(refs.values()));
+}
+async function cleanNonOwnedCircleHistory(uid, circleIds) {
+    for (const circleId of circleIds) {
+        await Promise.all([
+            (0, momentum_1.removeMemberFromAllCircleOpportunities)({ circleId, uid }),
+            deleteCircleFeedItemsForUser(circleId, uid),
+        ]);
+    }
+}
 async function deleteNonOwnedMemberships(uid, ownedCircleIds) {
     const memberSnapshots = await firebase_1.db
         .collectionGroup('members')
@@ -161,16 +211,40 @@ async function deleteJoinRequests(uid, ownedCircleIds) {
         }
     }
 }
+async function deleteMembershipHistory(uid, ownedCircleIds) {
+    const historySnapshots = await firebase_1.db
+        .collectionGroup('membershipHistory')
+        .where('uid', '==', uid)
+        .get();
+    for (const historySnapshot of historySnapshots.docs) {
+        const circleRef = getParentDocument(historySnapshot.ref, 'membership history');
+        if (!ownedCircleIds.has(circleRef.id)) {
+            await firebase_1.db.recursiveDelete(historySnapshot.ref);
+        }
+    }
+}
 async function deleteNonOwnedCheckIns(uid, ownedCircleIds) {
     const checkInSnapshots = await firebase_1.db
         .collectionGroup('checkIns')
         .where('uid', '==', uid)
         .get();
-    for (const checkInSnapshot of checkInSnapshots.docs) {
+    const records = checkInSnapshots.docs.flatMap(checkInSnapshot => {
         const { circleRef, dayRef } = getCircleRefFromCheckInRef(checkInSnapshot.ref);
-        if (ownedCircleIds.has(circleRef.id)) {
-            continue;
-        }
+        return ownedCircleIds.has(circleRef.id)
+            ? []
+            : [{ checkInSnapshot, circleRef, dayRef }];
+    });
+    for (let index = 0; index < records.length; index += 400) {
+        const batch = firebase_1.db.batch();
+        records.slice(index, index + 400).forEach(({ checkInSnapshot }) => {
+            batch.set(checkInSnapshot.ref, {
+                deletionReason: 'account',
+                deletionRequestedAt: firestore_1.FieldValue.serverTimestamp(),
+            }, { merge: true });
+        });
+        await batch.commit();
+    }
+    for (const { checkInSnapshot, circleRef, dayRef } of records) {
         const checkIn = checkInSnapshot.data();
         const batch = firebase_1.db.batch();
         batch.delete(checkInSnapshot.ref);
@@ -202,7 +276,6 @@ async function deleteAccountDocuments(uid) {
     const handleRefs = new Map();
     const batch = firebase_1.db.batch();
     batch.delete(userRef);
-    batch.delete(userPrivateRef);
     if (typeof handle === 'string' && handle.trim()) {
         const handleRef = firebase_1.db.collection('handles').doc(handle);
         handleRefs.set(handleRef.path, handleRef);
@@ -215,6 +288,7 @@ async function deleteAccountDocuments(uid) {
     });
     await Promise.all([
         batch.commit(),
+        firebase_1.db.recursiveDelete(userPrivateRef),
         deleteStoragePrefix(`users/${uid}/avatar/`),
     ]);
 }
@@ -307,6 +381,12 @@ exports.completeProfile = (0, https_1.onCall)(async (request) => {
             (starterCircleDecision === 'create' || starterCircleDecision === 'repair')) {
             const circleRef = firebase_1.db.collection('circles').doc();
             const memberRef = circleRef.collection('members').doc(uid);
+            const membershipHistoryRef = circleRef
+                .collection('membershipHistory')
+                .doc(uid);
+            const membershipPeriodRef = membershipHistoryRef
+                .collection('periods')
+                .doc('initial');
             const publicIndexRef = firebase_1.db
                 .collection('publicCircleIndex')
                 .doc(circleRef.id);
@@ -361,8 +441,27 @@ exports.completeProfile = (0, https_1.onCall)(async (request) => {
                 displayName: profileData.displayName,
                 handle: profileData.handle,
                 joinedAt: now,
+                membershipPeriodId: membershipPeriodRef.id,
+                opportunityEligibility: 'include_current',
                 role: 'owner',
                 status: 'active',
+                uid,
+            });
+            transaction.set(membershipHistoryRef, {
+                currentPeriodId: membershipPeriodRef.id,
+                firstJoinedAt: now,
+                lastJoinedAt: now,
+                lastRole: 'owner',
+                status: 'active',
+                uid,
+                updatedAt: now,
+            });
+            transaction.set(membershipPeriodRef, {
+                circleId: circleRef.id,
+                joinedAt: now,
+                opportunityEligibility: 'include_current',
+                periodId: membershipPeriodRef.id,
+                role: 'owner',
                 uid,
             });
             if (!isPersonal && privacy === 'public') {
@@ -446,6 +545,9 @@ exports.completeProfile = (0, https_1.onCall)(async (request) => {
             updatedAt: now,
         }, { merge: true });
     });
+    if (starterCircle?.circleId) {
+        await (0, momentum_1.materializeCurrentCircleOpportunities)(starterCircle.circleId).catch(error => console.error('materialize_onboarding_circle_opportunities_failed', error));
+    }
     return { handle: input.handle, starterCircle, uid };
 });
 exports.deleteAccount = (0, https_1.onCall)(async (request) => {
@@ -455,7 +557,10 @@ exports.deleteAccount = (0, https_1.onCall)(async (request) => {
         .where('ownerId', '==', uid)
         .get();
     const ownedCircleIds = new Set(ownedCircleSnapshots.docs.map(snapshot => snapshot.id));
+    const nonOwnedCircleIds = await collectNonOwnedCircleIds(uid, ownedCircleIds);
+    await cleanNonOwnedCircleHistory(uid, nonOwnedCircleIds);
     await deleteNonOwnedMemberships(uid, ownedCircleIds);
+    await deleteMembershipHistory(uid, ownedCircleIds);
     await deleteJoinRequests(uid, ownedCircleIds);
     await deleteNonOwnedCheckIns(uid, ownedCircleIds);
     await deleteOwnedCircles(ownedCircleIds);

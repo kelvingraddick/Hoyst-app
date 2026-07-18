@@ -71,12 +71,15 @@ export type CommitmentSchedule = {
 export type MomentumSummary = {
   availableOpportunities: number;
   bestStreak: number;
+  creditedOpportunities: number;
   completedOpportunities: number;
   currentStreak: number;
   label: string;
   percentage: number;
   periodKey: string;
+  skippedOpportunities: number;
   status: MomentumStatus;
+  tapInOpportunities: number;
 };
 
 export type Opportunity = {

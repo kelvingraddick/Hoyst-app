@@ -39,12 +39,15 @@ export type MomentumOpportunity = {
 export type MomentumSummary = {
   availableOpportunities: number;
   bestStreak: number;
+  creditedOpportunities: number;
   completedOpportunities: number;
   currentStreak: number;
   label: string;
   percentage: number;
   periodKey: string;
+  skippedOpportunities: number;
   status: MomentumStatus;
+  tapInOpportunities: number;
 };
 
 type CommitmentLike = {
@@ -80,11 +83,9 @@ function getLocalDateParts(timezone: string, now = new Date()) {
 export function getDateKey(timezone: string, now = new Date()) {
   const local = getLocalDateParts(timezone, now);
 
-  return [
-    local.year,
-    padDatePart(local.month),
-    padDatePart(local.day),
-  ].join('-');
+  return [local.year, padDatePart(local.month), padDatePart(local.day)].join(
+    '-',
+  );
 }
 
 function parseDateKey(dateKey: string) {
@@ -122,9 +123,7 @@ function getWeekStartDateKey(timezone: string, now = new Date()) {
     Tue: 1,
     Wed: 2,
   };
-  const localDate = new Date(
-    Date.UTC(local.year, local.month - 1, local.day),
-  );
+  const localDate = new Date(Date.UTC(local.year, local.month - 1, local.day));
   localDate.setUTCDate(
     localDate.getUTCDate() - (dayOffsetByWeekday[local.weekday] ?? 0),
   );
@@ -140,11 +139,7 @@ function getPeriodShape(schedule: CommitmentSchedule, now = new Date()) {
 
   if (schedule.cadence === 'monthly') {
     const local = getLocalDateParts(schedule.timezone, now);
-    const startDateKey = [
-      local.year,
-      padDatePart(local.month),
-      '01',
-    ].join('-');
+    const startDateKey = [local.year, padDatePart(local.month), '01'].join('-');
 
     return {
       dayCount: getDaysInMonth(local.year, local.month),
@@ -221,7 +216,10 @@ export function getOpportunitySlots(
   now = new Date(),
 ): OpportunitySlot[] {
   const period = getPeriodShape(schedule, now);
-  const offsets = getSlotOffsets(period.dayCount, schedule.opportunitiesPerPeriod);
+  const offsets = getSlotOffsets(
+    period.dayCount,
+    schedule.opportunitiesPerPeriod,
+  );
 
   return offsets.map((offset, index) => {
     const availableDateKey = addDays(period.startDateKey, offset);
@@ -310,13 +308,45 @@ export function calculateMomentumSummary({
   const availableOpportunities = opportunities.filter(
     opportunity => opportunity.status !== 'upcoming',
   ).length;
-  const completedOpportunities = opportunities.filter(
+  const tapInOpportunities = opportunities.filter(
     opportunity => opportunity.status === 'completed',
   ).length;
+  const skippedOpportunities = opportunities.filter(
+    opportunity => opportunity.status === 'skipped',
+  ).length;
+  const creditedOpportunities = tapInOpportunities + skippedOpportunities;
   const percentage =
     availableOpportunities > 0
-      ? Math.round((completedOpportunities / availableOpportunities) * 100)
+      ? Math.round((creditedOpportunities / availableOpportunities) * 100)
       : 0;
+  const {bestStreak, currentStreak} = calculateMomentumStreaks({
+    opportunities,
+    priorBestStreak,
+  });
+  const status = getMomentumStatus(percentage);
+
+  return {
+    availableOpportunities,
+    bestStreak,
+    creditedOpportunities,
+    completedOpportunities: creditedOpportunities,
+    currentStreak,
+    label: getMomentumLabel(status),
+    percentage,
+    periodKey,
+    skippedOpportunities,
+    status,
+    tapInOpportunities,
+  };
+}
+
+export function calculateMomentumStreaks({
+  opportunities,
+  priorBestStreak = 0,
+}: {
+  opportunities: MomentumOpportunity[];
+  priorBestStreak?: number;
+}) {
   let currentStreak = 0;
   let bestStreak = priorBestStreak;
 
@@ -330,29 +360,19 @@ export function calculateMomentumSummary({
       return dateDelta !== 0 ? dateDelta : left.slotIndex - right.slotIndex;
     })
     .forEach(opportunity => {
-      if (opportunity.status === 'completed') {
+      if (
+        opportunity.status === 'completed' ||
+        opportunity.status === 'skipped'
+      ) {
         currentStreak += 1;
         bestStreak = Math.max(bestStreak, currentStreak);
         return;
       }
 
-      if (
-        opportunity.status === 'missed' ||
-        opportunity.status === 'expired'
-      ) {
+      if (opportunity.status === 'missed' || opportunity.status === 'expired') {
         currentStreak = 0;
       }
     });
-  const status = getMomentumStatus(percentage);
 
-  return {
-    availableOpportunities,
-    bestStreak,
-    completedOpportunities,
-    currentStreak,
-    label: getMomentumLabel(status),
-    percentage,
-    periodKey,
-    status,
-  };
+  return {bestStreak, currentStreak};
 }

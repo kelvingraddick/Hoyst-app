@@ -26,7 +26,7 @@ service firebase.storage {
     }
 
     match /circles/{circleId}/check-ins/{dateKey}/{uid}/{fileName} {
-      allow read: if isActiveMember(circleId);
+      allow read: if isSelf(uid) || isActiveMember(circleId);
       allow write: if isSelf(uid) &&
         isActiveMember(circleId) &&
         request.resource.size < 10 * 1024 * 1024;

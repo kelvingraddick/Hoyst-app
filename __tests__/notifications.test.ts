@@ -83,6 +83,7 @@ import {
   getJoinRequestNotificationDedupeKey,
   getNudgeNotificationDedupeKey,
   getNotificationPreferenceEnabled,
+  getOpportunityReminderSlots,
   getReminderEligibility,
   getRoutineNotificationEligibility,
   getSameDayImmediateCoverageCircleIds,
@@ -449,6 +450,59 @@ describe('evening activity recap', () => {
 });
 
 describe('notification reminder eligibility', () => {
+  it('uses opening day for midday and expiry day for final reminders', () => {
+    const slots = [
+      {
+        availableDateKey: '2026-07-01',
+        expiresDateKey: '2026-07-03',
+        periodKey: '2026-06-29',
+        slotIndex: 0,
+      },
+      {
+        availableDateKey: '2026-07-04',
+        expiresDateKey: '2026-07-04',
+        periodKey: '2026-06-29',
+        slotIndex: 1,
+      },
+    ];
+
+    expect(
+      getOpportunityReminderSlots({
+        dateKey: '2026-07-01',
+        kind: 'midday',
+        slots,
+      }),
+    ).toEqual([slots[0]]);
+    expect(
+      getOpportunityReminderSlots({
+        dateKey: '2026-07-02',
+        kind: 'midday',
+        slots,
+      }),
+    ).toEqual([]);
+    expect(
+      getOpportunityReminderSlots({
+        dateKey: '2026-07-03',
+        kind: 'final',
+        slots,
+      }),
+    ).toEqual([slots[0]]);
+    expect(
+      getOpportunityReminderSlots({
+        dateKey: '2026-07-04',
+        kind: 'midday',
+        slots,
+      }),
+    ).toEqual([slots[1]]);
+    expect(
+      getOpportunityReminderSlots({
+        dateKey: '2026-07-04',
+        kind: 'final',
+        slots,
+      }),
+    ).toEqual([slots[1]]);
+  });
+
   it('keeps one due circle pointed at the Tap In composer', () => {
     expect(
       buildTapInReminderNotification({
@@ -507,6 +561,62 @@ describe('notification reminder eligibility', () => {
     });
   });
 
+  it('includes period and slot identity in multi-day reminder dedupe keys', () => {
+    expect(
+      getReminderEligibility({
+        cadence: 'weekly',
+        circleId: 'circle-1',
+        dateKey: '2026-07-02',
+        kind: 'midday',
+        memberStatus: 'active',
+        notificationSettings: {tapInReminders: true},
+        periodKey: '2026-06-29',
+        slotIndex: 1,
+        uid: 'user-1',
+      }),
+    ).toMatchObject({
+      dedupeKey: 'tap_in_midday_circle-1_2026-06-29_1_user-1',
+      eligible: true,
+    });
+
+    const first = buildTapInReminderNotification({
+      dateKey: '2026-07-02',
+      kind: 'midday',
+      reminders: [
+        {
+          circleId: 'circle-1',
+          circleTitle: 'Weekly One',
+          opportunityKey: 'circle-1_2026-06-29_1',
+        },
+        {
+          circleId: 'circle-2',
+          circleTitle: 'Weekly Two',
+          opportunityKey: 'circle-2_2026-06-29_0',
+        },
+      ],
+      uid: 'user-1',
+    });
+    const laterSlot = buildTapInReminderNotification({
+      dateKey: '2026-07-02',
+      kind: 'midday',
+      reminders: [
+        {
+          circleId: 'circle-1',
+          circleTitle: 'Weekly One',
+          opportunityKey: 'circle-1_2026-06-29_2',
+        },
+        {
+          circleId: 'circle-2',
+          circleTitle: 'Weekly Two',
+          opportunityKey: 'circle-2_2026-06-29_0',
+        },
+      ],
+      uid: 'user-1',
+    });
+
+    expect(first?.dedupeKey).not.toBe(laterSlot?.dedupeKey);
+  });
+
   it('allows active members with due Tap Ins and enabled reminders', () => {
     expect(
       getReminderEligibility({
@@ -558,6 +668,17 @@ describe('notification reminder eligibility', () => {
         kind: 'midday',
         memberStatus: 'active',
         todayStatus: 'skip',
+        uid: 'user-1',
+      }),
+    ).toMatchObject({eligible: false, reason: 'already-covered'});
+
+    expect(
+      getReminderEligibility({
+        circleId: 'circle-1',
+        dateKey: '2026-05-13',
+        kind: 'final',
+        memberStatus: 'active',
+        opportunityStatus: 'skipped',
         uid: 'user-1',
       }),
     ).toMatchObject({eligible: false, reason: 'already-covered'});

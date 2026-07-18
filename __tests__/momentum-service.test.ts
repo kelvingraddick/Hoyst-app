@@ -41,19 +41,22 @@ describe('momentum summary fallback', () => {
     expect(getMomentumLabel('strong_momentum')).toBe('Strong');
   });
 
-  it('formats opportunity progress as done copy', () => {
+  it('formats opportunity progress as covered copy', () => {
     expect(
       formatOpportunityCount({
         availableOpportunities: 4,
         bestStreak: 0,
+        creditedOpportunities: 2,
         completedOpportunities: 2,
         currentStreak: 0,
         label: 'Strong',
         percentage: 50,
         periodKey: 'current',
+        skippedOpportunities: 1,
         status: 'strong_momentum',
+        tapInOpportunities: 1,
       }),
-    ).toBe('2 of 4 opportunities done');
+    ).toBe('2 of 4 opportunities covered');
   });
 
   it('counts partial weekly Tap Ins as completed scheduled opportunities', () => {
@@ -115,7 +118,7 @@ describe('momentum summary fallback', () => {
     });
   });
 
-  it('does not count a skipped opportunity as completed', () => {
+  it('counts a skipped opportunity as credited coverage', () => {
     const summary = buildMomentumSummaryFromHomeData({
       circles: [
         circle({
@@ -130,8 +133,10 @@ describe('momentum summary fallback', () => {
 
     expect(summary).toMatchObject({
       availableOpportunities: 1,
-      completedOpportunities: 0,
-      percentage: 0,
+      completedOpportunities: 1,
+      creditedOpportunities: 1,
+      skippedOpportunities: 1,
+      percentage: 100,
     });
   });
 

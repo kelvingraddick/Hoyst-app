@@ -59,6 +59,7 @@ import {
   buildTapInMomentumPreview,
   getTapInMomentumPreview,
   recordTapInOpportunity,
+  removeUidFromCircleSlotAggregate,
   removeTapInOpportunity,
 } from '../functions/src/momentum';
 import {
@@ -119,7 +120,7 @@ function createReadBeforeWriteTransaction(
 
       return snapshot(nextSnapshot);
     }),
-    set: jest.fn((ref: Ref) => {
+    set: jest.fn((ref: Ref, _data?: unknown, _options?: unknown) => {
       hasWritten = true;
       calls.push(`set:${ref.path}`);
     }),
@@ -162,6 +163,29 @@ const profile = {
 };
 
 describe('momentum transaction ordering', () => {
+  it('removes a deleted account from every canonical slot outcome', () => {
+    expect(
+      removeUidFromCircleSlotAggregate(
+        {
+          completedMemberUids: ['user-1', 'user-2'],
+          coveredMemberUids: ['user-1', 'user-2'],
+          expectedMemberUids: ['user-1', 'user-2'],
+          skippedMemberUids: ['user-1'],
+        },
+        'user-1',
+      ),
+    ).toEqual({
+      completedMemberCount: 1,
+      completedMemberUids: ['user-2'],
+      coveredMemberCount: 1,
+      coveredMemberUids: ['user-2'],
+      expectedMemberCount: 1,
+      expectedMemberUids: ['user-2'],
+      skippedMemberCount: 0,
+      skippedMemberUids: [],
+    });
+  });
+
   it('previews the post-submit momentum streak without writing', () => {
     const dateKey = '2026-05-29';
 
@@ -232,6 +256,7 @@ describe('momentum transaction ordering', () => {
         circle,
         circleId: 'circle-1',
         dateKey,
+        member: {status: 'active'},
         status: 'done',
         transaction: transaction as never,
         uid: 'user-1',
@@ -250,13 +275,15 @@ describe('momentum transaction ordering', () => {
 
   it('records Tap In opportunity reads before transaction writes', async () => {
     const {calls, transaction} = createReadBeforeWriteTransaction();
+    const dateKey = getDateKey('UTC');
 
     await expect(
       recordTapInOpportunity({
         checkInId: 'user-1',
         circle,
         circleId: 'circle-1',
-        dateKey: '9999-12-31',
+        dateKey,
+        member: {status: 'active'},
         memberCount: 1,
         profile,
         status: 'done',
@@ -267,6 +294,103 @@ describe('momentum transaction ordering', () => {
 
     expectReadsBeforeWrites(calls);
   });
+
+  it.each([
+    {
+      nextCheckInStatus: 'skip' as const,
+      nextOpportunityStatus: 'skipped',
+      priorOpportunityStatus: 'completed',
+    },
+    {
+      nextCheckInStatus: 'done' as const,
+      nextOpportunityStatus: 'completed',
+      priorOpportunityStatus: 'skipped',
+    },
+  ])(
+    'reconciles a covered $priorOpportunityStatus opportunity to $nextOpportunityStatus',
+    async ({
+      nextCheckInStatus,
+      nextOpportunityStatus,
+      priorOpportunityStatus,
+    }) => {
+      const dateKey = getDateKey('UTC');
+      const opportunityPath = `userPrivate/user-1/opportunities/circle-1_${dateKey}_0`;
+      const periodPath = `circles/circle-1/opportunities/${dateKey}`;
+      const slotPath = `${periodPath}/slots/0`;
+      const wasCompleted = priorOpportunityStatus === 'completed';
+      const snapshots = new Map<string, SnapshotData>([
+        [
+          opportunityPath,
+          {
+            completionDateKey: dateKey,
+            slotIndex: 0,
+            status: priorOpportunityStatus,
+          },
+        ],
+        [
+          periodPath,
+          {
+            completedOpportunityCount: wasCompleted ? 1 : 0,
+            coveredOpportunityCount: 1,
+            expectedOpportunityCount: 1,
+            skippedOpportunityCount: wasCompleted ? 0 : 1,
+          },
+        ],
+        [
+          slotPath,
+          {
+            completedMemberUids: wasCompleted ? ['user-1'] : [],
+            coveredMemberUids: ['user-1'],
+            expectedMemberUids: ['user-1'],
+            skippedMemberUids: wasCompleted ? [] : ['user-1'],
+          },
+        ],
+      ]);
+      const {calls, transaction} = createReadBeforeWriteTransaction(snapshots);
+
+      await recordTapInOpportunity({
+        checkInId: 'user-1',
+        circle,
+        circleId: 'circle-1',
+        dateKey,
+        member: {status: 'active'},
+        memberCount: 1,
+        profile,
+        status: nextCheckInStatus,
+        transaction: transaction as never,
+        uid: 'user-1',
+      });
+
+      expectReadsBeforeWrites(calls);
+      const opportunityWrite = transaction.set.mock.calls.find(
+        ([ref]) => (ref as Ref).path === opportunityPath,
+      );
+      const slotWrite = transaction.set.mock.calls.find(
+        ([ref]) => (ref as Ref).path === slotPath,
+      );
+      const periodWrite = transaction.set.mock.calls.find(
+        ([ref]) => (ref as Ref).path === periodPath,
+      );
+
+      expect(opportunityWrite?.[1]).toEqual(
+        expect.objectContaining({status: nextOpportunityStatus}),
+      );
+      expect(slotWrite?.[1]).toEqual(
+        expect.objectContaining({
+          completedMemberCount: nextCheckInStatus === 'done' ? 1 : 0,
+          coveredMemberCount: 1,
+          skippedMemberCount: nextCheckInStatus === 'skip' ? 1 : 0,
+        }),
+      );
+      expect(periodWrite?.[1]).toEqual(
+        expect.objectContaining({
+          completedOpportunityCount: nextCheckInStatus === 'done' ? 1 : 0,
+          coveredOpportunityCount: 1,
+          skippedOpportunityCount: nextCheckInStatus === 'skip' ? 1 : 0,
+        }),
+      );
+    },
+  );
 
   it('does not overwrite momentum opportunities after the period target is covered', async () => {
     const slots = getOpportunitySlots(
@@ -290,6 +414,7 @@ describe('momentum transaction ordering', () => {
         circle: weeklyCircle,
         circleId: 'circle-1',
         dateKey: '9999-12-31',
+        member: {status: 'active'},
         memberCount: 1,
         profile,
         status: 'done',

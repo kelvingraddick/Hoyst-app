@@ -1,5 +1,11 @@
 import {getRemoveTapInDecision} from '../functions/src/checkins/remove';
 import {
+  getCreditedOutcomeStatus,
+  getNextCoverageRevision,
+  isCoveredOutcomeChange,
+  shouldRetainCorrectedMetricEffect,
+} from '../functions/src/checkins/reconciliation';
+import {
   getCircleCompleteNotificationTargets,
   getCompanionTapInNotificationTargets,
 } from '../functions/src/checkins/notification-plan';
@@ -107,6 +113,101 @@ describe('remove Tap In decision', () => {
         checkInStatus: 'done',
       }),
     ).toThrow('Join this circle first.');
+  });
+});
+
+describe('Tap In reconciliation revisions', () => {
+  it('detects covered Tap In and Skip outcome replacements', () => {
+    expect(getCreditedOutcomeStatus({status: 'done'})).toBe('done');
+    expect(getCreditedOutcomeStatus({coverageStatus: 'skipped'})).toBe('skip');
+    expect(
+      isCoveredOutcomeChange({
+        existingCheckIn: {coverageStatus: 'covered', status: 'done'},
+        nextStatus: 'skip',
+      }),
+    ).toBe(true);
+    expect(
+      isCoveredOutcomeChange({
+        existingCheckIn: {coverageStatus: 'skipped', status: 'skip'},
+        nextStatus: 'done',
+      }),
+    ).toBe(true);
+    expect(
+      isCoveredOutcomeChange({
+        existingCheckIn: {coverageStatus: 'covered', status: 'done'},
+        nextStatus: 'done',
+      }),
+    ).toBe(false);
+  });
+
+  it('increments only when coverage is newly earned', () => {
+    expect(
+      getNextCoverageRevision({
+        existingCovered: false,
+        existingRevision: 0,
+        nextCovered: true,
+      }),
+    ).toBe(1);
+    expect(
+      getNextCoverageRevision({
+        existingCovered: true,
+        existingRevision: 1,
+        nextCovered: true,
+      }),
+    ).toBe(1);
+  });
+
+  it('continues from the private ledger after a covered Tap In is deleted', () => {
+    expect(
+      getNextCoverageRevision({
+        existingCovered: false,
+        ledgerRevision: 2,
+        nextCovered: true,
+      }),
+    ).toBe(3);
+    expect(
+      getNextCoverageRevision({
+        existingCovered: false,
+        ledgerRevision: 2,
+        nextCovered: false,
+      }),
+    ).toBe(2);
+  });
+
+  it('retains only milestone effects that still qualify after correction', () => {
+    expect(
+      shouldRetainCorrectedMetricEffect({
+        bestStreak: 8,
+        currentStreak: 7,
+        effectId: 'companion_streak_milestone_7-day-streak_user-1',
+        type: 'companion_streak_milestone',
+      }),
+    ).toBe(true);
+    expect(
+      shouldRetainCorrectedMetricEffect({
+        bestStreak: 8,
+        currentStreak: 6,
+        effectId: 'companion_streak_milestone_7-day-streak_user-1',
+        type: 'companion_streak_milestone',
+      }),
+    ).toBe(false);
+    expect(
+      shouldRetainCorrectedMetricEffect({
+        bestStreak: 10,
+        currentStreak: 2,
+        effectId: 'companion_achievement_unlocked_10-day-streak_user-1',
+        type: 'companion_achievement_unlocked',
+      }),
+    ).toBe(true);
+    expect(
+      shouldRetainCorrectedMetricEffect({
+        bestStreak: 4,
+        currentStreak: 1,
+        effectId: 'companion_momentum_level_up_strong_momentum_user-1',
+        momentumStatus: 'building_momentum',
+        type: 'companion_momentum_level_up',
+      }),
+    ).toBe(false);
   });
 });
 

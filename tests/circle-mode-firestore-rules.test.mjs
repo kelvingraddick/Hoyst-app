@@ -7,6 +7,7 @@ import {
   initializeTestEnvironment,
 } from '@firebase/rules-unit-testing';
 import {doc, getDoc, setDoc} from 'firebase/firestore';
+import {getBytes, ref as storageRef, uploadBytes} from 'firebase/storage';
 
 describe('circle mode Firestore rules', () => {
   let testEnvironment;
@@ -19,7 +20,13 @@ describe('circle mode Firestore rules', () => {
           'utf8',
         ),
       },
-      projectId: 'hoyst-circle-mode-rules',
+      storage: {
+        rules: readFileSync(
+          new URL('../storage.rules', import.meta.url),
+          'utf8',
+        ),
+      },
+      projectId: 'hoyst-firebase-app',
     });
   });
 
@@ -77,6 +84,74 @@ describe('circle mode Firestore rules', () => {
           circleMode: 'personal',
           title: 'Read every day',
         }),
+        setDoc(doc(firestore, 'circles/past-private'), {
+          circleMode: 'group',
+          privacy: 'private',
+          title: 'Past private circle',
+        }),
+        setDoc(doc(firestore, 'circles/past-private/members/current-1'), {
+          status: 'active',
+          uid: 'current-1',
+        }),
+        setDoc(
+          doc(firestore, 'circles/past-private/membershipHistory/former-1'),
+          {status: 'past', uid: 'former-1'},
+        ),
+        setDoc(
+          doc(
+            firestore,
+            'circles/past-private/membershipHistory/former-1/periods/period-1',
+          ),
+          {circleId: 'past-private', uid: 'former-1'},
+        ),
+        setDoc(doc(firestore, 'circles/past-private/days/2026-07-01'), {
+          checkInCount: 2,
+        }),
+        setDoc(
+          doc(
+            firestore,
+            'circles/past-private/days/2026-07-01/checkIns/former-1',
+          ),
+          {circleId: 'past-private', status: 'done', uid: 'former-1'},
+        ),
+        setDoc(
+          doc(
+            firestore,
+            'circles/past-private/days/2026-07-01/checkIns/current-1',
+          ),
+          {circleId: 'past-private', status: 'done', uid: 'current-1'},
+        ),
+        setDoc(doc(firestore, 'circles/past-private/feedItems/activity-1'), {
+          text: 'Private activity',
+        }),
+        setDoc(
+          doc(firestore, 'circles/past-private/opportunities/2026-07-01'),
+          {coveredOpportunityCount: 1},
+        ),
+        setDoc(
+          doc(firestore, 'userPrivate/former-1/pastCircles/past-private'),
+          {
+            circleId: 'past-private',
+            title: 'Past private circle',
+          },
+        ),
+      ]);
+
+      await Promise.all([
+        uploadBytes(
+          storageRef(
+            context.storage(),
+            'circles/past-private/check-ins/2026-07-01/former-1/photo.jpg',
+          ),
+          new Uint8Array([1, 2, 3]),
+        ),
+        uploadBytes(
+          storageRef(
+            context.storage(),
+            'circles/past-private/check-ins/2026-07-01/current-1/photo.jpg',
+          ),
+          new Uint8Array([4, 5, 6]),
+        ),
       ]);
     });
   });
@@ -122,5 +197,72 @@ describe('circle mode Firestore rules', () => {
     await assertSucceeds(
       getDoc(doc(firestore, 'circles/legacy-group/threadReads/user-1')),
     );
+  });
+
+  it('limits former members to their private Past Circle history', async () => {
+    const firestore = testEnvironment
+      .authenticatedContext('former-1')
+      .firestore();
+
+    await assertSucceeds(
+      getDoc(doc(firestore, 'userPrivate/former-1/pastCircles/past-private')),
+    );
+    await assertSucceeds(
+      getDoc(doc(firestore, 'circles/past-private/membershipHistory/former-1')),
+    );
+    await assertSucceeds(
+      getDoc(
+        doc(
+          firestore,
+          'circles/past-private/membershipHistory/former-1/periods/period-1',
+        ),
+      ),
+    );
+    await assertSucceeds(
+      getDoc(
+        doc(
+          firestore,
+          'circles/past-private/days/2026-07-01/checkIns/former-1',
+        ),
+      ),
+    );
+    await assertFails(getDoc(doc(firestore, 'circles/past-private')));
+    await assertFails(
+      getDoc(
+        doc(
+          firestore,
+          'circles/past-private/days/2026-07-01/checkIns/current-1',
+        ),
+      ),
+    );
+    await assertFails(
+      getDoc(doc(firestore, 'circles/past-private/feedItems/activity-1')),
+    );
+    await assertFails(
+      getDoc(doc(firestore, 'circles/past-private/opportunities/2026-07-01')),
+    );
+  });
+
+  it('lets a former member read their own retained media only', async () => {
+    const formerStorage = testEnvironment
+      .authenticatedContext('former-1')
+      .storage();
+    const formerPhotoPath =
+      'circles/past-private/check-ins/2026-07-01/former-1/photo.jpg';
+    const currentPhotoPath =
+      'circles/past-private/check-ins/2026-07-01/current-1/photo.jpg';
+
+    await assertSucceeds(getBytes(storageRef(formerStorage, formerPhotoPath)));
+    await assertFails(getBytes(storageRef(formerStorage, currentPhotoPath)));
+  });
+
+  it('lets remaining active members read retained former-member media', async () => {
+    const activeStorage = testEnvironment
+      .authenticatedContext('current-1')
+      .storage();
+    const formerPhotoPath =
+      'circles/past-private/check-ins/2026-07-01/former-1/photo.jpg';
+
+    await assertSucceeds(getBytes(storageRef(activeStorage, formerPhotoPath)));
   });
 });

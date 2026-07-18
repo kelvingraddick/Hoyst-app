@@ -9,6 +9,7 @@ const zod_1 = require("zod");
 const firebase_1 = require("../firebase");
 const grace_1 = require("./grace");
 const remove_1 = require("./remove");
+const reconciliation_1 = require("./reconciliation");
 const momentum_1 = require("../momentum");
 const notifications_1 = require("../notifications");
 const commitments_1 = require("../shared/commitments");
@@ -26,6 +27,166 @@ const removeTapInSchema = zod_1.z.object({
     circleId: zod_1.z.string().trim().min(1),
     idToken: zod_1.z.string().trim().min(1).optional(),
 });
+function getCheckInEffectSourceKey(circleId, dateKey, uid) {
+    return `check_in:${circleId}:${dateKey}:${uid}`;
+}
+async function deleteSnapshotsInBatches(snapshots) {
+    for (let index = 0; index < snapshots.length; index += 400) {
+        const batch = firebase_1.db.batch();
+        snapshots.slice(index, index + 400).forEach(snapshot => {
+            batch.delete(snapshot.ref);
+        });
+        await batch.commit();
+    }
+}
+async function retractTapInEffects({ accountDeletion = false, circleId, dateKey, uid, }) {
+    const circleRef = firebase_1.db.collection('circles').doc(circleId);
+    const sourceKey = getCheckInEffectSourceKey(circleId, dateKey, uid);
+    const streakPrefix = `streak_${dateKey}_${uid}_`;
+    const effectRef = circleRef
+        .collection('checkInEffects')
+        .doc(`${dateKey}_${uid}`);
+    const [effectSnapshot, sourceInboxSnapshots, streakSnapshots] = await Promise.all([
+        effectRef.get(),
+        firebase_1.db.collectionGroup('inbox').where('sourceKey', '==', sourceKey).get(),
+        circleRef
+            .collection('feedItems')
+            .where(firestore_1.FieldPath.documentId(), '>=', streakPrefix)
+            .where(firestore_1.FieldPath.documentId(), '<', `${streakPrefix}\uf8ff`)
+            .get(),
+    ]);
+    const coverageRevision = typeof effectSnapshot.data()?.coverageRevision === 'number'
+        ? effectSnapshot.data()?.coverageRevision
+        : 1;
+    const momentumSummary = accountDeletion
+        ? undefined
+        : await (0, momentum_1.recalculateMomentumSummaryForUser)(uid);
+    const retainedInboxSnapshots = momentumSummary
+        ? sourceInboxSnapshots.docs.filter(snapshot => (0, reconciliation_1.shouldRetainCorrectedMetricEffect)({
+            bestStreak: momentumSummary.bestStreak,
+            currentStreak: momentumSummary.currentStreak,
+            effectId: snapshot.id,
+            momentumStatus: momentumSummary.status,
+            type: snapshot.data().type,
+        }))
+        : [];
+    const retainedInboxIds = new Set(retainedInboxSnapshots.map(snapshot => snapshot.id));
+    const removableInboxSnapshots = sourceInboxSnapshots.docs.filter(snapshot => !retainedInboxIds.has(snapshot.id));
+    const retainedStreakSnapshots = momentumSummary
+        ? streakSnapshots.docs.filter(snapshot => (0, reconciliation_1.shouldRetainCorrectedMetricEffect)({
+            bestStreak: momentumSummary.bestStreak,
+            currentStreak: momentumSummary.currentStreak,
+            effectId: snapshot.id,
+            momentumStatus: momentumSummary.status,
+            type: 'streak_milestone',
+        }))
+        : [];
+    const retainedStreakIds = new Set(retainedStreakSnapshots.map(snapshot => snapshot.id));
+    const removableStreakSnapshots = streakSnapshots.docs.filter(snapshot => !retainedStreakIds.has(snapshot.id));
+    const retainedMetricEventIds = [
+        ...retainedInboxSnapshots.map(snapshot => snapshot.id),
+        ...retainedStreakSnapshots.map(snapshot => snapshot.id),
+    ];
+    await Promise.all([
+        circleRef.collection('feedItems').doc(`tap_in_${dateKey}_${uid}`).delete(),
+        deleteSnapshotsInBatches(removableInboxSnapshots),
+        deleteSnapshotsInBatches(removableStreakSnapshots),
+    ]);
+    if (accountDeletion) {
+        await firebase_1.db.recursiveDelete(effectRef);
+        return;
+    }
+    await Promise.all([
+        effectRef.set({
+            active: false,
+            retractedAt: firestore_1.FieldValue.serverTimestamp(),
+            retainedMetricEventIds,
+            sourceKey,
+            updatedAt: firestore_1.FieldValue.serverTimestamp(),
+        }, { merge: true }),
+        effectRef.collection('revisions').doc(String(coverageRevision)).set({
+            active: false,
+            retractedAt: firestore_1.FieldValue.serverTimestamp(),
+            retainedMetricEventIds,
+            sourceKey,
+            status: 'retracted',
+            updatedAt: firestore_1.FieldValue.serverTimestamp(),
+        }, { merge: true }),
+    ]);
+}
+async function updateCoveredTapInActivity({ checkIn, circleId, dateKey, uid, }) {
+    const circleRef = firebase_1.db.collection('circles').doc(circleId);
+    const activityId = `tap_in_${dateKey}_${uid}`;
+    const activityRef = circleRef.collection('feedItems').doc(activityId);
+    const effectRef = circleRef
+        .collection('checkInEffects')
+        .doc(`${dateKey}_${uid}`);
+    const [circleSnapshot, activitySnapshot, effectSnapshot] = await Promise.all([
+        circleRef.get(),
+        activityRef.get(),
+        effectRef.get(),
+    ]);
+    const isAccountDeletion = checkIn.deletionReason === 'account';
+    const shouldShowActivity = !isAccountDeletion &&
+        (0, circle_mode_1.getCircleMode)(circleSnapshot.data()) !== 'personal' &&
+        checkIn.status === 'done';
+    if (!shouldShowActivity) {
+        await activityRef.delete();
+    }
+    else if (activitySnapshot.exists) {
+        await activityRef.set({
+            mediaImageUrl: asCleanString(checkIn.photoUrl) ?? null,
+            note: asCleanString(checkIn.note) ?? null,
+            updatedAt: firestore_1.FieldValue.serverTimestamp(),
+        }, { merge: true });
+    }
+    else {
+        await (0, thread_1.createCircleThreadActivity)({
+            actor: {
+                avatarUrl: asCleanString(checkIn.avatarUrl) ?? null,
+                displayName: asCleanString(checkIn.displayName) ?? 'Someone',
+                handle: asCleanString(checkIn.handle) ?? null,
+                uid,
+            },
+            circleId,
+            createdAt: checkIn.createdAt,
+            itemId: activityId,
+            mediaImageUrl: asCleanString(checkIn.photoUrl),
+            note: asCleanString(checkIn.note),
+            text: `${asCleanString(checkIn.displayName) ?? 'Someone'} tapped in`,
+            tone: 'success',
+            type: 'tap_in',
+        });
+    }
+    if (isAccountDeletion || !effectSnapshot.exists) {
+        return;
+    }
+    const rawActivityIds = effectSnapshot.data()?.circleActivityIds;
+    const priorActivityIds = Array.isArray(rawActivityIds)
+        ? rawActivityIds.filter((value) => typeof value === 'string')
+        : [];
+    const circleActivityIds = shouldShowActivity
+        ? Array.from(new Set([...priorActivityIds, activityId]))
+        : priorActivityIds.filter(value => value !== activityId);
+    const coverageRevision = typeof checkIn.coverageRevision === 'number'
+        ? checkIn.coverageRevision
+        : effectSnapshot.data()?.coverageRevision;
+    const effectPayload = {
+        circleActivityIds,
+        status: checkIn.status,
+        updatedAt: firestore_1.FieldValue.serverTimestamp(),
+    };
+    const writes = [
+        effectRef.set(effectPayload, { merge: true }),
+    ];
+    if (typeof coverageRevision === 'number') {
+        writes.push(effectRef
+            .collection('revisions')
+            .doc(String(coverageRevision))
+            .set(effectPayload, { merge: true }));
+    }
+    await Promise.all(writes);
+}
 async function getAuthenticatedUid(uid, idToken) {
     if (uid) {
         return uid;
@@ -177,6 +338,27 @@ async function processTapInSideEffectsForCheckIn({ checkIn, circleId, dateKey, s
     const scoringSnapshots = commitmentCadence === 'daily' && todayCheckInSnapshot
         ? [todayCheckInSnapshot]
         : periodCheckInSnapshots;
+    const periodKey = commitmentCadence === 'daily' ? dateKey : periodDateKeys[0] ?? dateKey;
+    const [canonicalPeriodSnapshot, canonicalSlotSnapshots] = await Promise.all([
+        circleRef.collection('opportunities').doc(periodKey).get(),
+        circleRef
+            .collection('opportunities')
+            .doc(periodKey)
+            .collection('slots')
+            .get(),
+    ]);
+    const canonicalExpectedMemberUids = new Set();
+    canonicalSlotSnapshots.docs.forEach(snapshot => {
+        const values = snapshot.data().expectedMemberUids;
+        if (Array.isArray(values)) {
+            values.forEach(value => {
+                if (typeof value === 'string') {
+                    canonicalExpectedMemberUids.add(value);
+                }
+            });
+        }
+    });
+    const hasCanonicalExpectations = canonicalSlotSnapshots.size > 0;
     scoringSnapshots.forEach(snapshot => {
         snapshot.docs.forEach(doc => {
             if ((0, commitments_1.isCoveredCheckInData)(doc.data())) {
@@ -190,6 +372,8 @@ async function processTapInSideEffectsForCheckIn({ checkIn, circleId, dateKey, s
         const memberUid = memberData.uid;
         return (typeof memberUid === 'string' &&
             memberUid !== uid &&
+            (!hasCanonicalExpectations ||
+                canonicalExpectedMemberUids.has(memberUid)) &&
             (coveredCounts.get(memberUid) ?? 0) < requiredTapIns);
     });
     const remainingCount = pendingMembers.reduce((total, memberData) => {
@@ -206,10 +390,22 @@ async function processTapInSideEffectsForCheckIn({ checkIn, circleId, dateKey, s
             ? memberUid
             : snapshot.id;
     })
-        .filter(Boolean);
-    const totalRemainingCount = activeMemberUids.reduce((total, memberUid) => total + Math.max(requiredTapIns - (coveredCounts.get(memberUid) ?? 0), 0), 0);
-    const periodKey = commitmentCadence === 'daily' ? dateKey : periodDateKeys[0] ?? dateKey;
+        .filter(memberUid => Boolean(memberUid) &&
+        (!hasCanonicalExpectations ||
+            canonicalExpectedMemberUids.has(memberUid)));
+    const canonicalExpectedOpportunityCount = canonicalPeriodSnapshot.data()?.expectedOpportunityCount;
+    const canonicalCoveredOpportunityCount = canonicalPeriodSnapshot.data()?.coveredOpportunityCount;
+    const totalRemainingCount = typeof canonicalExpectedOpportunityCount === 'number' &&
+        typeof canonicalCoveredOpportunityCount === 'number'
+        ? Math.max(canonicalExpectedOpportunityCount - canonicalCoveredOpportunityCount, 0)
+        : activeMemberUids.reduce((total, memberUid) => total +
+            Math.max(requiredTapIns - (coveredCounts.get(memberUid) ?? 0), 0), 0);
+    const circleRemainingCount = hasCanonicalExpectations
+        ? totalRemainingCount
+        : remainingCount;
     const circleTitle = asCleanString(circle?.title) ?? 'Your circle';
+    const coverageRevision = typeof checkIn.coverageRevision === 'number' ? checkIn.coverageRevision : 1;
+    const sourceKey = getCheckInEffectSourceKey(circleId, dateKey, uid);
     const actor = {
         avatarUrl: asCleanString(checkIn.avatarUrl) ?? null,
         displayName: asCleanString(checkIn.displayName) ?? 'Someone',
@@ -229,7 +425,10 @@ async function processTapInSideEffectsForCheckIn({ checkIn, circleId, dateKey, s
         activeMemberUids,
         remainingTapIns: totalRemainingCount,
     });
+    const circleActivityIds = [];
+    let milestoneKeys = [];
     if (status === 'done' && !isPersonal) {
+        circleActivityIds.push(`tap_in_${dateKey}_${uid}`);
         await (0, thread_1.createCircleThreadActivity)({
             actor,
             circleId,
@@ -248,6 +447,8 @@ async function processTapInSideEffectsForCheckIn({ checkIn, circleId, dateKey, s
             dateKey,
             mediaImageUrl: target.canViewMedia ? mediaImageUrl : undefined,
             targetUid: target.uid,
+            sourceKey,
+            sourceRevision: coverageRevision,
         }))).catch(error => console.error('notify_companion_tapped_in_failed', error));
     }
     if (status === 'skip' && !isPersonal) {
@@ -257,6 +458,8 @@ async function processTapInSideEffectsForCheckIn({ checkIn, circleId, dateKey, s
             circleId,
             circleTitle,
             dateKey,
+            sourceKey,
+            sourceRevision: coverageRevision,
         }).catch(error => console.error('notify_companion_skipped_failed', error));
     }
     if (momentumSummary) {
@@ -264,8 +467,10 @@ async function processTapInSideEffectsForCheckIn({ checkIn, circleId, dateKey, s
             priorSummary: priorMomentumSummary,
             summary: momentumSummary,
         });
+        milestoneKeys = milestoneEvents.map(event => event.key);
         const streakMilestones = milestoneEvents.filter(event => event.type === 'companion_streak_milestone');
         if (!isPersonal) {
+            circleActivityIds.push(...streakMilestones.map(event => `streak_${dateKey}_${uid}_${event.key}`));
             await Promise.all(streakMilestones.map(event => (0, thread_1.createCircleThreadActivity)({
                 actor,
                 circleId,
@@ -282,6 +487,8 @@ async function processTapInSideEffectsForCheckIn({ checkIn, circleId, dateKey, s
             circleId,
             dateKey,
             events: milestoneEvents,
+            sourceKey,
+            sourceRevision: coverageRevision,
             targetUid: uid,
         }).catch(error => console.error('notify_companion_milestones_failed', error));
     }
@@ -292,19 +499,46 @@ async function processTapInSideEffectsForCheckIn({ checkIn, circleId, dateKey, s
             circleTitle,
             commitmentCadence,
             periodKey,
+            sourceKey,
+            sourceRevision: coverageRevision,
             targetUid,
         }))).catch(error => console.error('notify_circle_complete_failed', error));
     }
-    if (!isPersonal && remainingCount > 0 && remainingCount <= 2) {
+    if (!isPersonal && circleRemainingCount > 0 && circleRemainingCount <= 2) {
         await Promise.all(pendingMembers.map(memberData => (0, notifications_1.notifyCircleAtRisk)({
             commitmentCadence,
             circleId,
             circleTitle,
             periodKey,
-            remainingCount,
+            remainingCount: circleRemainingCount,
             targetUid: memberData.uid,
         }))).catch(error => console.error('notify_circle_at_risk_failed', error));
     }
+    const effectRef = circleRef
+        .collection('checkInEffects')
+        .doc(`${dateKey}_${uid}`);
+    const effectPayload = {
+        active: true,
+        circleActivityIds,
+        circleCompletionTargetUids: circleCompleteTargetUids,
+        coverageRevision,
+        milestoneKeys,
+        notificationSourceKey: sourceKey,
+        periodKey,
+        sourceKey,
+        status,
+        updatedAt: firestore_1.FieldValue.serverTimestamp(),
+    };
+    await Promise.all([
+        effectRef.set(effectPayload, { merge: true }),
+        effectRef
+            .collection('revisions')
+            .doc(String(coverageRevision))
+            .set({
+            ...effectPayload,
+            createdAt: firestore_1.FieldValue.serverTimestamp(),
+        }, { merge: true }),
+    ]);
 }
 async function submitTapInHandler(request) {
     const { profile, uid } = await requireCompletedProfile(request.auth?.uid);
@@ -330,14 +564,27 @@ async function submitTapInHandler(request) {
             .doc(dateKey)
             .collection('checkIns')
             .doc(uid);
-        const checkInSnapshot = await transaction.get(checkInRef);
+        const effectRef = circleRef
+            .collection('checkInEffects')
+            .doc(`${dateKey}_${uid}`);
+        const [checkInSnapshot, effectSnapshot] = await Promise.all([
+            transaction.get(checkInRef),
+            transaction.get(effectRef),
+        ]);
         const existingCheckIn = checkInSnapshot.data();
         const existingCovered = (0, commitments_1.isCoveredCheckInData)(existingCheckIn);
+        const coveredOutcomeChanged = (0, reconciliation_1.isCoveredOutcomeChange)({
+            existingCheckIn,
+            nextStatus: input.status,
+        });
         const quantityUpdateAllowed = input.status === 'done' &&
             checkInSnapshot.exists &&
             canUpdateQuantityTapIn(circle) &&
             existingCheckIn?.status !== 'skip';
-        if (checkInSnapshot.exists && !quantityUpdateAllowed) {
+        const coveredOutcomeUpdateAllowed = checkInSnapshot.exists && existingCovered && coveredOutcomeChanged;
+        if (checkInSnapshot.exists &&
+            !quantityUpdateAllowed &&
+            !coveredOutcomeUpdateAllowed) {
             throw new https_1.HttpsError('already-exists', 'You already tapped in today.');
         }
         if (input.status === 'skip') {
@@ -371,6 +618,12 @@ async function submitTapInHandler(request) {
         });
         const nextStatus = (0, commitments_1.getCheckInStatusForCoverage)(coverageStatus);
         const nextCovered = coverageStatus === 'covered' || coverageStatus === 'skipped';
+        const coverageRevision = (0, reconciliation_1.getNextCoverageRevision)({
+            existingCovered,
+            existingRevision: existingCheckIn?.coverageRevision,
+            ledgerRevision: effectSnapshot.data()?.coverageRevision,
+            nextCovered,
+        });
         const quantityConfig = (0, commitments_1.getQuantityConfig)(circle);
         const commitmentType = (0, commitments_1.getCommitmentType)(circle);
         let momentum;
@@ -379,10 +632,13 @@ async function submitTapInHandler(request) {
                 circle,
                 circleId: input.circleId,
                 dateKey,
+                member: memberSnapshot.data(),
                 status: nextStatus === 'skip' ? 'skip' : 'done',
                 transaction,
                 uid,
             });
+        }
+        if (nextCovered && (!existingCovered || coveredOutcomeChanged)) {
             await (0, momentum_1.recordTapInOpportunity)({
                 checkInId: uid,
                 circle,
@@ -391,6 +647,7 @@ async function submitTapInHandler(request) {
                 memberCount: typeof circle?.memberCount === 'number'
                     ? circle.memberCount
                     : undefined,
+                member: memberSnapshot.data(),
                 profile,
                 status: nextStatus === 'skip' ? 'skip' : 'done',
                 transaction,
@@ -409,6 +666,8 @@ async function submitTapInHandler(request) {
         const checkInPayload = {
             avatarUrl: profile.avatarUrl ?? null,
             coverageStatus,
+            coverageRevision,
+            circleId: input.circleId,
             displayName: profile.displayName,
             handle: profile.handle,
             note: input.note ?? null,
@@ -454,6 +713,15 @@ async function submitTapInHandler(request) {
             checkInPayload.unitLabel = firestore_1.FieldValue.delete();
         }
         transaction.set(checkInRef, checkInPayload, { merge: true });
+        if (nextCovered && !existingCovered) {
+            transaction.set(effectRef, {
+                active: false,
+                coverageRevision,
+                pending: true,
+                sourceKey: getCheckInEffectSourceKey(input.circleId, dateKey, uid),
+                updatedAt: now,
+            }, { merge: true });
+        }
         transaction.set(circleRef.collection('days').doc(dateKey), {
             checkInCount: firestore_1.FieldValue.increment(nextCovered === existingCovered ? 0 : nextCovered ? 1 : -1),
             dateKey,
@@ -468,6 +736,7 @@ async function submitTapInHandler(request) {
             currentValue,
             dateKey,
             momentum,
+            coverageRevision,
             status: nextStatus,
         };
     });
@@ -480,10 +749,27 @@ exports.processTapInSideEffects = (0, firestore_2.onDocumentWritten)({
     const checkIn = event.data?.after.data();
     const priorCheckIn = event.data?.before.data();
     const status = checkIn?.status;
-    if (!checkIn ||
-        !(0, commitments_1.isCoveredCheckInData)(checkIn) ||
-        (0, commitments_1.isCoveredCheckInData)(priorCheckIn) ||
-        (status !== 'done' && status !== 'skip')) {
+    const wasCovered = (0, commitments_1.isCoveredCheckInData)(priorCheckIn);
+    const isCovered = (0, commitments_1.isCoveredCheckInData)(checkIn);
+    if (wasCovered && !isCovered) {
+        await retractTapInEffects({
+            accountDeletion: priorCheckIn?.deletionReason === 'account',
+            circleId: event.params.circleId,
+            dateKey: event.params.dateKey,
+            uid: event.params.uid,
+        });
+        return;
+    }
+    if (wasCovered && isCovered && checkIn) {
+        await updateCoveredTapInActivity({
+            checkIn,
+            circleId: event.params.circleId,
+            dateKey: event.params.dateKey,
+            uid: event.params.uid,
+        });
+        return;
+    }
+    if (!checkIn || !isCovered || (status !== 'done' && status !== 'skip')) {
         return;
     }
     await processTapInSideEffectsForCheckIn({

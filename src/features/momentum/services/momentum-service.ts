@@ -117,9 +117,7 @@ function getAvailableScheduledOpportunityCount(
 
 function getCoveredOpportunityCount(circle: CircleManagementCard) {
   if (typeof circle.viewerRemainingTapIns !== 'number') {
-    return circle.viewerHasCheckedIn && circle.viewerTodayStatus !== 'skip'
-      ? 1
-      : 0;
+    return circle.viewerHasCheckedIn ? 1 : 0;
   }
 
   const requiredOpportunities = getCircleOpportunityCount(circle);
@@ -128,9 +126,7 @@ function getCoveredOpportunityCount(circle: CircleManagementCard) {
     requiredOpportunities - remainingOpportunities,
     0,
   );
-  const skippedToday = circle.viewerTodayStatus === 'skip' ? 1 : 0;
-
-  return Math.max(coveredOpportunities - skippedToday, 0);
+  return coveredOpportunities;
 }
 
 export function getMomentumStatus(percentage: number): MomentumStatus {
@@ -167,10 +163,10 @@ export function getMomentumLabel(status: MomentumStatus) {
 
 export function formatOpportunityCount(summary: MomentumSummary) {
   const available = summary.availableOpportunities;
-  const completed = summary.completedOpportunities;
+  const credited = summary.creditedOpportunities;
   const noun = available === 1 ? 'opportunity' : 'opportunities';
 
-  return `${completed} of ${available} ${noun} done`;
+  return `${credited} of ${available} ${noun} covered`;
 }
 
 export function buildMomentumSummaryFromHomeData(
@@ -188,25 +184,40 @@ export function buildMomentumSummaryFromHomeData(
       ),
     0,
   );
-  const completedOpportunities = activeCircles.reduce(
+  const creditedOpportunities = activeCircles.reduce(
     (total, circle) => total + getCoveredOpportunityCount(circle),
     0,
   );
   const percentage =
     availableOpportunities > 0
-      ? Math.round((completedOpportunities / availableOpportunities) * 100)
+      ? Math.round((creditedOpportunities / availableOpportunities) * 100)
       : 0;
   const status = getMomentumStatus(percentage);
 
   return {
     availableOpportunities,
     bestStreak: 0,
-    completedOpportunities,
-    currentStreak: completedOpportunities,
+    creditedOpportunities,
+    completedOpportunities: creditedOpportunities,
+    currentStreak: creditedOpportunities,
     label: getMomentumLabel(status),
     percentage,
     periodKey: homeData.todayDateKey,
+    skippedOpportunities: activeCircles.reduce(
+      (total, circle) => total + (circle.viewerTodayStatus === 'skip' ? 1 : 0),
+      0,
+    ),
     status,
+    tapInOpportunities: activeCircles.reduce(
+      (total, circle) =>
+        total +
+        Math.max(
+          getCoveredOpportunityCount(circle) -
+            (circle.viewerTodayStatus === 'skip' ? 1 : 0),
+          0,
+        ),
+      0,
+    ),
   };
 }
 
@@ -220,6 +231,11 @@ export function mapMomentumSummarySnapshot(
   }
 
   const percentage = asNumber(data.percentage, 0);
+  const creditedOpportunities = asNumber(
+    data.creditedOpportunities,
+    asNumber(data.completedOpportunities, 0),
+  );
+  const skippedOpportunities = asNumber(data.skippedOpportunities, 0);
   const status =
     data.status === 'building_momentum' ||
     data.status === 'strong_momentum' ||
@@ -231,12 +247,18 @@ export function mapMomentumSummarySnapshot(
   return {
     availableOpportunities: asNumber(data.availableOpportunities, 0),
     bestStreak: asNumber(data.bestStreak, 0),
-    completedOpportunities: asNumber(data.completedOpportunities, 0),
+    creditedOpportunities,
+    completedOpportunities: creditedOpportunities,
     currentStreak: asNumber(data.currentStreak, 0),
     label: asString(data.label, getMomentumLabel(status)),
     percentage,
     periodKey: asString(data.periodKey, 'current'),
+    skippedOpportunities,
     status,
+    tapInOpportunities: asNumber(
+      data.tapInOpportunities,
+      Math.max(creditedOpportunities - skippedOpportunities, 0),
+    ),
   };
 }
 

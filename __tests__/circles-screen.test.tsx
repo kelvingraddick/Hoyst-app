@@ -5,6 +5,7 @@ import renderer, {act} from 'react-test-renderer';
 import {CirclesScreen} from '../src/features/circles/screens/CirclesScreen';
 import {GlassPanel} from '../src/design/components/GlassPanel';
 import type {HomeData} from '../src/features/home/services/home-data-service';
+import type {PastCircleSummary} from '../src/features/circles/services/past-circle-service';
 import type {CircleManagementCard} from '../src/types/models';
 
 jest.mock('@react-native-community/blur', () => {
@@ -65,6 +66,7 @@ jest.mock('../src/store/profile-store', () => ({
 }));
 
 let mockHomeData: HomeData;
+let mockPastCircles: PastCircleSummary[] = [];
 
 jest.mock('../src/features/home/services/home-data-service', () => {
   function needsTapInToday(circle: CircleManagementCard) {
@@ -121,6 +123,13 @@ jest.mock('../src/features/home/services/home-data-service', () => {
 
 jest.mock('../src/features/circles/services/circle-service', () => ({
   nudgeCircleMembers: jest.fn(),
+}));
+
+jest.mock('../src/features/circles/services/past-circle-service', () => ({
+  subscribeToPastCircles: jest.fn(({onCircles}) => {
+    onCircles(mockPastCircles);
+    return jest.fn();
+  }),
 }));
 
 function circle(
@@ -192,6 +201,10 @@ function renderScreen() {
 }
 
 describe('CirclesScreen render paths', () => {
+  beforeEach(() => {
+    mockPastCircles = [];
+  });
+
   it('renders the filterable management list when an active circle exists', () => {
     mockHomeData = homeData([circle({})]);
     const output = renderScreen();
@@ -241,6 +254,42 @@ describe('CirclesScreen render paths', () => {
     expect(output.indexOf('Personal Commitments')).toBeLessThan(
       output.indexOf('Sorted by urgency'),
     );
+  });
+
+  it('renders Past Circles below active circles and opens a read-only summary', () => {
+    mockHomeData = homeData([circle({})]);
+    mockPastCircles = [
+      {
+        category: 'Learning',
+        circleId: 'past-1',
+        circleMode: 'group',
+        commitment: 'Read 20 pages',
+        id: 'past-1',
+        joinedAt: new Date('2026-01-01T12:00:00Z'),
+        leftAt: new Date('2026-07-01T12:00:00Z'),
+        privacy: 'private',
+        title: 'Book Club',
+      },
+    ];
+
+    const {rootNavigate, screen} = renderScreenWithNavigation();
+    const pastCircleButton = screen.root.findByProps({
+      accessibilityLabel: 'View past Circle Book Club',
+    });
+    const output = JSON.stringify(screen.toJSON());
+
+    expect(output).toContain('Past Circles');
+    expect(output.indexOf('Morning Movers')).toBeLessThan(
+      output.indexOf('Past Circles'),
+    );
+
+    act(() => {
+      pastCircleButton.props.onPress();
+    });
+
+    expect(rootNavigate).toHaveBeenCalledWith('PastCircle', {
+      summary: mockPastCircles[0],
+    });
   });
 
   it('uses compact commitment header type and full-width stat cards', () => {

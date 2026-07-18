@@ -1,5 +1,6 @@
 import type {NavigatorScreenParams} from '@react-navigation/native';
 import type {CheckInCoverageStatus, CommitmentType} from '../types/models';
+import type {PastCircleSummary} from '../features/circles/services/past-circle-service';
 
 export type AppTabsParamList = {
   Home: undefined;
@@ -50,6 +51,7 @@ export type RootStackParamList = {
     resumeAction?: 'join';
     source?: 'notification';
   };
+  PastCircle: {summary: PastCircleSummary};
   TapInComposer: {circleId: string; source: TapInSource};
   TapInComplete: {
     circleId: string;

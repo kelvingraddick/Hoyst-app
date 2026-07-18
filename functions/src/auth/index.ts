@@ -17,6 +17,10 @@ import {
   isCoveredCheckInData,
 } from '../shared/commitments';
 import {resolveStarterCircleDecision} from './starter-circle-plan';
+import {
+  materializeCurrentCircleOpportunities,
+  removeMemberFromAllCircleOpportunities,
+} from '../momentum';
 
 const onboardingPreferencesSchema = z.object({
   categories: z.array(z.string().trim().min(1).max(40)).max(8).default([]),
@@ -134,6 +138,70 @@ async function deleteCircleServerMetadata(circleId: string) {
   ]);
 }
 
+async function deleteDocumentRefsInBatches(
+  refs: Array<DocumentReference<DocumentData>>,
+) {
+  for (let index = 0; index < refs.length; index += 400) {
+    const batch = db.batch();
+
+    refs.slice(index, index + 400).forEach(ref => batch.delete(ref));
+    await batch.commit();
+  }
+}
+
+async function collectNonOwnedCircleIds(
+  uid: string,
+  ownedCircleIds: Set<string>,
+) {
+  const [memberSnapshots, historySnapshots, checkInSnapshots] =
+    await Promise.all([
+      db.collectionGroup('members').where('uid', '==', uid).get(),
+      db.collectionGroup('membershipHistory').where('uid', '==', uid).get(),
+      db.collectionGroup('checkIns').where('uid', '==', uid).get(),
+    ]);
+  const circleIds = new Set<string>();
+
+  memberSnapshots.docs.forEach(snapshot => {
+    circleIds.add(getParentDocument(snapshot.ref, 'member').id);
+  });
+  historySnapshots.docs.forEach(snapshot => {
+    circleIds.add(getParentDocument(snapshot.ref, 'membership history').id);
+  });
+  checkInSnapshots.docs.forEach(snapshot => {
+    circleIds.add(getCircleRefFromCheckInRef(snapshot.ref).circleRef.id);
+  });
+  ownedCircleIds.forEach(circleId => circleIds.delete(circleId));
+
+  return circleIds;
+}
+
+async function deleteCircleFeedItemsForUser(circleId: string, uid: string) {
+  const feedItemsRef = db
+    .collection('circles')
+    .doc(circleId)
+    .collection('feedItems');
+  const [actorSnapshots, targetSnapshots] = await Promise.all([
+    feedItemsRef.where('actor.uid', '==', uid).get(),
+    feedItemsRef.where('targetActor.uid', '==', uid).get(),
+  ]);
+  const refs = new Map<string, DocumentReference<DocumentData>>();
+
+  [...actorSnapshots.docs, ...targetSnapshots.docs].forEach(snapshot => {
+    refs.set(snapshot.ref.path, snapshot.ref);
+  });
+
+  await deleteDocumentRefsInBatches(Array.from(refs.values()));
+}
+
+async function cleanNonOwnedCircleHistory(uid: string, circleIds: Set<string>) {
+  for (const circleId of circleIds) {
+    await Promise.all([
+      removeMemberFromAllCircleOpportunities({circleId, uid}),
+      deleteCircleFeedItemsForUser(circleId, uid),
+    ]);
+  }
+}
+
 async function deleteNonOwnedMemberships(
   uid: string,
   ownedCircleIds: Set<string>,
@@ -210,6 +278,27 @@ async function deleteJoinRequests(uid: string, ownedCircleIds: Set<string>) {
   }
 }
 
+async function deleteMembershipHistory(
+  uid: string,
+  ownedCircleIds: Set<string>,
+) {
+  const historySnapshots = await db
+    .collectionGroup('membershipHistory')
+    .where('uid', '==', uid)
+    .get();
+
+  for (const historySnapshot of historySnapshots.docs) {
+    const circleRef = getParentDocument(
+      historySnapshot.ref,
+      'membership history',
+    );
+
+    if (!ownedCircleIds.has(circleRef.id)) {
+      await db.recursiveDelete(historySnapshot.ref);
+    }
+  }
+}
+
 async function deleteNonOwnedCheckIns(
   uid: string,
   ownedCircleIds: Set<string>,
@@ -218,14 +307,31 @@ async function deleteNonOwnedCheckIns(
     .collectionGroup('checkIns')
     .where('uid', '==', uid)
     .get();
-
-  for (const checkInSnapshot of checkInSnapshots.docs) {
+  const records = checkInSnapshots.docs.flatMap(checkInSnapshot => {
     const {circleRef, dayRef} = getCircleRefFromCheckInRef(checkInSnapshot.ref);
 
-    if (ownedCircleIds.has(circleRef.id)) {
-      continue;
-    }
+    return ownedCircleIds.has(circleRef.id)
+      ? []
+      : [{checkInSnapshot, circleRef, dayRef}];
+  });
 
+  for (let index = 0; index < records.length; index += 400) {
+    const batch = db.batch();
+
+    records.slice(index, index + 400).forEach(({checkInSnapshot}) => {
+      batch.set(
+        checkInSnapshot.ref,
+        {
+          deletionReason: 'account',
+          deletionRequestedAt: FieldValue.serverTimestamp(),
+        },
+        {merge: true},
+      );
+    });
+    await batch.commit();
+  }
+
+  for (const {checkInSnapshot, circleRef, dayRef} of records) {
     const checkIn = checkInSnapshot.data();
     const batch = db.batch();
 
@@ -270,7 +376,6 @@ async function deleteAccountDocuments(uid: string) {
   const batch = db.batch();
 
   batch.delete(userRef);
-  batch.delete(userPrivateRef);
 
   if (typeof handle === 'string' && handle.trim()) {
     const handleRef = db.collection('handles').doc(handle);
@@ -287,6 +392,7 @@ async function deleteAccountDocuments(uid: string) {
 
   await Promise.all([
     batch.commit(),
+    db.recursiveDelete(userPrivateRef),
     deleteStoragePrefix(`users/${uid}/avatar/`),
   ]);
 }
@@ -412,6 +518,12 @@ export const completeProfile = onCall(async request => {
     ) {
       const circleRef = db.collection('circles').doc();
       const memberRef = circleRef.collection('members').doc(uid);
+      const membershipHistoryRef = circleRef
+        .collection('membershipHistory')
+        .doc(uid);
+      const membershipPeriodRef = membershipHistoryRef
+        .collection('periods')
+        .doc('initial');
       const publicIndexRef = db
         .collection('publicCircleIndex')
         .doc(circleRef.id);
@@ -473,8 +585,27 @@ export const completeProfile = onCall(async request => {
         displayName: profileData.displayName,
         handle: profileData.handle,
         joinedAt: now,
+        membershipPeriodId: membershipPeriodRef.id,
+        opportunityEligibility: 'include_current',
         role: 'owner',
         status: 'active',
+        uid,
+      });
+      transaction.set(membershipHistoryRef, {
+        currentPeriodId: membershipPeriodRef.id,
+        firstJoinedAt: now,
+        lastJoinedAt: now,
+        lastRole: 'owner',
+        status: 'active',
+        uid,
+        updatedAt: now,
+      });
+      transaction.set(membershipPeriodRef, {
+        circleId: circleRef.id,
+        joinedAt: now,
+        opportunityEligibility: 'include_current',
+        periodId: membershipPeriodRef.id,
+        role: 'owner',
         uid,
       });
 
@@ -568,6 +699,16 @@ export const completeProfile = onCall(async request => {
     );
   });
 
+  if (starterCircle?.circleId) {
+    await materializeCurrentCircleOpportunities(starterCircle.circleId).catch(
+      error =>
+        console.error(
+          'materialize_onboarding_circle_opportunities_failed',
+          error,
+        ),
+    );
+  }
+
   return {handle: input.handle, starterCircle, uid};
 });
 
@@ -580,8 +721,11 @@ export const deleteAccount = onCall(async request => {
   const ownedCircleIds = new Set(
     ownedCircleSnapshots.docs.map(snapshot => snapshot.id),
   );
+  const nonOwnedCircleIds = await collectNonOwnedCircleIds(uid, ownedCircleIds);
 
+  await cleanNonOwnedCircleHistory(uid, nonOwnedCircleIds);
   await deleteNonOwnedMemberships(uid, ownedCircleIds);
+  await deleteMembershipHistory(uid, ownedCircleIds);
   await deleteJoinRequests(uid, ownedCircleIds);
   await deleteNonOwnedCheckIns(uid, ownedCircleIds);
   await deleteOwnedCircles(ownedCircleIds);

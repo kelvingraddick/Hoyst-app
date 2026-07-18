@@ -86,6 +86,7 @@ export type HomeCircleMappingInput = {
   memberProfilesByUid?: ReadonlyMap<string, PlainData>;
   membersData?: PlainData[];
   membershipData?: PlainData;
+  periodOpportunityData?: PlainData;
   periodCheckInStatuses?: ReadonlyMap<
     string,
     ReadonlyMap<string, CheckInStatus>
@@ -100,6 +101,9 @@ export type HomeCircleMappingInput = {
 
 type CircleSubscriptionState = {
   circleData?: PlainData;
+  circleOpportunityData?: PlainData;
+  circleOpportunityKey?: string;
+  circleOpportunityUnsubscribe?: () => void;
   memberProfiles: Map<string, PlainData>;
   memberProfileUnsubscribes: Map<string, () => void>;
   membersData?: PlainData[];
@@ -588,6 +592,18 @@ function getCommitmentPeriodDateKeys(
   return getCommitmentWeekDateKeys(timezone, now);
 }
 
+function getCommitmentPeriodKey(
+  cadence: CommitmentCadence,
+  timezone: string,
+  now = new Date(),
+) {
+  const firstDateKey =
+    getCommitmentPeriodDateKeys(cadence, timezone, now)[0] ??
+    getDateKey(now, timezone);
+
+  return cadence === 'monthly' ? firstDateKey.slice(0, 7) : firstDateKey;
+}
+
 function getRollingGraceDateKeys(
   timezone: string,
   windowDays: number,
@@ -1065,6 +1081,7 @@ export function mapHomeCircleFromData({
   memberProfilesByUid,
   membersData = [],
   membershipData,
+  periodOpportunityData,
   periodCheckInStatuses,
   todayCheckInStatuses,
   todayCheckInUids = new Set<string>(),
@@ -1147,13 +1164,27 @@ export function mapHomeCircleFromData({
     circleData.memberCount,
     Math.max(memberRecords.length, visibleMembers.length),
   );
-  const progressBase =
+  const fallbackProgressBase =
     Math.max(activeMemberCount, isPending ? 0 : memberCount) * requiredTapIns;
-  const periodCoveredCount = getPeriodCoveredTotal(
+  const fallbackPeriodCoveredCount = getPeriodCoveredTotal(
     memberRecords,
     memberCoveredCounts,
     requiredTapIns,
   );
+  const canonicalExpectedCount = asNumber(
+    periodOpportunityData?.expectedOpportunityCount,
+    -1,
+  );
+  const canonicalCoveredCount = asNumber(
+    periodOpportunityData?.coveredOpportunityCount,
+    -1,
+  );
+  const progressBase =
+    canonicalExpectedCount >= 0 ? canonicalExpectedCount : fallbackProgressBase;
+  const periodCoveredCount =
+    canonicalCoveredCount >= 0
+      ? canonicalCoveredCount
+      : fallbackPeriodCoveredCount;
   const progressPercent =
     progressBase > 0
       ? Math.min(100, Math.round((periodCoveredCount / progressBase) * 100))
@@ -1492,6 +1523,7 @@ function buildCircleFromState(
     memberProfilesByUid: state?.memberProfiles,
     membersData: state?.membersData,
     membershipData,
+    periodOpportunityData: state?.circleOpportunityData,
     periodCheckInStatuses: state?.periodCheckInStatuses,
     todayCheckInStatuses: state?.todayCheckInStatuses,
     viewerSkipGraceDateKeys: state?.skipGraceDateKeys,
@@ -1499,6 +1531,51 @@ function buildCircleFromState(
     viewerSkipGraceStatuses: state?.skipGraceCheckInStatuses,
     viewerTodayCheckIn: state?.viewerTodayCheckIn,
   });
+}
+
+function clearCircleOpportunityListener(state: CircleSubscriptionState) {
+  state.circleOpportunityUnsubscribe?.();
+  state.circleOpportunityUnsubscribe = undefined;
+  state.circleOpportunityData = undefined;
+  state.circleOpportunityKey = undefined;
+}
+
+function syncCircleOpportunityListener({
+  circleRef,
+  onError,
+  onUpdate,
+  state,
+}: {
+  circleRef: FirebaseFirestoreTypes.DocumentReference;
+  onError?: (error: Error) => void;
+  onUpdate: () => void;
+  state: CircleSubscriptionState;
+}) {
+  if (!state.circleData) {
+    clearCircleOpportunityListener(state);
+    return;
+  }
+
+  const cadence = normalizeCommitmentCadence(
+    state.circleData.commitmentCadence,
+    state.circleData.commitmentFrequency,
+  );
+  const timezone = asString(state.circleData.timezone, 'UTC');
+  const periodKey = getCommitmentPeriodKey(cadence, timezone);
+
+  if (state.circleOpportunityKey === periodKey) {
+    return;
+  }
+
+  clearCircleOpportunityListener(state);
+  state.circleOpportunityKey = periodKey;
+  state.circleOpportunityUnsubscribe = circleRef
+    .collection('opportunities')
+    .doc(periodKey)
+    .onSnapshot(snapshot => {
+      state.circleOpportunityData = snapshotData(snapshot);
+      onUpdate();
+    }, onError);
 }
 
 function syncMemberProfileListeners({
@@ -1905,6 +1982,7 @@ export function subscribeToHomeData({
     circleUnsubscribes = [];
     states.forEach(state => {
       clearMemberProfileListeners(state);
+      clearCircleOpportunityListener(state);
       clearPeriodCheckInListeners(state);
       clearRecentGroupCheckInListeners(state);
       clearSkipGraceCheckInListeners(state);
@@ -1947,6 +2025,12 @@ export function subscribeToHomeData({
         circleRef.onSnapshot(snapshot => {
           state.circleData = snapshotData(snapshot);
           if (membershipStatus === 'active') {
+            syncCircleOpportunityListener({
+              circleRef,
+              onError,
+              onUpdate: emit,
+              state,
+            });
             syncPeriodCheckInListeners({
               cadence: normalizeCommitmentCadence(
                 state.circleData?.commitmentCadence,
@@ -2086,6 +2170,7 @@ export function subscribeToMemberCircleDetail({
       memberProfilesByUid: state.memberProfiles,
       membersData: state.membersData,
       membershipData,
+      periodOpportunityData: state.circleOpportunityData,
       periodCheckInStatuses: state.periodCheckInStatuses,
       todayCheckInStatuses: state.todayCheckInStatuses,
       viewerSkipGraceDateKeys: state.skipGraceDateKeys,
@@ -2118,6 +2203,7 @@ export function subscribeToMemberCircleDetail({
       state,
     });
     state.todayCheckInStatuses = new Map();
+    clearCircleOpportunityListener(state);
     clearPeriodCheckInListeners(state);
     clearRecentGroupCheckInListeners(state);
     clearSkipGraceCheckInListeners(state);
@@ -2152,6 +2238,12 @@ export function subscribeToMemberCircleDetail({
     );
 
     if (state.circleData) {
+      syncCircleOpportunityListener({
+        circleRef,
+        onError,
+        onUpdate: emit,
+        state,
+      });
       syncPeriodCheckInListeners({
         cadence: normalizeCommitmentCadence(
           state.circleData.commitmentCadence,
@@ -2203,6 +2295,12 @@ export function subscribeToMemberCircleDetail({
   const unsubscribeCircle = circleRef.onSnapshot(snapshot => {
     state.circleData = snapshotData(snapshot);
     if (normalizeMembershipStatus(membershipData?.status) === 'active') {
+      syncCircleOpportunityListener({
+        circleRef,
+        onError,
+        onUpdate: emit,
+        state,
+      });
       syncPeriodCheckInListeners({
         cadence: normalizeCommitmentCadence(
           state.circleData?.commitmentCadence,
@@ -2252,6 +2350,7 @@ export function subscribeToMemberCircleDetail({
     unsubscribeMembership();
     stopActiveListeners();
     clearMemberProfileListeners(state);
+    clearCircleOpportunityListener(state);
     clearRecentGroupCheckInListeners(state);
     clearSkipGraceCheckInListeners(state);
   };

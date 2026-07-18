@@ -34,6 +34,11 @@ import {
 } from '../shared/commitments';
 import {ensureGroupCircle, getCircleMode} from '../shared/circle-mode';
 import {createCircleThreadActivity, getCircleThreadNudgeText} from '../thread';
+import {
+  materializeCurrentCircleOpportunities,
+  removeMemberFromOpenCircleOpportunities,
+} from '../momentum';
+import {getLeaveCirclePlan} from './leave-plan';
 import {getNudgeTargetUids} from './nudge-targets';
 
 const graceRuleSchema = z.object({
@@ -290,31 +295,45 @@ function buildPublicPreviewFromMember(member: DocumentData, uid: string) {
 
 async function deleteCircleServerMetadata(circleId: string) {
   const publicIndexRef = db.collection('publicCircleIndex').doc(circleId);
+  const circleRef = db.collection('circles').doc(circleId);
+  const [historySnapshots, memberSnapshots] = await Promise.all([
+    circleRef.collection('membershipHistory').get(),
+    circleRef.collection('members').get(),
+  ]);
+  const uids = new Set(
+    [...historySnapshots.docs, ...memberSnapshots.docs].map(
+      snapshot => asOptionalString(snapshot.data().uid) ?? snapshot.id,
+    ),
+  );
+  const cleanupRefs: DocumentReference[] = [];
+
+  for (const uid of uids) {
+    cleanupRefs.push(
+      db
+        .collection('userPrivate')
+        .doc(uid)
+        .collection('pastCircles')
+        .doc(circleId),
+    );
+    const opportunities = await db
+      .collection('userPrivate')
+      .doc(uid)
+      .collection('opportunities')
+      .where('circleId', '==', circleId)
+      .get();
+    cleanupRefs.push(...opportunities.docs.map(snapshot => snapshot.ref));
+  }
+
+  for (let index = 0; index < cleanupRefs.length; index += 400) {
+    const batch = db.batch();
+    cleanupRefs.slice(index, index + 400).forEach(ref => batch.delete(ref));
+    await batch.commit();
+  }
 
   await Promise.all([
     publicIndexRef.delete(),
     deleteStoragePrefix(`circles/${circleId}/`),
   ]);
-}
-
-function getParentDocument(
-  ref: DocumentReference<DocumentData>,
-  label: string,
-) {
-  const parent = ref.parent.parent;
-
-  if (!parent) {
-    throw new Error(`Could not resolve parent document for ${label}.`);
-  }
-
-  return parent;
-}
-
-function getCircleRefFromCheckInRef(ref: DocumentReference<DocumentData>) {
-  const dayRef = getParentDocument(ref, 'check-in');
-  const circleRef = getParentDocument(dayRef, 'check-in day');
-
-  return {circleRef, dayRef};
 }
 
 function withoutPublicMemberPreview(members: unknown, uid: string) {
@@ -336,42 +355,6 @@ async function deleteStoragePrefix(prefix: string) {
     force: true,
     prefix,
   });
-}
-
-async function deleteCircleCheckInsForMember(circleId: string, uid: string) {
-  const checkInSnapshots = await db
-    .collectionGroup('checkIns')
-    .where('uid', '==', uid)
-    .get();
-
-  for (const checkInSnapshot of checkInSnapshots.docs) {
-    const {circleRef, dayRef} = getCircleRefFromCheckInRef(checkInSnapshot.ref);
-
-    if (circleRef.id !== circleId) {
-      continue;
-    }
-
-    const checkIn = checkInSnapshot.data();
-    const batch = db.batch();
-
-    batch.delete(checkInSnapshot.ref);
-
-    if (isCoveredCheckInData(checkIn)) {
-      batch.set(
-        dayRef,
-        {
-          checkInCount: FieldValue.increment(-1),
-          updatedAt: FieldValue.serverTimestamp(),
-        },
-        {merge: true},
-      );
-    }
-
-    await batch.commit();
-    await deleteStoragePrefix(
-      `circles/${circleRef.id}/check-ins/${dayRef.id}/${uid}/`,
-    );
-  }
 }
 
 function getHistoricalActivityCopy(checkIn: DocumentData, actorName: string) {
@@ -505,6 +488,88 @@ async function backfillPersonalCircleActivity({
   } while (lastDaySnapshot);
 }
 
+async function backfillDepartedMemberActivity({
+  circleId,
+  uid,
+}: {
+  circleId: string;
+  uid: string;
+}) {
+  const circleRef = db.collection('circles').doc(circleId);
+  const profileSnapshot = await db.collection('users').doc(uid).get();
+  const profile = profileSnapshot.data() ?? {};
+  const actorName =
+    asOptionalString(profile.displayName) ??
+    asOptionalString(profile.name) ??
+    'Former member';
+  let lastDaySnapshot: QueryDocumentSnapshot<DocumentData> | undefined;
+
+  do {
+    let query = circleRef
+      .collection('days')
+      .orderBy(FieldPath.documentId())
+      .limit(350);
+
+    if (lastDaySnapshot) {
+      query = query.startAfter(lastDaySnapshot);
+    }
+
+    const daySnapshots = await query.get();
+    if (daySnapshots.empty) {
+      break;
+    }
+    const checkInSnapshots = await Promise.all(
+      daySnapshots.docs.map(daySnapshot =>
+        daySnapshot.ref.collection('checkIns').doc(uid).get(),
+      ),
+    );
+    const batch = db.batch();
+
+    checkInSnapshots.forEach((checkInSnapshot, index) => {
+      if (!checkInSnapshot.exists) {
+        return;
+      }
+      const checkIn = checkInSnapshot.data() ?? {};
+      const dateKey = daySnapshots.docs[index].id;
+      const copy = getHistoricalActivityCopy(checkIn, actorName);
+      const isStandardTapIn =
+        checkIn.status === 'done' || checkIn.coverageStatus === 'covered';
+      const itemId = isStandardTapIn
+        ? `tap_in_${dateKey}_${uid}`
+        : `member_history_${dateKey}_${uid}`;
+
+      batch.set(
+        circleRef.collection('feedItems').doc(itemId),
+        {
+          actor: {
+            avatarUrl: profile.avatarUrl ?? null,
+            displayName: actorName,
+            handle: profile.handle ?? null,
+            uid,
+          },
+          createdAt: getHistoricalActivityCreatedAt(checkIn, dateKey),
+          dateKey,
+          historical: true,
+          kind: 'activity',
+          mediaImageUrl: checkIn.photoUrl ?? null,
+          note: checkIn.note ?? null,
+          outcomeStatus: checkIn.coverageStatus ?? checkIn.status ?? 'covered',
+          readOnly: true,
+          source: 'member_departure',
+          text: copy.text,
+          tone: copy.tone,
+          type: 'tap_in',
+          updatedAt: FieldValue.serverTimestamp(),
+        },
+        {merge: true},
+      );
+    });
+
+    await batch.commit();
+    lastDaySnapshot = daySnapshots.docs[daySnapshots.docs.length - 1];
+  } while (lastDaySnapshot);
+}
+
 export const createCircle = onCall(
   {secrets: [oneSignalRestApiKey]},
   async request => {
@@ -512,6 +577,12 @@ export const createCircle = onCall(
     const input = createCircleSchema.parse(request.data);
     const circleRef = db.collection('circles').doc();
     const memberRef = circleRef.collection('members').doc(uid);
+    const membershipHistoryRef = circleRef
+      .collection('membershipHistory')
+      .doc(uid);
+    const membershipPeriodRef = membershipHistoryRef
+      .collection('periods')
+      .doc('initial');
     const publicIndexRef = db.collection('publicCircleIndex').doc(circleRef.id);
     const now = FieldValue.serverTimestamp();
     const circleMode = input.circleMode;
@@ -574,8 +645,27 @@ export const createCircle = onCall(
       displayName: profile.displayName,
       handle: profile.handle,
       joinedAt: now,
+      membershipPeriodId: membershipPeriodRef.id,
+      opportunityEligibility: 'include_current',
       role: 'owner',
       status: 'active',
+      uid,
+    });
+    batch.set(membershipHistoryRef, {
+      currentPeriodId: membershipPeriodRef.id,
+      firstJoinedAt: now,
+      lastJoinedAt: now,
+      lastRole: 'owner',
+      status: 'active',
+      uid,
+      updatedAt: now,
+    });
+    batch.set(membershipPeriodRef, {
+      circleId: circleRef.id,
+      joinedAt: now,
+      opportunityEligibility: 'include_current',
+      periodId: membershipPeriodRef.id,
+      role: 'owner',
       uid,
     });
 
@@ -608,6 +698,10 @@ export const createCircle = onCall(
     }
 
     await batch.commit();
+
+    await materializeCurrentCircleOpportunities(circleRef.id).catch(error =>
+      console.error('materialize_created_circle_opportunities_failed', error),
+    );
 
     if (!isPersonal) {
       await notifyCompanionCircleCreated({
@@ -644,16 +738,33 @@ export const joinCircle = onCall(
     const publicIndexRef = db
       .collection('publicCircleIndex')
       .doc(input.circleId);
+    const membershipHistoryRef = circleRef
+      .collection('membershipHistory')
+      .doc(uid);
+    const membershipPeriodId = randomUUID();
+    const membershipPeriodRef = membershipHistoryRef
+      .collection('periods')
+      .doc(membershipPeriodId);
+    const pastCircleRef = db
+      .collection('userPrivate')
+      .doc(uid)
+      .collection('pastCircles')
+      .doc(input.circleId);
     const now = FieldValue.serverTimestamp();
     const requestToken = randomUUID();
 
     const result = await db.runTransaction(async transaction => {
-      const [circleSnapshot, memberSnapshot, joinRequestSnapshot] =
-        await Promise.all([
-          transaction.get(circleRef),
-          transaction.get(memberRef),
-          transaction.get(joinRequestRef),
-        ]);
+      const [
+        circleSnapshot,
+        memberSnapshot,
+        joinRequestSnapshot,
+        membershipHistorySnapshot,
+      ] = await Promise.all([
+        transaction.get(circleRef),
+        transaction.get(memberRef),
+        transaction.get(joinRequestRef),
+        transaction.get(membershipHistoryRef),
+      ]);
 
       if (!circleSnapshot.exists) {
         throw new HttpsError('not-found', 'Circle not found.');
@@ -753,12 +864,37 @@ export const joinCircle = onCall(
         displayName: profile.displayName,
         handle: profile.handle,
         joinedAt: now,
+        membershipPeriodId,
+        opportunityEligibility: 'next_opening',
         role: 'member',
         status: 'active',
         uid,
       };
 
       transaction.set(memberRef, memberPreview);
+      transaction.set(
+        membershipHistoryRef,
+        {
+          currentPeriodId: membershipPeriodId,
+          firstJoinedAt: membershipHistorySnapshot.data()?.firstJoinedAt ?? now,
+          lastJoinedAt: now,
+          lastLeftAt: FieldValue.delete(),
+          lastRole: 'member',
+          status: 'active',
+          uid,
+          updatedAt: now,
+        },
+        {merge: true},
+      );
+      transaction.set(membershipPeriodRef, {
+        circleId: input.circleId,
+        joinedAt: now,
+        opportunityEligibility: 'next_opening',
+        periodId: membershipPeriodId,
+        role: 'member',
+        uid,
+      });
+      transaction.delete(pastCircleRef);
       transaction.update(circleRef, {memberCount: FieldValue.increment(1)});
       if (circle?.privacy === 'public') {
         transaction.set(
@@ -781,6 +917,12 @@ export const joinCircle = onCall(
     const circle = circleSnapshot.data();
     const ownerId = asOptionalString(circle?.ownerId);
     const circleTitle = asOptionalString(circle?.title) ?? 'your circle';
+
+    if (result.status === 'active' && result.shouldNotifyOwner) {
+      await materializeCurrentCircleOpportunities(input.circleId).catch(error =>
+        console.error('materialize_joined_circle_opportunities_failed', error),
+      );
+    }
 
     if (ownerId && result.status === 'pending' && result.shouldNotifyOwner) {
       await notifyOwnerJoinRequest({
@@ -855,6 +997,18 @@ export const reviewJoinRequest = onCall(
     const publicIndexRef = db
       .collection('publicCircleIndex')
       .doc(input.circleId);
+    const requesterHistoryRef = circleRef
+      .collection('membershipHistory')
+      .doc(input.requesterId);
+    const membershipPeriodId = randomUUID();
+    const requesterPeriodRef = requesterHistoryRef
+      .collection('periods')
+      .doc(membershipPeriodId);
+    const requesterPastCircleRef = db
+      .collection('userPrivate')
+      .doc(input.requesterId)
+      .collection('pastCircles')
+      .doc(input.circleId);
     const now = FieldValue.serverTimestamp();
 
     const result = await db.runTransaction(async transaction => {
@@ -863,11 +1017,13 @@ export const reviewJoinRequest = onCall(
         memberSnapshot,
         requesterMemberSnapshot,
         joinRequestSnapshot,
+        requesterHistorySnapshot,
       ] = await Promise.all([
         transaction.get(circleRef),
         transaction.get(memberRef),
         transaction.get(requesterMemberRef),
         transaction.get(joinRequestRef),
+        transaction.get(requesterHistoryRef),
       ]);
 
       if (!circleSnapshot.exists) {
@@ -912,12 +1068,38 @@ export const reviewJoinRequest = onCall(
           displayName: requesterMember?.displayName ?? 'Hoyst member',
           handle: requesterMember?.handle ?? null,
           joinedAt: now,
+          membershipPeriodId,
+          opportunityEligibility: 'next_opening',
           role: 'member',
           status: 'active',
           uid: input.requesterId,
         };
 
         transaction.set(requesterMemberRef, approvedMember, {merge: true});
+        transaction.set(
+          requesterHistoryRef,
+          {
+            currentPeriodId: membershipPeriodId,
+            firstJoinedAt:
+              requesterHistorySnapshot.data()?.firstJoinedAt ?? now,
+            lastJoinedAt: now,
+            lastLeftAt: FieldValue.delete(),
+            lastRole: 'member',
+            status: 'active',
+            uid: input.requesterId,
+            updatedAt: now,
+          },
+          {merge: true},
+        );
+        transaction.set(requesterPeriodRef, {
+          circleId: input.circleId,
+          joinedAt: now,
+          opportunityEligibility: 'next_opening',
+          periodId: membershipPeriodId,
+          role: 'member',
+          uid: input.requesterId,
+        });
+        transaction.delete(requesterPastCircleRef);
         transaction.set(
           joinRequestRef,
           {
@@ -975,6 +1157,12 @@ export const reviewJoinRequest = onCall(
     }).catch(error => console.error('notify_join_review_failed', error));
 
     if (input.approved) {
+      await materializeCurrentCircleOpportunities(input.circleId).catch(error =>
+        console.error(
+          'materialize_approved_circle_opportunities_failed',
+          error,
+        ),
+      );
       const circleSnapshot = await circleRef.get();
       const circle = circleSnapshot.data();
       const ownerId = asOptionalString(circle?.ownerId);
@@ -1180,7 +1368,16 @@ export const leaveCircle = onCall(async request => {
   const memberRef = circleRef.collection('members').doc(uid);
   const joinRequestRef = circleRef.collection('joinRequests').doc(uid);
   const publicIndexRef = db.collection('publicCircleIndex').doc(input.circleId);
-  const now = FieldValue.serverTimestamp();
+  const membershipHistoryRef = circleRef
+    .collection('membershipHistory')
+    .doc(uid);
+  const pastCircleRef = db
+    .collection('userPrivate')
+    .doc(uid)
+    .collection('pastCircles')
+    .doc(input.circleId);
+  const leftAtDate = new Date();
+  const now = Timestamp.fromDate(leftAtDate);
 
   const status = await db.runTransaction(async transaction => {
     const [
@@ -1188,11 +1385,13 @@ export const leaveCircle = onCall(async request => {
       memberSnapshot,
       joinRequestSnapshot,
       publicIndexSnapshot,
+      membershipHistorySnapshot,
     ] = await Promise.all([
       transaction.get(circleRef),
       transaction.get(memberRef),
       transaction.get(joinRequestRef),
       transaction.get(publicIndexRef),
+      transaction.get(membershipHistoryRef),
     ]);
 
     if (!circleSnapshot.exists) {
@@ -1202,6 +1401,7 @@ export const leaveCircle = onCall(async request => {
     const circle = circleSnapshot.data();
     const member = memberSnapshot.data();
     const joinRequest = joinRequestSnapshot.data();
+    const membershipHistory = membershipHistorySnapshot.data();
 
     if (circle?.ownerId === uid || member?.role === 'owner') {
       throw new HttpsError(
@@ -1210,19 +1410,24 @@ export const leaveCircle = onCall(async request => {
       );
     }
 
-    const isActiveMember = member?.status === 'active';
-    const isPendingMember =
-      member?.status === 'pending' || joinRequest?.status === 'pending';
-    const leaveStatus = isActiveMember
-      ? ('left' as const)
-      : ('cancelled' as const);
+    const leavePlan = getLeaveCirclePlan({
+      activityBackfillStatus: membershipHistory?.activityBackfillStatus,
+      historyStatus: membershipHistory?.status,
+      joinRequestStatus: joinRequest?.status,
+      memberStatus: member?.status,
+    });
+    const effectiveLeftAt =
+      leavePlan.isDepartureRetry &&
+      membershipHistory?.lastLeftAt instanceof Timestamp
+        ? membershipHistory.lastLeftAt.toDate()
+        : leftAtDate;
     const filteredMembers = withoutPublicMemberPreview(
       publicIndexSnapshot.data()?.members,
       uid,
     );
 
-    if (!isActiveMember && !isPendingMember) {
-      return 'cancelled' as const;
+    if (!leavePlan.isActiveMember && !leavePlan.isPendingMember) {
+      return {...leavePlan, leftAt: effectiveLeftAt};
     }
 
     if (memberSnapshot.exists) {
@@ -1233,7 +1438,58 @@ export const leaveCircle = onCall(async request => {
       transaction.delete(joinRequestRef);
     }
 
-    if (isActiveMember) {
+    if (leavePlan.isActiveMember) {
+      const membershipPeriodId =
+        asOptionalString(member?.membershipPeriodId) ?? `legacy_${uid}`;
+      const membershipPeriodRef = membershipHistoryRef
+        .collection('periods')
+        .doc(membershipPeriodId);
+
+      transaction.set(
+        membershipHistoryRef,
+        {
+          currentPeriodId: FieldValue.delete(),
+          activityBackfillStatus: 'pending',
+          activityBackfillUpdatedAt: now,
+          firstJoinedAt: member?.joinedAt ?? circle?.createdAt ?? now,
+          lastJoinedAt: member?.joinedAt ?? circle?.createdAt ?? now,
+          lastLeftAt: now,
+          lastRole: member?.role ?? 'member',
+          status: 'past',
+          uid,
+          updatedAt: now,
+        },
+        {merge: true},
+      );
+      transaction.set(
+        membershipPeriodRef,
+        {
+          circleId: input.circleId,
+          joinedAt: member?.joinedAt ?? circle?.createdAt ?? now,
+          leftAt: now,
+          opportunityEligibility:
+            member?.opportunityEligibility ?? 'next_opening',
+          periodId: membershipPeriodId,
+          role: member?.role ?? 'member',
+          uid,
+        },
+        {merge: true},
+      );
+      transaction.set(
+        pastCircleRef,
+        {
+          category: circle?.category ?? 'Custom',
+          circleId: input.circleId,
+          circleMode: getCircleMode(circle),
+          commitment: circle?.commitment ?? circle?.title ?? 'Commitment',
+          joinedAt: member?.joinedAt ?? circle?.createdAt ?? now,
+          leftAt: now,
+          privacy: circle?.privacy ?? 'private',
+          title: circle?.title ?? 'Past Circle',
+          updatedAt: now,
+        },
+        {merge: true},
+      );
       transaction.update(circleRef, {
         memberCount: FieldValue.increment(-1),
         updatedAt: now,
@@ -1244,7 +1500,9 @@ export const leaveCircle = onCall(async request => {
       transaction.set(
         publicIndexRef,
         {
-          ...(isActiveMember ? {memberCount: FieldValue.increment(-1)} : {}),
+          ...(leavePlan.isActiveMember
+            ? {memberCount: FieldValue.increment(-1)}
+            : {}),
           ...(filteredMembers ? {members: filteredMembers} : {}),
           updatedAt: now,
         },
@@ -1252,12 +1510,45 @@ export const leaveCircle = onCall(async request => {
       );
     }
 
-    return leaveStatus;
+    return {...leavePlan, leftAt: effectiveLeftAt};
   });
 
-  await deleteCircleCheckInsForMember(input.circleId, uid);
+  if (status.shouldRemoveOpenOpportunities) {
+    await removeMemberFromOpenCircleOpportunities({
+      circleId: input.circleId,
+      leftAt: status.leftAt,
+      uid,
+    });
+  }
 
-  return {status};
+  if (status.shouldBackfillActivity) {
+    try {
+      await backfillDepartedMemberActivity({circleId: input.circleId, uid});
+      await membershipHistoryRef.set(
+        {
+          activityBackfillCompletedAt: FieldValue.serverTimestamp(),
+          activityBackfillLastFailedAt: FieldValue.delete(),
+          activityBackfillStatus: 'complete',
+          activityBackfillUpdatedAt: FieldValue.serverTimestamp(),
+        },
+        {merge: true},
+      );
+    } catch (error) {
+      await membershipHistoryRef
+        .set(
+          {
+            activityBackfillLastFailedAt: FieldValue.serverTimestamp(),
+            activityBackfillStatus: 'pending',
+            activityBackfillUpdatedAt: FieldValue.serverTimestamp(),
+          },
+          {merge: true},
+        )
+        .catch(() => undefined);
+      throw error;
+    }
+  }
+
+  return {status: status.status};
 });
 
 export const convertPersonalCircle = onCall(async request => {

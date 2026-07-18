@@ -477,7 +477,7 @@ export function CircleToolsScreen({
       isPendingMembership ? 'Cancel request?' : 'Leave circle?',
       isPendingMembership
         ? 'The circle owner will no longer see your request.'
-        : 'Your membership, Tap Ins, and check-in media for this Circle will be removed.',
+        : 'You will stop future Tap Ins and reminders. Your past Tap Ins and shared media will remain in the Circle history.',
       [
         {style: 'cancel', text: 'Keep'},
         {

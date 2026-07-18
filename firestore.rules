@@ -64,6 +64,11 @@ service cloud.firestore {
         allow read: if isSelf(uid);
         allow write: if false;
       }
+
+      match /pastCircles/{circleId} {
+        allow read: if isSelf(uid);
+        allow write: if false;
+      }
     }
 
     match /handles/{handle} {
@@ -90,6 +95,16 @@ service cloud.firestore {
         allow write: if false;
       }
 
+      match /membershipHistory/{uid} {
+        allow read: if isSelf(uid);
+        allow write: if false;
+
+        match /periods/{periodId} {
+          allow read: if isSelf(uid);
+          allow write: if false;
+        }
+      }
+
       match /joinRequests/{uid} {
         allow read: if isSelf(uid) || isActiveMember(circleId);
         allow write: if false;
@@ -100,7 +115,7 @@ service cloud.firestore {
         allow write: if false;
 
         match /checkIns/{uid} {
-          allow read: if isActiveMember(circleId);
+          allow read: if isActiveMember(circleId) || isSelf(uid);
           allow write: if false;
         }
       }

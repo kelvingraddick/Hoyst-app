@@ -349,7 +349,7 @@ describe('CircleToolsScreen', () => {
     pressByAccessibilityLabel(tree, 'Leave Circle');
     expect(alertSpy).toHaveBeenCalledWith(
       'Leave circle?',
-      'Your membership, Tap Ins, and check-in media for this Circle will be removed.',
+      'You will stop future Tap Ins and reminders. Your past Tap Ins and shared media will remain in the Circle history.',
       expect.arrayContaining([
         expect.objectContaining({text: 'Keep'}),
         expect.objectContaining({style: 'destructive', text: 'Leave'}),

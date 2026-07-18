@@ -1,5 +1,6 @@
 import {
   calculateMomentumSummary,
+  calculateMomentumStreaks,
   getMomentumStatus,
   getOpportunitySlots,
   normalizeCommitmentSchedule,
@@ -71,7 +72,7 @@ describe('Momentum opportunity scheduling', () => {
     });
   });
 
-  it('treats skips as neutral for Momentum and streaks', () => {
+  it('credits skips for Momentum and streaks while preserving their count', () => {
     const summary = calculateMomentumSummary({
       opportunities: [
         {
@@ -98,10 +99,13 @@ describe('Momentum opportunity scheduling', () => {
 
     expect(summary).toMatchObject({
       availableOpportunities: 3,
-      completedOpportunities: 2,
-      currentStreak: 2,
-      percentage: 67,
-      status: 'strong_momentum',
+      completedOpportunities: 3,
+      creditedOpportunities: 3,
+      currentStreak: 3,
+      percentage: 100,
+      skippedOpportunities: 1,
+      status: 'peak_momentum',
+      tapInOpportunities: 2,
     });
   });
 
@@ -130,6 +134,58 @@ describe('Momentum opportunity scheduling', () => {
       currentStreak: 0,
       percentage: 50,
     });
+  });
+
+  it('rebuilds lifetime streaks from completed Tap Ins and Skips', () => {
+    expect(
+      calculateMomentumStreaks({
+        opportunities: [
+          {
+            availableDateKey: '2026-04-30',
+            periodKey: 'past',
+            slotIndex: 0,
+            status: 'completed',
+          },
+          {
+            availableDateKey: '2026-05-01',
+            periodKey: 'past',
+            slotIndex: 0,
+            status: 'skipped',
+          },
+          {
+            availableDateKey: '2026-05-02',
+            periodKey: 'current',
+            slotIndex: 0,
+            status: 'completed',
+          },
+        ],
+      }),
+    ).toEqual({bestStreak: 3, currentStreak: 3});
+
+    expect(
+      calculateMomentumStreaks({
+        opportunities: [
+          {
+            availableDateKey: '2026-04-30',
+            periodKey: 'past',
+            slotIndex: 0,
+            status: 'completed',
+          },
+          {
+            availableDateKey: '2026-05-01',
+            periodKey: 'past',
+            slotIndex: 0,
+            status: 'missed',
+          },
+          {
+            availableDateKey: '2026-05-02',
+            periodKey: 'current',
+            slotIndex: 0,
+            status: 'completed',
+          },
+        ],
+      }),
+    ).toEqual({bestStreak: 1, currentStreak: 1});
   });
 
   it('uses the planned status thresholds', () => {
