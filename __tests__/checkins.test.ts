@@ -1,4 +1,5 @@
 import {getRemoveTapInDecision} from '../functions/src/checkins/remove';
+import {getTapInDetailsPatch} from '../functions/src/checkins/details';
 import {
   getCreditedOutcomeStatus,
   getNextCoverageRevision,
@@ -113,6 +114,64 @@ describe('remove Tap In decision', () => {
         checkInStatus: 'done',
       }),
     ).toThrow('Join this circle first.');
+  });
+});
+
+describe('Tap In details update decision', () => {
+  it('returns metadata only for an existing non-skip Tap In', () => {
+    expect(
+      getTapInDetailsPatch({
+        checkInExists: true,
+        checkInStatus: 'done',
+        memberStatus: 'active',
+        note: '  Proof saved.  ',
+        photoUrl: 'https://example.com/proof.jpg',
+      }),
+    ).toEqual({
+      note: '  Proof saved.  ',
+      photoUrl: 'https://example.com/proof.jpg',
+    });
+  });
+
+  it('supports clearing details without changing the Tap In outcome', () => {
+    expect(
+      getTapInDetailsPatch({
+        checkInExists: true,
+        checkInStatus: 'partial',
+        memberStatus: 'active',
+        note: '',
+        photoUrl: null,
+      }),
+    ).toEqual({note: null, photoUrl: null});
+  });
+
+  it('rejects inactive members, missing Tap Ins, and skips', () => {
+    expect(() =>
+      getTapInDetailsPatch({
+        checkInExists: true,
+        checkInStatus: 'done',
+        memberStatus: 'pending',
+        note: null,
+        photoUrl: null,
+      }),
+    ).toThrow('Join this circle first.');
+    expect(() =>
+      getTapInDetailsPatch({
+        checkInExists: false,
+        memberStatus: 'active',
+        note: null,
+        photoUrl: null,
+      }),
+    ).toThrow("Today's Tap In was not found.");
+    expect(() =>
+      getTapInDetailsPatch({
+        checkInExists: true,
+        checkInStatus: 'skip',
+        memberStatus: 'active',
+        note: null,
+        photoUrl: null,
+      }),
+    ).toThrow('Details can only be added to a Tap In.');
   });
 });
 

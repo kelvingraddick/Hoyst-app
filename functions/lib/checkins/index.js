@@ -1,8 +1,9 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.removeTapIn = exports.processTapInSideEffects = exports.submitTapIn = void 0;
+exports.removeTapIn = exports.processTapInSideEffects = exports.updateTapInDetails = exports.submitTapIn = void 0;
 const firestore_1 = require("firebase-admin/firestore");
 const auth_1 = require("firebase-admin/auth");
+const storage_1 = require("firebase-admin/storage");
 const firestore_2 = require("firebase-functions/v2/firestore");
 const https_1 = require("firebase-functions/v2/https");
 const zod_1 = require("zod");
@@ -16,6 +17,7 @@ const commitments_1 = require("../shared/commitments");
 const circle_mode_1 = require("../shared/circle-mode");
 const thread_1 = require("../thread");
 const notification_plan_1 = require("./notification-plan");
+const details_1 = require("./details");
 const submitTapInSchema = zod_1.z.object({
     circleId: zod_1.z.string().trim().min(1),
     currentValue: zod_1.z.number().int().min(0).max(100000).optional(),
@@ -26,6 +28,11 @@ const submitTapInSchema = zod_1.z.object({
 const removeTapInSchema = zod_1.z.object({
     circleId: zod_1.z.string().trim().min(1),
     idToken: zod_1.z.string().trim().min(1).optional(),
+});
+const updateTapInDetailsSchema = zod_1.z.object({
+    circleId: zod_1.z.string().trim().min(1),
+    note: zod_1.z.string().trim().max(1000).nullable(),
+    photoUrl: zod_1.z.string().trim().url().max(2048).nullable(),
 });
 function getCheckInEffectSourceKey(circleId, dateKey, uid) {
     return `check_in:${circleId}:${dateKey}:${uid}`;
@@ -742,6 +749,68 @@ async function submitTapInHandler(request) {
     });
 }
 exports.submitTapIn = (0, https_1.onCall)(submitTapInHandler);
+async function updateTapInDetailsHandler(request) {
+    const { profile, uid } = await requireCompletedProfile(request.auth?.uid);
+    const input = updateTapInDetailsSchema.parse(request.data);
+    const circleRef = firebase_1.db.collection('circles').doc(input.circleId);
+    const memberRef = circleRef.collection('members').doc(uid);
+    const now = firestore_1.FieldValue.serverTimestamp();
+    const result = await firebase_1.db.runTransaction(async (transaction) => {
+        const [circleSnapshot, memberSnapshot] = await Promise.all([
+            transaction.get(circleRef),
+            transaction.get(memberRef),
+        ]);
+        if (!circleSnapshot.exists) {
+            throw new https_1.HttpsError('not-found', 'Circle not found.');
+        }
+        const circle = circleSnapshot.data();
+        const dateKey = getDateKey(circle?.timezone ?? profile.timezone ?? 'UTC');
+        const checkInRef = circleRef
+            .collection('days')
+            .doc(dateKey)
+            .collection('checkIns')
+            .doc(uid);
+        const checkInSnapshot = await transaction.get(checkInRef);
+        const patch = (0, details_1.getTapInDetailsPatch)({
+            checkInExists: checkInSnapshot.exists,
+            checkInStatus: checkInSnapshot.data()?.status,
+            memberStatus: memberSnapshot.data()?.status,
+            note: input.note,
+            photoUrl: input.photoUrl,
+        });
+        const shouldDeletePhoto = Boolean(checkInSnapshot.data()?.photoUrl) && patch.photoUrl === null;
+        transaction.set(checkInRef, {
+            ...patch,
+            updatedAt: now,
+        }, { merge: true });
+        return {
+            dateKey,
+            note: patch.note,
+            photoUrl: patch.photoUrl,
+            shouldDeletePhoto,
+        };
+    });
+    if (result.shouldDeletePhoto) {
+        await (0, storage_1.getStorage)()
+            .bucket()
+            .deleteFiles({
+            force: true,
+            prefix: `circles/${input.circleId}/check-ins/${result.dateKey}/${uid}/proof.jpg`,
+        })
+            .catch(error => console.error('delete_tap_in_proof_failed', {
+            circleId: input.circleId,
+            dateKey: result.dateKey,
+            error,
+            uid,
+        }));
+    }
+    return {
+        dateKey: result.dateKey,
+        note: result.note,
+        photoUrl: result.photoUrl,
+    };
+}
+exports.updateTapInDetails = (0, https_1.onCall)(updateTapInDetailsHandler);
 exports.processTapInSideEffects = (0, firestore_2.onDocumentWritten)({
     document: 'circles/{circleId}/days/{dateKey}/checkIns/{uid}',
     secrets: [notifications_1.oneSignalRestApiKey],

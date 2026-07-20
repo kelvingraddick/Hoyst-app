@@ -1,15 +1,11 @@
 import React from 'react';
-import {
-  Image,
-  Pressable,
-  StyleSheet,
-  View,
-} from 'react-native';
-import {Camera, X} from 'lucide-react-native';
+import {Image, Pressable, StyleSheet, View} from 'react-native';
+import {ImagePlus, X} from 'lucide-react-native';
 
 import {useHoystTheme} from '../theme/useHoystTheme';
 import {radius} from '../tokens/radius';
 import {HoystText} from './HoystText';
+import {TapInActionButton} from './TapInActionButton';
 
 type PhotoPickerTileProps = {
   onAddPhoto: () => void;
@@ -25,70 +21,60 @@ export function PhotoPickerTile({
   const theme = useHoystTheme();
 
   return (
-    <View style={styles.row}>
-      <Pressable
+    <View style={styles.stack}>
+      {photoUri ? (
+        <View
+          style={[
+            styles.previewTile,
+            {
+              backgroundColor: theme.surfaceSoft,
+              borderColor: theme.border,
+            },
+          ]}
+          testID="photo-picker-preview">
+          <Image source={{uri: photoUri}} style={styles.previewImage} />
+          <Pressable
+            accessibilityLabel="Remove selected photo"
+            accessibilityRole="button"
+            hitSlop={8}
+            onPress={onRemovePhoto}
+            style={styles.removeButton}
+            testID="photo-picker-remove">
+            <X color="#FFFFFF" size={14} strokeWidth={2.4} />
+          </Pressable>
+        </View>
+      ) : null}
+      <TapInActionButton
+        icon={
+          <ImagePlus
+            color={theme.textSubtle}
+            size={19}
+            strokeWidth={2.2}
+          />
+        }
+        label={photoUri ? 'Change Photo' : 'Add Photo'}
         onPress={onAddPhoto}
-        style={({pressed}) => [
-          styles.addTile,
-          {
-            backgroundColor: theme.surfaceSoft,
-            borderColor: theme.border,
-            opacity: pressed ? 0.92 : 1,
-          },
-        ]}>
-        <Camera color={theme.textSubtle} size={22} strokeWidth={2.1} />
-        <HoystText tone="muted" variant="tiny">
-          Add Photo
+        testID={photoUri ? 'photo-picker-change' : 'photo-picker-add'}
+        variant="surface"
+      />
+      {!photoUri ? (
+        <HoystText style={styles.helperText} tone="muted" variant="caption">
+          Optional proof for your Circle
         </HoystText>
-      </Pressable>
-      <View
-        style={[
-          styles.previewTile,
-          {
-            backgroundColor: theme.surfaceSoft,
-            borderColor: theme.border,
-          },
-        ]}>
-        {photoUri ? (
-          <>
-            <Image source={{uri: photoUri}} style={styles.previewImage} />
-            <Pressable
-              onPress={onRemovePhoto}
-              style={styles.removeButton}>
-              <X color={theme.text} size={14} strokeWidth={2.2} />
-            </Pressable>
-          </>
-        ) : (
-          <View style={styles.emptyPreview}>
-            <HoystText tone="muted" variant="caption">
-              Photo preview
-            </HoystText>
-          </View>
-        )}
-      </View>
+      ) : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  row: {
-    flexDirection: 'row',
-    gap: 14,
-  },
-  addTile: {
-    alignItems: 'center',
-    borderRadius: radius.md,
-    borderWidth: 1,
-    flex: 1,
-    gap: 10,
-    justifyContent: 'center',
-    minHeight: 118,
+  helperText: {
+    textAlign: 'center',
   },
   previewTile: {
     borderRadius: radius.md,
     borderWidth: 1,
     flex: 1,
-    minHeight: 118,
+    minHeight: 112,
     overflow: 'hidden',
   },
   previewImage: {
@@ -106,9 +92,8 @@ const styles = StyleSheet.create({
     top: 8,
     width: 24,
   },
-  emptyPreview: {
-    alignItems: 'center',
-    flex: 1,
-    justifyContent: 'center',
+  stack: {
+    alignSelf: 'stretch',
+    gap: 7,
   },
 });

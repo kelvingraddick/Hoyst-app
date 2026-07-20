@@ -4,6 +4,10 @@ import {Alert} from 'react-native';
 
 import {HoystButton} from '../src/design/components/HoystButton';
 import {HoystInput} from '../src/design/components/HoystInput';
+import {
+  CommitmentTypeIcon,
+  CommitmentTypePill,
+} from '../src/design/components/CommitmentTypeVisual';
 import {CreateCircleScreen} from '../src/features/create-circle/screens/CreateCircleScreen';
 
 jest.mock('@react-native-community/blur', () => {
@@ -150,6 +154,11 @@ describe('CreateCircleScreen unified flow', () => {
     expect(output).toContain('Set the Commitment rules');
     expect(output).toContain('You Tap In');
     expect(output).not.toContain('Each member taps in');
+    expect(
+      tree.root
+        .findAllByType(CommitmentTypeIcon)
+        .map(icon => icon.props.commitmentType),
+    ).toEqual(['build', 'limit', 'avoid']);
 
     pressContinue(tree);
     output = JSON.stringify(tree.toJSON());
@@ -165,6 +174,9 @@ describe('CreateCircleScreen unified flow', () => {
     expect(output).toContain('Review your setup');
     expect(output).toContain('Personal commitment');
     expect(output).not.toContain('members');
+    expect(tree.root.findByType(CommitmentTypePill).props.commitmentType).toBe(
+      'build',
+    );
     expect(findButton(tree, 'Create Personal Commitment')).toBeTruthy();
   });
 

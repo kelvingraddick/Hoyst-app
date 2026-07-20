@@ -39,6 +39,7 @@ import {
 import {launchImageLibrary} from 'react-native-image-picker';
 
 import {BrandMark} from '../../../design/components/BrandMark';
+import {CommitmentTypeIcon} from '../../../design/components/CommitmentTypeVisual';
 import {FrostedBackdrop} from '../../../design/components/FrostedBackdrop';
 import {GlassPanel} from '../../../design/components/GlassPanel';
 import {HoystButton} from '../../../design/components/HoystButton';
@@ -316,13 +317,15 @@ function CoachPrompt({
 
 function PreviewRow({
   accent,
+  commitmentType,
   detail,
   icon: Icon,
   label,
 }: {
   accent: OnboardingOption<string>['accent'];
+  commitmentType?: CommitmentType;
   detail: string;
-  icon: LucideIcon;
+  icon?: LucideIcon;
   label: string;
 }) {
   const theme = useHoystTheme();
@@ -337,12 +340,22 @@ function PreviewRow({
       <View
         style={[
           styles.previewIcon,
-          {
-            backgroundColor: `${accentColor}20`,
-            borderColor: `${accentColor}66`,
-          },
+          commitmentType
+            ? styles.previewCommitmentIcon
+            : {
+                backgroundColor: `${accentColor}20`,
+                borderColor: `${accentColor}66`,
+              },
         ]}>
-        <Icon color={accentColor} size={20} strokeWidth={2.3} />
+        {commitmentType ? (
+          <CommitmentTypeIcon
+            commitmentType={commitmentType}
+            decorative
+            size={42}
+          />
+        ) : Icon ? (
+          <Icon color={accentColor} size={20} strokeWidth={2.3} />
+        ) : null}
       </View>
       <View style={styles.previewCopy}>
         <HoystText variant="label">{label}</HoystText>
@@ -1454,7 +1467,7 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
               detail={
                 formatCommitmentRulesSummary(starterCircleDraft)
               }
-              icon={Target}
+              commitmentType={starterCircleDraft.commitmentType}
               label="Commitment rules"
             />
             <PreviewRow
@@ -1971,6 +1984,10 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: 4,
     minWidth: 0,
+  },
+  previewCommitmentIcon: {
+    backgroundColor: 'transparent',
+    borderColor: 'transparent',
   },
   stepper: {
     alignItems: 'center',

@@ -252,6 +252,7 @@ export type InboxEvent = {
 export type ViewerTodayCheckIn = {
   coverageStatus?: CheckInCoverageStatus;
   currentValue?: number;
+  dateKey?: string;
   maximumValue?: number;
   minimumValue?: number;
   note?: string;

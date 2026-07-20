@@ -23,6 +23,8 @@ import {AppTabsNavigator} from './AppTabsNavigator';
 import {AuthStackNavigator} from './AuthStackNavigator';
 import {getRootNavigatorMode, shouldRegisterAccountRoutes} from './root-mode';
 import type {RootStackParamList} from './types';
+import {useHoystTheme} from '../design/theme/useHoystTheme';
+import {getTapInComposerScreenOptions} from './tap-in-sheet-options';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -35,6 +37,7 @@ function LoadingScreen(): React.JSX.Element {
 }
 
 export function RootNavigator(): React.JSX.Element {
+  const theme = useHoystTheme();
   const status = useSessionStore(state => state.status);
   const hasHydratedOnboarding = useOnboardingStore(state => state.hasHydrated);
   const mode = getRootNavigatorMode({
@@ -163,11 +166,7 @@ export function RootNavigator(): React.JSX.Element {
       <Stack.Screen
         component={TapInComposerScreen}
         name="TapInComposer"
-        options={{
-          animation: 'slide_from_bottom',
-          headerShown: false,
-          presentation: 'fullScreenModal',
-        }}
+        options={getTapInComposerScreenOptions(theme.background)}
       />
       <Stack.Screen
         component={TapInCompleteScreen}

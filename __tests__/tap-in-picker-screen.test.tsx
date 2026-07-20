@@ -350,7 +350,7 @@ describe('TapInPickerScreen', () => {
       priorityButton.props.onPress();
     });
 
-    expect(navigation.replace).toHaveBeenCalledWith('TapInComposer', {
+    expect(navigation.navigate).toHaveBeenCalledWith('TapInComposer', {
       circleId: 'most-urgent',
       source: 'tap_in',
     });
@@ -415,7 +415,7 @@ describe('TapInPickerScreen', () => {
       tapInTodayButton.props.onPress();
     });
 
-    expect(navigation.replace).toHaveBeenCalledWith('TapInComposer', {
+    expect(navigation.navigate).toHaveBeenCalledWith('TapInComposer', {
       circleId: 'remaining-due',
       source: 'tap_in',
     });

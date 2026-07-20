@@ -1,6 +1,7 @@
-import React, {useEffect, useMemo, useRef, useState} from 'react';
+import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {
   AccessibilityInfo,
+  Alert,
   Animated,
   Easing,
   Image,
@@ -12,6 +13,7 @@ import {Flame, Share2} from 'lucide-react-native';
 import type {NativeStackScreenProps} from '@react-navigation/native-stack';
 
 import {FrostedBackdrop} from '../../../design/components/FrostedBackdrop';
+import {CommitmentTypePill} from '../../../design/components/CommitmentTypeVisual';
 import {HoystButton} from '../../../design/components/HoystButton';
 import {HoystScreen} from '../../../design/components/HoystScreen';
 import {HoystText} from '../../../design/components/HoystText';
@@ -32,6 +34,10 @@ import {
   formatQuantityValue,
 } from '../../commitments/commitment-logic';
 import {canShareTapInStory} from '../services/tap-in-story-share';
+import {
+  TapInDetailsSection,
+  type SavedTapInDetails,
+} from '../components/TapInDetailsSection';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'TapInComplete'>;
 
@@ -75,6 +81,10 @@ const completionMarkStageSize = 190;
 function cleanOptionalText(value?: string) {
   const trimmed = value?.trim();
   return trimmed && trimmed.length > 0 ? trimmed : undefined;
+}
+
+function isRemotePhoto(value?: string) {
+  return Boolean(value && /^https?:\/\//i.test(value));
 }
 
 function formatDayCount(value: number) {
@@ -235,13 +245,24 @@ export function TapInCompleteScreen({
   const [hasLaidOut, setHasLaidOut] = useState(false);
   const [hasSettledNavigation, setHasSettledNavigation] = useState(false);
   const [hasResolvedDetail, setHasResolvedDetail] = useState(false);
+  const [hasDirtyDetails, setHasDirtyDetails] = useState(false);
+  const [pendingPhotoUri, setPendingPhotoUri] = useState<string | undefined>(
+    isRemotePhoto(route.params.photoUri) ? undefined : route.params.photoUri,
+  );
+  const [savedDetails, setSavedDetails] = useState<SavedTapInDetails>(() => ({
+    ...(route.params.note?.trim() ? {note: route.params.note.trim()} : {}),
+    ...(isRemotePhoto(route.params.photoUri)
+      ? {photoUrl: route.params.photoUri}
+      : {}),
+  }));
   const profile = useUserProfileStore(state => state.profile);
   const status = useSessionStore(state => state.status);
   const user = useSessionStore(state => state.user);
   const timezone = profile?.timezone ?? 'UTC';
   const canLoadDetail = status === 'authenticatedReady' && Boolean(user?.uid);
-  const note = route.params.note?.trim();
+  const note = savedDetails.note?.trim();
   const hasNote = Boolean(note);
+  const visiblePhotoUri = pendingPhotoUri ?? savedDetails.photoUrl;
   const isSkip = route.params.status === 'skip';
   const quantityValue = cleanQuantityValue(route.params.currentValue);
   const isQuantityCompletion =
@@ -332,6 +353,28 @@ export function TapInCompleteScreen({
   const canShowStoryShare = canShareTapInStory(route.params.status);
 
   useEffect(() => {
+    return navigation.addListener('beforeRemove', event => {
+      if (!hasDirtyDetails) {
+        return;
+      }
+
+      event.preventDefault();
+      Alert.alert(
+        'Discard detail changes?',
+        'Your note or photo is not saved yet.',
+        [
+          {style: 'cancel', text: 'Keep editing'},
+          {
+            onPress: () => navigation.dispatch(event.data.action),
+            style: 'destructive',
+            text: 'Discard',
+          },
+        ],
+      );
+    });
+  }, [hasDirtyDetails, navigation]);
+
+  useEffect(() => {
     setHasResolvedDetail(false);
 
     if (!canLoadDetail || !user?.uid) {
@@ -354,6 +397,23 @@ export function TapInCompleteScreen({
       uid: user.uid,
     });
   }, [canLoadDetail, route.params.circleId, timezone, user?.uid]);
+
+  useEffect(() => {
+    const viewerTodayCheckIn = detail?.viewerTodayCheckIn;
+
+    if (!viewerTodayCheckIn || viewerTodayCheckIn.status === 'skip') {
+      return;
+    }
+
+    setSavedDetails({
+      ...(viewerTodayCheckIn.note?.trim()
+        ? {note: viewerTodayCheckIn.note.trim()}
+        : {}),
+      ...(viewerTodayCheckIn.photoUrl
+        ? {photoUrl: viewerTodayCheckIn.photoUrl}
+        : {}),
+    });
+  }, [detail?.viewerTodayCheckIn]);
 
   useEffect(() => {
     let isMounted = true;
@@ -478,6 +538,10 @@ export function TapInCompleteScreen({
 
     navigation.replace('MainTabs', {screen: 'Home'});
   };
+  const handleDetailsSaved = useCallback((details: SavedTapInDetails) => {
+    setSavedDetails(details);
+    setPendingPhotoUri(undefined);
+  }, []);
   const shareStory = () => {
     navigation.navigate('TapInStoryShare', {
       circleId: route.params.circleId,
@@ -491,8 +555,8 @@ export function TapInCompleteScreen({
       source: route.params.source,
       streakDays: displayDetail?.streakDays ?? route.params.streakDays,
       streakLabel: displayDetail?.streakLabel ?? route.params.streakLabel,
-      note: route.params.note,
-      photoUri: route.params.photoUri,
+      note: savedDetails.note,
+      photoUri: visiblePhotoUri,
     });
   };
   const commitment = hasCompletionContent
@@ -524,18 +588,18 @@ export function TapInCompleteScreen({
           theme.accentTertiary,
         ]
       : completionTone === 'skip' || completionTone === 'partial'
-    ? [
-        theme.warning,
-        theme.accentWarmSoft,
-        theme.accentSecondary,
-        theme.accentTertiary,
-      ]
-    : [
-        theme.success,
-        theme.accentSecondary,
-        theme.accentTertiary,
-        theme.accent,
-      ];
+      ? [
+          theme.warning,
+          theme.accentWarmSoft,
+          theme.accentSecondary,
+          theme.accentTertiary,
+        ]
+      : [
+          theme.success,
+          theme.accentSecondary,
+          theme.accentTertiary,
+          theme.accent,
+        ];
   const outcomeBackgroundColor =
     completionTone === 'failed'
       ? theme.danger
@@ -549,7 +613,9 @@ export function TapInCompleteScreen({
       ? theme.warningForeground
       : theme.successForeground;
   const statusIconColor =
-    completionTone === 'covered' ? theme.accentWarmSoft : outcomeForegroundColor;
+    completionTone === 'covered'
+      ? theme.accentWarmSoft
+      : outcomeForegroundColor;
   const statusLeadColor =
     completionTone === 'covered'
       ? theme.isDark
@@ -712,17 +778,10 @@ export function TapInCompleteScreen({
               </HoystText>
               {isReadyForCelebration ? (
                 <View style={styles.statusRow}>
-                  <Flame
-                    color={statusIconColor}
-                    size={16}
-                    strokeWidth={2.7}
-                  />
+                  <Flame color={statusIconColor} size={16} strokeWidth={2.7} />
                   <HoystText
                     numberOfLines={1}
-                    style={[
-                      styles.statusLead,
-                      {color: statusLeadColor},
-                    ]}>
+                    style={[styles.statusLead, {color: statusLeadColor}]}>
                     {statusCopy.lead}
                   </HoystText>
                   {statusCopy.trailing ? (
@@ -763,9 +822,18 @@ export function TapInCompleteScreen({
                   borderColor: theme.glassBorder,
                 },
               ]}>
-              <HoystText tone="muted" variant="label">
-                Circle Commitment
-              </HoystText>
+              <View style={styles.summaryHeader}>
+                <HoystText tone="muted" variant="label">
+                  Circle Commitment
+                </HoystText>
+                {route.params.commitmentType ? (
+                  <CommitmentTypePill
+                    commitmentType={route.params.commitmentType}
+                    density="compact"
+                    uppercase
+                  />
+                ) : null}
+              </View>
               <HoystText numberOfLines={2} style={styles.summaryTitle}>
                 {commitment}
               </HoystText>
@@ -788,14 +856,26 @@ export function TapInCompleteScreen({
                 tone={hasNote ? 'primary' : 'muted'}>
                 {hasNote ? note : emptyNoteCopy}
               </HoystText>
-              {route.params.photoUri ? (
+              {visiblePhotoUri ? (
                 <Image
                   resizeMode="cover"
-                  source={{uri: route.params.photoUri}}
+                  source={{uri: visiblePhotoUri}}
                   style={styles.summaryImage}
                 />
               ) : null}
             </View>
+
+            {!isSkip ? (
+              <TapInDetailsSection
+                autoSaveInitialPhoto={Boolean(pendingPhotoUri)}
+                circleId={route.params.circleId}
+                dateKey={route.params.dateKey}
+                initialNote={savedDetails.note}
+                initialPhotoUrl={visiblePhotoUri}
+                onDirtyChange={setHasDirtyDetails}
+                onSaved={handleDetailsSaved}
+              />
+            ) : null}
 
             {canShowStoryShare ? (
               <HoystButton
@@ -853,7 +933,7 @@ export function TapInCompleteScreen({
 const styles = StyleSheet.create({
   bodyStack: {
     alignSelf: 'stretch',
-    gap: 36,
+    gap: 18,
   },
   bottomAction: {
     alignSelf: 'stretch',
@@ -981,6 +1061,13 @@ const styles = StyleSheet.create({
     height: 168,
     marginTop: 4,
     width: '100%',
+  },
+  summaryHeader: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    justifyContent: 'space-between',
   },
   summaryNote: {
     fontSize: 14,

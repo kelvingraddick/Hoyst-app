@@ -1660,6 +1660,7 @@ function getCoveredStatusesFromSnapshot(
 
 function getViewerTodayCheckInFromSnapshot(
   snapshot: FirebaseFirestoreTypes.QuerySnapshot,
+  dateKey: string,
   uid: string,
 ): ViewerTodayCheckIn | undefined {
   const checkInSnapshot = snapshot.docs.find(doc => {
@@ -1696,6 +1697,7 @@ function getViewerTodayCheckInFromSnapshot(
   const unitLabel = asString(data.unitLabel);
 
   return {
+    dateKey,
     status,
     ...(coverageStatus ? {coverageStatus} : {}),
     ...(typeof currentValue === 'number' ? {currentValue} : {}),
@@ -1777,6 +1779,7 @@ function syncPeriodCheckInListeners({
             state.todayCheckInStatuses = dayStatuses;
             state.viewerTodayCheckIn = getViewerTodayCheckInFromSnapshot(
               snapshot,
+              dateKey,
               uid,
             );
           }

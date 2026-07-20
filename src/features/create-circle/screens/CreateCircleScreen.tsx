@@ -37,11 +37,11 @@ import {CommitmentSetupScaffold} from '../components/CommitmentSetupScaffold';
 import {
   categoryOptions,
   circleModeOptions,
+  CommitmentTypeRuleSummary,
   commitmentCadenceOptions,
   commitmentTypeOptions,
   formatAccessSummary,
   formatCadenceSummary,
-  formatCommitmentRulesSummary,
   formatJoinMode,
   formatSkipSummary,
   formatTimezoneSummary,
@@ -729,7 +729,7 @@ export function CreateCircleScreen({navigation}: Props): React.JSX.Element {
         <SetupSummaryRow label="Commitment" value={draft.commitment.trim()} />
         <SetupSummaryRow
           label="Commitment type"
-          value={formatCommitmentRulesSummary(draft)}
+          value={<CommitmentTypeRuleSummary {...draft} />}
         />
         <SetupSummaryRow
           label="Rhythm"

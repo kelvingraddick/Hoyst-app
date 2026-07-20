@@ -4,6 +4,7 @@ import {
   type DocumentData,
 } from 'firebase-admin/firestore';
 import {getAuth} from 'firebase-admin/auth';
+import {getStorage} from 'firebase-admin/storage';
 import {onDocumentWritten} from 'firebase-functions/v2/firestore';
 import {
   HttpsError,
@@ -49,6 +50,7 @@ import {
 import {getCircleMode} from '../shared/circle-mode';
 import {createCircleThreadActivity, getCircleThreadStreakText} from '../thread';
 import {getCircleCompleteNotificationTargets} from './notification-plan';
+import {getTapInDetailsPatch} from './details';
 
 const submitTapInSchema = z.object({
   circleId: z.string().trim().min(1),
@@ -61,6 +63,12 @@ const submitTapInSchema = z.object({
 const removeTapInSchema = z.object({
   circleId: z.string().trim().min(1),
   idToken: z.string().trim().min(1).optional(),
+});
+
+const updateTapInDetailsSchema = z.object({
+  circleId: z.string().trim().min(1),
+  note: z.string().trim().max(1000).nullable(),
+  photoUrl: z.string().trim().url().max(2048).nullable(),
 });
 
 type TapInSideEffectInput = {
@@ -1030,6 +1038,84 @@ async function submitTapInHandler(request: CallableRequest) {
 }
 
 export const submitTapIn = onCall(submitTapInHandler);
+
+async function updateTapInDetailsHandler(request: CallableRequest) {
+  const {profile, uid} = await requireCompletedProfile(request.auth?.uid);
+  const input = updateTapInDetailsSchema.parse(request.data);
+  const circleRef = db.collection('circles').doc(input.circleId);
+  const memberRef = circleRef.collection('members').doc(uid);
+  const now = FieldValue.serverTimestamp();
+
+  const result = await db.runTransaction(async transaction => {
+    const [circleSnapshot, memberSnapshot] = await Promise.all([
+      transaction.get(circleRef),
+      transaction.get(memberRef),
+    ]);
+
+    if (!circleSnapshot.exists) {
+      throw new HttpsError('not-found', 'Circle not found.');
+    }
+
+    const circle = circleSnapshot.data();
+    const dateKey = getDateKey(circle?.timezone ?? profile.timezone ?? 'UTC');
+    const checkInRef = circleRef
+      .collection('days')
+      .doc(dateKey)
+      .collection('checkIns')
+      .doc(uid);
+    const checkInSnapshot = await transaction.get(checkInRef);
+    const patch = getTapInDetailsPatch({
+      checkInExists: checkInSnapshot.exists,
+      checkInStatus: checkInSnapshot.data()?.status,
+      memberStatus: memberSnapshot.data()?.status,
+      note: input.note,
+      photoUrl: input.photoUrl,
+    });
+    const shouldDeletePhoto =
+      Boolean(checkInSnapshot.data()?.photoUrl) && patch.photoUrl === null;
+
+    transaction.set(
+      checkInRef,
+      {
+        ...patch,
+        updatedAt: now,
+      },
+      {merge: true},
+    );
+
+    return {
+      dateKey,
+      note: patch.note,
+      photoUrl: patch.photoUrl,
+      shouldDeletePhoto,
+    };
+  });
+
+  if (result.shouldDeletePhoto) {
+    await getStorage()
+      .bucket()
+      .deleteFiles({
+        force: true,
+        prefix: `circles/${input.circleId}/check-ins/${result.dateKey}/${uid}/proof.jpg`,
+      })
+      .catch(error =>
+        console.error('delete_tap_in_proof_failed', {
+          circleId: input.circleId,
+          dateKey: result.dateKey,
+          error,
+          uid,
+        }),
+      );
+  }
+
+  return {
+    dateKey: result.dateKey,
+    note: result.note,
+    photoUrl: result.photoUrl,
+  };
+}
+
+export const updateTapInDetails = onCall(updateTapInDetailsHandler);
 
 export const processTapInSideEffects = onDocumentWritten(
   {

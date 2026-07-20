@@ -1,8 +1,9 @@
 import React from 'react';
-import {Alert, Image, Pressable} from 'react-native';
+import {Alert, Image, Pressable, StyleSheet} from 'react-native';
 import renderer, {act} from 'react-test-renderer';
 
 import {HoystTapInMark} from '../src/design/components/HoystTapInMark';
+import {CommitmentTypePill} from '../src/design/components/CommitmentTypeVisual';
 import {TapInActionButton} from '../src/design/components/TapInActionButton';
 import {TapInComposerScreen} from '../src/features/check-in/screens/TapInComposerScreen';
 import type {CircleDetailModel} from '../src/types/models';
@@ -10,6 +11,12 @@ import type {CircleDetailModel} from '../src/types/models';
 const mockSubmitTapIn = jest.fn();
 const mockRemoveTapIn = jest.fn();
 const mockSubscribeToMemberCircleDetail = jest.fn();
+const mockLaunchCamera = jest.fn();
+const mockLaunchImageLibrary = jest.fn();
+const mockNavigationListeners: Record<
+  string,
+  (event: {data: {index: number; stable: boolean}}) => void
+> = {};
 
 const baseMockDetail: CircleDetailModel = {
   activity: [],
@@ -66,6 +73,7 @@ jest.mock('react-native-safe-area-context', () => {
   return {
     SafeAreaView: ({children, ...props}: {children?: React.ReactNode}) =>
       MockReact.createElement(View, props, children),
+    useSafeAreaInsets: () => ({bottom: 0, left: 0, right: 0, top: 0}),
   };
 });
 
@@ -74,8 +82,8 @@ jest.mock('react-native-haptic-feedback', () => ({
 }));
 
 jest.mock('react-native-image-picker', () => ({
-  launchCamera: jest.fn(),
-  launchImageLibrary: jest.fn(),
+  launchCamera: (...args: unknown[]) => mockLaunchCamera(...args),
+  launchImageLibrary: (...args: unknown[]) => mockLaunchImageLibrary(...args),
 }));
 
 jest.mock('../src/store/settings-store', () => ({
@@ -120,10 +128,22 @@ jest.mock('../src/features/home/services/home-data-service', () => ({
 }));
 
 function renderComposerScreen() {
+  const addListener = jest.fn(
+    (
+      eventName: string,
+      listener: (event: {data: {index: number; stable: boolean}}) => void,
+    ) => {
+      mockNavigationListeners[eventName] = listener;
+      return jest.fn();
+    },
+  );
+
   return renderer.create(
     <TapInComposerScreen
       navigation={
         {
+          addListener,
+          dispatch: jest.fn(),
           goBack: jest.fn(),
           navigate: jest.fn(),
           replace: jest.fn(),
@@ -174,6 +194,11 @@ describe('TapInComposerScreen', () => {
     });
     mockRemoveTapIn.mockResolvedValue({dateKey: '2026-05-29', removed: true});
     mockSubscribeToMemberCircleDetail.mockClear();
+    mockLaunchCamera.mockReset();
+    mockLaunchImageLibrary.mockReset();
+    Object.keys(mockNavigationListeners).forEach(key => {
+      delete mockNavigationListeners[key];
+    });
   });
 
   afterEach(() => {
@@ -192,11 +217,63 @@ describe('TapInComposerScreen', () => {
     expect(tree!.root.findByProps({testID: 'tap-in-composer-logo'}).type).toBe(
       HoystTapInMark,
     );
+    expect(
+      tree!.root.findByProps({testID: 'tap-in-composer-circle-title'}).props
+        .children,
+    ).toBe('Morning Movers');
+    expect(
+      tree!.root.findByProps({testID: 'tap-in-composer-commitment'}).props
+        .children,
+    ).toBe('Move for 30 minutes');
+    expect(
+      StyleSheet.flatten(
+        tree!.root.findByProps({testID: 'tap-in-composer-close-row'}).props
+          .style,
+      ),
+    ).toEqual(
+      expect.objectContaining({height: 54, marginBottom: -38, paddingTop: 16}),
+    );
+    expect(JSON.stringify(tree!.toJSON())).not.toContain('Circle Commitment');
     const confirmButton = tree!.root
       .findAllByType(TapInActionButton)
-      .find(button => button.props.label === 'Confirm Tap In');
+      .find(button => button.props.label === 'Tap In');
+    const actionFooter = tree!.root.findByProps({
+      testID: 'tap-in-composer-action-footer',
+    });
 
     expect(confirmButton?.props.variant).toBe('primary');
+    expect(confirmButton?.props.emphasis).toBe('spectrumBreathing');
+    expect(
+      actionFooter
+        .findAllByType(TapInActionButton)
+        .map(button => button.props.label),
+    ).toEqual(['Tap In']);
+    expect(StyleSheet.flatten(actionFooter.props.style)).toEqual(
+      expect.objectContaining({gap: 24}),
+    );
+    expect(
+      StyleSheet.flatten(
+        tree!.root.findByProps({
+          testID: 'tap-in-composer-action-footer-position',
+        }).props.style,
+      ),
+    ).toEqual(
+      expect.objectContaining({
+        flexShrink: 0,
+        paddingBottom: 8,
+        paddingTop: 10,
+      }),
+    );
+    expect(
+      StyleSheet.flatten(
+        tree!.root.findByProps({
+          testID: 'tap-in-composer-action-footer-position',
+        }).props.style,
+      ).position,
+    ).toBeUndefined();
+    expect(
+      tree!.root.findByType(CommitmentTypePill).props.commitmentType,
+    ).toBe('build');
 
     await act(async () => {
       confirmButton!.props.onPress();
@@ -212,17 +289,46 @@ describe('TapInComposerScreen', () => {
         streakDelta: 1,
       },
       commitment: 'Move for 30 minutes',
+      commitmentType: 'build',
       inviteUrl: 'https://hoyst.app/join/circle-1',
       memberCount: 4,
-      note: undefined,
+      dateKey: '2026-05-29',
       periodTapInCount: 8,
-      photoUri: undefined,
       progressLabel: 'Week · 50%',
       source: 'home',
       status: 'done',
       streakDays: 4,
       streakLabel: '4d streak',
     });
+  });
+
+  it('keeps the action footer anchored when the sheet expands', async () => {
+    let tree: renderer.ReactTestRenderer | undefined;
+
+    await act(async () => {
+      tree = renderComposerScreen();
+    });
+
+    const compactHeight = StyleSheet.flatten(
+      tree!.root.findByProps({testID: 'tap-in-composer-sheet-frame'}).props
+        .style,
+    ).height;
+
+    act(() => {
+      mockNavigationListeners.sheetDetentChange({
+        data: {index: 1, stable: true},
+      });
+    });
+
+    const expandedHeight = StyleSheet.flatten(
+      tree!.root.findByProps({testID: 'tap-in-composer-sheet-frame'}).props
+        .style,
+    ).height;
+
+    expect(expandedHeight).toBeGreaterThan(compactHeight);
+    expect(
+      tree!.root.findByProps({testID: 'tap-in-composer-action-footer'}),
+    ).toBeTruthy();
   });
 
   it('allows a new daily Tap In after the weekly commitment is complete', async () => {
@@ -246,9 +352,99 @@ describe('TapInComposerScreen', () => {
     const output = JSON.stringify(tree!.toJSON());
     const confirmButton = tree!.root
       .findAllByType(TapInActionButton)
-      .find(button => button.props.label === 'Confirm Tap In');
+      .find(button => button.props.label === 'Tap In');
 
-    expect(output).toContain('Commitment complete');
+    expect(output).toContain('COMMITMENT COMPLETE');
+    expect(confirmButton).toBeTruthy();
+    expect(confirmButton?.props.disabled).toBe(false);
+  });
+
+  it('uses Tap In for an Avoid confirmation', async () => {
+    mockDetail = {
+      ...baseMockDetail,
+      commitmentType: 'avoid',
+    };
+    let tree: renderer.ReactTestRenderer | undefined;
+
+    await act(async () => {
+      tree = renderComposerScreen();
+    });
+
+    const confirmButton = tree!.root
+      .findAllByType(TapInActionButton)
+      .find(button => button.props.label === 'Tap In');
+    const typePill = tree!.root.findByType(CommitmentTypePill);
+    const navigation =
+      tree!.root.findByType(TapInComposerScreen).props.navigation;
+
+    expect(confirmButton).toBeTruthy();
+    expect(typePill.props.commitmentType).toBe('avoid');
+    expect(JSON.stringify(tree!.toJSON())).not.toContain("Today's Progress");
+
+    await act(async () => {
+      confirmButton!.props.onPress();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(navigation.replace).toHaveBeenCalledWith(
+      'TapInComplete',
+      expect.objectContaining({commitmentType: 'avoid', status: 'done'}),
+    );
+  });
+
+  it('uses Log Progress for a first Limit quantity save', async () => {
+    mockDetail = {
+      ...baseMockDetail,
+      commitmentType: 'limit',
+      currentValue: 0,
+      maximumValue: 4,
+      unitLabel: 'drinks',
+      viewerTodayStatus: undefined,
+    };
+    let tree: renderer.ReactTestRenderer | undefined;
+
+    await act(async () => {
+      tree = renderComposerScreen();
+    });
+
+    const confirmButton = tree!.root
+      .findAllByType(TapInActionButton)
+      .find(button => button.props.label === 'Log Progress');
+
+    expect(confirmButton).toBeTruthy();
+    expect(tree!.root.findByType(CommitmentTypePill).props.commitmentType).toBe(
+      'limit',
+    );
+    expect(JSON.stringify(tree!.toJSON())).toContain("Today's Progress");
+  });
+
+  it('uses Update Progress when reopening a saved Limit quantity', async () => {
+    mockDetail = {
+      ...baseMockDetail,
+      commitmentType: 'limit',
+      currentValue: 5,
+      maximumValue: 4,
+      unitLabel: 'drinks',
+      viewerCanUpdateTapIn: true,
+      viewerHasTappedInToday: true,
+      viewerTodayCheckIn: {
+        coverageStatus: 'failed',
+        currentValue: 5,
+        status: 'failed',
+      },
+      viewerTodayStatus: 'failed',
+    };
+    let tree: renderer.ReactTestRenderer | undefined;
+
+    await act(async () => {
+      tree = renderComposerScreen();
+    });
+
+    const confirmButton = tree!.root
+      .findAllByType(TapInActionButton)
+      .find(button => button.props.label === 'Update Progress');
+
     expect(confirmButton).toBeTruthy();
     expect(confirmButton?.props.disabled).toBe(false);
   });
@@ -299,14 +495,8 @@ describe('TapInComposerScreen', () => {
       });
     }
 
-    const tapInButton = tree!.root
-      .findAllByType(TapInActionButton)
-      .find(button => button.props.label === 'Tap In');
-
-    expect(tapInButton).toBeTruthy();
-
     await act(async () => {
-      tapInButton!.props.onPress();
+      progressButton!.props.onPress();
       await Promise.resolve();
       await Promise.resolve();
     });
@@ -374,7 +564,7 @@ describe('TapInComposerScreen', () => {
       .findAllByType(TapInActionButton)
       .find(button => button.props.label === 'Update Progress');
 
-    expect(JSON.stringify(tree!.toJSON())).toContain('Current total today');
+    expect(JSON.stringify(tree!.toJSON())).toContain("Today's Progress");
     expect(updateButton?.props.disabled).toBe(false);
 
     await act(async () => {
@@ -446,7 +636,7 @@ describe('TapInComposerScreen', () => {
       button => button.props.label === 'Remove Tap In',
     );
 
-    expect(JSON.stringify(tree!.toJSON())).toContain('Current total today');
+    expect(JSON.stringify(tree!.toJSON())).toContain("Today's Progress");
     expect(updateButton).toBeTruthy();
     expect(removeButton?.props.variant).toBe('dangerOutline');
 
@@ -531,8 +721,12 @@ describe('TapInComposerScreen', () => {
     });
 
     const skipButton = findPressableContainingText(tree!, 'Use Skip (1 left)');
+    const actionFooter = tree!.root.findByProps({
+      testID: 'tap-in-composer-action-footer',
+    });
 
     expect(skipButton?.props.disabled).toBe(false);
+    expect(actionFooter.findAllByType(Pressable)).toContain(skipButton);
 
     await act(async () => {
       skipButton!.props.onPress();
@@ -571,29 +765,23 @@ describe('TapInComposerScreen', () => {
     const removeButton = actionButtons.find(
       button => button.props.label === 'Remove Tap In',
     );
-    const closeButton = actionButtons.find(
-      button => button.props.label === 'Close',
-    );
 
-    expect(output).toContain('Tap In logged');
+    expect(output).toContain('SAVED TODAY');
+    expect(output).toContain('Morning Movers');
     expect(output).toContain("Today's proof");
     expect(output).not.toContain('Already tapped in');
     expect(output).toContain('No note added. Your Tap In still counts.');
-    expect(output).toContain(
-      "Removing this will reopen today's Tap In and lower this Circle's Progression.",
-    );
     expect(tree!.root.findAllByType(HoystTapInMark).length).toBeGreaterThan(0);
     expect(shareButton?.props.variant).toBe('accentOutline');
     expect(removeButton?.props.variant).toBe('dangerOutline');
     expect(removeButton?.props.disabled).toBe(false);
-    expect(closeButton?.props.variant).toBe('text');
     expect(
       actionButtons
         .map(button => button.props.label)
         .filter((label: string) =>
-          ['Share Story', 'Remove Tap In', 'Close'].includes(label),
+          ['Share Story', 'Remove Tap In'].includes(label),
         ),
-    ).toEqual(['Share Story', 'Remove Tap In', 'Close']);
+    ).toEqual(['Share Story', 'Remove Tap In']);
 
     await act(async () => {
       shareButton!.props.onPress();
@@ -621,6 +809,7 @@ describe('TapInComposerScreen', () => {
       viewerHasCheckedIn: true,
       viewerHasTappedInToday: true,
       viewerTodayCheckIn: {
+        dateKey: '2026-05-29',
         note: 'Slept eight hours and woke up steady.',
         photoUrl: 'https://example.com/proof.jpg',
         status: 'done',
@@ -648,6 +837,9 @@ describe('TapInComposerScreen', () => {
     expect(proofImage.props.source).toEqual({
       uri: 'https://example.com/proof.jpg',
     });
+    expect(
+      tree!.root.findByProps({testID: 'tap-in-details-disclosure'}),
+    ).toBeTruthy();
 
     await act(async () => {
       shareButton!.props.onPress();
@@ -667,5 +859,98 @@ describe('TapInComposerScreen', () => {
       streakDays: 4,
       streakLabel: '4d streak',
     });
+  });
+
+  it('keeps optional photo controls out of quantity logging', async () => {
+    mockDetail = {
+      ...baseMockDetail,
+      commitmentType: 'build',
+      currentValue: 0,
+      targetValue: 3,
+      unitLabel: 'pages',
+    };
+    let tree: renderer.ReactTestRenderer | undefined;
+
+    await act(async () => {
+      tree = renderComposerScreen();
+    });
+
+    const output = JSON.stringify(tree!.toJSON());
+
+    expect(output).toContain("Today's Progress");
+    expect(output).not.toContain('Optional Note');
+    expect(output).not.toContain('Add Photo');
+    expect(output).not.toContain('Take Photo');
+    expect(output).not.toContain('Choose Photo');
+  });
+
+  it('adds optional proof to a non-quantity Tap In from one photo action', async () => {
+    mockLaunchImageLibrary.mockResolvedValueOnce({
+      assets: [{uri: 'file:///proof.jpg'}],
+    });
+    const alertSpy = jest
+      .spyOn(Alert, 'alert')
+      .mockImplementation(() => undefined);
+    let tree: renderer.ReactTestRenderer | undefined;
+
+    await act(async () => {
+      tree = renderComposerScreen();
+    });
+
+    expect(tree!.root.findByProps({testID: 'photo-picker-add'})).toBeTruthy();
+
+    const photoButton = tree!.root
+      .findAllByType(TapInActionButton)
+      .find(button => button.props.label === 'Add Photo');
+
+    expect(photoButton?.props.variant).toBe('surface');
+
+    await act(async () => {
+      tree!.root.findByProps({testID: 'photo-picker-add'}).props.onPress();
+    });
+
+    expect(alertSpy).toHaveBeenCalledWith(
+      'Add Photo',
+      'Choose a photo source.',
+      expect.arrayContaining([
+        expect.objectContaining({text: 'Take Photo'}),
+        expect.objectContaining({text: 'Choose from Library'}),
+      ]),
+    );
+
+    const sourceButtons = alertSpy.mock.calls.at(-1)?.[2] as Array<{
+      onPress?: () => void;
+      text?: string;
+    }>;
+
+    await act(async () => {
+      sourceButtons
+        .find(button => button.text === 'Choose from Library')
+        ?.onPress?.();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(
+      tree!.root.findByProps({testID: 'photo-picker-preview'}),
+    ).toBeTruthy();
+
+    const navigation =
+      tree!.root.findByType(TapInComposerScreen).props.navigation;
+    const submitButton = tree!.root
+      .findAllByType(TapInActionButton)
+      .find(button => button.props.label === 'Tap In');
+
+    await act(async () => {
+      submitButton!.props.onPress();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(navigation.replace).toHaveBeenCalledWith(
+      'TapInComplete',
+      expect.objectContaining({photoUri: 'file:///proof.jpg', status: 'done'}),
+    );
+    alertSpy.mockRestore();
   });
 });

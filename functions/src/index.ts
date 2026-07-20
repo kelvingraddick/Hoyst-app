@@ -13,7 +13,12 @@ export {
   updateNotificationSettings,
 } from './notifications';
 export {completeProfile, deleteAccount} from './auth';
-export {processTapInSideEffects, removeTapIn, submitTapIn} from './checkins';
+export {
+  processTapInSideEffects,
+  removeTapIn,
+  submitTapIn,
+  updateTapInDetails,
+} from './checkins';
 export {
   convertPersonalCircle,
   createCircle,

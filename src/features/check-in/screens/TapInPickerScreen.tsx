@@ -599,7 +599,7 @@ export function TapInPickerScreen({navigation}: Props): React.JSX.Element {
     dueCircles.length === 0;
 
   const openTapIn = (circleId: string) => {
-    navigation.replace('TapInComposer', {
+    navigation.navigate('TapInComposer', {
       circleId,
       source: 'tap_in',
     });

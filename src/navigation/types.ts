@@ -55,6 +55,7 @@ export type RootStackParamList = {
   TapInComposer: {circleId: string; source: TapInSource};
   TapInComplete: {
     circleId: string;
+    dateKey: string;
     circleTitle?: string;
     commitment?: string;
     commitmentType?: CommitmentType;

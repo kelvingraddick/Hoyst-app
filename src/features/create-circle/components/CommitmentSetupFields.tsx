@@ -11,15 +11,12 @@ import {
   CalendarDays,
   CalendarRange,
   Check,
-  Gauge,
   Globe2,
   Lock,
   Minus,
   Plus,
   Share2,
-  ShieldCheck,
   ShieldQuestion,
-  Sprout,
   UserRound,
   UsersRound,
   type LucideIcon,
@@ -29,6 +26,10 @@ import {
   CircleCategoryIcon,
   getCircleCategoryVisual,
 } from '../../../design/components/CircleCategoryIcon';
+import {
+  CommitmentTypeIcon,
+  CommitmentTypePill,
+} from '../../../design/components/CommitmentTypeVisual';
 import {HoystText} from '../../../design/components/HoystText';
 import {radius} from '../../../design/tokens/radius';
 import type {HoystTheme} from '../../../design/tokens/colors';
@@ -50,6 +51,7 @@ export type SetupTone = 'blue' | 'green' | 'neutral' | 'orange' | 'purple';
 
 export type SetupOption<T extends string> = {
   category?: string;
+  commitmentType?: CommitmentType;
   description: string;
   icon?: LucideIcon;
   id: T;
@@ -77,21 +79,21 @@ export const circleModeOptions: SetupOption<CircleMode>[] = [
 export const commitmentTypeOptions: SetupOption<CommitmentType>[] = [
   {
     description: 'Reach at least a target amount each Tap In day.',
-    icon: Sprout,
+    commitmentType: 'build',
     id: 'build',
     label: 'Build',
     tone: 'green',
   },
   {
     description: 'Stay inside a minimum and maximum amount.',
-    icon: Gauge,
+    commitmentType: 'limit',
     id: 'limit',
     label: 'Limit',
     tone: 'orange',
   },
   {
     description: 'Confirm you stayed clear for the Tap In day.',
-    icon: ShieldCheck,
+    commitmentType: 'avoid',
     id: 'avoid',
     label: 'Avoid',
     tone: 'purple',
@@ -304,7 +306,7 @@ export function SetupOptionCard<T extends string>({
         <View
           style={[
             styles.optionIcon,
-            option.category
+            option.category || option.commitmentType
               ? styles.categoryIcon
               : {
                   backgroundColor: `${accentColor}${isSelected ? '28' : '16'}`,
@@ -313,6 +315,12 @@ export function SetupOptionCard<T extends string>({
           ]}>
           {option.category ? (
             <CircleCategoryIcon category={option.category} size={40} />
+          ) : option.commitmentType ? (
+            <CommitmentTypeIcon
+              commitmentType={option.commitmentType}
+              decorative
+              size={42}
+            />
           ) : Icon ? (
             <Icon color={accentColor} size={21} strokeWidth={2.3} />
           ) : null}
@@ -516,6 +524,42 @@ export function formatCommitmentRulesSummary({
   return `Build · ${targetValue ?? 1} ${unitLabel}`.trim();
 }
 
+export function CommitmentTypeRuleSummary({
+  commitmentType,
+  maximumValue,
+  minimumValue,
+  targetValue,
+  unitLabel,
+}: {
+  commitmentType: CommitmentType;
+  maximumValue?: number;
+  minimumValue?: number;
+  targetValue?: number;
+  unitLabel: string;
+}): React.JSX.Element {
+  const ruleDetail =
+    commitmentType === 'avoid'
+      ? 'Binary Tap In'
+      : commitmentType === 'limit'
+      ? `${minimumValue ?? 0} to ${maximumValue ?? targetValue ?? 1} ${
+          unitLabel.trim() || 'Tap In'
+        }`
+      : `${targetValue ?? 1} ${unitLabel.trim() || 'Tap In'}`;
+
+  return (
+    <View style={styles.commitmentRuleSummary}>
+      <CommitmentTypePill commitmentType={commitmentType} uppercase />
+      <HoystText
+        numberOfLines={2}
+        style={styles.commitmentRuleDetail}
+        tone="muted"
+        variant="caption">
+        {ruleDetail}
+      </HoystText>
+    </View>
+  );
+}
+
 export function formatTimezoneSummary(timezoneId: string, now = new Date()) {
   const option = getTimezonePickerOptions({
     currentTimezone: timezoneId,
@@ -527,6 +571,14 @@ export function formatTimezoneSummary(timezoneId: string, now = new Date()) {
 }
 
 const styles = StyleSheet.create({
+  commitmentRuleDetail: {
+    flexShrink: 1,
+    textAlign: 'right',
+  },
+  commitmentRuleSummary: {
+    alignItems: 'flex-end',
+    gap: 5,
+  },
   iconButton: {
     alignItems: 'center',
     borderRadius: radius.pill,

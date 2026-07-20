@@ -1,6 +1,7 @@
 import {firebaseFunctions} from '../../../lib/firebase/functions';
 import {firebaseAuth} from '../../../lib/firebase/auth';
 import {getFirebaseApp} from '../../../lib/firebase/app';
+import {firebaseStorage} from '../../../lib/firebase/storage';
 import type {CheckInStatus} from '../../../types/models';
 
 export type SubmitTapInInput = {
@@ -27,10 +28,48 @@ export type RemoveTapInInput = {
   circleId: string;
 };
 
+export type UpdateTapInDetailsInput = {
+  circleId: string;
+  note: string | null;
+  photoUrl: string | null;
+};
+
+export type UpdateTapInDetailsResult = {
+  dateKey: string;
+  note: string | null;
+  photoUrl: string | null;
+};
+
 export async function submitTapIn(input: SubmitTapInInput) {
   const callable = firebaseFunctions().httpsCallable('submitTapIn');
   const result = await callable(input);
   return result.data as SubmitTapInResult;
+}
+
+export async function uploadTapInPhoto({
+  circleId,
+  dateKey,
+  uid,
+  uri,
+}: {
+  circleId: string;
+  dateKey: string;
+  uid: string;
+  uri: string;
+}) {
+  const reference = firebaseStorage().ref(
+    `circles/${circleId}/check-ins/${dateKey}/${uid}/proof.jpg`,
+  );
+
+  await reference.putFile(uri);
+
+  return reference.getDownloadURL();
+}
+
+export async function updateTapInDetails(input: UpdateTapInDetailsInput) {
+  const callable = firebaseFunctions().httpsCallable('updateTapInDetails');
+  const result = await callable(input);
+  return result.data as UpdateTapInDetailsResult;
 }
 
 export async function removeTapIn(input: RemoveTapInInput) {

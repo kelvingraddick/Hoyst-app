@@ -22,6 +22,7 @@ type HoystScreenProps = PropsWithChildren<{
   keyboardShouldPersistTaps?: ScrollViewProps['keyboardShouldPersistTaps'];
   padded?: boolean;
   scrollEnabled?: boolean;
+  stackStyle?: StyleProp<ViewStyle>;
   style?: ViewStyle;
 }>;
 
@@ -34,6 +35,7 @@ export function HoystScreen({
   keyboardShouldPersistTaps,
   padded = true,
   scrollEnabled = true,
+  stackStyle,
   style,
 }: HoystScreenProps): React.JSX.Element {
   const theme = useHoystTheme();
@@ -51,7 +53,7 @@ export function HoystScreen({
       keyboardShouldPersistTaps={keyboardShouldPersistTaps}
       scrollEnabled={scrollEnabled}
       showsVerticalScrollIndicator={false}>
-      <View style={styles.stack}>{children}</View>
+      <View style={[styles.stack, stackStyle]}>{children}</View>
     </ScrollView>
   );
 

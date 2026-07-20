@@ -4,6 +4,7 @@ import renderer, {act} from 'react-test-renderer';
 
 import {HoystButton} from '../src/design/components/HoystButton';
 import {HoystInput} from '../src/design/components/HoystInput';
+import {CommitmentTypeIcon} from '../src/design/components/CommitmentTypeVisual';
 import {EditCircleScreen} from '../src/features/circles/screens/EditCircleScreen';
 import type {CircleDetailModel} from '../src/types/models';
 
@@ -186,6 +187,11 @@ describe('EditCircleScreen refresh', () => {
     expect(output).not.toContain('Access and capacity');
     expect(output).not.toContain('Circle Progression');
     expect(output).not.toContain('members');
+    expect(
+      tree.root
+        .findAllByType(CommitmentTypeIcon)
+        .map(icon => icon.props.commitmentType),
+    ).toEqual(['build', 'limit', 'avoid']);
     expect(
       tree.root
         .findAllByType(HoystButton)
