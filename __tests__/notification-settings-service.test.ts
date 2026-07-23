@@ -206,8 +206,8 @@ describe('notification settings service listeners', () => {
     expect(() => handleSnapshot(null)).not.toThrow();
 
     expect(onSettings).toHaveBeenCalledWith({
-      circleRisk: true,
       discovery: true,
+      nudgePrompts: true,
       nudges: true,
       productUpdates: true,
       socialActivity: true,
@@ -241,8 +241,8 @@ describe('notification settings service listeners', () => {
     });
 
     expect(onSettings).toHaveBeenCalledWith({
-      circleRisk: false,
       discovery: false,
+      nudgePrompts: false,
       nudges: false,
       productUpdates: false,
       socialActivity: true,

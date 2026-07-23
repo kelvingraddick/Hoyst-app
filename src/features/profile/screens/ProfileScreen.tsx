@@ -1040,22 +1040,22 @@ export function ProfileScreen({navigation}: Props): React.JSX.Element {
             trailingKind="switch"
           />
           <SettingsRow
-            detail="Warnings when a circle is close to slipping."
+            detail="One daily prompt to help companions before a Commitment window closes."
             icon={Shield}
             iconTone="orange"
-            title="Circle risk"
+            title="Nudge reminders"
             trailing={
               <SettingsSwitch
                 onValueChange={value =>
-                  setServerNotificationPreference('circleRisk', value)
+                  setServerNotificationPreference('nudgePrompts', value)
                 }
-                value={notifications.circleRisk}
+                value={notifications.nudgePrompts}
               />
             }
             trailingKind="switch"
           />
           <SettingsRow
-            detail="Manual nudges and prompts to help companions."
+            detail="Notifications when a companion nudges you."
             icon={BellRing}
             iconTone="purple"
             title="Nudges"

@@ -90,6 +90,7 @@ import {
   markInboxEventsRead,
   repairPushSubscription,
   resolveNotificationCopy,
+  selectHighestPriorityCircleNudge,
   shouldIncludeInEveningSummary,
 } from '../functions/src/notifications';
 
@@ -263,7 +264,7 @@ describe('notification settings compatibility', () => {
     expect(getNotificationPreferenceEnabled(undefined, 'socialActivity')).toBe(
       true,
     );
-    expect(getNotificationPreferenceEnabled(undefined, 'circleRisk')).toBe(
+    expect(getNotificationPreferenceEnabled(undefined, 'nudgePrompts')).toBe(
       true,
     );
     expect(getNotificationPreferenceEnabled(undefined, 'nudges')).toBe(true);
@@ -280,15 +281,67 @@ describe('notification settings compatibility', () => {
     expect(
       getNotificationPreferenceEnabled(legacySettings, 'socialActivity'),
     ).toBe(false);
-    expect(getNotificationPreferenceEnabled(legacySettings, 'circleRisk')).toBe(
-      false,
-    );
+    expect(
+      getNotificationPreferenceEnabled(legacySettings, 'nudgePrompts'),
+    ).toBe(false);
     expect(getNotificationPreferenceEnabled(legacySettings, 'nudges')).toBe(
       false,
     );
     expect(getNotificationPreferenceEnabled(legacySettings, 'discovery')).toBe(
       false,
     );
+  });
+
+  it('migrates the former circle risk preference to nudge prompts', () => {
+    expect(
+      getNotificationPreferenceEnabled(
+        {circleRisk: false, nudges: true},
+        'nudgePrompts',
+      ),
+    ).toBe(false);
+    expect(
+      getNotificationPreferenceEnabled(
+        {circleRisk: false, nudgePrompts: true},
+        'nudgePrompts',
+      ),
+    ).toBe(true);
+  });
+});
+
+describe('daily circle nudge selection', () => {
+  const candidate = {
+    activeCount: 4,
+    behindCount: 1,
+    circleId: 'circle-b',
+    circleTitle: 'Circle B',
+    deadlineDateKey: '2026-07-24',
+    periodKey: '2026-07-20',
+    targetUid: 'user-1',
+    timezone: 'America/New_York',
+  };
+
+  it('prioritizes the earliest commitment deadline', () => {
+    expect(
+      selectHighestPriorityCircleNudge([
+        candidate,
+        {
+          ...candidate,
+          behindCount: 3,
+          circleId: 'circle-later',
+          deadlineDateKey: '2026-07-25',
+        },
+      ])?.circleId,
+    ).toBe('circle-b');
+  });
+
+  it('breaks deadline ties by risk share and then stable circle id', () => {
+    expect(
+      selectHighestPriorityCircleNudge([
+        {...candidate, circleId: 'circle-b'},
+        {...candidate, behindCount: 2, circleId: 'circle-c'},
+        {...candidate, behindCount: 2, circleId: 'circle-a'},
+      ])?.circleId,
+    ).toBe('circle-a');
   });
 });
 

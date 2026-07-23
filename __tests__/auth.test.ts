@@ -1167,8 +1167,8 @@ describe('settings store', () => {
   it('resets persisted account preferences to guest defaults', () => {
     useSettingsStore.getState().setAppearancePreference('light');
     useSettingsStore.getState().setNotificationSettings({
-      circleRisk: false,
       discovery: false,
+      nudgePrompts: false,
       nudges: false,
       productUpdates: false,
       socialActivity: false,
@@ -1179,8 +1179,8 @@ describe('settings store', () => {
 
     expect(useSettingsStore.getState().appearance).toBe('dark');
     expect(useSettingsStore.getState().notifications).toEqual({
-      circleRisk: true,
       discovery: true,
+      nudgePrompts: true,
       nudges: true,
       productUpdates: true,
       socialActivity: true,

@@ -7,8 +7,8 @@ import {firebaseFunctions} from '../../../lib/firebase/functions';
 import type {InboxEvent, InboxEventType} from '../../../types/models';
 
 export type NotificationSettings = {
-  circleRisk: boolean;
   discovery: boolean;
+  nudgePrompts: boolean;
   nudges: boolean;
   productUpdates: boolean;
   socialActivity: boolean;
@@ -16,8 +16,8 @@ export type NotificationSettings = {
 };
 
 const defaultNotificationSettings: NotificationSettings = {
-  circleRisk: true,
   discovery: true,
+  nudgePrompts: true,
   nudges: true,
   productUpdates: true,
   socialActivity: true,
@@ -93,8 +93,11 @@ function normalizeNotificationSettings(value: unknown): NotificationSettings {
   );
 
   return {
-    circleRisk: asBoolean(data.circleRisk, legacyCircleActivity),
     discovery: asBoolean(data.discovery, productUpdates),
+    nudgePrompts: asBoolean(
+      data.nudgePrompts,
+      asBoolean(data.circleRisk, legacyCircleActivity),
+    ),
     nudges: asBoolean(data.nudges, legacyCircleActivity),
     productUpdates,
     socialActivity: asBoolean(data.socialActivity, legacyCircleActivity),

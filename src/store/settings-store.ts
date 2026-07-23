@@ -7,8 +7,8 @@ export type AppearancePreference = 'dark' | 'system' | 'light';
 type SettingsState = {
   appearance: AppearancePreference;
   notifications: {
-    circleRisk: boolean;
     discovery: boolean;
+    nudgePrompts: boolean;
     nudges: boolean;
     productUpdates: boolean;
     socialActivity: boolean;
@@ -26,8 +26,8 @@ type SettingsState = {
 };
 
 const defaultNotifications = {
-  circleRisk: true,
   discovery: true,
+  nudgePrompts: true,
   nudges: true,
   productUpdates: true,
   socialActivity: true,
@@ -42,6 +42,7 @@ function normalizePersistedNotifications(
   const data =
     value && typeof value === 'object'
       ? (value as Partial<SettingsState['notifications']> & {
+          circleRisk?: unknown;
           circleActivity?: unknown;
         })
       : {};
@@ -53,12 +54,14 @@ function normalizePersistedNotifications(
       : defaultNotifications.productUpdates;
 
   return {
-    circleRisk:
-      typeof data.circleRisk === 'boolean'
-        ? data.circleRisk
-        : legacyCircleActivity,
     discovery:
       typeof data.discovery === 'boolean' ? data.discovery : productUpdates,
+    nudgePrompts:
+      typeof data.nudgePrompts === 'boolean'
+        ? data.nudgePrompts
+        : typeof data.circleRisk === 'boolean'
+          ? data.circleRisk
+          : legacyCircleActivity,
     nudges:
       typeof data.nudges === 'boolean' ? data.nudges : legacyCircleActivity,
     productUpdates,

@@ -670,8 +670,8 @@ export const completeProfile = onCall(async request => {
         email: userRecord?.email ?? null,
         lastSignInAt: now,
         notificationSettings: {
-          circleRisk: true,
           discovery: true,
+          nudgePrompts: true,
           nudges: true,
           productUpdates: true,
           socialActivity: true,

@@ -29,7 +29,6 @@ import {
 } from '../momentum';
 import {
   getCompanionMilestoneEvents,
-  notifyCircleAtRisk,
   notifyCircleComplete,
   notifyCompanionMilestones,
   notifyCompanionSkipped,
@@ -550,27 +549,6 @@ async function processTapInSideEffectsForCheckIn({
     });
   });
 
-  const pendingMembers = memberSnapshots.docs
-    .map(snapshot => snapshot.data())
-    .filter(memberData => {
-      const memberUid = memberData.uid;
-
-      return (
-        typeof memberUid === 'string' &&
-        memberUid !== uid &&
-        (!hasCanonicalExpectations ||
-          canonicalExpectedMemberUids.has(memberUid)) &&
-        (coveredCounts.get(memberUid) ?? 0) < requiredTapIns
-      );
-    });
-  const remainingCount = pendingMembers.reduce((total, memberData) => {
-    const memberUid = memberData.uid;
-
-    return typeof memberUid === 'string'
-      ? total +
-          Math.max(requiredTapIns - (coveredCounts.get(memberUid) ?? 0), 0)
-      : total;
-  }, 0);
   const activeMemberUids = memberSnapshots.docs
     .map(snapshot => {
       const memberUid = snapshot.data().uid;
@@ -601,9 +579,6 @@ async function processTapInSideEffectsForCheckIn({
             Math.max(requiredTapIns - (coveredCounts.get(memberUid) ?? 0), 0),
           0,
         );
-  const circleRemainingCount = hasCanonicalExpectations
-    ? totalRemainingCount
-    : remainingCount;
   const circleTitle = asCleanString(circle?.title) ?? 'Your circle';
   const coverageRevision =
     typeof checkIn.coverageRevision === 'number' ? checkIn.coverageRevision : 1;
@@ -736,21 +711,6 @@ async function processTapInSideEffectsForCheckIn({
         }),
       ),
     ).catch(error => console.error('notify_circle_complete_failed', error));
-  }
-
-  if (!isPersonal && circleRemainingCount > 0 && circleRemainingCount <= 2) {
-    await Promise.all(
-      pendingMembers.map(memberData =>
-        notifyCircleAtRisk({
-          commitmentCadence,
-          circleId,
-          circleTitle,
-          periodKey,
-          remainingCount: circleRemainingCount,
-          targetUid: memberData.uid,
-        }),
-      ),
-    ).catch(error => console.error('notify_circle_at_risk_failed', error));
   }
 
   const effectRef = circleRef
