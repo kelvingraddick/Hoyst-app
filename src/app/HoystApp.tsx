@@ -1,4 +1,4 @@
-import React, {useEffect} from 'react';
+import React, {useEffect, useState} from 'react';
 import {AppState, StatusBar} from 'react-native';
 import {
   NavigationContainer,
@@ -15,10 +15,12 @@ import {
   setNotificationNavigationRef,
   syncPushSubscription,
 } from '../lib/notifications';
+import {CircleInviteCoordinator} from '../features/circle-invites/providers/CircleInviteCoordinator';
 
 function HoystAppInner(): React.JSX.Element {
   const theme = useHoystTheme();
   const navigationRef = useNavigationContainerRef<RootStackParamList>();
+  const [isNavigationReady, setIsNavigationReady] = useState(false);
 
   useEffect(() => {
     initializePushNotifications();
@@ -46,8 +48,13 @@ function HoystAppInner(): React.JSX.Element {
         backgroundColor={theme.background}
       />
       <NavigationContainer
+        onReady={() => setIsNavigationReady(true)}
         ref={navigationRef}
         theme={createNavigationTheme(theme)}>
+        <CircleInviteCoordinator
+          isNavigationReady={isNavigationReady}
+          navigationRef={navigationRef}
+        />
         <RootNavigator />
       </NavigationContainer>
     </>

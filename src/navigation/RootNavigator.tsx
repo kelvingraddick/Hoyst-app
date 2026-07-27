@@ -17,6 +17,7 @@ import {TapInComposerScreen} from '../features/check-in/screens/TapInComposerScr
 import {TapInPickerScreen} from '../features/check-in/screens/TapInPickerScreen';
 import {TapInStoryShareScreen} from '../features/check-in/screens/TapInStoryShareScreen';
 import {InboxScreen} from '../features/inbox/screens/InboxScreen';
+import {CircleInviteScreen} from '../features/circle-invites/screens/CircleInviteScreen';
 import {useOnboardingStore} from '../store/onboarding-store';
 import {useSessionStore} from '../store/session-store';
 import {AppTabsNavigator} from './AppTabsNavigator';
@@ -82,6 +83,14 @@ export function RootNavigator(): React.JSX.Element {
           }}
         />
       ) : null}
+      <Stack.Screen
+        component={CircleInviteScreen}
+        name="CircleInvite"
+        options={{
+          animation: 'fade',
+          headerShown: false,
+        }}
+      />
       <Stack.Screen
         component={TapInPickerScreen}
         name="TapInPicker"

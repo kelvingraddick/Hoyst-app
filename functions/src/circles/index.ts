@@ -33,6 +33,11 @@ import {
   isCoveredCheckInData,
 } from '../shared/commitments';
 import {ensureGroupCircle, getCircleMode} from '../shared/circle-mode';
+import {
+  createInviteCode,
+  getCircleInviteUrl,
+  requiresMatchingCircleInvite,
+} from '../shared/invite-code';
 import {createCircleThreadActivity, getCircleThreadNudgeText} from '../thread';
 import {
   materializeCurrentCircleOpportunities,
@@ -168,10 +173,6 @@ async function requireCompletedProfile(uid?: string, idToken?: string) {
   }
 
   return {profile, uid: authenticatedUid};
-}
-
-function createInviteCode() {
-  return Math.random().toString(36).slice(2, 10);
 }
 
 function asOptionalString(value: unknown) {
@@ -785,8 +786,8 @@ export const joinCircle = onCall(
       }
 
       if (
-        circle?.privacy === 'private' &&
-        input.inviteCode !== circle.inviteCode
+        requiresMatchingCircleInvite(circle) &&
+        input.inviteCode !== circle?.inviteCode
       ) {
         throw new HttpsError(
           'permission-denied',
@@ -1590,7 +1591,7 @@ export const convertPersonalCircle = onCall(async request => {
         return {
           circleId: input.circleId,
           inviteCode,
-          inviteUrl: `https://hoyst.app/join/${inviteCode}`,
+          inviteUrl: getCircleInviteUrl(inviteCode),
         };
       }
     }
@@ -1714,7 +1715,7 @@ export const convertPersonalCircle = onCall(async request => {
   return {
     circleId: input.circleId,
     inviteCode: result,
-    inviteUrl: `https://hoyst.app/join/${result}`,
+    inviteUrl: getCircleInviteUrl(result),
   };
 });
 

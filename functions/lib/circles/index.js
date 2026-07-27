@@ -11,6 +11,7 @@ const firebase_1 = require("../firebase");
 const notifications_1 = require("../notifications");
 const commitments_1 = require("../shared/commitments");
 const circle_mode_1 = require("../shared/circle-mode");
+const invite_code_1 = require("../shared/invite-code");
 const thread_1 = require("../thread");
 const momentum_1 = require("../momentum");
 const leave_plan_1 = require("./leave-plan");
@@ -133,9 +134,6 @@ async function requireCompletedProfile(uid, idToken) {
         throw new https_1.HttpsError('failed-precondition', 'Complete your profile first.');
     }
     return { profile, uid: authenticatedUid };
-}
-function createInviteCode() {
-    return Math.random().toString(36).slice(2, 10);
 }
 function asOptionalString(value) {
     return typeof value === 'string' && value.trim().length > 0
@@ -442,7 +440,7 @@ exports.createCircle = (0, https_1.onCall)({ secrets: [notifications_1.oneSignal
     const now = firestore_1.FieldValue.serverTimestamp();
     const circleMode = input.circleMode;
     const isPersonal = circleMode === 'personal';
-    const inviteCode = isPersonal ? undefined : createInviteCode();
+    const inviteCode = isPersonal ? undefined : (0, invite_code_1.createInviteCode)();
     const joinMode = isPersonal ? 'invite_only' : input.joinMode;
     const maxSize = isPersonal ? 1 : input.maxSize;
     const privacy = isPersonal ? 'private' : input.privacy;
@@ -607,8 +605,8 @@ exports.joinCircle = (0, https_1.onCall)({ secrets: [notifications_1.oneSignalRe
         if ((circle?.memberCount ?? 0) >= (circle?.maxSize ?? 0)) {
             throw new https_1.HttpsError('resource-exhausted', 'This circle is full.');
         }
-        if (circle?.privacy === 'private' &&
-            input.inviteCode !== circle.inviteCode) {
+        if ((0, invite_code_1.requiresMatchingCircleInvite)(circle) &&
+            input.inviteCode !== circle?.inviteCode) {
             throw new https_1.HttpsError('permission-denied', 'A valid invite is required.');
         }
         if (circle?.joinMode === 'request_to_join') {
@@ -1185,7 +1183,7 @@ exports.convertPersonalCircle = (0, https_1.onCall)(async (request) => {
                 return {
                     circleId: input.circleId,
                     inviteCode,
-                    inviteUrl: `https://hoyst.app/join/${inviteCode}`,
+                    inviteUrl: (0, invite_code_1.getCircleInviteUrl)(inviteCode),
                 };
             }
         }
@@ -1201,7 +1199,7 @@ exports.convertPersonalCircle = (0, https_1.onCall)(async (request) => {
         owner,
         uid,
     });
-    const inviteCode = createInviteCode();
+    const inviteCode = (0, invite_code_1.createInviteCode)();
     const result = await firebase_1.db.runTransaction(async (transaction) => {
         const [latestCircleSnapshot, latestOwnerSnapshot] = await Promise.all([
             transaction.get(circleRef),
@@ -1274,7 +1272,7 @@ exports.convertPersonalCircle = (0, https_1.onCall)(async (request) => {
     return {
         circleId: input.circleId,
         inviteCode: result,
-        inviteUrl: `https://hoyst.app/join/${result}`,
+        inviteUrl: (0, invite_code_1.getCircleInviteUrl)(result),
     };
 });
 exports.updateCircle = (0, https_1.onCall)(async (request) => {

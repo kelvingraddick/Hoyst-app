@@ -38,6 +38,7 @@ type RootAuthPresentationInput = {
   hasPendingProfileCompletion?: boolean;
   hasSeenOnboarding: boolean;
   pendingAction?: PendingProtectedAction;
+  hasPendingInvite?: boolean;
   status: AuthSessionStatus;
 };
 
@@ -93,6 +94,7 @@ export function getRootAuthPresentation({
   hasPendingProfileCompletion,
   hasSeenOnboarding,
   pendingAction,
+  hasPendingInvite,
   status,
 }: RootAuthPresentationInput): RootAuthPresentation | undefined {
   if (!hasHydratedOnboarding) {
@@ -112,7 +114,12 @@ export function getRootAuthPresentation({
     return 'finishProfile';
   }
 
-  if (status === 'guest' && !hasSeenOnboarding && !pendingAction) {
+  if (
+    status === 'guest' &&
+    !hasSeenOnboarding &&
+    !pendingAction &&
+    !hasPendingInvite
+  ) {
     return 'onboarding';
   }
 

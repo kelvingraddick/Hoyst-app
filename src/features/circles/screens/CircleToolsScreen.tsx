@@ -5,6 +5,7 @@ import {
   Modal,
   Platform,
   Pressable,
+  Share,
   StyleSheet,
   View,
 } from 'react-native';
@@ -13,6 +14,7 @@ import {
   ChevronRight,
   LogOut,
   Pencil,
+  RefreshCw,
   Trash2,
   UserPlus,
   type LucideIcon,
@@ -33,6 +35,7 @@ import {useSessionStore} from '../../../store/session-store';
 import type {CircleDetailModel} from '../../../types/models';
 import {subscribeToMemberCircleDetail} from '../../home/services/home-data-service';
 import {deleteCircle, leaveCircle} from '../services/circle-service';
+import {rotateCircleInvite} from '../../circle-invites/services/invite-service';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'CircleTools'>;
 type SettingsIconTone =
@@ -346,6 +349,7 @@ export function CircleToolsScreen({
   const [isDeleteConfirmVisible, setIsDeleteConfirmVisible] = useState(false);
   const [isDeletingCircle, setIsDeletingCircle] = useState(false);
   const [isLeavingCircle, setIsLeavingCircle] = useState(false);
+  const [isResettingInvite, setIsResettingInvite] = useState(false);
   const isPendingMembership = detail?.viewerMembershipStatus === 'pending';
   const isPersonal = detail?.circleMode === 'personal';
   const canEditCircle = detail?.viewerRole === 'owner' && !isPendingMembership;
@@ -491,6 +495,51 @@ export function CircleToolsScreen({
     );
   };
 
+  const handleResetInvite = async () => {
+    if (!detail || isResettingInvite) {
+      return;
+    }
+
+    setIsResettingInvite(true);
+    try {
+      const result = await rotateCircleInvite(detail.id);
+      await Share.share({
+        message: `Join ${detail.title} on Hoyst: ${result.inviteUrl}`,
+        title: `Join ${detail.title} on Hoyst`,
+        url: result.inviteUrl,
+      });
+    } catch (error) {
+      Alert.alert(
+        'Reset failed',
+        (error as {message?: string}).message ??
+          'Could not reset this invite link. Try again.',
+      );
+    } finally {
+      setIsResettingInvite(false);
+    }
+  };
+
+  const confirmResetInvite = () => {
+    if (!detail || isResettingInvite) {
+      return;
+    }
+
+    Alert.alert(
+      'Reset invite link?',
+      'The current link will stop working immediately. Existing members are not affected.',
+      [
+        {style: 'cancel', text: 'Keep Current Link'},
+        {
+          onPress: () => {
+            handleResetInvite().catch(() => undefined);
+          },
+          style: 'destructive',
+          text: 'Reset Link',
+        },
+      ],
+    );
+  };
+
   return (
     <HoystScreen contentContainerStyle={styles.content}>
       <View style={styles.navBar}>
@@ -552,6 +601,19 @@ export function CircleToolsScreen({
                       size={18}
                       strokeWidth={2.2}
                     />
+                  }
+                />
+              ) : null}
+              {!isPersonal ? (
+                <SettingsRow
+                  detail="Invalidate the current link and create a new one."
+                  icon={RefreshCw}
+                  iconTone="orange"
+                  onPress={isResettingInvite ? undefined : confirmResetInvite}
+                  title={
+                    isResettingInvite
+                      ? 'Resetting Invite Link...'
+                      : 'Reset Invite Link'
                   }
                 />
               ) : null}

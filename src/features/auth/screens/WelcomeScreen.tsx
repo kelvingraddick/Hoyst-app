@@ -60,6 +60,7 @@ import type {
 import {dismissAuthModals} from '../../../navigation/auth-modal-dismiss';
 import {useOnboardingStore} from '../../../store/onboarding-store';
 import {useSessionStore} from '../../../store/session-store';
+import {useCircleInviteStore} from '../../../store/circle-invite-store';
 import {useUserProfileStore} from '../../../store/profile-store';
 import {
   getOnboardingProgressSteps,
@@ -244,10 +245,7 @@ function ProgressHeader({
     return null;
   }
 
-  const progressIndex = Math.max(
-    0,
-    progressSteps.indexOf(currentStep),
-  );
+  const progressIndex = Math.max(0, progressSteps.indexOf(currentStep));
   return (
     <View style={styles.progressHeader}>
       <IconButton
@@ -272,13 +270,15 @@ function ProgressHeader({
 
 function CoachPrompt({
   currentStep,
+  isInvite,
   isPersonal,
 }: {
   currentStep: Exclude<OnboardingStep, 'welcome'>;
+  isInvite: boolean;
   isPersonal: boolean;
 }) {
   const theme = useHoystTheme();
-  const copy = getOnboardingStepCopy(currentStep, isPersonal);
+  const copy = getOnboardingStepCopy(currentStep, isPersonal, isInvite);
   const Icon = stepIcons[currentStep];
 
   return (
@@ -335,7 +335,10 @@ function PreviewRow({
     <View
       style={[
         styles.previewRow,
-        {backgroundColor: theme.glassSurfaceStrong, borderColor: theme.glassBorder},
+        {
+          backgroundColor: theme.glassSurfaceStrong,
+          borderColor: theme.glassBorder,
+        },
       ]}>
       <View
         style={[
@@ -414,6 +417,7 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
   const [profileWasCompleted, setProfileWasCompleted] = useState(false);
   const [selectedAvatarUri, setSelectedAvatarUri] = useState<string>();
   const currentStep = useOnboardingStore(state => state.currentStep);
+  const journey = useOnboardingStore(state => state.journey);
   const displayName = useOnboardingStore(state => state.displayName);
   const firstCircleSkipped = useOnboardingStore(
     state => state.firstCircleSkipped,
@@ -465,6 +469,7 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
   const status = useSessionStore(state => state.status);
   const user = useSessionStore(state => state.user);
   const profile = useUserProfileStore(state => state.profile);
+  const invitePreview = useCircleInviteStore(state => state.preview);
   const rootNavigation =
     navigation.getParent<NativeStackNavigationProp<RootStackParamList>>();
   const handleValidation = useMemo(() => validateHandle(handle), [handle]);
@@ -483,9 +488,10 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
       ? starterCircleDraft.joinMode
       : 'request_to_join';
   const isPersonal = starterCircleDraft.circleMode === 'personal';
-  const progressSteps = getOnboardingProgressSteps(
-    starterCircleDraft.circleMode,
-  );
+  const progressSteps =
+    journey === 'invite'
+      ? (['notifications', 'auth', 'finishProfile'] as OnboardingStep[])
+      : getOnboardingProgressSteps(starterCircleDraft.circleMode);
   const starterCircleTitle =
     typeof starterCircleDraft.title === 'string'
       ? starterCircleDraft.title
@@ -943,6 +949,23 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
   };
 
   const goBack = () => {
+    if (journey === 'invite') {
+      if (currentStep === 'finishProfile') {
+        setCurrentStep('auth');
+        return;
+      }
+
+      if (currentStep === 'auth') {
+        setCurrentStep('notifications');
+        return;
+      }
+
+      if (currentStep === 'notifications') {
+        continueAsGuest();
+        return;
+      }
+    }
+
     if (currentStep === 'finishProfile') {
       setCurrentStep('notifications');
       return;
@@ -974,7 +997,26 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
 
     return (
       <>
-        <CoachPrompt currentStep={currentStep} isPersonal={isPersonal} />
+        {journey === 'invite' && invitePreview ? (
+          <GlassPanel style={styles.inviteSummary}>
+            <HoystText
+              style={{color: theme.accentSecondaryForeground}}
+              variant="label">
+              INVITED CIRCLE
+            </HoystText>
+            <HoystText variant="subtitle">{invitePreview.title}</HoystText>
+            <HoystText tone="muted">{invitePreview.commitment}</HoystText>
+            <HoystText tone="muted" variant="caption">
+              {invitePreview.cadenceLabel} · {invitePreview.memberCount} of{' '}
+              {invitePreview.maxSize} members
+            </HoystText>
+          </GlassPanel>
+        ) : null}
+        <CoachPrompt
+          currentStep={currentStep}
+          isInvite={journey === 'invite'}
+          isPersonal={isPersonal}
+        />
         {currentStep === 'coach' ? (
           <View style={styles.coachPreview}>
             <PreviewRow
@@ -1464,9 +1506,7 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
                   ? 'purple'
                   : 'green'
               }
-              detail={
-                formatCommitmentRulesSummary(starterCircleDraft)
-              }
+              detail={formatCommitmentRulesSummary(starterCircleDraft)}
               commitmentType={starterCircleDraft.commitmentType}
               label="Commitment rules"
             />
@@ -1844,6 +1884,10 @@ const styles = StyleSheet.create({
     paddingBottom: 36,
     paddingHorizontal: 20,
     paddingTop: 16,
+  },
+  inviteSummary: {
+    gap: 8,
+    marginBottom: 18,
   },
   content: {
     flex: 1,

@@ -1,5 +1,5 @@
 import React from 'react';
-import {Alert, Pressable, StyleSheet} from 'react-native';
+import {Alert, Pressable, Share, StyleSheet} from 'react-native';
 import renderer, {act, type ReactTestInstance} from 'react-test-renderer';
 
 import {CircleToolsScreen} from '../src/features/circles/screens/CircleToolsScreen';
@@ -7,6 +7,7 @@ import type {CircleDetailModel} from '../src/types/models';
 
 const mockDeleteCircle = jest.fn();
 const mockLeaveCircle = jest.fn();
+const mockRotateCircleInvite = jest.fn();
 
 let mockMemberDetail: CircleDetailModel | undefined;
 let mockSessionState: {
@@ -80,6 +81,10 @@ jest.mock('../src/features/home/services/home-data-service', () => ({
 jest.mock('../src/features/circles/services/circle-service', () => ({
   deleteCircle: (...args: unknown[]) => mockDeleteCircle(...args),
   leaveCircle: (...args: unknown[]) => mockLeaveCircle(...args),
+}));
+
+jest.mock('../src/features/circle-invites/services/invite-service', () => ({
+  rotateCircleInvite: (...args: unknown[]) => mockRotateCircleInvite(...args),
 }));
 
 function detail(overrides: Partial<CircleDetailModel> = {}): CircleDetailModel {
@@ -230,6 +235,10 @@ describe('CircleToolsScreen', () => {
     };
     mockDeleteCircle.mockResolvedValue(undefined);
     mockLeaveCircle.mockResolvedValue({status: 'left'});
+    mockRotateCircleInvite.mockResolvedValue({
+      inviteCode: 'abcdef1234567890',
+      inviteUrl: 'https://hoyst.app/join/abcdef1234567890',
+    });
   });
 
   afterEach(() => {
@@ -303,6 +312,41 @@ describe('CircleToolsScreen', () => {
       'Circle deleted',
       'Morning Movers has been deleted.',
     );
+  });
+
+  it('resets and shares an owner invite link after confirmation', async () => {
+    const shareSpy = jest
+      .spyOn(Share, 'share')
+      .mockResolvedValue({action: Share.sharedAction});
+    const {tree} = renderScreen();
+
+    pressByAccessibilityLabel(tree, 'Reset Invite Link');
+    expect(alertSpy).toHaveBeenCalledWith(
+      'Reset invite link?',
+      'The current link will stop working immediately. Existing members are not affected.',
+      expect.arrayContaining([
+        expect.objectContaining({text: 'Keep Current Link'}),
+        expect.objectContaining({
+          style: 'destructive',
+          text: 'Reset Link',
+        }),
+      ]),
+    );
+
+    pressAlertButton('Reset invite link?', 'Reset Link');
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(mockRotateCircleInvite).toHaveBeenCalledWith('circle-1');
+    expect(shareSpy).toHaveBeenCalledWith({
+      message:
+        'Join Morning Movers on Hoyst: https://hoyst.app/join/abcdef1234567890',
+      title: 'Join Morning Movers on Hoyst',
+      url: 'https://hoyst.app/join/abcdef1234567890',
+    });
+    shareSpy.mockRestore();
   });
 
   it('offers edit, conversion, and delete actions for a personal commitment', () => {

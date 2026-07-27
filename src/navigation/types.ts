@@ -37,6 +37,7 @@ export type RootStackParamList = {
   Loading: undefined;
   MainTabs: NavigatorScreenParams<AppTabsParamList> | undefined;
   Auth: NavigatorScreenParams<AuthStackParamList> | undefined;
+  CircleInvite: {inviteCode: string};
   Circles: undefined;
   Inbox: undefined;
   EditProfile: undefined;

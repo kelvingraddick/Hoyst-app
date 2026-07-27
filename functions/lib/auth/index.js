@@ -10,6 +10,7 @@ const firebase_1 = require("../firebase");
 const commitments_1 = require("../shared/commitments");
 const starter_circle_plan_1 = require("./starter-circle-plan");
 const momentum_1 = require("../momentum");
+const invite_code_1 = require("../shared/invite-code");
 const onboardingPreferencesSchema = zod_1.z.object({
     categories: zod_1.z.array(zod_1.z.string().trim().min(1).max(40)).max(8).default([]),
     focusArea: zod_1.z.string().trim().min(1).max(80).optional(),
@@ -75,9 +76,6 @@ function requireAuthUid(uid) {
         throw new https_1.HttpsError('unauthenticated', 'Sign in is required.');
     }
     return uid;
-}
-function createInviteCode() {
-    return Math.random().toString(36).slice(2, 10);
 }
 function asOptionalString(value) {
     return typeof value === 'string' && value.trim() ? value.trim() : undefined;
@@ -392,7 +390,7 @@ exports.completeProfile = (0, https_1.onCall)(async (request) => {
                 .doc(circleRef.id);
             const circleMode = input.starterCircle.circleMode;
             const isPersonal = circleMode === 'personal';
-            const inviteCode = isPersonal ? undefined : createInviteCode();
+            const inviteCode = isPersonal ? undefined : (0, invite_code_1.createInviteCode)();
             const joinMode = isPersonal
                 ? 'invite_only'
                 : input.starterCircle.joinMode;

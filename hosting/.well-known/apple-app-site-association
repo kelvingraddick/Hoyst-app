@@ -1,0 +1,17 @@
+{
+  "applinks": {
+    "details": [
+      {
+        "appIDs": [
+          "HCQ2A438C7.com.wavelinkllc.hoyst"
+        ],
+        "components": [
+          {
+            "/": "/join/*",
+            "comment": "Open Hoyst Circle invitation links in the iOS app."
+          }
+        ]
+      }
+    ]
+  }
+}

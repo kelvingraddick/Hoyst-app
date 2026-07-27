@@ -13,6 +13,7 @@
 		58DAF617B41FFBE667A8FFB9 /* OneSignalNotificationServiceExtension.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = 065675BD27EA413DA98F1D82 /* OneSignalNotificationServiceExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		5A8D91B12F8F6D7100AABB01 /* HoystClipboardImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A8D91B32F8F6D7100AABB01 /* HoystClipboardImage.swift */; };
 		5A8D91B22F8F6D7100AABB01 /* HoystClipboardImageBridge.m in Sources */ = {isa = PBXBuildFile; fileRef = 5A8D91B42F8F6D7100AABB01 /* HoystClipboardImageBridge.m */; };
+		5A8D91B52F8F6D7100AABB01 /* HoystInviteLinkModule.m in Sources */ = {isa = PBXBuildFile; fileRef = 5A8D91B62F8F6D7100AABB01 /* HoystInviteLinkModule.m */; };
 		761780ED2CA45674006654EE /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 761780EC2CA45674006654EE /* AppDelegate.swift */; };
 		77AF91072EDFF14D5135DC5B /* Pods_Hoyst.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 69D775456EF18F4F6E9F7472 /* Pods_Hoyst.framework */; };
 		81AB9BB82411601600AC10FF /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */; };
@@ -59,6 +60,7 @@
 		5709B34CF0A7D63546082F79 /* Pods-Hoyst.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Hoyst.release.xcconfig"; path = "Target Support Files/Pods-Hoyst/Pods-Hoyst.release.xcconfig"; sourceTree = "<group>"; };
 		5A8D91B32F8F6D7100AABB01 /* HoystClipboardImage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = HoystClipboardImage.swift; path = Hoyst/HoystClipboardImage.swift; sourceTree = "<group>"; };
 		5A8D91B42F8F6D7100AABB01 /* HoystClipboardImageBridge.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; name = HoystClipboardImageBridge.m; path = Hoyst/HoystClipboardImageBridge.m; sourceTree = "<group>"; };
+		5A8D91B62F8F6D7100AABB01 /* HoystInviteLinkModule.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; name = HoystInviteLinkModule.m; path = Hoyst/HoystInviteLinkModule.m; sourceTree = "<group>"; };
 		69D775456EF18F4F6E9F7472 /* Pods_Hoyst.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_Hoyst.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		761780EC2CA45674006654EE /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = Hoyst/AppDelegate.swift; sourceTree = "<group>"; };
 		7FBAA45EA6046801900A5D69 /* NotificationService.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = NotificationService.swift; sourceTree = "<group>"; };
@@ -97,6 +99,7 @@
 				761780EC2CA45674006654EE /* AppDelegate.swift */,
 				5A8D91B32F8F6D7100AABB01 /* HoystClipboardImage.swift */,
 				5A8D91B42F8F6D7100AABB01 /* HoystClipboardImageBridge.m */,
+				5A8D91B62F8F6D7100AABB01 /* HoystInviteLinkModule.m */,
 				13B07FB41A68108700A75B9A /* Hoyst.entitlements */,
 				13B07FB61A68108700A75B9A /* Info.plist */,
 				81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */,
@@ -409,6 +412,7 @@
 				761780ED2CA45674006654EE /* AppDelegate.swift in Sources */,
 				5A8D91B12F8F6D7100AABB01 /* HoystClipboardImage.swift in Sources */,
 				5A8D91B22F8F6D7100AABB01 /* HoystClipboardImageBridge.m in Sources */,
+				5A8D91B52F8F6D7100AABB01 /* HoystInviteLinkModule.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

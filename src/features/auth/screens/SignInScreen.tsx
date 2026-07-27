@@ -75,10 +75,15 @@ export function SignInScreen({navigation, route}: Props): React.JSX.Element {
   >();
   const clearPendingAction = useSessionStore(state => state.clearPendingAction);
   const setGuest = useSessionStore(state => state.setGuest);
+  const sessionStatus = useSessionStore(state => state.status);
   const markOnboardingSeen = useOnboardingStore(state => state.markSeen);
   const startOnboardingWizard = useOnboardingStore(
     state => state.startOnboardingWizard,
   );
+  const startInviteOnboarding = useOnboardingStore(
+    state => state.startInviteOnboarding,
+  );
+  const onboardingJourney = useOnboardingStore(state => state.journey);
   const rootNavigation =
     navigation.getParent<NativeStackNavigationProp<RootStackParamList>>();
   const isActionBusy = isBusy || isDismissing;
@@ -86,7 +91,10 @@ export function SignInScreen({navigation, route}: Props): React.JSX.Element {
   const headerTitle = 'Welcome back';
   const headerBody =
     'Sign in to rejoin your circles, Tap In, and manage your profile.';
-  const onboardingLinkLabel = 'New to Hoyst? Get started';
+  const onboardingLinkLabel =
+    onboardingJourney === 'invite'
+      ? 'New to Hoyst? Create an account to join'
+      : 'New to Hoyst? Get started';
   const activeProviderLabel =
     activeProvider === 'apple'
       ? 'Apple'
@@ -127,6 +135,15 @@ export function SignInScreen({navigation, route}: Props): React.JSX.Element {
 
     setMethod(nextIntent.method);
   }, [route.params]);
+
+  useEffect(() => {
+    if (
+      onboardingJourney === 'invite' &&
+      sessionStatus === 'authenticatedReady'
+    ) {
+      markOnboardingSeen();
+    }
+  }, [markOnboardingSeen, onboardingJourney, sessionStatus]);
 
   const runAuth = async (action: () => Promise<unknown>) => {
     setIsBusy(true);
@@ -228,7 +245,11 @@ export function SignInScreen({navigation, route}: Props): React.JSX.Element {
   };
 
   const startAccountCreation = () => {
-    startOnboardingWizard();
+    if (onboardingJourney === 'invite') {
+      startInviteOnboarding();
+    } else {
+      startOnboardingWizard();
+    }
     navigation.navigate('Welcome');
   };
 

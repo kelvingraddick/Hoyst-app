@@ -2933,6 +2933,7 @@ async function sendCircleEngagementPrompts() {
   const now = new Date();
   const circleSnapshots = await db.collection('circles').get();
   const candidatesByUid = new Map<string, CircleNudgePromptCandidate[]>();
+  const sendPromises: Promise<unknown>[] = [];
 
   for (const circleSnapshot of circleSnapshots.docs) {
     const circle = circleSnapshot.data();
@@ -3003,6 +3004,21 @@ async function sendCircleEngagementPrompts() {
     const deadlineDateKey =
       periodDateKeys[periodDateKeys.length - 1] ?? local.dateKey;
 
+    if (local.hour === targetHour) {
+      behindMembers.forEach(member => {
+        sendPromises.push(
+          notifyMemberDuePrompt({
+            circleId: circleSnapshot.id,
+            circleTitle,
+            commitmentCadence,
+            periodKey,
+            targetUid: member.uid,
+            timezone,
+          }),
+        );
+      });
+    }
+
     engagedMembers.forEach(member => {
       const candidates = candidatesByUid.get(member.uid) ?? [];
       candidates.push({
@@ -3019,55 +3035,57 @@ async function sendCircleEngagementPrompts() {
     });
   }
 
-  const sendPromises = Array.from(candidatesByUid.entries()).map(
-    async ([uid, candidates]) => {
-      const [userPrivateSnapshot, userSnapshot] = await Promise.all([
-        db.collection('userPrivate').doc(uid).get(),
-        db.collection('users').doc(uid).get(),
-      ]);
-      const fallbackTimezone = candidates[0]?.timezone ?? 'UTC';
-      const timezone = asString(
-        userPrivateSnapshot.data()?.timezone,
-        asString(userSnapshot.data()?.timezone, fallbackTimezone),
-      );
-      const local = getLocalDateTimeParts(now, timezone);
+  sendPromises.push(
+    ...Array.from(candidatesByUid.entries()).map(
+      async ([uid, candidates]) => {
+        const [userPrivateSnapshot, userSnapshot] = await Promise.all([
+          db.collection('userPrivate').doc(uid).get(),
+          db.collection('users').doc(uid).get(),
+        ]);
+        const fallbackTimezone = candidates[0]?.timezone ?? 'UTC';
+        const timezone = asString(
+          userPrivateSnapshot.data()?.timezone,
+          asString(userSnapshot.data()?.timezone, fallbackTimezone),
+        );
+        const local = getLocalDateTimeParts(now, timezone);
 
-      if (local.hour !== targetHour) {
-        return undefined;
-      }
+        if (local.hour !== targetHour) {
+          return undefined;
+        }
 
-      const unsentCandidates = (
-        await Promise.all(
-          candidates.map(async candidate => {
-            const dedupeKey = `circle_nudge_prompt_${candidate.circleId}_${candidate.periodKey}_${uid}`;
-            const existingSnapshot = await userPrivateSnapshot.ref
-              .collection('inbox')
-              .doc(sanitizeEventId(dedupeKey))
-              .get();
+        const unsentCandidates = (
+          await Promise.all(
+            candidates.map(async candidate => {
+              const dedupeKey = `circle_nudge_prompt_${candidate.circleId}_${candidate.periodKey}_${uid}`;
+              const existingSnapshot = await userPrivateSnapshot.ref
+                .collection('inbox')
+                .doc(sanitizeEventId(dedupeKey))
+                .get();
 
-            return existingSnapshot.exists ? undefined : candidate;
-          }),
-        )
-      ).filter(
-        (candidate): candidate is CircleNudgePromptCandidate =>
-          Boolean(candidate),
-      );
-      const selected = selectHighestPriorityCircleNudge(unsentCandidates);
+              return existingSnapshot.exists ? undefined : candidate;
+            }),
+          )
+        ).filter(
+          (candidate): candidate is CircleNudgePromptCandidate =>
+            Boolean(candidate),
+        );
+        const selected = selectHighestPriorityCircleNudge(unsentCandidates);
 
-      if (!selected) {
-        return undefined;
-      }
+        if (!selected) {
+          return undefined;
+        }
 
-      return notifyCircleNudgePrompt({
-        circleId: selected.circleId,
-        circleTitle: selected.circleTitle,
-        dateKey: local.dateKey,
-        periodKey: selected.periodKey,
-        targetCount: selected.behindCount,
-        targetUid: selected.targetUid,
-        timezone,
-      });
-    },
+        return notifyCircleNudgePrompt({
+          circleId: selected.circleId,
+          circleTitle: selected.circleTitle,
+          dateKey: local.dateKey,
+          periodKey: selected.periodKey,
+          targetCount: selected.behindCount,
+          targetUid: selected.targetUid,
+          timezone,
+        });
+      },
+    ),
   );
 
   const results = await Promise.all(sendPromises);

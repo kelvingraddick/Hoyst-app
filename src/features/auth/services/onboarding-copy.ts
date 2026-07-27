@@ -87,9 +87,34 @@ const onboardingStepCopy: Record<
 export function getOnboardingStepCopy(
   currentStep: Exclude<OnboardingStep, 'welcome'>,
   isPersonal: boolean,
+  isInvite = false,
 ): OnboardingStepCopy {
   const copy = onboardingStepCopy[currentStep];
   const modeCopy = getModeAwareSetupCopy(isPersonal ? 'personal' : 'group');
+
+  if (isInvite && currentStep === 'notifications') {
+    return {
+      body: 'Hoyst can remind you before this Circle’s Tap In window closes.',
+      prompt: 'Stay in rhythm with your Circle',
+      title: 'Protect your Progression',
+    };
+  }
+
+  if (isInvite && currentStep === 'auth') {
+    return {
+      body: 'Create an account so Hoyst can add you to the invited Circle and keep your Progression across devices.',
+      prompt: 'Choose how you want to continue',
+      title: 'Join your Circle',
+    };
+  }
+
+  if (isInvite && currentStep === 'finishProfile') {
+    return {
+      body: 'Add the profile details your Circle companions will see. Handles are locked once saved.',
+      prompt: 'Finish your profile to join',
+      title: 'Last step',
+    };
+  }
 
   if (currentStep === 'circleCategory') {
     return {...copy, prompt: modeCopy.categoryPrompt};

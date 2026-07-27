@@ -25,6 +25,7 @@ import {getRootAuthPresentation} from './root-mode';
 import type {AppTabsParamList, RootStackParamList} from './types';
 import {useOnboardingStore} from '../store/onboarding-store';
 import {useSessionStore} from '../store/session-store';
+import {useCircleInviteStore} from '../store/circle-invite-store';
 
 const Tab = createBottomTabNavigator<AppTabsParamList>();
 
@@ -53,6 +54,11 @@ export function AppTabsNavigator({
     state => state.consumePendingAction,
   );
   const pendingAction = useSessionStore(state => state.pendingAction);
+  const pendingInviteCode = useCircleInviteStore(state => state.inviteCode);
+  const hasHydratedInvite = useCircleInviteStore(state => state.hasHydrated);
+  const hasCheckedInitialInviteUrl = useCircleInviteStore(
+    state => state.hasCheckedInitialUrl,
+  );
   const currentStep = useOnboardingStore(state => state.currentStep);
   const hasHydratedOnboarding = useOnboardingStore(state => state.hasHydrated);
   const hasSeenOnboarding = useOnboardingStore(
@@ -113,12 +119,17 @@ export function AppTabsNavigator({
   ]);
 
   useEffect(() => {
+    if (!hasHydratedInvite || !hasCheckedInitialInviteUrl) {
+      return;
+    }
+
     const presentation = getRootAuthPresentation({
       currentStep,
       hasHydratedOnboarding,
       hasPendingProfileCompletion,
       hasSeenOnboarding,
       pendingAction,
+      hasPendingInvite: Boolean(pendingInviteCode),
       status,
     });
 
@@ -148,9 +159,12 @@ export function AppTabsNavigator({
   }, [
     currentStep,
     hasHydratedOnboarding,
+    hasHydratedInvite,
+    hasCheckedInitialInviteUrl,
     hasPendingProfileCompletion,
     hasSeenOnboarding,
     pendingAction,
+    pendingInviteCode,
     rootNavigation,
     setCurrentStep,
     startOnboardingWizard,

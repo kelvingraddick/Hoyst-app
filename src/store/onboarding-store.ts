@@ -36,6 +36,7 @@ export type OnboardingStoreState = OnboardingIntentDraft & {
   hasPendingStarterCircleSetup: boolean;
   hasHydrated: boolean;
   hasSeenOnboarding: boolean;
+  journey: 'invite' | 'standard';
   starterCircleDraft: CreateCircleDraft;
   starterCircleSetupId?: string;
   timezone: string;
@@ -65,6 +66,9 @@ export type OnboardingStoreState = OnboardingIntentDraft & {
   ) => void;
   setTimezone: (timezone: string) => void;
   startOnboardingWizard: () => void;
+  startInviteOnboarding: () => void;
+  startInviteProfileCompletion: () => void;
+  startInviteSignIn: () => void;
 };
 
 const initialState = {
@@ -78,6 +82,7 @@ const initialState = {
   hasPendingStarterCircleSetup: false,
   hasHydrated: false,
   hasSeenOnboarding: false,
+  journey: 'standard' as const,
   starterCircleDraft: createInitialStarterCircleDraft(),
   starterCircleSetupId: undefined as string | undefined,
   timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
@@ -172,18 +177,18 @@ export function migratePersistedOnboardingState(persistedState: unknown) {
 
   return {
     ...state,
-    categories:
-      state.categories?.length
-        ? state.categories
-        : focusArea
-        ? [getLegacyFocusAreaCategory(focusArea)]
-        : starterCircleDraft.category
-        ? [starterCircleDraft.category]
-        : undefined,
+    categories: state.categories?.length
+      ? state.categories
+      : focusArea
+      ? [getLegacyFocusAreaCategory(focusArea)]
+      : starterCircleDraft.category
+      ? [starterCircleDraft.category]
+      : undefined,
     currentStep: normalizeOnboardingStepForMode(
       state.currentStep,
       starterCircleDraft.circleMode,
     ),
+    journey: state.journey === 'invite' ? 'invite' : 'standard',
     starterCircleDraft,
   };
 }
@@ -210,6 +215,7 @@ export const useOnboardingStore = create<OnboardingStoreState>()(
         set({
           hasPendingProfileCompletion: false,
           hasSeenOnboarding: true,
+          journey: 'standard',
         }),
       nextStep: () =>
         set(state => ({
@@ -306,8 +312,7 @@ export const useOnboardingStore = create<OnboardingStoreState>()(
             joinMode,
           ),
         })),
-      setTimezone: timezone =>
-        set({timezone}),
+      setTimezone: timezone => set({timezone}),
       startOnboardingWizard: () =>
         set(state => ({
           currentStep: 'welcome',
@@ -315,12 +320,43 @@ export const useOnboardingStore = create<OnboardingStoreState>()(
           hasPendingProfileCompletion: false,
           hasPendingStarterCircleSetup: false,
           hasSeenOnboarding: false,
+          journey: 'standard',
           starterCircleDraft: createInitialStarterCircleDraft({
             focusArea: state.focusArea,
             timezone: state.timezone,
           }),
           starterCircleSetupId: undefined,
         })),
+      startInviteOnboarding: () =>
+        set({
+          currentStep: 'notifications',
+          firstCircleSkipped: true,
+          hasPendingProfileCompletion: false,
+          hasPendingStarterCircleSetup: false,
+          hasSeenOnboarding: false,
+          journey: 'invite',
+          starterCircleSetupId: undefined,
+        }),
+      startInviteProfileCompletion: () =>
+        set({
+          currentStep: 'finishProfile',
+          firstCircleSkipped: true,
+          hasPendingProfileCompletion: true,
+          hasPendingStarterCircleSetup: false,
+          hasSeenOnboarding: false,
+          journey: 'invite',
+          starterCircleSetupId: undefined,
+        }),
+      startInviteSignIn: () =>
+        set({
+          currentStep: 'auth',
+          firstCircleSkipped: true,
+          hasPendingProfileCompletion: false,
+          hasPendingStarterCircleSetup: false,
+          hasSeenOnboarding: false,
+          journey: 'invite',
+          starterCircleSetupId: undefined,
+        }),
     }),
     {
       name: 'hoyst-onboarding-v1',
@@ -367,6 +403,7 @@ export const useOnboardingStore = create<OnboardingStoreState>()(
         hasPendingStarterCircleSetup: state.hasPendingStarterCircleSetup,
         hasPendingProfileCompletion: state.hasPendingProfileCompletion,
         hasSeenOnboarding: state.hasSeenOnboarding,
+        journey: state.journey,
         starterCircleDraft: state.starterCircleDraft,
         starterCircleSetupId: state.starterCircleSetupId,
         timezone: state.timezone,

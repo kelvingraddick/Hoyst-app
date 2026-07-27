@@ -40,6 +40,7 @@ export {
   sendCircleThreadMessage,
   toggleCircleThreadItemLike,
 } from './thread';
+export {invitePage, resolveCircleInvite, rotateCircleInvite} from './invites';
 
 export const healthcheck = onRequest((request, response) => {
   response.json({

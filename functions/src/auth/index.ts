@@ -21,6 +21,7 @@ import {
   materializeCurrentCircleOpportunities,
   removeMemberFromAllCircleOpportunities,
 } from '../momentum';
+import {createInviteCode} from '../shared/invite-code';
 
 const onboardingPreferencesSchema = z.object({
   categories: z.array(z.string().trim().min(1).max(40)).max(8).default([]),
@@ -90,10 +91,6 @@ function requireAuthUid(uid?: string) {
   }
 
   return uid;
-}
-
-function createInviteCode() {
-  return Math.random().toString(36).slice(2, 10);
 }
 
 function asOptionalString(value: unknown) {

@@ -1755,6 +1755,7 @@ async function sendCircleEngagementPrompts() {
     const now = new Date();
     const circleSnapshots = await firebase_1.db.collection('circles').get();
     const candidatesByUid = new Map();
+    const sendPromises = [];
     for (const circleSnapshot of circleSnapshots.docs) {
         const circle = circleSnapshot.data();
         const timezone = asString(circle.timezone, 'UTC');
@@ -1804,6 +1805,18 @@ async function sendCircleEngagementPrompts() {
             periodDateKeys,
         });
         const deadlineDateKey = periodDateKeys[periodDateKeys.length - 1] ?? local.dateKey;
+        if (local.hour === targetHour) {
+            behindMembers.forEach(member => {
+                sendPromises.push(notifyMemberDuePrompt({
+                    circleId: circleSnapshot.id,
+                    circleTitle,
+                    commitmentCadence,
+                    periodKey,
+                    targetUid: member.uid,
+                    timezone,
+                }));
+            });
+        }
         engagedMembers.forEach(member => {
             const candidates = candidatesByUid.get(member.uid) ?? [];
             candidates.push({
@@ -1819,7 +1832,7 @@ async function sendCircleEngagementPrompts() {
             candidatesByUid.set(member.uid, candidates);
         });
     }
-    const sendPromises = Array.from(candidatesByUid.entries()).map(async ([uid, candidates]) => {
+    sendPromises.push(...Array.from(candidatesByUid.entries()).map(async ([uid, candidates]) => {
         const [userPrivateSnapshot, userSnapshot] = await Promise.all([
             firebase_1.db.collection('userPrivate').doc(uid).get(),
             firebase_1.db.collection('users').doc(uid).get(),
@@ -1851,7 +1864,7 @@ async function sendCircleEngagementPrompts() {
             targetUid: selected.targetUid,
             timezone,
         });
-    });
+    }));
     const results = await Promise.all(sendPromises);
     return {
         sentOrSkipped: results.filter(result => Boolean(result)).length,
