@@ -15,6 +15,7 @@ import {
   shouldShowAuthenticatedHomeEmptyState,
 } from '../src/features/home/services/home-data-service';
 import {
+  markAllInboxEventsRead,
   markInboxEventRead,
   subscribeToInboxEvents,
 } from '../src/features/settings/services/notification-settings-service';
@@ -169,13 +170,17 @@ jest.mock('../src/features/home/services/home-data-service', () => ({
   })),
   getHomeCircleActionVariant: jest.fn(() => 'view'),
   getHomeGreetingContext: jest.fn(() => ({
-    completedTodayCount: 0,
+    circleSummary: {
+      atRiskCount: 0,
+      circleCount: 0,
+      doneCount: 0,
+      groupCircleCount: 0,
+      needsYouCount: 0,
+      pendingCount: 0,
+      personalCommitmentCount: 0,
+    },
     firstName: 'Kelvin',
-    needsTapInCount: 0,
-    nudgesAvailableCount: 0,
-    pendingCount: 0,
     timeWindow: 'morning',
-    upcomingCount: 0,
   })),
   getHomeGreetingFallback: jest.fn(() => 'Keep moving today'),
   getTodayAttentionCircles: jest.fn(() => []),
@@ -482,37 +487,40 @@ describe('HomeScreen companion updates', () => {
     });
   });
 
-  it('lifts the hero bubble and avatar while preserving the avatar border', () => {
+  it('keeps the lifted hero bubble and replaces the avatar with Hoy', () => {
     const tree = renderScreenTree();
     const bubbleSurfaceStyle = StyleSheet.flatten(
       tree.root.findByProps({testID: 'home-hero-bubble-surface'}).props.style,
     );
-    const avatarSurfaceStyle = StyleSheet.flatten(
-      tree.root.findByProps({testID: 'home-hero-avatar-surface'}).props.style,
-    );
-    const avatarFrameStyle = StyleSheet.flatten(
-      tree.root.findByProps({testID: 'home-hero-avatar-frame'}).props.style,
-    );
+    const hoyStyle = tree.root
+      .findAllByProps({testID: 'home-hero-hoy-orb'})
+      .map(node => StyleSheet.flatten(node.props.style))
+      .find(style => style?.height === 52);
     const largeTailDotStyle = StyleSheet.flatten(
       tree.root.findByProps({testID: 'home-hero-tail-dot-large'}).props.style,
     );
     const smallTailDotStyle = StyleSheet.flatten(
       tree.root.findByProps({testID: 'home-hero-tail-dot-small'}).props.style,
     );
-    const avatarButton = tree.root.findByProps({
-      accessibilityLabel: 'Open Inbox, 1 unread update',
+    const hoyButton = tree.root.findByProps({
+      testID: 'home-hero-hoy-button',
     });
+    const unreadBadgeStyle = StyleSheet.flatten(
+      tree.root.findByProps({testID: 'home-hero-hoy-unread-badge'}).props
+        .style,
+    );
 
     expect(bubbleSurfaceStyle.elevation).toBe(4);
     expect(bubbleSurfaceStyle.shadowOffset).toEqual({height: 7, width: 0});
     expect(bubbleSurfaceStyle.shadowOpacity).toBe(0.72);
     expect(bubbleSurfaceStyle.shadowRadius).toBe(18);
-    expect(avatarSurfaceStyle.elevation).toBe(4);
-    expect(avatarSurfaceStyle.shadowOffset).toEqual({height: 6, width: 0});
-    expect(avatarSurfaceStyle.shadowOpacity).toBe(0.72);
-    expect(avatarSurfaceStyle.shadowRadius).toBe(14);
-    expect(avatarFrameStyle.borderWidth).toBe(1);
-    expect(avatarFrameStyle.borderColor).toBe('rgba(255,255,255,0.92)');
+    expect(hoyStyle?.height).toBe(52);
+    expect(hoyStyle?.width).toBe(52);
+    expect(
+      tree.root.findAllByProps({
+        testID: 'home-hero-hoy-orb-thinking-image',
+      }).length,
+    ).toBeGreaterThan(0);
     expect(largeTailDotStyle.backgroundColor).toBe('rgba(255,255,255,0.6)');
     expect(largeTailDotStyle.borderWidth).toBe(1);
     expect(largeTailDotStyle.borderColor).toBe('rgba(255,255,255,0)');
@@ -527,7 +535,32 @@ describe('HomeScreen companion updates', () => {
     expect(smallTailDotStyle.shadowOffset).toEqual({height: 5, width: 0});
     expect(smallTailDotStyle.shadowOpacity).toBe(0.58);
     expect(smallTailDotStyle.shadowRadius).toBe(10);
-    expect(avatarButton.props.accessibilityRole).toBe('button');
+    expect(hoyButton.props.accessibilityRole).toBe('button');
+    expect(hoyButton.props.accessibilityLabel).toBe(
+      'Hoy, Thinking. Open Inbox, 1 unread update',
+    );
+    expect(unreadBadgeStyle).toMatchObject({
+      backgroundColor: brandColors.red,
+      borderRadius: 11,
+      bottom: -3,
+      height: 22,
+      right: -3,
+      width: 22,
+    });
+  });
+
+  it('keeps Hoy wired to unread clearing and Inbox navigation', () => {
+    const tree = renderScreenTree();
+    const hoyButton = tree.root.findByProps({
+      testID: 'home-hero-hoy-button',
+    });
+
+    act(() => {
+      hoyButton.props.onPress();
+    });
+
+    expect(markAllInboxEventsRead).toHaveBeenCalledTimes(1);
+    expect(mockRootNavigate).toHaveBeenCalledWith('Inbox');
   });
 
   it('keeps the hero tail dots visible in dark mode', () => {

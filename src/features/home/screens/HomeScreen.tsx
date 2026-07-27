@@ -1,4 +1,10 @@
-import React, {useCallback, useEffect, useMemo, useState} from 'react';
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import {
   Alert,
   Pressable,
@@ -24,10 +30,7 @@ import {TodayCircleCard} from '../../../design/components/TodayCircleCard';
 import {WeekProgressStrip} from '../../../design/components/WeekProgressStrip';
 import {useHoystTheme} from '../../../design/theme/useHoystTheme';
 import {useProtectedAction} from '../../auth/hooks/useProtectedAction';
-import {
-  getHomeAvatarBadgeKind,
-  getHomeHeroCopy,
-} from '../services/home-hero-copy';
+import {getHomeHeroCopy} from '../services/home-hero-copy';
 import {
   createEmptyHomeData,
   getHomeCircleActionVariant,
@@ -48,9 +51,10 @@ import {
   setCachedHomeGreeting,
 } from '../services/home-greeting-service';
 import {
-  getProfileAvatarSource,
-  getProfileInitials,
-} from '../../profile/services/profile-display';
+  getHoyAccessibilityLabel,
+  getHoyCelebrationSnapshot,
+  getHoyState,
+} from '../services/hoy-state';
 import type {
   AppTabsParamList,
   RootStackParamList,
@@ -208,17 +212,6 @@ function getInboxBadgeText(unreadCount: number) {
   return String(Math.min(unreadCount, 9));
 }
 
-function getInboxAccessibilityLabel(unreadCount: number) {
-  if (unreadCount <= 0) {
-    return 'Open Inbox';
-  }
-
-  const countLabel = unreadCount > 9 ? '9 or more' : String(unreadCount);
-  const updateLabel = unreadCount === 1 ? 'update' : 'updates';
-
-  return `Open Inbox, ${countLabel} unread ${updateLabel}`;
-}
-
 export function HomeScreen(): React.JSX.Element {
   const theme = useHoystTheme();
   const [homeData, setHomeData] = useState<HomeData>(() =>
@@ -236,8 +229,15 @@ export function HomeScreen(): React.JSX.Element {
   );
   const [homeGreetingState, setHomeGreetingState] =
     useState<HomeGreetingState>();
+  const [hoyCelebrationKey, setHoyCelebrationKey] = useState(0);
+  const [isHoyCelebrating, setIsHoyCelebrating] = useState(false);
   const [remoteMomentumSummary, setRemoteMomentumSummary] =
     useState<MomentumSummary>();
+  const previousHoyDoneCountRef = useRef(0);
+  const hasLoadedHoySnapshotRef = useRef(false);
+  const hoyCelebrationTimerRef = useRef<
+    ReturnType<typeof setTimeout> | undefined
+  >(undefined);
   const profile = useUserProfileStore(state => state.profile);
   const status = useSessionStore(state => state.status);
   const user = useSessionStore(state => state.user);
@@ -378,11 +378,25 @@ export function HomeScreen(): React.JSX.Element {
   const bubbleText =
     activeHomeGreetingState?.headline ??
     (isAuthenticatedHome ? undefined : homeGreetingFallback);
-  const initials = getProfileInitials(profile);
-  const avatarSource = getProfileAvatarSource(profile, user?.photoURL);
   const momentumSummary =
     remoteMomentumSummary ?? buildMomentumSummaryFromHomeData(homeData);
-  const avatarBadgeKind = getHomeAvatarBadgeKind(events[0]?.type);
+  const activeCircleCount =
+    homeGreetingContext.circleSummary.circleCount -
+    homeGreetingContext.circleSummary.pendingCount;
+  const hoyState = getHoyState({
+    activeCircleCount,
+    atRiskCount: homeGreetingContext.circleSummary.atRiskCount,
+    doneCount: homeGreetingContext.circleSummary.doneCount,
+    hasHomeDataError,
+    isAuthenticatedHome,
+    isCelebrating: isHoyCelebrating,
+    isGreetingLoading: isAuthenticatedHome && !bubbleText,
+    isIncompleteProfile,
+    isLoadingHomeData,
+    needsYouCount: homeGreetingContext.circleSummary.needsYouCount,
+    pendingCount: homeGreetingContext.circleSummary.pendingCount,
+    personalStreakDays: homeData.personalStreakDays,
+  });
   const heroCopy = getHomeHeroCopy({
     dateKey: homeData.todayDateKey,
     momentumStatus: momentumSummary.status,
@@ -420,6 +434,63 @@ export function HomeScreen(): React.JSX.Element {
     styles.homeCardLift,
     {shadowColor: theme.glassShadow},
   ];
+
+  useEffect(() => {
+    previousHoyDoneCountRef.current = 0;
+    hasLoadedHoySnapshotRef.current = false;
+    setHoyCelebrationKey(0);
+    setIsHoyCelebrating(false);
+
+    if (hoyCelebrationTimerRef.current) {
+      clearTimeout(hoyCelebrationTimerRef.current);
+      hoyCelebrationTimerRef.current = undefined;
+    }
+
+    return () => {
+      if (hoyCelebrationTimerRef.current) {
+        clearTimeout(hoyCelebrationTimerRef.current);
+        hoyCelebrationTimerRef.current = undefined;
+      }
+    };
+  }, [isAuthenticatedHome, user?.uid]);
+
+  useEffect(() => {
+    const snapshot = getHoyCelebrationSnapshot({
+      currentDoneCount: homeGreetingContext.circleSummary.doneCount,
+      hasLoadedSnapshot: hasLoadedHoySnapshotRef.current,
+      isLoaded:
+        isAuthenticatedHome &&
+        homeData.hasLoadedMemberships &&
+        !isLoadingHomeData &&
+        !hasHomeDataError,
+      previousDoneCount: previousHoyDoneCountRef.current,
+    });
+
+    previousHoyDoneCountRef.current = snapshot.doneCount;
+    hasLoadedHoySnapshotRef.current = snapshot.hasLoadedSnapshot;
+
+    if (!snapshot.shouldCelebrate) {
+      return;
+    }
+
+    setHoyCelebrationKey(currentKey => currentKey + 1);
+    setIsHoyCelebrating(true);
+
+    if (hoyCelebrationTimerRef.current) {
+      clearTimeout(hoyCelebrationTimerRef.current);
+    }
+
+    hoyCelebrationTimerRef.current = setTimeout(() => {
+      setIsHoyCelebrating(false);
+      hoyCelebrationTimerRef.current = undefined;
+    }, 2200);
+  }, [
+    hasHomeDataError,
+    homeData.hasLoadedMemberships,
+    homeGreetingContext.circleSummary.doneCount,
+    isAuthenticatedHome,
+    isLoadingHomeData,
+  ]);
 
   useEffect(() => {
     clearExpiredHomeGreetingCacheEntries().catch(() => undefined);
@@ -649,17 +720,17 @@ export function HomeScreen(): React.JSX.Element {
         showsVerticalScrollIndicator={false}
         style={styles.scroll}>
         <HomeHeroHeader
-          avatarAccessibilityLabel={getInboxAccessibilityLabel(
-            unreadInboxCount,
-          )}
-          avatarSource={avatarSource}
-          badgeKind={avatarBadgeKind}
           bubbleText={bubbleText}
           copy={heroCopy}
-          initials={initials}
+          hoyAccessibilityLabel={getHoyAccessibilityLabel({
+            state: hoyState,
+            unreadCount: unreadInboxCount,
+          })}
+          hoyCelebrationKey={hoyCelebrationKey}
+          hoyState={hoyState}
           momentumPercent={momentumSummary.percentage}
           momentumStatus={momentumSummary.status}
-          onAvatarPress={openInbox}
+          onHoyPress={openInbox}
           onMomentumPress={() => navigation.navigate('Momentum')}
           unreadBadgeText={getInboxBadgeText(unreadInboxCount)}
         />

@@ -1,48 +1,10 @@
-import type {InboxEventType, MomentumStatus} from '../../../types/models';
+import type {MomentumStatus} from '../../../types/models';
 import type {HomeGreetingTimeWindow} from './home-data-service';
-
-export type HomeAvatarBadgeKind = 'flame' | 'heart' | 'sparkle';
 
 export type HomeHeroCopy = {
   headline: string;
   subline: string;
 };
-
-const heartEventTypes: ReadonlySet<InboxEventType> = new Set([
-  'companion_tapped_in',
-  'join_approved',
-  'join_request',
-  'member_joined',
-]);
-
-const sparkleEventTypes: ReadonlySet<InboxEventType> = new Set([
-  'circle_at_risk',
-  'circle_discovery_suggestion',
-  'circle_nudge_prompt',
-  'member_due_prompt',
-  'nudge',
-  'tap_in_final_warning',
-  'tap_in_midday_reminder',
-]);
-
-/**
- * The avatar badge mirrors the most recent inbox event: social activity shows
- * the heart, support/nudge events show the sparkle, and everything else
- * (including no events) falls back to the streak flame.
- */
-export function getHomeAvatarBadgeKind(
-  latestEventType?: InboxEventType,
-): HomeAvatarBadgeKind {
-  if (latestEventType && heartEventTypes.has(latestEventType)) {
-    return 'heart';
-  }
-
-  if (latestEventType && sparkleEventTypes.has(latestEventType)) {
-    return 'sparkle';
-  }
-
-  return 'flame';
-}
 
 const headlinePools: Record<HomeGreetingTimeWindow, readonly string[]> = {
   morning: [

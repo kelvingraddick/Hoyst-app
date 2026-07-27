@@ -1,30 +1,28 @@
 import React, {useEffect, useRef, useState} from 'react';
 import {
   Animated,
-  Image,
   Platform,
   Pressable,
   StyleSheet,
   View,
-  type ImageSourcePropType,
 } from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {BlurView} from '@react-native-community/blur';
-import Svg, {Defs, G, LinearGradient, Path, Stop} from 'react-native-svg';
 
-import type {HomeAvatarBadgeKind} from '../../features/home/services/home-hero-copy';
 import type {HomeHeroCopy} from '../../features/home/services/home-hero-copy';
+import type {HoyState} from '../../features/home/services/hoy-state';
 import type {MomentumStatus} from '../../types/models';
 import {brandColors} from '../tokens/colors';
 import {actionMotion} from '../tokens/actions';
 import {useHoystTheme} from '../theme/useHoystTheme';
 import {BrandMark} from './BrandMark';
 import {HoystText} from './HoystText';
+import {HoyOrb} from './HoyOrb';
 import {MomentumStageIcon} from './MomentumStageIcon';
 import {getMomentumStatusVisualColor} from './MomentumStatusPill';
 
-const AVATAR_SIZE = 46;
-const AVATAR_BADGE_SIZE = 22;
+const HOY_SIZE = 52;
+const UNREAD_BADGE_SIZE = 22;
 const BAR_HEIGHT = 10;
 const KNOB_SIZE = 34;
 const MOMENTUM_STAGE_ICON_BACKGROUND = '#FFF3DF';
@@ -37,9 +35,6 @@ export const homeHeroPalettes = {
     bubbleSubtle: '#5B5B86',
     subline: brandColors.blueVivid,
     track: 'rgba(124,111,240,0.18)',
-    avatarRing: 'rgba(255,255,255,0.6)',
-    avatarFallback: 'rgba(255,255,255,0.4)',
-    avatarInitial: brandColors.blueVivid,
     tailDot: 'rgba(255,255,255,0.6)',
     tailDotBorder: 'rgba(255,255,255,0)',
   },
@@ -50,40 +45,23 @@ export const homeHeroPalettes = {
     bubbleSubtle: '#9292B4',
     subline: brandColors.blue,
     track: 'rgba(124,111,240,0.24)',
-    avatarRing: 'rgba(40,42,64,0.6)',
-    avatarFallback: 'rgba(60,62,90,0.5)',
-    avatarInitial: brandColors.purpleBright,
     tailDot: 'rgba(74,77,116,0.78)',
     tailDotBorder: 'rgba(255,255,255,0.20)',
   },
 } as const;
 
 type HomeHeroHeaderProps = {
-  avatarAccessibilityLabel: string;
-  avatarSource?: ImageSourcePropType;
-  badgeKind: HomeAvatarBadgeKind;
   bubbleText?: string;
   copy: HomeHeroCopy;
-  initials: string;
+  hoyAccessibilityLabel: string;
+  hoyCelebrationKey?: number;
+  hoyState: HoyState;
   momentumPercent: number;
   momentumStatus: MomentumStatus;
-  onAvatarPress: () => void;
+  onHoyPress: () => void;
   onMomentumPress: () => void;
   unreadBadgeText?: string;
 };
-
-const badgeVisuals: Record<
-  HomeAvatarBadgeKind,
-  {gradientStart: string; gradientStop: string}
-> = {
-  flame: {gradientStart: '#FF8A3D', gradientStop: '#F25B07'},
-  heart: {gradientStart: '#FF5C8A', gradientStop: '#E91E55'},
-  sparkle: {gradientStart: '#3D8BFF', gradientStop: '#1559E0'},
-};
-
-function useGradientId(name: string) {
-  return `${React.useId().replace(/[^a-zA-Z0-9]/g, '')}-${name}`;
-}
 
 function FrostedFill({radius}: {radius: number}) {
   const theme = useHoystTheme();
@@ -99,58 +77,6 @@ function FrostedFill({radius}: {radius: number}) {
       reducedTransparencyFallbackColor={theme.glassSurfaceStrong}
       style={[StyleSheet.absoluteFill, {borderRadius: radius}]}
     />
-  );
-}
-
-function AvatarBadgeIcon({kind}: {kind: HomeAvatarBadgeKind}) {
-  const visual = badgeVisuals[kind];
-  const gradientId = useGradientId(`avatar-badge-${kind}`);
-
-  return (
-    <Svg
-      height={AVATAR_BADGE_SIZE}
-      viewBox="0 0 32 32"
-      width={AVATAR_BADGE_SIZE}>
-      <Defs>
-        <LinearGradient id={gradientId} x1="6" x2="26" y1="4" y2="28">
-          <Stop offset="0" stopColor={visual.gradientStart} />
-          <Stop offset="1" stopColor={visual.gradientStop} />
-        </LinearGradient>
-      </Defs>
-      <Path
-        d="M16 1.6c8 0 14.4 6.4 14.4 14.4S24 30.4 16 30.4 1.6 24 1.6 16 8 1.6 16 1.6Z"
-        fill={`url(#${gradientId})`}
-        stroke="#FFFFFF"
-        strokeWidth={2.6}
-      />
-      {kind === 'flame' ? (
-        <G translateY={1}>
-          <Path
-            d="M16.3 24.6c-4.2-.8-6.9-4-6.4-8 .3-2.6 2.1-4.5 3.9-6.3 1.6-1.5 2.3-3 1.9-4.9 4.4 2.2 6.7 5.9 5.5 10 1.9 1.1 2.6 3.2 1.7 5.2-1 2.4-3.8 4.4-6.6 4Z"
-            fill="#FFFFFF"
-          />
-          <Path
-            d="M16.5 21.8c-2.2-.4-3.5-2-3.2-4 .2-1.3 1.1-2.3 2-3.2.8-.8 1.2-1.5 1-2.5 2.3 1.2 3.5 3.2 2.8 5.3 1 .6 1.4 1.7 1 2.7-.6 1.3-2.1 2.1-3.6 1.7Z"
-            fill={visual.gradientStop}
-            opacity={0.45}
-          />
-        </G>
-      ) : kind === 'heart' ? (
-        <G translateY={-1}>
-          <Path
-            d="M16 24.4 8.9 17.2c-1.9-2-1.9-5.1 0-7 1.8-1.9 4.8-1.9 6.6 0l.5.5.5-.5c1.8-1.9 4.8-1.9 6.6 0 1.9 1.9 1.9 5 0 7L16 24.4Z"
-            fill="#FFFFFF"
-          />
-        </G>
-      ) : (
-        <G translateY={2}>
-          <Path
-            d="M16 6.4c.9 4.8 2.9 6.8 7.6 7.6-4.7.8-6.7 2.8-7.6 7.6-.9-4.8-2.9-6.8-7.6-7.6 4.7-.8 6.7-2.8 7.6-7.6Z"
-            fill="#FFFFFF"
-          />
-        </G>
-      )}
-    </Svg>
   );
 }
 
@@ -217,15 +143,14 @@ function BubbleText({text}: {text: string}) {
 }
 
 export function HomeHeroHeader({
-  avatarAccessibilityLabel,
-  avatarSource,
-  badgeKind,
   bubbleText,
   copy,
-  initials,
+  hoyAccessibilityLabel,
+  hoyCelebrationKey,
+  hoyState,
   momentumPercent,
   momentumStatus,
-  onAvatarPress,
+  onHoyPress,
   onMomentumPress,
   unreadBadgeText,
 }: HomeHeroHeaderProps): React.JSX.Element {
@@ -310,62 +235,25 @@ export function HomeHeroHeader({
           />
         </View>
         <Pressable
-          accessibilityLabel={avatarAccessibilityLabel}
+          accessibilityLabel={hoyAccessibilityLabel}
           accessibilityRole="button"
           hitSlop={8}
-          onPress={onAvatarPress}
+          onPress={onHoyPress}
           style={({pressed}) => [
-            styles.avatarCluster,
-            {opacity: pressed ? 0.92 : 1},
-          ]}>
-          <View
-            testID="home-hero-avatar-surface"
-            style={[
-              styles.avatarSurface,
-              {
-                shadowColor: theme.glassShadow,
-              },
-            ]}>
-            <View
-              style={[
-                styles.avatarRing,
-                {
-                  backgroundColor: palette.avatarRing,
-                  borderColor: theme.glassBorder,
-                },
-              ]}>
-              <FrostedFill radius={(AVATAR_SIZE + 6) / 2} />
-              <View
-                testID="home-hero-avatar-frame"
-                style={[
-                  styles.avatarFrame,
-                  {
-                    backgroundColor: palette.avatarFallback,
-                    borderColor: theme.isDark
-                      ? 'rgba(255,255,255,0.18)'
-                      : 'rgba(255,255,255,0.92)',
-                  },
-                ]}>
-                {avatarSource ? (
-                  <Image source={avatarSource} style={styles.avatarImage} />
-                ) : (
-                  <HoystText
-                    style={[
-                      styles.avatarInitials,
-                      {color: palette.avatarInitial},
-                    ]}
-                    variant="bodyStrong">
-                    {initials}
-                  </HoystText>
-                )}
-              </View>
-            </View>
-          </View>
-          <View style={styles.statusBadge}>
-            <AvatarBadgeIcon kind={badgeKind} />
-          </View>
+            styles.hoyCluster,
+            {opacity: pressed ? 0.9 : 1},
+          ]}
+          testID="home-hero-hoy-button">
+          <HoyOrb
+            celebrationKey={hoyCelebrationKey}
+            size={HOY_SIZE}
+            state={hoyState}
+            testID="home-hero-hoy-orb"
+          />
           {unreadBadgeText ? (
-            <View style={styles.unreadBadge}>
+            <View
+              style={styles.unreadBadge}
+              testID="home-hero-hoy-unread-badge">
               <HoystText
                 allowFontScaling={false}
                 numberOfLines={1}
@@ -511,65 +399,22 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     width: 7,
   },
-  avatarCluster: {
-    height: AVATAR_SIZE + 6,
-    width: AVATAR_SIZE + 6,
-  },
-  avatarSurface: {
-    alignItems: 'center',
-    elevation: 4,
-    height: AVATAR_SIZE + 6,
-    justifyContent: 'center',
-    shadowOffset: {height: 6, width: 0},
-    shadowOpacity: 0.72,
-    shadowRadius: 14,
-    width: AVATAR_SIZE + 6,
-  },
-  avatarRing: {
-    alignItems: 'center',
-    borderRadius: (AVATAR_SIZE + 6) / 2,
-    borderWidth: 1,
-    height: AVATAR_SIZE + 6,
-    justifyContent: 'center',
-    overflow: 'hidden',
-    width: AVATAR_SIZE + 6,
-  },
-  avatarFrame: {
-    alignItems: 'center',
-    borderRadius: AVATAR_SIZE / 2,
-    borderWidth: 1,
-    height: AVATAR_SIZE,
-    justifyContent: 'center',
-    overflow: 'hidden',
-    width: AVATAR_SIZE,
-  },
-  avatarImage: {
-    borderRadius: (AVATAR_SIZE - 2) / 2,
-    height: AVATAR_SIZE - 2,
-    resizeMode: 'cover',
-    width: AVATAR_SIZE - 2,
-  },
-  avatarInitials: {
-    fontSize: 18,
-    fontWeight: '700',
-  },
-  statusBadge: {
-    position: 'absolute',
-    right: -3,
-    top: -3,
+  hoyCluster: {
+    height: HOY_SIZE,
+    width: HOY_SIZE,
   },
   unreadBadge: {
     alignItems: 'center',
     backgroundColor: brandColors.red,
     borderColor: brandColors.white,
-    borderRadius: AVATAR_BADGE_SIZE / 2,
+    borderRadius: UNREAD_BADGE_SIZE / 2,
     borderWidth: 2,
     bottom: -3,
-    height: AVATAR_BADGE_SIZE,
+    height: UNREAD_BADGE_SIZE,
     justifyContent: 'center',
     position: 'absolute',
     right: -3,
-    width: AVATAR_BADGE_SIZE,
+    width: UNREAD_BADGE_SIZE,
   },
   unreadBadgeText: {
     color: brandColors.white,

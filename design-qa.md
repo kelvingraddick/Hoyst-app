@@ -107,3 +107,56 @@ Primary interactions tested: open and close the compact sheet, switch to the exp
 Automated coverage: 8 focused Jest suites, TypeScript typecheck, and Firebase Functions build. The final focused rerun includes dedicated detent-change, glow-only, and enlarged-label assertions.
 
 final result: passed
+
+---
+
+# Hoy Home Header Design QA
+
+## Scope
+
+- Device: iPhone 17 Pro simulator, iOS 26.5
+- Source references:
+  - `/Users/kelvin/Desktop/Screenshot 2026-07-26 at 11.55.35 PM.png`
+  - `/Users/kelvin/Desktop/Screenshot 2026-07-26 at 11.55.49 PM.png`
+- Comparison image: `/tmp/hoy-design-comparison.png`
+- Implementation captures:
+  - `/tmp/hoy-qa-dark/`
+  - `/tmp/hoy-qa-light/`
+
+## Visual checks
+
+| Check | Result |
+| --- | --- |
+| Glossy 3D orb treatment follows the selected references | Pass |
+| Orb remains readable in the 52-point Home header slot | Pass |
+| Large white eyes, brows, and mouth remain distinct in every state | Pass |
+| Soft glow and floating shadow remain visible in light and dark modes | Pass |
+| Speech bubble, tail dots, greeting, and surrounding layout remain aligned | Pass |
+| Existing red unread badge stays at Hoy's lower-right edge | Pass |
+| State glyphs remain restrained and do not replace the face | Pass |
+| Celebration uses temporary confetti without a permanent glyph | Pass |
+
+## State checks
+
+| State | Light | Dark | Glyph rule |
+| --- | --- | --- | --- |
+| Locked | Pass | Pass | Blue lock |
+| Thinking | Pass | Pass | None |
+| Celebrating | Pass | Pass | Temporary confetti |
+| Risk / attention | Pass | Pass | Warning triangle |
+| Tap In needed | Pass | Pass | Exclamation |
+| Goal completed | Pass | Pass | Green check |
+| Streak active | Pass | Pass | None |
+| Default | Pass | Pass | None |
+
+## Interaction and motion checks
+
+- Hoy remains the Inbox button and preserves unread clearing.
+- State changes crossfade and scale over 210 ms.
+- Default, streak, thinking, Tap In, goal, and risk loops use native-driven transforms.
+- Locked does not loop.
+- Celebration runs for 2.2 seconds and does not replay on the initial loaded snapshot.
+- Reduce Motion and the test environment use the static composition.
+- The temporary local state and appearance overrides used for capture were removed.
+
+final result: passed
