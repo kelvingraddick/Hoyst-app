@@ -156,12 +156,14 @@ function detail(overrides: Partial<CircleDetailModel> = {}): CircleDetailModel {
 }
 
 function threadItems(): CircleThreadItem[] {
+  const now = Date.now();
+
   return [
     {
       activityType: 'tap_in',
       actor: {initials: 'MJ', name: 'Maya', uid: 'user-2'},
       createdAtLabel: '8:40 AM',
-      createdAtMs: 1,
+      createdAtMs: now - 3 * 60_000,
       id: 'activity-1',
       isLikedByViewer: true,
       kind: 'activity',
@@ -174,7 +176,7 @@ function threadItems(): CircleThreadItem[] {
     {
       actor: {initials: 'KM', name: 'Kelvin', uid: 'user-1'},
       createdAtLabel: '9:16 AM',
-      createdAtMs: 2,
+      createdAtMs: now - 2 * 60_000,
       id: 'message-1',
       isLikedByViewer: false,
       kind: 'message',
@@ -184,7 +186,7 @@ function threadItems(): CircleThreadItem[] {
     {
       actor: {initials: 'PJ', name: 'Priya', uid: 'user-3'},
       createdAtLabel: '9:32 AM',
-      createdAtMs: 3,
+      createdAtMs: now - 60_000,
       id: 'message-2',
       isLikedByViewer: false,
       kind: 'message',
@@ -196,7 +198,7 @@ function threadItems(): CircleThreadItem[] {
       activityType: 'nudge',
       actor: {initials: 'SR', name: 'Sam', uid: 'user-4'},
       createdAtLabel: '9:40 AM',
-      createdAtMs: 4,
+      createdAtMs: now,
       id: 'activity-2',
       isLikedByViewer: false,
       kind: 'activity',
@@ -251,6 +253,18 @@ function findTextNode(tree: renderer.ReactTestRenderer, text: string) {
   return tree.root.findAllByType(Text).find(node => textContent(node) === text);
 }
 
+function getDayMarkerIds(tree: renderer.ReactTestRenderer) {
+  return new Set(
+    tree.root
+      .findAll(
+        node =>
+          typeof node.props.testID === 'string' &&
+          node.props.testID.startsWith('circle-thread-day-'),
+      )
+      .map(node => node.props.testID as string),
+  );
+}
+
 describe('CircleThreadScreen', () => {
   beforeEach(() => {
     alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
@@ -295,6 +309,7 @@ describe('CircleThreadScreen', () => {
     expect(output).toContain('💪 You got this');
     expect(output).not.toContain('🔥 Streak');
     expect(output).not.toContain('💪 Push');
+    expect(getDayMarkerIds(tree).size).toBe(1);
     expect(
       tree.root.findByProps({testID: 'circle-thread-activity-image'}),
     ).toBeTruthy();
@@ -318,6 +333,20 @@ describe('CircleThreadScreen', () => {
 
     expect(currentMessage).toBeTruthy();
     expect(currentMessageAncestors.length).toBeGreaterThan(0);
+  });
+
+  it('renders separate date markers for activity from different days', () => {
+    const now = Date.now();
+    const [olderItem, todayItem] = threadItems();
+    mockThreadItems = [
+      {...olderItem, createdAtMs: now - 3 * 24 * 60 * 60_000, id: 'older'},
+      {...todayItem, createdAtMs: now, id: 'today'},
+    ];
+
+    const {tree} = renderScreen();
+
+    expect(getDayMarkerIds(tree).size).toBe(2);
+    expect(outputOf(tree)).toContain('TODAY');
   });
 
   it('uses compact sizing for the thread header, feed, quick chips, and composer', () => {
@@ -369,9 +398,9 @@ describe('CircleThreadScreen', () => {
         paddingHorizontal: 20,
       }),
     );
-    expect(StyleSheet.flatten(backButton.props.style({pressed: false}))).toEqual(
-      expect.objectContaining({borderWidth: 1, height: 40, width: 40}),
-    );
+    expect(
+      StyleSheet.flatten(backButton.props.style({pressed: false})),
+    ).toEqual(expect.objectContaining({borderWidth: 1, height: 40, width: 40}));
     expect(StyleSheet.flatten(title?.props.style)).toEqual(
       expect.objectContaining({fontSize: 20, lineHeight: 25}),
     );

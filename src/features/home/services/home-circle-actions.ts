@@ -4,7 +4,10 @@ export type HomeCircleActionVariant = 'check_in' | 'nudge' | 'share' | 'view';
 
 type TapInTodayInput = Pick<
   CircleManagementCard,
-  'viewerHasTappedInToday' | 'viewerMembershipStatus' | 'viewerTodayStatus'
+  | 'viewerCanUpdateTapIn'
+  | 'viewerHasTappedInToday'
+  | 'viewerMembershipStatus'
+  | 'viewerTodayStatus'
 >;
 
 export function canTapInToday(circle: TapInTodayInput) {
@@ -16,9 +19,10 @@ export function canTapInToday(circle: TapInTodayInput) {
     return true;
   }
 
-  return (
-    circle.viewerTodayStatus === 'partial' ||
-    circle.viewerTodayStatus === 'failed'
+  return Boolean(
+    circle.viewerCanUpdateTapIn &&
+      (circle.viewerTodayStatus === 'partial' ||
+        circle.viewerTodayStatus === 'failed'),
   );
 }
 

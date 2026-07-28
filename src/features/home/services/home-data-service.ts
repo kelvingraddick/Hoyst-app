@@ -791,10 +791,14 @@ export function getHomeGreetingCircleSummary(
         return summary;
       }
 
-      if (canTapInToday(circle)) {
+      const viewerCanTapInToday = canTapInToday(circle);
+      const viewerNeedsInitialTapIn =
+        viewerCanTapInToday && !circle.viewerHasTappedInToday;
+
+      if (viewerNeedsInitialTapIn) {
         summary.needsYouCount += 1;
       }
-      if (circle.state === 'risk') {
+      if (circle.state === 'risk' && viewerNeedsInitialTapIn) {
         summary.atRiskCount += 1;
       }
       if (circle.state === 'done') {
@@ -863,6 +867,14 @@ export function getHomeGreetingFallback({
     );
   }
 
+  if (circleSummary.atRiskCount > 0) {
+    return buildGreetingWithName(
+      context.firstName,
+      'pressure is up. Perfect, now it counts.',
+      'Pressure is up. Perfect, now it counts.',
+    );
+  }
+
   if (circleSummary.needsYouCount > 0) {
     const waitingLabel =
       (circleSummary.groupCircleCount ?? circleSummary.circleCount) === 0
@@ -873,14 +885,6 @@ export function getHomeGreetingFallback({
       context.firstName,
       `your ${waitingLabel} are waiting. Make it quick and undeniable.`,
       `Your ${waitingLabel} are waiting. Make it quick and undeniable.`,
-    );
-  }
-
-  if (circleSummary.atRiskCount > 0) {
-    return buildGreetingWithName(
-      context.firstName,
-      'pressure is up. Perfect, now it counts.',
-      'Pressure is up. Perfect, now it counts.',
     );
   }
 

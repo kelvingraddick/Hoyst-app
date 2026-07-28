@@ -52,8 +52,9 @@ import {
 } from '../services/home-greeting-service';
 import {
   getHoyAccessibilityLabel,
-  getHoyCelebrationSnapshot,
+  getStableHoyDisplayState,
   getHoyState,
+  type HoyState,
 } from '../services/hoy-state';
 import type {
   AppTabsParamList,
@@ -67,6 +68,7 @@ import type {
   MomentumSummary,
 } from '../../../types/models';
 import {useOnboardingStore} from '../../../store/onboarding-store';
+import {useHoyFeedbackStore} from '../../../store/hoy-feedback-store';
 import {useUserProfileStore} from '../../../store/profile-store';
 import {useSessionStore} from '../../../store/session-store';
 import {CircleActionCard} from '../../circles/components/CircleActionCard';
@@ -233,8 +235,10 @@ export function HomeScreen(): React.JSX.Element {
   const [isHoyCelebrating, setIsHoyCelebrating] = useState(false);
   const [remoteMomentumSummary, setRemoteMomentumSummary] =
     useState<MomentumSummary>();
-  const previousHoyDoneCountRef = useRef(0);
-  const hasLoadedHoySnapshotRef = useRef(false);
+  const lastResolvedHoyStateRef = useRef<{
+    sessionKey: string;
+    state: HoyState;
+  } | undefined>(undefined);
   const hoyCelebrationTimerRef = useRef<
     ReturnType<typeof setTimeout> | undefined
   >(undefined);
@@ -243,6 +247,15 @@ export function HomeScreen(): React.JSX.Element {
   const user = useSessionStore(state => state.user);
   const beginAuthFlow = useSessionStore(state => state.beginAuthFlow);
   const clearPendingAction = useSessionStore(state => state.clearPendingAction);
+  const pendingHoyTapInCelebration = useHoyFeedbackStore(
+    state => state.pendingTapInCelebration,
+  );
+  const clearStaleHoyTapInCelebration = useHoyFeedbackStore(
+    state => state.clearStaleTapInCelebration,
+  );
+  const consumeHoyTapInCelebration = useHoyFeedbackStore(
+    state => state.consumeTapInCelebration,
+  );
   const startOnboardingWizard = useOnboardingStore(
     state => state.startOnboardingWizard,
   );
@@ -256,6 +269,8 @@ export function HomeScreen(): React.JSX.Element {
   const isAuthenticatedHome =
     status === 'authenticatedReady' && Boolean(user?.uid && profile);
   const isIncompleteProfile = status === 'authenticatedIncompleteProfile';
+  const isSessionResolving =
+    status === 'initializing' || status === 'authenticating';
 
   useFocusEffect(
     useCallback(() => {
@@ -377,17 +392,18 @@ export function HomeScreen(): React.JSX.Element {
     (homeData.hasLoadedMemberships || hasHomeDataError);
   const bubbleText =
     activeHomeGreetingState?.headline ??
-    (isAuthenticatedHome ? undefined : homeGreetingFallback);
+    (status === 'guest' || isIncompleteProfile
+      ? homeGreetingFallback
+      : undefined);
   const momentumSummary =
     remoteMomentumSummary ?? buildMomentumSummaryFromHomeData(homeData);
   const activeCircleCount =
     homeGreetingContext.circleSummary.circleCount -
     homeGreetingContext.circleSummary.pendingCount;
-  const hoyState = getHoyState({
+  const candidateHoyState = getHoyState({
     activeCircleCount,
     atRiskCount: homeGreetingContext.circleSummary.atRiskCount,
     doneCount: homeGreetingContext.circleSummary.doneCount,
-    hasHomeDataError,
     isAuthenticatedHome,
     isCelebrating: isHoyCelebrating,
     isGreetingLoading: isAuthenticatedHome && !bubbleText,
@@ -397,13 +413,25 @@ export function HomeScreen(): React.JSX.Element {
     pendingCount: homeGreetingContext.circleSummary.pendingCount,
     personalStreakDays: homeData.personalStreakDays,
   });
+  const hoySessionKey = user?.uid ?? status;
+  const previousResolvedHoyState =
+    lastResolvedHoyStateRef.current?.sessionKey === hoySessionKey
+      ? lastResolvedHoyStateRef.current.state
+      : undefined;
+  const displayedHoyState = getStableHoyDisplayState({
+    candidateState: candidateHoyState,
+    isSessionResolving,
+    previousResolvedState: previousResolvedHoyState,
+  });
+  const isCandidateHoyStateResolved =
+    !isSessionResolving && candidateHoyState !== 'thinking';
   const heroCopy = getHomeHeroCopy({
     dateKey: homeData.todayDateKey,
     momentumStatus: momentumSummary.status,
     streakDays: homeData.personalStreakDays,
     timeWindow: homeGreetingContext.timeWindow,
   });
-  const showAccountPrompt = !isAuthenticatedHome;
+  const showAccountPrompt = status === 'guest' || isIncompleteProfile;
   const showAuthenticatedEmptyState = shouldShowAuthenticatedHomeEmptyState({
     circleCount: homeData.circles.length,
     hasHomeDataError,
@@ -436,8 +464,29 @@ export function HomeScreen(): React.JSX.Element {
   ];
 
   useEffect(() => {
-    previousHoyDoneCountRef.current = 0;
-    hasLoadedHoySnapshotRef.current = false;
+    if (isCandidateHoyStateResolved) {
+      lastResolvedHoyStateRef.current = {
+        sessionKey: hoySessionKey,
+        state: candidateHoyState,
+      };
+    }
+  }, [candidateHoyState, hoySessionKey, isCandidateHoyStateResolved]);
+
+  const triggerHoyCelebration = useCallback(() => {
+    setHoyCelebrationKey(currentKey => currentKey + 1);
+    setIsHoyCelebrating(true);
+
+    if (hoyCelebrationTimerRef.current) {
+      clearTimeout(hoyCelebrationTimerRef.current);
+    }
+
+    hoyCelebrationTimerRef.current = setTimeout(() => {
+      setIsHoyCelebrating(false);
+      hoyCelebrationTimerRef.current = undefined;
+    }, 2200);
+  }, []);
+
+  useEffect(() => {
     setHoyCelebrationKey(0);
     setIsHoyCelebrating(false);
 
@@ -452,45 +501,50 @@ export function HomeScreen(): React.JSX.Element {
         hoyCelebrationTimerRef.current = undefined;
       }
     };
-  }, [isAuthenticatedHome, user?.uid]);
+  }, [homeData.todayDateKey, user?.uid]);
 
-  useEffect(() => {
-    const snapshot = getHoyCelebrationSnapshot({
-      currentDoneCount: homeGreetingContext.circleSummary.doneCount,
-      hasLoadedSnapshot: hasLoadedHoySnapshotRef.current,
-      isLoaded:
-        isAuthenticatedHome &&
-        homeData.hasLoadedMemberships &&
-        !isLoadingHomeData &&
-        !hasHomeDataError,
-      previousDoneCount: previousHoyDoneCountRef.current,
-    });
+  useFocusEffect(
+    useCallback(() => {
+      if (
+        !pendingHoyTapInCelebration ||
+        !isAuthenticatedHome ||
+        !user?.uid ||
+        !isCandidateHoyStateResolved ||
+        !displayedHoyState
+      ) {
+        return undefined;
+      }
 
-    previousHoyDoneCountRef.current = snapshot.doneCount;
-    hasLoadedHoySnapshotRef.current = snapshot.hasLoadedSnapshot;
+      const scope = {
+        dateKey: homeData.todayDateKey,
+        uid: user.uid,
+      };
 
-    if (!snapshot.shouldCelebrate) {
-      return;
-    }
+      if (
+        pendingHoyTapInCelebration.dateKey !== scope.dateKey ||
+        pendingHoyTapInCelebration.uid !== scope.uid
+      ) {
+        clearStaleHoyTapInCelebration(scope);
+        return undefined;
+      }
 
-    setHoyCelebrationKey(currentKey => currentKey + 1);
-    setIsHoyCelebrating(true);
+      if (consumeHoyTapInCelebration(scope)) {
+        triggerHoyCelebration();
+      }
 
-    if (hoyCelebrationTimerRef.current) {
-      clearTimeout(hoyCelebrationTimerRef.current);
-    }
-
-    hoyCelebrationTimerRef.current = setTimeout(() => {
-      setIsHoyCelebrating(false);
-      hoyCelebrationTimerRef.current = undefined;
-    }, 2200);
-  }, [
-    hasHomeDataError,
-    homeData.hasLoadedMemberships,
-    homeGreetingContext.circleSummary.doneCount,
-    isAuthenticatedHome,
-    isLoadingHomeData,
-  ]);
+      return undefined;
+    }, [
+      clearStaleHoyTapInCelebration,
+      consumeHoyTapInCelebration,
+      displayedHoyState,
+      homeData.todayDateKey,
+      isAuthenticatedHome,
+      isCandidateHoyStateResolved,
+      pendingHoyTapInCelebration,
+      triggerHoyCelebration,
+      user?.uid,
+    ]),
+  );
 
   useEffect(() => {
     clearExpiredHomeGreetingCacheEntries().catch(() => undefined);
@@ -723,11 +777,11 @@ export function HomeScreen(): React.JSX.Element {
           bubbleText={bubbleText}
           copy={heroCopy}
           hoyAccessibilityLabel={getHoyAccessibilityLabel({
-            state: hoyState,
+            state: displayedHoyState,
             unreadCount: unreadInboxCount,
           })}
           hoyCelebrationKey={hoyCelebrationKey}
-          hoyState={hoyState}
+          hoyState={displayedHoyState}
           momentumPercent={momentumSummary.percentage}
           momentumStatus={momentumSummary.status}
           onHoyPress={openInbox}

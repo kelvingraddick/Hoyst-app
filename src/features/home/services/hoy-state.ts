@@ -12,7 +12,6 @@ export type HoyStateInput = {
   activeCircleCount: number;
   atRiskCount: number;
   doneCount: number;
-  hasHomeDataError: boolean;
   isAuthenticatedHome: boolean;
   isCelebrating: boolean;
   isGreetingLoading: boolean;
@@ -21,11 +20,6 @@ export type HoyStateInput = {
   needsYouCount: number;
   pendingCount: number;
   personalStreakDays: number;
-};
-
-export type HoyCelebrationSnapshot = {
-  doneCount: number;
-  hasLoadedSnapshot: boolean;
 };
 
 export const hoyStateLabels: Record<HoyState, string> = {
@@ -63,7 +57,7 @@ export function getHoyState(input: HoyStateInput): HoyState {
     return 'celebrating';
   }
 
-  if (input.hasHomeDataError || input.atRiskCount > 0) {
+  if (input.atRiskCount > 0) {
     return 'risk_attention';
   }
 
@@ -85,51 +79,33 @@ export function getHoyState(input: HoyStateInput): HoyState {
   return 'default';
 }
 
-/**
- * Track completed-circle snapshots without replaying celebration on initial
- * load. Only a later increase produces a one-shot celebration.
- */
-export function getHoyCelebrationSnapshot({
-  currentDoneCount,
-  hasLoadedSnapshot,
-  isLoaded,
-  previousDoneCount,
+export function getStableHoyDisplayState({
+  candidateState,
+  isSessionResolving,
+  previousResolvedState,
 }: {
-  currentDoneCount: number;
-  hasLoadedSnapshot: boolean;
-  isLoaded: boolean;
-  previousDoneCount: number;
-}): HoyCelebrationSnapshot & {shouldCelebrate: boolean} {
-  if (!isLoaded) {
-    return {
-      doneCount: previousDoneCount,
-      hasLoadedSnapshot,
-      shouldCelebrate: false,
-    };
+  candidateState: HoyState;
+  isSessionResolving: boolean;
+  previousResolvedState?: HoyState;
+}): HoyState | undefined {
+  if (isSessionResolving || candidateState === 'thinking') {
+    return previousResolvedState;
   }
 
-  if (!hasLoadedSnapshot) {
-    return {
-      doneCount: currentDoneCount,
-      hasLoadedSnapshot: true,
-      shouldCelebrate: false,
-    };
-  }
-
-  return {
-    doneCount: currentDoneCount,
-    hasLoadedSnapshot: true,
-    shouldCelebrate: currentDoneCount > previousDoneCount,
-  };
+  return candidateState;
 }
 
 export function getHoyAccessibilityLabel({
   state,
   unreadCount,
 }: {
-  state: HoyState;
+  state?: HoyState;
   unreadCount: number;
 }) {
+  if (!state) {
+    return 'Hoy is getting ready. Open Inbox.';
+  }
+
   const stateLabel = hoyStateLabels[state];
 
   if (unreadCount <= 0) {

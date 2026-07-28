@@ -1,6 +1,6 @@
 import {
   getHoyAccessibilityLabel,
-  getHoyCelebrationSnapshot,
+  getStableHoyDisplayState,
   getHoyState,
   type HoyStateInput,
 } from '../src/features/home/services/hoy-state';
@@ -9,7 +9,6 @@ const baseInput: HoyStateInput = {
   activeCircleCount: 0,
   atRiskCount: 0,
   doneCount: 0,
-  hasHomeDataError: false,
   isAuthenticatedHome: true,
   isCelebrating: false,
   isGreetingLoading: false,
@@ -44,7 +43,6 @@ describe('getHoyState', () => {
         activeCircleCount: 1,
         atRiskCount: 1,
         doneCount: 1,
-        hasHomeDataError: true,
         isCelebrating: true,
         isGreetingLoading: true,
         isLoadingHomeData: true,
@@ -93,65 +91,49 @@ describe('getHoyState', () => {
     expect(getHoyState(baseInput)).toBe('default');
   });
 
-  it('treats a data error as risk and attention', () => {
-    expect(getHoyState({...baseInput, hasHomeDataError: true})).toBe(
-      'risk_attention',
-    );
-  });
 });
 
-describe('Hoy completion transitions', () => {
-  it('seeds the initial loaded snapshot without celebrating', () => {
+describe('getStableHoyDisplayState', () => {
+  it('uses no face before the first resolved state', () => {
     expect(
-      getHoyCelebrationSnapshot({
-        currentDoneCount: 2,
-        hasLoadedSnapshot: false,
-        isLoaded: true,
-        previousDoneCount: 0,
+      getStableHoyDisplayState({
+        candidateState: 'thinking',
+        isSessionResolving: false,
       }),
-    ).toEqual({
-      doneCount: 2,
-      hasLoadedSnapshot: true,
-      shouldCelebrate: false,
-    });
+    ).toBeUndefined();
+    expect(
+      getStableHoyDisplayState({
+        candidateState: 'locked',
+        isSessionResolving: true,
+      }),
+    ).toBeUndefined();
   });
 
-  it('celebrates only when completion increases after the first snapshot', () => {
+  it('retains the last resolved face during later refreshes', () => {
     expect(
-      getHoyCelebrationSnapshot({
-        currentDoneCount: 3,
-        hasLoadedSnapshot: true,
-        isLoaded: true,
-        previousDoneCount: 2,
+      getStableHoyDisplayState({
+        candidateState: 'thinking',
+        isSessionResolving: false,
+        previousResolvedState: 'risk_attention',
       }),
-    ).toEqual({
-      doneCount: 3,
-      hasLoadedSnapshot: true,
-      shouldCelebrate: true,
-    });
+    ).toBe('risk_attention');
     expect(
-      getHoyCelebrationSnapshot({
-        currentDoneCount: 2,
-        hasLoadedSnapshot: true,
-        isLoaded: true,
-        previousDoneCount: 2,
-      }).shouldCelebrate,
-    ).toBe(false);
+      getStableHoyDisplayState({
+        candidateState: 'locked',
+        isSessionResolving: true,
+        previousResolvedState: 'streak_active',
+      }),
+    ).toBe('streak_active');
   });
 
-  it('does not mutate its baseline while Home is still loading', () => {
+  it('uses a newly resolved final state immediately', () => {
     expect(
-      getHoyCelebrationSnapshot({
-        currentDoneCount: 4,
-        hasLoadedSnapshot: false,
-        isLoaded: false,
-        previousDoneCount: 1,
+      getStableHoyDisplayState({
+        candidateState: 'goal_completed',
+        isSessionResolving: false,
+        previousResolvedState: 'risk_attention',
       }),
-    ).toEqual({
-      doneCount: 1,
-      hasLoadedSnapshot: false,
-      shouldCelebrate: false,
-    });
+    ).toBe('goal_completed');
   });
 });
 
@@ -166,5 +148,11 @@ describe('getHoyAccessibilityLabel', () => {
     expect(
       getHoyAccessibilityLabel({state: 'default', unreadCount: 0}),
     ).toBe('Hoy, Ready. Open Inbox');
+  });
+
+  it('uses a neutral loading label before a face is resolved', () => {
+    expect(getHoyAccessibilityLabel({state: undefined, unreadCount: 4})).toBe(
+      'Hoy is getting ready. Open Inbox.',
+    );
   });
 });

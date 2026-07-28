@@ -28,6 +28,7 @@ import {useHoystTheme} from '../../../design/theme/useHoystTheme';
 import {triggerTapInSuccessHaptic} from '../../../lib/haptics/tap-in-haptics';
 import {TAP_IN_SHEET_DETENTS} from '../../../navigation/tap-in-sheet-options';
 import type {RootStackParamList} from '../../../navigation/types';
+import {useHoyFeedbackStore} from '../../../store/hoy-feedback-store';
 import {useUserProfileStore} from '../../../store/profile-store';
 import {useSessionStore} from '../../../store/session-store';
 import type {CheckInStatus, CircleDetailModel} from '../../../types/models';
@@ -130,6 +131,9 @@ export function TapInComposerScreen({
   const profile = useUserProfileStore(state => state.profile);
   const status = useSessionStore(state => state.status);
   const user = useSessionStore(state => state.user);
+  const queueHoyTapInCelebration = useHoyFeedbackStore(
+    state => state.queueTapInCelebration,
+  );
   const timezone = profile?.timezone ?? 'UTC';
   const canLoadDetail = status === 'authenticatedReady' && Boolean(user?.uid);
 
@@ -475,6 +479,23 @@ export function TapInComposerScreen({
           : completionCoverageStatus
           ? getCheckInStatusForCoverage(completionCoverageStatus)
           : 'done';
+      const viewerWasAlreadyCovered =
+        detail.viewerTodayStatus === 'done' &&
+        (detail.viewerTodayCheckIn?.coverageStatus === undefined ||
+          detail.viewerTodayCheckIn.coverageStatus === 'covered');
+
+      if (
+        checkInStatus === 'done' &&
+        completionStatus === 'done' &&
+        !viewerWasAlreadyCovered &&
+        user?.uid
+      ) {
+        queueHoyTapInCelebration({
+          circleId: route.params.circleId,
+          dateKey: result.dateKey,
+          uid: user.uid,
+        });
+      }
 
       navigation.replace('TapInComplete', {
         circleId: route.params.circleId,

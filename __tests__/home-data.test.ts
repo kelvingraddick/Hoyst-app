@@ -1239,7 +1239,9 @@ describe('Home greeting fallback', () => {
     const atRiskCard = {
       ...makeActiveCard(),
       state: 'risk' as const,
-      viewerHasCheckedIn: true,
+      viewerHasCheckedIn: false,
+      viewerHasTappedInToday: false,
+      viewerTodayStatus: undefined,
     };
     const doneCard = mapHomeCircleFromData({
       circleData,
@@ -1305,6 +1307,73 @@ describe('Home greeting fallback', () => {
         timezone: 'UTC',
       }),
     ).toBe('Aaron, pending approval. Patience, but make it productive.');
+  });
+
+  it('counts only risk that the viewer can act on now', () => {
+    const actionableRisk = homeCard({
+      id: 'actionable-risk',
+      state: 'risk',
+    });
+    const tappedTodayWeeklyRisk = homeCard({
+      commitmentCadence: 'weekly',
+      commitmentFrequency: {tapInsPerWeek: 4},
+      id: 'tapped-weekly-risk',
+      remainingCheckIns: 3,
+      state: 'risk',
+      viewerHasCheckedIn: false,
+      viewerHasTappedInToday: true,
+      viewerRemainingTapIns: 3,
+      viewerTodayStatus: 'done',
+    });
+    const partialRisk = homeCard({
+      commitmentType: 'build',
+      currentValue: 2,
+      id: 'partial-risk',
+      state: 'risk',
+      targetValue: 5,
+      viewerCanUpdateTapIn: true,
+      viewerHasCheckedIn: false,
+      viewerHasTappedInToday: true,
+      viewerRemainingTapIns: 1,
+      viewerTodayStatus: 'partial',
+    });
+    const nonActionableFailedRisk = homeCard({
+      commitmentType: 'limit',
+      currentValue: 6,
+      id: 'non-actionable-failed-risk',
+      maximumValue: 5,
+      state: 'risk',
+      viewerCanUpdateTapIn: false,
+      viewerHasCheckedIn: false,
+      viewerHasTappedInToday: true,
+      viewerRemainingTapIns: 1,
+      viewerTodayStatus: 'failed',
+    });
+
+    expect(
+      getHomeGreetingContext({
+        circles: [actionableRisk],
+        timezone: 'UTC',
+      }).circleSummary,
+    ).toMatchObject({atRiskCount: 1, needsYouCount: 1});
+    expect(
+      getHomeGreetingContext({
+        circles: [tappedTodayWeeklyRisk],
+        timezone: 'UTC',
+      }).circleSummary,
+    ).toMatchObject({atRiskCount: 0, needsYouCount: 0});
+    expect(
+      getHomeGreetingContext({
+        circles: [partialRisk],
+        timezone: 'UTC',
+      }).circleSummary,
+    ).toMatchObject({atRiskCount: 0, needsYouCount: 0});
+    expect(
+      getHomeGreetingContext({
+        circles: [nonActionableFailedRisk],
+        timezone: 'UTC',
+      }).circleSummary,
+    ).toMatchObject({atRiskCount: 0, needsYouCount: 0});
   });
 
   it('builds a minimal Gemini-safe context from circle state', () => {

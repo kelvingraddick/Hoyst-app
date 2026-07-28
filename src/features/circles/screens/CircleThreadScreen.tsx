@@ -50,6 +50,7 @@ import {
   toggleCircleThreadItemLike,
   uploadCircleThreadImage,
 } from '../services/circle-thread-service';
+import {buildCircleThreadDaySections} from '../services/circle-thread-date';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'CircleThread'>;
 type ThreadTone = NonNullable<CircleThreadItem['tone']>;
@@ -367,6 +368,10 @@ export function CircleThreadScreen({
       : categoryVisual.accentColor
     : undefined;
   const subtitle = useMemo(() => formatThreadSubtitle(detail), [detail]);
+  const daySections = useMemo(
+    () => buildCircleThreadDaySections({items, timezone}),
+    [items, timezone],
+  );
 
   useEffect(() => {
     if (!canLoadThread || !user?.uid) {
@@ -552,9 +557,6 @@ export function CircleThreadScreen({
           keyboardDismissMode="interactive"
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}>
-          <HoystText style={styles.dayMarker} tone="muted" variant="label">
-            TODAY
-          </HoystText>
           {hasThreadError && items.length === 0 ? (
             <GlassPanel padding="none" style={styles.emptyCard}>
               <View style={styles.emptyCardContent}>
@@ -573,13 +575,24 @@ export function CircleThreadScreen({
               </View>
             </GlassPanel>
           ) : items.length > 0 ? (
-            items.map(item => (
-              <ThreadItem
-                item={item}
-                key={item.id}
-                onLike={handleLike}
-                viewerUid={user?.uid}
-              />
+            daySections.map(section => (
+              <View key={section.dateKey} style={styles.daySection}>
+                <HoystText
+                  style={styles.dayMarker}
+                  testID={`circle-thread-day-${section.dateKey}`}
+                  tone="muted"
+                  variant="label">
+                  {section.label}
+                </HoystText>
+                {section.items.map(item => (
+                  <ThreadItem
+                    item={item}
+                    key={item.id}
+                    onLike={handleLike}
+                    viewerUid={user?.uid}
+                  />
+                ))}
+              </View>
             ))
           ) : (
             <GlassPanel padding="none" style={styles.emptyCard}>
@@ -890,6 +903,10 @@ const styles = StyleSheet.create({
     letterSpacing: 1.5,
     lineHeight: 14,
     marginBottom: 4,
+  },
+  daySection: {
+    gap: 8,
+    width: '100%',
   },
   emptyCard: {
     borderRadius: 22,

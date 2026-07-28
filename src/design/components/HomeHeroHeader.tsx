@@ -55,7 +55,7 @@ type HomeHeroHeaderProps = {
   copy: HomeHeroCopy;
   hoyAccessibilityLabel: string;
   hoyCelebrationKey?: number;
-  hoyState: HoyState;
+  hoyState?: HoyState;
   momentumPercent: number;
   momentumStatus: MomentumStatus;
   onHoyPress: () => void;
@@ -139,6 +139,27 @@ function BubbleText({text}: {text: string}) {
         {displayedText}
       </HoystText>
     </Animated.View>
+  );
+}
+
+function HoyPlaceholder(): React.JSX.Element {
+  const theme = useHoystTheme();
+
+  return (
+    <View
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
+      style={[
+        styles.hoyPlaceholder,
+        {
+          backgroundColor: theme.glassSurfaceStrong,
+          borderColor: theme.glassBorder,
+          shadowColor: theme.glassShadow,
+        },
+      ]}
+      testID="home-hero-hoy-placeholder">
+      <FrostedFill radius={HOY_SIZE / 2} />
+    </View>
   );
 }
 
@@ -244,12 +265,16 @@ export function HomeHeroHeader({
             {opacity: pressed ? 0.9 : 1},
           ]}
           testID="home-hero-hoy-button">
-          <HoyOrb
-            celebrationKey={hoyCelebrationKey}
-            size={HOY_SIZE}
-            state={hoyState}
-            testID="home-hero-hoy-orb"
-          />
+          {hoyState ? (
+            <HoyOrb
+              celebrationKey={hoyCelebrationKey}
+              size={HOY_SIZE}
+              state={hoyState}
+              testID="home-hero-hoy-orb"
+            />
+          ) : (
+            <HoyPlaceholder />
+          )}
           {unreadBadgeText ? (
             <View
               style={styles.unreadBadge}
@@ -401,6 +426,18 @@ const styles = StyleSheet.create({
   },
   hoyCluster: {
     height: HOY_SIZE,
+    width: HOY_SIZE,
+  },
+  hoyPlaceholder: {
+    borderRadius: HOY_SIZE / 2,
+    borderWidth: 1,
+    elevation: 3,
+    height: HOY_SIZE,
+    opacity: 0.78,
+    overflow: 'hidden',
+    shadowOffset: {height: 3, width: 0},
+    shadowOpacity: 0.18,
+    shadowRadius: 6,
     width: HOY_SIZE,
   },
   unreadBadge: {

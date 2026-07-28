@@ -14,6 +14,10 @@ import {
   getTodayAttentionCircles,
   shouldShowAuthenticatedHomeEmptyState,
 } from '../src/features/home/services/home-data-service';
+import type {
+  AuthSessionStatus,
+  AuthSessionUser,
+} from '../src/store/session-store';
 import {
   markAllInboxEventsRead,
   markInboxEventRead,
@@ -35,6 +39,16 @@ let mockHomeData: HomeData;
 let mockInboxEvents: InboxEvent[];
 let mockMomentumSummary: MomentumSummary;
 let mockAppearance: 'dark' | 'light' = 'light';
+let mockSessionStatus: AuthSessionStatus = 'authenticatedReady';
+let mockSessionUser: AuthSessionUser | undefined = {
+  providerIds: [],
+  uid: 'user-1',
+};
+let mockPendingHoyTapInCelebration:
+  | {circleId: string; dateKey: string; uid: string}
+  | undefined;
+const mockClearStaleHoyTapInCelebration = jest.fn();
+const mockConsumeHoyTapInCelebration = jest.fn();
 
 jest.mock('@react-native-community/blur', () => {
   const MockReact = require('react');
@@ -113,15 +127,34 @@ jest.mock('../src/store/session-store', () => ({
     selector: (state: {
       beginAuthFlow: jest.Mock;
       clearPendingAction: jest.Mock;
-      status: 'authenticatedReady';
-      user: {photoURL?: string; providerIds: string[]; uid: string};
+      status: AuthSessionStatus;
+      user?: AuthSessionUser;
     }) => unknown,
   ) =>
     selector({
       beginAuthFlow: jest.fn(),
       clearPendingAction: jest.fn(),
-      status: 'authenticatedReady',
-      user: {providerIds: [], uid: 'user-1'},
+      status: mockSessionStatus,
+      user: mockSessionUser,
+    }),
+}));
+
+jest.mock('../src/store/hoy-feedback-store', () => ({
+  useHoyFeedbackStore: (
+    selector: (state: {
+      clearStaleTapInCelebration: jest.Mock;
+      consumeTapInCelebration: jest.Mock;
+      pendingTapInCelebration?: {
+        circleId: string;
+        dateKey: string;
+        uid: string;
+      };
+    }) => unknown,
+  ) =>
+    selector({
+      clearStaleTapInCelebration: mockClearStaleHoyTapInCelebration,
+      consumeTapInCelebration: mockConsumeHoyTapInCelebration,
+      pendingTapInCelebration: mockPendingHoyTapInCelebration,
     }),
 }));
 
@@ -328,6 +361,25 @@ describe('HomeScreen companion updates', () => {
     mockInboxEvents = [];
     mockMomentumSummary = momentumSummary();
     mockAppearance = 'light';
+    mockSessionStatus = 'authenticatedReady';
+    mockSessionUser = {providerIds: [], uid: 'user-1'};
+    mockPendingHoyTapInCelebration = undefined;
+    mockConsumeHoyTapInCelebration.mockImplementation(
+      ({dateKey, uid}: {dateKey: string; uid: string}) => {
+        const pendingFeedback = mockPendingHoyTapInCelebration;
+
+        if (
+          !pendingFeedback ||
+          pendingFeedback.dateKey !== dateKey ||
+          pendingFeedback.uid !== uid
+        ) {
+          return undefined;
+        }
+
+        mockPendingHoyTapInCelebration = undefined;
+        return pendingFeedback;
+      },
+    );
     (getTodayAttentionCircles as jest.Mock).mockReturnValue([]);
     (shouldShowAuthenticatedHomeEmptyState as jest.Mock).mockReturnValue(false);
   });
@@ -492,10 +544,9 @@ describe('HomeScreen companion updates', () => {
     const bubbleSurfaceStyle = StyleSheet.flatten(
       tree.root.findByProps({testID: 'home-hero-bubble-surface'}).props.style,
     );
-    const hoyStyle = tree.root
-      .findAllByProps({testID: 'home-hero-hoy-orb'})
-      .map(node => StyleSheet.flatten(node.props.style))
-      .find(style => style?.height === 52);
+    const hoyPlaceholderStyle = StyleSheet.flatten(
+      tree.root.findByProps({testID: 'home-hero-hoy-placeholder'}).props.style,
+    );
     const largeTailDotStyle = StyleSheet.flatten(
       tree.root.findByProps({testID: 'home-hero-tail-dot-large'}).props.style,
     );
@@ -514,13 +565,18 @@ describe('HomeScreen companion updates', () => {
     expect(bubbleSurfaceStyle.shadowOffset).toEqual({height: 7, width: 0});
     expect(bubbleSurfaceStyle.shadowOpacity).toBe(0.72);
     expect(bubbleSurfaceStyle.shadowRadius).toBe(18);
-    expect(hoyStyle?.height).toBe(52);
-    expect(hoyStyle?.width).toBe(52);
+    expect(hoyPlaceholderStyle.height).toBe(52);
+    expect(hoyPlaceholderStyle.width).toBe(52);
     expect(
       tree.root.findAllByProps({
         testID: 'home-hero-hoy-orb-thinking-image',
       }).length,
-    ).toBeGreaterThan(0);
+    ).toBe(0);
+    expect(
+      tree.root.findAllByProps({
+        testID: 'home-hero-hoy-orb-locked-image',
+      }),
+    ).toHaveLength(0);
     expect(largeTailDotStyle.backgroundColor).toBe('rgba(255,255,255,0.6)');
     expect(largeTailDotStyle.borderWidth).toBe(1);
     expect(largeTailDotStyle.borderColor).toBe('rgba(255,255,255,0)');
@@ -537,7 +593,7 @@ describe('HomeScreen companion updates', () => {
     expect(smallTailDotStyle.shadowRadius).toBe(10);
     expect(hoyButton.props.accessibilityRole).toBe('button');
     expect(hoyButton.props.accessibilityLabel).toBe(
-      'Hoy, Thinking. Open Inbox, 1 unread update',
+      'Hoy is getting ready. Open Inbox.',
     );
     expect(unreadBadgeStyle).toMatchObject({
       backgroundColor: brandColors.red,
@@ -547,6 +603,105 @@ describe('HomeScreen companion updates', () => {
       right: -3,
       width: 22,
     });
+  });
+
+  it('does not treat an authenticating session as a guest Hoy state', () => {
+    mockSessionStatus = 'authenticating';
+    mockSessionUser = {providerIds: [], uid: 'user-1'};
+
+    const tree = renderScreenTree();
+    const output = JSON.stringify(tree.toJSON());
+
+    expect(
+      tree.root.findAllByProps({testID: 'home-hero-hoy-placeholder'}),
+    ).not.toHaveLength(0);
+    expect(
+      tree.root.findAllByProps({
+        testID: 'home-hero-hoy-orb-locked-image',
+      }),
+    ).toHaveLength(0);
+    expect(output).not.toContain('Start making Progression');
+  });
+
+  it('mounts the final Hoy face directly after initial Home resolution', async () => {
+    mockHomeData = {
+      ...homeData(),
+      hasLoadedMemberships: true,
+    };
+    let tree: renderer.ReactTestRenderer | undefined;
+
+    await act(async () => {
+      tree = renderer.create(<HomeScreen />);
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(
+      tree!.root.findAllByProps({testID: 'home-hero-hoy-placeholder'}),
+    ).toHaveLength(0);
+    expect(
+      tree!.root.findAllByProps({
+        testID: 'home-hero-hoy-orb-default-image',
+      }),
+    ).not.toHaveLength(0);
+    expect(
+      tree!.root.findAllByProps({
+        testID: 'home-hero-hoy-orb-thinking-image',
+      }),
+    ).toHaveLength(0);
+    expect(
+      tree!.root.findAllByProps({
+        testID: 'home-hero-hoy-orb-locked-image',
+      }),
+    ).toHaveLength(0);
+  });
+
+  it('consumes a covered Tap In celebration only after Hoy resolves', async () => {
+    jest.useFakeTimers();
+    mockHomeData = {
+      ...homeData(),
+      hasLoadedMemberships: true,
+    };
+    mockPendingHoyTapInCelebration = {
+      circleId: 'circle-1',
+      dateKey: '2026-05-26',
+      uid: 'user-1',
+    };
+    let tree: renderer.ReactTestRenderer | undefined;
+
+    await act(async () => {
+      tree = renderer.create(<HomeScreen />);
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(mockPendingHoyTapInCelebration).toBeUndefined();
+    expect(mockConsumeHoyTapInCelebration).toHaveBeenCalledWith({
+      dateKey: '2026-05-26',
+      uid: 'user-1',
+    });
+    expect(
+      tree!.root.findAllByProps({
+        testID: 'home-hero-hoy-orb-celebrating-image',
+      }),
+    ).not.toHaveLength(0);
+
+    act(() => {
+      jest.advanceTimersByTime(2200);
+    });
+
+    expect(
+      tree!.root.findAllByProps({
+        testID: 'home-hero-hoy-orb-default-image',
+      }),
+    ).not.toHaveLength(0);
+
+    act(() => {
+      tree!.unmount();
+    });
+    jest.useRealTimers();
   });
 
   it('keeps Hoy wired to unread clearing and Inbox navigation', () => {

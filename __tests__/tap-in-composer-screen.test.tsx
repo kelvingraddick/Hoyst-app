@@ -6,6 +6,7 @@ import {HoystTapInMark} from '../src/design/components/HoystTapInMark';
 import {CommitmentTypePill} from '../src/design/components/CommitmentTypeVisual';
 import {TapInActionButton} from '../src/design/components/TapInActionButton';
 import {TapInComposerScreen} from '../src/features/check-in/screens/TapInComposerScreen';
+import {useHoyFeedbackStore} from '../src/store/hoy-feedback-store';
 import type {CircleDetailModel} from '../src/types/models';
 
 const mockSubmitTapIn = jest.fn();
@@ -183,6 +184,7 @@ function findPressableContainingText(
 
 describe('TapInComposerScreen', () => {
   beforeEach(() => {
+    useHoyFeedbackStore.setState({pendingTapInCelebration: undefined});
     mockDetail = {...baseMockDetail};
     mockSubmitTapIn.mockResolvedValue({
       checkInId: 'user-1',
@@ -299,6 +301,13 @@ describe('TapInComposerScreen', () => {
       status: 'done',
       streakDays: 4,
       streakLabel: '4d streak',
+    });
+    expect(
+      useHoyFeedbackStore.getState().pendingTapInCelebration,
+    ).toEqual({
+      circleId: 'circle-1',
+      dateKey: '2026-05-29',
+      uid: 'user-1',
     });
   });
 
@@ -521,6 +530,62 @@ describe('TapInComposerScreen', () => {
         unitLabel: 'pages',
       }),
     );
+    expect(
+      useHoyFeedbackStore.getState().pendingTapInCelebration,
+    ).toEqual({
+      circleId: 'circle-1',
+      dateKey: '2026-05-29',
+      uid: 'user-1',
+    });
+  });
+
+  it('does not queue Hoy for a failed quantity Tap In', async () => {
+    mockDetail = {
+      ...baseMockDetail,
+      commitmentType: 'limit',
+      currentValue: 0,
+      maximumValue: 4,
+      stepValue: 1,
+      unitLabel: 'drinks',
+      viewerHasCheckedIn: false,
+      viewerHasTappedInToday: false,
+      viewerRemainingTapIns: 1,
+      viewerTodayStatus: undefined,
+    };
+    mockSubmitTapIn.mockResolvedValueOnce({
+      checkInId: 'user-1',
+      coverageStatus: 'failed',
+      currentValue: 5,
+      dateKey: '2026-05-29',
+      status: 'failed',
+    });
+    let tree: renderer.ReactTestRenderer | undefined;
+
+    await act(async () => {
+      tree = renderComposerScreen();
+    });
+
+    for (let index = 0; index < 5; index += 1) {
+      await act(async () => {
+        tree!.root
+          .findByProps({accessibilityLabel: 'Increase quantity'})
+          .props.onPress();
+      });
+    }
+
+    const progressButton = tree!.root
+      .findAllByType(TapInActionButton)
+      .find(button => button.props.label === 'Log Progress');
+
+    await act(async () => {
+      progressButton!.props.onPress();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(
+      useHoyFeedbackStore.getState().pendingTapInCelebration,
+    ).toBeUndefined();
   });
 
   it('opens the completion screen after updating a saved quantity Tap In', async () => {
@@ -597,6 +662,119 @@ describe('TapInComposerScreen', () => {
         unitLabel: 'pages',
       }),
     );
+    expect(
+      useHoyFeedbackStore.getState().pendingTapInCelebration,
+    ).toBeUndefined();
+  });
+
+  it('queues Hoy when partial progress becomes covered', async () => {
+    mockDetail = {
+      ...baseMockDetail,
+      commitmentType: 'build',
+      currentValue: 2,
+      stepValue: 1,
+      targetValue: 3,
+      unitLabel: 'pages',
+      viewerCanUpdateTapIn: true,
+      viewerHasCheckedIn: false,
+      viewerHasTappedInToday: true,
+      viewerRemainingTapIns: 1,
+      viewerTodayCheckIn: {
+        coverageStatus: 'partial',
+        currentValue: 2,
+        status: 'partial',
+      },
+      viewerTodayStatus: 'partial',
+    };
+    mockSubmitTapIn.mockResolvedValueOnce({
+      checkInId: 'user-1',
+      coverageStatus: 'covered',
+      currentValue: 3,
+      dateKey: '2026-05-29',
+      status: 'done',
+    });
+    let tree: renderer.ReactTestRenderer | undefined;
+
+    await act(async () => {
+      tree = renderComposerScreen();
+    });
+
+    await act(async () => {
+      tree!.root
+        .findByProps({accessibilityLabel: 'Increase quantity'})
+        .props.onPress();
+    });
+
+    const updateButton = tree!.root
+      .findAllByType(TapInActionButton)
+      .find(button => button.props.label === 'Update Progress');
+
+    await act(async () => {
+      updateButton!.props.onPress();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(
+      useHoyFeedbackStore.getState().pendingTapInCelebration,
+    ).toEqual({
+      circleId: 'circle-1',
+      dateKey: '2026-05-29',
+      uid: 'user-1',
+    });
+  });
+
+  it('does not queue Hoy when editing an already-covered quantity Tap In', async () => {
+    mockDetail = {
+      ...baseMockDetail,
+      commitmentType: 'limit',
+      currentValue: 3,
+      maximumValue: 4,
+      stepValue: 1,
+      unitLabel: 'drinks',
+      viewerCanUpdateTapIn: true,
+      viewerHasCheckedIn: true,
+      viewerHasTappedInToday: true,
+      viewerRemainingTapIns: 0,
+      viewerTodayCheckIn: {
+        coverageStatus: 'covered',
+        currentValue: 3,
+        status: 'done',
+      },
+      viewerTodayStatus: 'done',
+    };
+    mockSubmitTapIn.mockResolvedValueOnce({
+      checkInId: 'user-1',
+      coverageStatus: 'covered',
+      currentValue: 4,
+      dateKey: '2026-05-29',
+      status: 'done',
+    });
+    let tree: renderer.ReactTestRenderer | undefined;
+
+    await act(async () => {
+      tree = renderComposerScreen();
+    });
+
+    await act(async () => {
+      tree!.root
+        .findByProps({accessibilityLabel: 'Increase quantity'})
+        .props.onPress();
+    });
+
+    const updateButton = tree!.root
+      .findAllByType(TapInActionButton)
+      .find(button => button.props.label === 'Update Progress');
+
+    await act(async () => {
+      updateButton!.props.onPress();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(
+      useHoyFeedbackStore.getState().pendingTapInCelebration,
+    ).toBeUndefined();
   });
 
   it('allows removing a saved quantity Tap In from the update composer', async () => {
@@ -740,6 +918,9 @@ describe('TapInComposerScreen', () => {
         status: 'skip',
       }),
     );
+    expect(
+      useHoyFeedbackStore.getState().pendingTapInCelebration,
+    ).toBeUndefined();
   });
 
   it('renders the logged Tap In review state with fallback proof copy and actions', async () => {
