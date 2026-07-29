@@ -1,13 +1,8 @@
 import React, {useEffect, useRef, useState} from 'react';
-import {
-  Animated,
-  Platform,
-  Pressable,
-  StyleSheet,
-  View,
-} from 'react-native';
+import {Animated, Platform, Pressable, StyleSheet, View} from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {BlurView} from '@react-native-community/blur';
+import {Bell} from 'lucide-react-native';
 
 import type {HomeHeroCopy} from '../../features/home/services/home-hero-copy';
 import type {HoyState} from '../../features/home/services/hoy-state';
@@ -53,14 +48,17 @@ export const homeHeroPalettes = {
 type HomeHeroHeaderProps = {
   bubbleText?: string;
   copy: HomeHeroCopy;
+  isHoyActionDisabled?: boolean;
   hoyAccessibilityLabel: string;
   hoyCelebrationKey?: number;
   hoyState?: HoyState;
   momentumPercent: number;
   momentumStatus: MomentumStatus;
-  onHoyPress: () => void;
+  notificationAccessibilityLabel: string;
+  notificationBadgeText?: string;
+  onHoyActionPress: () => void;
   onMomentumPress: () => void;
-  unreadBadgeText?: string;
+  onNotificationPress: () => void;
 };
 
 function FrostedFill({radius}: {radius: number}) {
@@ -166,14 +164,17 @@ function HoyPlaceholder(): React.JSX.Element {
 export function HomeHeroHeader({
   bubbleText,
   copy,
+  isHoyActionDisabled = false,
   hoyAccessibilityLabel,
   hoyCelebrationKey,
   hoyState,
   momentumPercent,
   momentumStatus,
-  onHoyPress,
+  notificationAccessibilityLabel,
+  notificationBadgeText,
+  onHoyActionPress,
   onMomentumPress,
-  unreadBadgeText,
+  onNotificationPress,
 }: HomeHeroHeaderProps): React.JSX.Element {
   const theme = useHoystTheme();
   const insets = useSafeAreaInsets();
@@ -190,107 +191,122 @@ export function HomeHeroHeader({
 
   return (
     <View style={[styles.header, {paddingTop: insets.top + 10}]}>
-      <View style={styles.topRow}>
-        <View
-          testID="home-hero-bubble-surface"
-          style={[
-            styles.bubbleSurface,
-            {
-              shadowColor: theme.glassShadow,
-            },
-          ]}>
+      <Pressable
+        accessibilityLabel={hoyAccessibilityLabel}
+        accessibilityRole="button"
+        disabled={isHoyActionDisabled}
+        onPress={onHoyActionPress}
+        style={({pressed}) => ({
+          opacity: pressed ? actionMotion.pressedOpacity : 1,
+        })}
+        testID="home-hero-hoy-action">
+        <View style={styles.topRow}>
           <View
+            testID="home-hero-bubble-surface"
             style={[
-              styles.bubble,
+              styles.bubbleSurface,
               {
-                backgroundColor: palette.bubble,
-                borderColor: theme.glassBorder,
+                shadowColor: theme.glassShadow,
               },
             ]}>
-            <FrostedFill radius={18} />
-            {bubbleText ? (
-              <BubbleText text={bubbleText} />
+            <View
+              style={[
+                styles.bubble,
+                {
+                  backgroundColor: palette.bubble,
+                  borderColor: theme.glassBorder,
+                },
+              ]}>
+              <FrostedFill radius={18} />
+              {bubbleText ? (
+                <BubbleText text={bubbleText} />
+              ) : (
+                <View
+                  accessibilityElementsHidden
+                  importantForAccessibility="no-hide-descendants"
+                  style={styles.bubbleSkeleton}>
+                  <View
+                    style={[
+                      styles.bubbleSkeletonLine,
+                      {backgroundColor: palette.track},
+                    ]}
+                  />
+                  <View
+                    style={[
+                      styles.bubbleSkeletonLineShort,
+                      {backgroundColor: palette.track},
+                    ]}
+                  />
+                </View>
+              )}
+            </View>
+          </View>
+          <View style={styles.bubbleTail}>
+            <View
+              testID="home-hero-tail-dot-large"
+              style={[
+                styles.tailDotLarge,
+                {
+                  backgroundColor: palette.tailDot,
+                  borderColor: palette.tailDotBorder,
+                  shadowColor: theme.glassShadow,
+                },
+              ]}
+            />
+            <View
+              testID="home-hero-tail-dot-small"
+              style={[
+                styles.tailDotSmall,
+                {
+                  backgroundColor: palette.tailDot,
+                  borderColor: palette.tailDotBorder,
+                  shadowColor: theme.glassShadow,
+                },
+              ]}
+            />
+          </View>
+          <View style={styles.hoyCluster}>
+            {hoyState ? (
+              <HoyOrb
+                celebrationKey={hoyCelebrationKey}
+                size={HOY_SIZE}
+                state={hoyState}
+                testID="home-hero-hoy-orb"
+              />
             ) : (
-              <View
-                accessibilityElementsHidden
-                importantForAccessibility="no-hide-descendants"
-                style={styles.bubbleSkeleton}>
-                <View
-                  style={[
-                    styles.bubbleSkeletonLine,
-                    {backgroundColor: palette.track},
-                  ]}
-                />
-                <View
-                  style={[
-                    styles.bubbleSkeletonLineShort,
-                    {backgroundColor: palette.track},
-                  ]}
-                />
-              </View>
+              <HoyPlaceholder />
             )}
           </View>
         </View>
-        <View style={styles.bubbleTail}>
-          <View
-            testID="home-hero-tail-dot-large"
-            style={[
-              styles.tailDotLarge,
-              {
-                backgroundColor: palette.tailDot,
-                borderColor: palette.tailDotBorder,
-                shadowColor: theme.glassShadow,
-              },
-            ]}
-          />
-          <View
-            testID="home-hero-tail-dot-small"
-            style={[
-              styles.tailDotSmall,
-              {
-                backgroundColor: palette.tailDot,
-                borderColor: palette.tailDotBorder,
-                shadowColor: theme.glassShadow,
-              },
-            ]}
-          />
-        </View>
+      </Pressable>
+
+      <View style={styles.logoRow}>
+        <BrandMark isDark={theme.isDark} kind="logo" style={styles.logo} />
         <Pressable
-          accessibilityLabel={hoyAccessibilityLabel}
+          accessibilityLabel={notificationAccessibilityLabel}
           accessibilityRole="button"
-          hitSlop={8}
-          onPress={onHoyPress}
+          hitSlop={4}
+          onPress={onNotificationPress}
           style={({pressed}) => [
-            styles.hoyCluster,
-            {opacity: pressed ? 0.9 : 1},
+            styles.notificationButton,
+            {opacity: pressed ? actionMotion.pressedOpacity : 1},
           ]}
-          testID="home-hero-hoy-button">
-          {hoyState ? (
-            <HoyOrb
-              celebrationKey={hoyCelebrationKey}
-              size={HOY_SIZE}
-              state={hoyState}
-              testID="home-hero-hoy-orb"
-            />
-          ) : (
-            <HoyPlaceholder />
-          )}
-          {unreadBadgeText ? (
+          testID="home-hero-notification-button">
+          <Bell color={theme.text} size={24} strokeWidth={2.2} />
+          {notificationBadgeText ? (
             <View
               style={styles.unreadBadge}
-              testID="home-hero-hoy-unread-badge">
+              testID="home-hero-notification-unread-badge">
               <HoystText
                 allowFontScaling={false}
                 numberOfLines={1}
                 style={styles.unreadBadgeText}>
-                {unreadBadgeText}
+                {notificationBadgeText}
               </HoystText>
             </View>
           ) : null}
         </Pressable>
       </View>
-
-      <BrandMark isDark={theme.isDark} kind="logo" style={styles.logo} />
 
       <View style={styles.copyBlock}>
         <HoystText style={[styles.headline, {color: theme.text}]}>
@@ -446,11 +462,11 @@ const styles = StyleSheet.create({
     borderColor: brandColors.white,
     borderRadius: UNREAD_BADGE_SIZE / 2,
     borderWidth: 2,
-    bottom: -3,
     height: UNREAD_BADGE_SIZE,
     justifyContent: 'center',
     position: 'absolute',
-    right: -3,
+    right: -7,
+    top: -7,
     width: UNREAD_BADGE_SIZE,
   },
   unreadBadgeText: {
@@ -462,11 +478,21 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   logo: {
-    alignSelf: 'flex-start',
     height: 40,
     marginLeft: -3,
-    marginTop: 22,
     width: 86,
+  },
+  logoRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 22,
+  },
+  notificationButton: {
+    alignItems: 'center',
+    height: 44,
+    justifyContent: 'center',
+    width: 44,
   },
   copyBlock: {
     gap: 6,

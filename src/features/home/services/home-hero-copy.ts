@@ -6,26 +6,46 @@ export type HomeHeroCopy = {
   subline: string;
 };
 
-const headlinePools: Record<HomeGreetingTimeWindow, readonly string[]> = {
+type HomeHeroHeadline = {
+  text: string;
+  withName?: (firstName: string) => string;
+};
+
+const headlinePools: Record<
+  HomeGreetingTimeWindow,
+  readonly HomeHeroHeadline[]
+> = {
   morning: [
-    'Today shows your commitment.',
-    'Start the day by showing up.',
-    'Your circles are counting on you.',
+    {
+      text: 'Set the tone.',
+      withName: firstName => `Set the tone, ${firstName}.`,
+    },
+    {text: 'Start the day by showing up.'},
+    {text: 'Your circles are counting on you.'},
   ],
   midday: [
-    'Today shows your commitment.',
-    'Keep your word to your circles.',
-    'Showing up is the whole game.',
+    {
+      text: 'Keep it moving.',
+      withName: firstName => `Keep it moving, ${firstName}.`,
+    },
+    {text: 'Keep your word to your circles.'},
+    {text: 'Showing up is the whole game.'},
   ],
   afternoon: [
-    'Today shows your commitment.',
-    'Still time to show up today.',
-    'Consistency beats intensity.',
+    {
+      text: 'Make the next move count.',
+      withName: firstName => `Make the next move count, ${firstName}.`,
+    },
+    {text: 'Still time to show up today.'},
+    {text: 'Consistency beats intensity.'},
   ],
   evening: [
-    'Today shows your commitment.',
-    'Close the day the strong way.',
-    'End today the way you started.',
+    {
+      text: 'One last push.',
+      withName: firstName => `One last push, ${firstName}.`,
+    },
+    {text: 'Close the day the strong way.'},
+    {text: 'End today the way you started.'},
   ],
 };
 
@@ -71,17 +91,24 @@ function hashDateKey(dateKey: string) {
  */
 export function getHomeHeroCopy({
   dateKey,
+  firstName,
   momentumStatus,
   streakDays,
   timeWindow,
 }: {
   dateKey: string;
+  firstName?: string;
   momentumStatus: MomentumStatus;
   streakDays: number;
   timeWindow: HomeGreetingTimeWindow;
 }): HomeHeroCopy {
   const pool = headlinePools[timeWindow] ?? headlinePools.morning;
-  const headline = pool[hashDateKey(dateKey) % pool.length];
+  const headlineOption = pool[hashDateKey(dateKey) % pool.length];
+  const cleanFirstName = firstName?.trim();
+  const headline =
+    cleanFirstName && headlineOption.withName
+      ? headlineOption.withName(cleanFirstName)
+      : headlineOption.text;
 
   return {
     headline,

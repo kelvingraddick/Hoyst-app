@@ -10,6 +10,7 @@ import {onSchedule} from 'firebase-functions/v2/scheduler';
 
 import {db} from '../firebase';
 import {
+  calculateRollingMomentumSummary,
   calculateMomentumSummary,
   calculateMomentumStreaks,
   getDateKey,
@@ -70,6 +71,35 @@ function asString(value: unknown, fallback = '') {
 
 function asNumber(value: unknown, fallback: number) {
   return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
+}
+
+function asTimestampMs(value: unknown) {
+  if (!value || typeof value !== 'object') {
+    return undefined;
+  }
+
+  if (
+    'toMillis' in value &&
+    typeof (value as {toMillis?: unknown}).toMillis === 'function'
+  ) {
+    return (value as {toMillis: () => number}).toMillis();
+  }
+
+  if (
+    'toDate' in value &&
+    typeof (value as {toDate?: unknown}).toDate === 'function'
+  ) {
+    return (value as {toDate: () => Date}).toDate().getTime();
+  }
+
+  if (
+    'seconds' in value &&
+    typeof (value as {seconds?: unknown}).seconds === 'number'
+  ) {
+    return (value as {seconds: number}).seconds * 1000;
+  }
+
+  return undefined;
 }
 
 function asStringArray(value: unknown) {
@@ -216,9 +246,19 @@ function mapOpportunitySnapshot(
 
   return {
     availableDateKey: asString(data?.availableDateKey),
+    expiresDateKey: asString(data?.expiresDateKey) || undefined,
     periodKey: asString(data?.periodKey),
+    resolvedAtMs:
+      asTimestampMs(data?.resolvedAt) ??
+      asTimestampMs(data?.completedAt) ??
+      asTimestampMs(data?.updatedAt),
+    resolvedDateKey:
+      asString(data?.completionDateKey) ||
+      asString(data?.expiresDateKey) ||
+      undefined,
     slotIndex: asNumber(data?.slotIndex, 0),
     status,
+    timezone: asString(data?.timezone, 'UTC'),
   };
 }
 
@@ -347,7 +387,10 @@ export async function recalculateMomentumSummaryForUser(uid: string) {
     opportunities: currentOpportunities,
     periodKey: 'current',
   });
-  const reconciledSummary = {...summary, ...streaks};
+  const rollingMomentum = calculateRollingMomentumSummary({
+    opportunities: allOpportunities,
+  });
+  const reconciledSummary = {...summary, ...streaks, rollingMomentum};
 
   await momentumRef.set(
     {
@@ -366,6 +409,7 @@ function buildOpportunityPayload({
   circleId,
   dateKey,
   profile,
+  stampResolution = true,
   slot,
   status,
   uid,
@@ -375,10 +419,17 @@ function buildOpportunityPayload({
   circleId: string;
   dateKey?: string;
   profile?: DocumentData;
+  stampResolution?: boolean;
   slot: OpportunitySlot;
   status: OpportunityStatus;
   uid: string;
 }) {
+  const isResolved =
+    status === 'completed' ||
+    status === 'skipped' ||
+    status === 'missed' ||
+    status === 'expired';
+
   return {
     availableDateKey: slot.availableDateKey,
     cadence: normalizeCommitmentSchedule(circle).cadence,
@@ -400,6 +451,9 @@ function buildOpportunityPayload({
     ...(dateKey ? {completionDateKey: dateKey} : {}),
     ...(status === 'completed' || status === 'skipped'
       ? {completedAt: FieldValue.serverTimestamp()}
+      : {}),
+    ...(stampResolution && isResolved
+      ? {resolvedAt: FieldValue.serverTimestamp()}
       : {}),
     ...(profile
       ? {
@@ -668,6 +722,7 @@ export async function removeTapInOpportunity({
       completedAt: FieldValue.delete(),
       completionDateKey: FieldValue.delete(),
       linkedCheckInId: FieldValue.delete(),
+      resolvedAt: FieldValue.delete(),
       status: nextStatus,
       updatedAt: FieldValue.serverTimestamp(),
     },
@@ -976,7 +1031,8 @@ export async function materializeCurrentCircleOpportunities(
   >();
 
   eligibleEntries.forEach((entry, index) => {
-    const existingStatus = existingOpportunitySnapshots[index].data()?.status;
+    const existingOpportunityData = existingOpportunitySnapshots[index].data();
+    const existingStatus = existingOpportunityData?.status;
     const status = getOpportunityStatusForSlot({
       completionStatus: existingStatus,
       now,
@@ -1005,6 +1061,7 @@ export async function materializeCurrentCircleOpportunities(
       data: buildOpportunityPayload({
         circle,
         circleId,
+        stampResolution: !existingOpportunityData?.resolvedAt,
         slot: entry.slot,
         status,
         uid: entry.uid,
@@ -1140,6 +1197,7 @@ export const backfillMomentumOpportunities = onCall(async request => {
         buildOpportunityPayload({
           circle,
           circleId: circleRef.id,
+          stampResolution: false,
           slot,
           status: getOpportunityStatusForSlot({
             slot,

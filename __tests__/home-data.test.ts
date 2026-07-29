@@ -11,8 +11,12 @@ import {
   getHomeGreetingContext,
   getHomeGreetingFallback,
   getHomeGreetingTimeWindow,
+  getHomePrimaryAction,
+  getNextHomeActionBoundary,
   getTodayAttentionCircles,
   getUpcomingAttentionCircles,
+  isHomeCircleDeadlineUrgent,
+  isHomeCircleGreetingContextReady,
   mapHomeCircleFromData,
   matchesHomeCircleFilter,
   shouldShowAuthenticatedHomeEmptyState,
@@ -55,6 +59,7 @@ function homeCard(
     streakDays: 0,
     streakLabel: 'Start today',
     title: 'Real Fitness Circle',
+    timezone: 'UTC',
     viewerHasCheckedIn: false,
     viewerHasTappedInToday: false,
     viewerMembershipStatus: 'active',
@@ -1129,8 +1134,8 @@ describe('home data mapping', () => {
 });
 
 describe('Home greeting fallback', () => {
-  const makeActiveCard = () =>
-    mapHomeCircleFromData({
+  const makeActiveCard = () => {
+    const card = mapHomeCircleFromData({
       circleData,
       circleId: 'circle-active',
       membersData: [
@@ -1145,6 +1150,9 @@ describe('Home greeting fallback', () => {
       },
       todayCheckInStatuses: new Map([['user-1', 'done']]),
     })!;
+
+    return {...card, nudgeTargetCount: 0};
+  };
 
   it('classifies greeting time windows by local hour', () => {
     expect(
@@ -1285,14 +1293,24 @@ describe('Home greeting fallback', () => {
         firstName: 'Aaron',
         timezone: 'UTC',
       }),
-    ).toBe('Aaron, your circles are waiting. Make it quick and undeniable.');
+    ).toBe(
+      'Aaron, Real Fitness Circle needs your Tap In today. Finish the day clean.',
+    );
     expect(
       getHomeGreetingFallback({
-        circles: [atRiskCard],
+        circles: [
+          {
+            ...atRiskCard,
+            viewerOpenOpportunityExpiresDateKey: '2026-05-07',
+          },
+        ],
         firstName: 'Aaron',
+        now: new Date('2026-05-07T19:00:00.000Z'),
         timezone: 'UTC',
       }),
-    ).toBe('Aaron, pressure is up. Perfect, now it counts.');
+    ).toBe(
+      'Aaron, Real Fitness Circle needs your Tap In before midnight. Steady it.',
+    );
     expect(
       getHomeGreetingFallback({
         circles: [doneCard],
@@ -1306,13 +1324,16 @@ describe('Home greeting fallback', () => {
         firstName: 'Aaron',
         timezone: 'UTC',
       }),
-    ).toBe('Aaron, pending approval. Patience, but make it productive.');
+    ).toBe(
+      'Aaron, Real Fitness Circle is pending approval. Check where it stands.',
+    );
   });
 
-  it('counts only risk that the viewer can act on now', () => {
+  it('counts only final-hours Tap In deadlines as actionable risk', () => {
     const actionableRisk = homeCard({
       id: 'actionable-risk',
       state: 'risk',
+      viewerOpenOpportunityExpiresDateKey: '2026-05-07',
     });
     const tappedTodayWeeklyRisk = homeCard({
       commitmentCadence: 'weekly',
@@ -1353,24 +1374,28 @@ describe('Home greeting fallback', () => {
     expect(
       getHomeGreetingContext({
         circles: [actionableRisk],
+        now: new Date('2026-05-07T19:00:00.000Z'),
         timezone: 'UTC',
       }).circleSummary,
     ).toMatchObject({atRiskCount: 1, needsYouCount: 1});
     expect(
       getHomeGreetingContext({
         circles: [tappedTodayWeeklyRisk],
+        now: new Date('2026-05-07T19:00:00.000Z'),
         timezone: 'UTC',
       }).circleSummary,
     ).toMatchObject({atRiskCount: 0, needsYouCount: 0});
     expect(
       getHomeGreetingContext({
         circles: [partialRisk],
+        now: new Date('2026-05-07T19:00:00.000Z'),
         timezone: 'UTC',
       }).circleSummary,
-    ).toMatchObject({atRiskCount: 0, needsYouCount: 0});
+    ).toMatchObject({atRiskCount: 0, needsYouCount: 1});
     expect(
       getHomeGreetingContext({
         circles: [nonActionableFailedRisk],
+        now: new Date('2026-05-07T19:00:00.000Z'),
         timezone: 'UTC',
       }).circleSummary,
     ).toMatchObject({atRiskCount: 0, needsYouCount: 0});
@@ -1395,7 +1420,289 @@ describe('Home greeting fallback', () => {
         personalCommitmentCount: 0,
       },
       firstName: 'Aaron',
+      primaryAction: {
+        isAtRisk: false,
+        kind: 'momentum',
+        remainingActionCount: 0,
+      },
       timeWindow: 'midday',
     });
+  });
+
+  it('selects every contextual action kind from Home urgency state', () => {
+    const tapIn = homeCard({id: 'tap', title: 'Workout Circle'});
+    const updateTapIn = homeCard({
+      commitmentType: 'build',
+      currentValue: 2,
+      id: 'update',
+      targetValue: 5,
+      title: 'Water Goal',
+      viewerCanUpdateTapIn: true,
+      viewerHasTappedInToday: true,
+      viewerTodayStatus: 'partial',
+    });
+    const personalTapIn = homeCard({
+      circleMode: 'personal',
+      id: 'personal',
+      title: 'Daily Reading',
+    });
+    const nudge = homeCard({
+      id: 'nudge',
+      nudgeTargetCount: 2,
+      title: 'Morning Crew',
+      viewerHasCheckedIn: true,
+      viewerHasTappedInToday: true,
+      viewerRemainingTapIns: 0,
+      viewerTodayStatus: 'done',
+    });
+    const pending = homeCard({
+      id: 'pending',
+      title: 'Sleep Circle',
+      viewerMembershipStatus: 'pending',
+    });
+    const done = homeCard({
+      id: 'done',
+      remainingCheckIns: 0,
+      state: 'done',
+      viewerHasCheckedIn: true,
+      viewerHasTappedInToday: true,
+      viewerRemainingTapIns: 0,
+      viewerTodayStatus: 'done',
+    });
+
+    expect(
+      getHomePrimaryAction({circles: [tapIn], firstName: 'Kelvin'}).context,
+    ).toMatchObject({circleTitle: 'Workout Circle', kind: 'tap_in'});
+    expect(
+      getHomePrimaryAction({
+        circles: [updateTapIn],
+        firstName: 'Kelvin',
+      }).context,
+    ).toMatchObject({circleTitle: 'Water Goal', kind: 'update_tap_in'});
+    expect(
+      getHomePrimaryAction({
+        circles: [personalTapIn],
+        firstName: 'Kelvin',
+      }).context,
+    ).toMatchObject({
+      circleMode: 'personal',
+      circleTitle: 'Daily Reading',
+      kind: 'tap_in',
+    });
+    expect(
+      getHomePrimaryAction({circles: [nudge], firstName: 'Kelvin'}).context,
+    ).toMatchObject({circleTitle: 'Morning Crew', kind: 'nudge'});
+    expect(
+      getHomePrimaryAction({circles: [pending], firstName: 'Kelvin'}).context,
+    ).toMatchObject({circleTitle: 'Sleep Circle', kind: 'pending_approval'});
+    expect(
+      getHomePrimaryAction({circles: [done], firstName: 'Kelvin'}).context,
+    ).toEqual({
+      isAtRisk: false,
+      kind: 'momentum',
+      remainingActionCount: 0,
+    });
+    expect(
+      getHomePrimaryAction({circles: [], firstName: 'Kelvin'}).context,
+    ).toEqual({
+      isAtRisk: false,
+      kind: 'no_commitments',
+      remainingActionCount: 0,
+    });
+  });
+
+  it('names the most urgent Circle and summarizes remaining work', () => {
+    const context = getHomeGreetingContext({
+      circles: [
+        homeCard({id: 'tap', title: 'Read Today'}),
+        homeCard({
+          id: 'risk',
+          state: 'risk',
+          title:
+            'Exceptionally Long Workout Accountability Circle for Everyone',
+        }),
+        homeCard({
+          id: 'pending',
+          title: 'Sleep Circle',
+          viewerMembershipStatus: 'pending',
+        }),
+      ],
+      firstName: 'Kelvin',
+      now: new Date('2026-05-07T19:00:00.000Z'),
+      timezone: 'UTC',
+    });
+    const fallback = getHomeGreetingFallback({
+      circles: [
+        homeCard({id: 'tap', title: 'Read Today'}),
+        homeCard({
+          id: 'risk',
+          state: 'risk',
+          title:
+            'Exceptionally Long Workout Accountability Circle for Everyone',
+          viewerOpenOpportunityExpiresDateKey: '2026-05-07',
+        }),
+        homeCard({
+          id: 'pending',
+          title: 'Sleep Circle',
+          viewerMembershipStatus: 'pending',
+        }),
+      ],
+      firstName: 'Kelvin',
+      now: new Date('2026-05-07T19:00:00.000Z'),
+      timezone: 'UTC',
+    });
+
+    expect(context.primaryAction).toMatchObject({
+      isAtRisk: true,
+      kind: 'tap_in',
+      remainingActionCount: 2,
+    });
+    expect(context.primaryAction?.circleTitle).toMatch(/…$/);
+    expect(fallback).toContain('2 more need attention.');
+    expect(fallback).toContain('Tap In');
+    expect(fallback.length).toBeLessThanOrEqual(90);
+  });
+
+  it('keeps Hoy calm at midnight and starts deadline urgency at 6 PM locally', () => {
+    const daily = homeCard({
+      state: 'risk',
+      timezone: 'America/New_York',
+    });
+
+    expect(
+      isHomeCircleDeadlineUrgent(daily, new Date('2026-05-08T04:00:00.000Z')),
+    ).toBe(false);
+    expect(
+      isHomeCircleDeadlineUrgent(daily, new Date('2026-05-08T21:59:59.000Z')),
+    ).toBe(false);
+    expect(
+      isHomeCircleDeadlineUrgent(daily, new Date('2026-05-08T22:00:00.000Z')),
+    ).toBe(true);
+  });
+
+  it.each(['weekly', 'monthly'] as const)(
+    'uses the canonical %s opportunity expiry date',
+    commitmentCadence => {
+      const circle = homeCard({
+        commitmentCadence,
+        timezone: 'America/Los_Angeles',
+        viewerOpenOpportunityExpiresDateKey: '2026-05-07',
+      });
+
+      expect(
+        isHomeCircleDeadlineUrgent(
+          circle,
+          new Date('2026-05-08T00:59:59.000Z'),
+        ),
+      ).toBe(false);
+      expect(
+        isHomeCircleDeadlineUrgent(
+          circle,
+          new Date('2026-05-08T01:00:00.000Z'),
+        ),
+      ).toBe(true);
+    },
+  );
+
+  it('promotes an urgent Tap In above routine actions', () => {
+    const routine = homeCard({id: 'routine', title: 'Routine Circle'});
+    const urgent = homeCard({
+      id: 'urgent',
+      title: 'Deadline Circle',
+      viewerOpenOpportunityExpiresDateKey: '2026-05-07',
+    });
+    const primaryAction = getHomePrimaryAction({
+      circles: [routine, urgent],
+      firstName: 'Kelvin',
+      now: new Date('2026-05-07T19:00:00.000Z'),
+    }).context;
+
+    expect(primaryAction).toMatchObject({
+      circleTitle: 'Deadline Circle',
+      isAtRisk: true,
+      kind: 'tap_in',
+      urgency: 'deadline',
+    });
+  });
+
+  it('returns the next warning or midnight boundary', () => {
+    const circle = homeCard({
+      viewerOpenOpportunityExpiresDateKey: '2026-05-07',
+    });
+
+    expect(
+      getNextHomeActionBoundary({
+        circles: [circle],
+        now: new Date('2026-05-07T17:30:00.000Z'),
+        timezone: 'UTC',
+      }),
+    ).toBe(new Date('2026-05-07T18:00:00.000Z').getTime());
+    expect(
+      getNextHomeActionBoundary({
+        circles: [circle],
+        now: new Date('2026-05-07T19:00:00.000Z'),
+        timezone: 'UTC',
+      }),
+    ).toBe(new Date('2026-05-08T00:00:00.000Z').getTime());
+  });
+});
+
+describe('Home greeting readiness', () => {
+  it('waits for viewer opportunity deadlines before resolving actions', () => {
+    expect(
+      isHomeCircleGreetingContextReady({
+        expectedPeriodSnapshotCount: 7,
+        hasLoadedCircle: true,
+        hasLoadedMembers: true,
+        hasLoadedOpportunity: true,
+        hasLoadedViewerOpportunities: false,
+        loadedPeriodSnapshotCount: 7,
+        membershipStatus: 'active',
+      }),
+    ).toBe(false);
+  });
+
+  it('waits for every action-bearing snapshot for active memberships', () => {
+    const resolvedInput = {
+      expectedPeriodSnapshotCount: 7,
+      hasLoadedCircle: true,
+      hasLoadedMembers: true,
+      hasLoadedOpportunity: true,
+      loadedPeriodSnapshotCount: 7,
+      membershipStatus: 'active' as const,
+    };
+
+    expect(isHomeCircleGreetingContextReady(resolvedInput)).toBe(true);
+    expect(
+      isHomeCircleGreetingContextReady({
+        ...resolvedInput,
+        hasLoadedMembers: false,
+      }),
+    ).toBe(false);
+    expect(
+      isHomeCircleGreetingContextReady({
+        ...resolvedInput,
+        hasLoadedOpportunity: false,
+      }),
+    ).toBe(false);
+    expect(
+      isHomeCircleGreetingContextReady({
+        ...resolvedInput,
+        loadedPeriodSnapshotCount: 6,
+      }),
+    ).toBe(false);
+  });
+
+  it('only needs the Circle snapshot for pending approval', () => {
+    expect(
+      isHomeCircleGreetingContextReady({
+        expectedPeriodSnapshotCount: 0,
+        hasLoadedCircle: true,
+        hasLoadedMembers: false,
+        hasLoadedOpportunity: false,
+        loadedPeriodSnapshotCount: 0,
+        membershipStatus: 'pending',
+      }),
+    ).toBe(true);
   });
 });

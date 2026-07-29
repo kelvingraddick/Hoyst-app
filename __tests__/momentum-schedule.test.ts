@@ -1,4 +1,5 @@
 import {
+  calculateRollingMomentumSummary,
   calculateMomentumSummary,
   calculateMomentumStreaks,
   getMomentumStatus,
@@ -193,5 +194,142 @@ describe('Momentum opportunity scheduling', () => {
     expect(getMomentumStatus(14)).toBe('building_momentum');
     expect(getMomentumStatus(55)).toBe('strong_momentum');
     expect(getMomentumStatus(90)).toBe('peak_momentum');
+  });
+
+  it('weights the latest seven days more heavily in rolling momentum', () => {
+    const rollingMomentum = calculateRollingMomentumSummary({
+      now: new Date('2026-07-29T16:00:00Z'),
+      opportunities: [
+        {
+          availableDateKey: '2026-07-29',
+          periodKey: '2026-07-29',
+          resolvedAtMs: 300,
+          resolvedDateKey: '2026-07-29',
+          slotIndex: 0,
+          status: 'completed',
+          timezone: 'UTC',
+        },
+        {
+          availableDateKey: '2026-07-28',
+          periodKey: '2026-07-28',
+          resolvedAtMs: 200,
+          resolvedDateKey: '2026-07-28',
+          slotIndex: 0,
+          status: 'missed',
+          timezone: 'UTC',
+        },
+        {
+          availableDateKey: '2026-07-20',
+          periodKey: '2026-07-20',
+          resolvedAtMs: 100,
+          resolvedDateKey: '2026-07-20',
+          slotIndex: 0,
+          status: 'skipped',
+          timezone: 'UTC',
+        },
+      ],
+    });
+
+    expect(rollingMomentum).toEqual({
+      hasUnrecoveredMiss: false,
+      percentage: 60,
+      resolvedOpportunityCount: 3,
+      status: 'strong_momentum',
+      windowDays: 14,
+    });
+  });
+
+  it('marks a miss as recovered only after a later covered opportunity', () => {
+    const missedOpportunity = {
+      availableDateKey: '2026-07-28',
+      periodKey: '2026-07-28',
+      resolvedAtMs: 200,
+      resolvedDateKey: '2026-07-28',
+      slotIndex: 0,
+      status: 'missed' as const,
+      timezone: 'UTC',
+    };
+    const earlierCompletion = {
+      availableDateKey: '2026-07-27',
+      periodKey: '2026-07-27',
+      resolvedAtMs: 100,
+      resolvedDateKey: '2026-07-27',
+      slotIndex: 0,
+      status: 'completed' as const,
+      timezone: 'UTC',
+    };
+
+    expect(
+      calculateRollingMomentumSummary({
+        now: new Date('2026-07-29T12:00:00Z'),
+        opportunities: [earlierCompletion, missedOpportunity],
+      }).hasUnrecoveredMiss,
+    ).toBe(true);
+    expect(
+      calculateRollingMomentumSummary({
+        now: new Date('2026-07-29T12:00:00Z'),
+        opportunities: [
+          earlierCompletion,
+          missedOpportunity,
+          {
+            ...earlierCompletion,
+            availableDateKey: '2026-07-29',
+            periodKey: '2026-07-29',
+            resolvedAtMs: 300,
+            resolvedDateKey: '2026-07-29',
+            status: 'skipped',
+          },
+        ],
+      }).hasUnrecoveredMiss,
+    ).toBe(false);
+  });
+
+  it('uses date and slot ordering when older opportunities lack timestamps', () => {
+    const rollingMomentum = calculateRollingMomentumSummary({
+      now: new Date('2026-07-29T12:00:00Z'),
+      opportunities: [
+        {
+          availableDateKey: '2026-07-28',
+          periodKey: '2026-07-28',
+          resolvedDateKey: '2026-07-28',
+          slotIndex: 0,
+          status: 'completed',
+          timezone: 'UTC',
+        },
+        {
+          availableDateKey: '2026-07-29',
+          periodKey: '2026-07-29',
+          resolvedDateKey: '2026-07-29',
+          slotIndex: 0,
+          status: 'expired',
+          timezone: 'UTC',
+        },
+      ],
+    });
+
+    expect(rollingMomentum.hasUnrecoveredMiss).toBe(true);
+  });
+
+  it('returns a neutral building state without resolved 14-day history', () => {
+    expect(
+      calculateRollingMomentumSummary({
+        now: new Date('2026-07-29T12:00:00Z'),
+        opportunities: [
+          {
+            availableDateKey: '2026-07-29',
+            periodKey: '2026-07-29',
+            slotIndex: 0,
+            status: 'available',
+            timezone: 'UTC',
+          },
+        ],
+      }),
+    ).toEqual({
+      hasUnrecoveredMiss: false,
+      percentage: 0,
+      resolvedOpportunityCount: 0,
+      status: 'building_momentum',
+      windowDays: 14,
+    });
   });
 });

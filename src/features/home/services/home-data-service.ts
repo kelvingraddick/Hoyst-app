@@ -60,9 +60,32 @@ export type HomeGreetingCircleSummary = {
   personalCommitmentCount?: number;
 };
 
+export type HomeGreetingPrimaryActionKind =
+  | 'tap_in'
+  | 'update_tap_in'
+  | 'nudge'
+  | 'pending_approval'
+  | 'no_commitments'
+  | 'momentum';
+
+export type HomeGreetingPrimaryAction = {
+  circleMode?: 'group' | 'personal';
+  circleTitle?: string;
+  isAtRisk: boolean;
+  kind: HomeGreetingPrimaryActionKind;
+  remainingActionCount: number;
+  urgency?: 'deadline' | 'routine';
+};
+
+export type HomePrimaryAction = {
+  circle?: CircleManagementCard;
+  context: HomeGreetingPrimaryAction;
+};
+
 export type HomeGreetingContext = {
   circleSummary: HomeGreetingCircleSummary;
   firstName?: string;
+  primaryAction?: HomeGreetingPrimaryAction;
   timeWindow: HomeGreetingTimeWindow;
 };
 
@@ -70,6 +93,7 @@ export type HomeData = {
   circles: CircleManagementCard[];
   hasLoadedMemberships: boolean;
   hasRealProgress: boolean;
+  hasResolvedGreetingContext: boolean;
   membershipCount: number;
   personalStreakDays: number;
   progressDays: HomeProgressCell[];
@@ -96,11 +120,15 @@ export type HomeCircleMappingInput = {
   viewerSkipGraceDateKeys?: readonly string[];
   viewerSkipGraceLoadedDateKeys?: ReadonlySet<string>;
   viewerSkipGraceStatuses?: ReadonlyMap<string, CheckInStatus | undefined>;
+  viewerOpenOpportunityExpiresDateKey?: string;
   viewerTodayCheckIn?: ViewerTodayCheckIn;
 };
 
 type CircleSubscriptionState = {
   circleData?: PlainData;
+  hasLoadedCircle: boolean;
+  hasLoadedMembers: boolean;
+  hasLoadedOpportunity: boolean;
   circleOpportunityData?: PlainData;
   circleOpportunityKey?: string;
   circleOpportunityUnsubscribe?: () => void;
@@ -108,6 +136,8 @@ type CircleSubscriptionState = {
   memberProfileUnsubscribes: Map<string, () => void>;
   membersData?: PlainData[];
   periodCheckInStatuses: Map<string, Map<string, CheckInStatus>>;
+  periodCheckInExpectedDateKeys: Set<string>;
+  periodCheckInLoadedDateKeys: Set<string>;
   periodCheckInKey?: string;
   periodCheckInUnsubscribes: Array<() => void>;
   recentGroupCheckInKey?: string;
@@ -150,6 +180,43 @@ type CircleDetailSubscriptionOptions = {
   timezone: string;
   uid: string;
 };
+
+export function isHomeCircleGreetingContextReady({
+  expectedPeriodSnapshotCount,
+  hasLoadedCircle,
+  hasLoadedMembers,
+  hasLoadedOpportunity,
+  hasLoadedViewerOpportunities = true,
+  loadedPeriodSnapshotCount,
+  membershipStatus,
+}: {
+  expectedPeriodSnapshotCount: number;
+  hasLoadedCircle: boolean;
+  hasLoadedMembers: boolean;
+  hasLoadedOpportunity: boolean;
+  hasLoadedViewerOpportunities?: boolean;
+  loadedPeriodSnapshotCount: number;
+  membershipStatus?: CircleMembershipStatus;
+}) {
+  if (!hasLoadedCircle || !hasLoadedViewerOpportunities) {
+    return false;
+  }
+
+  if (membershipStatus === 'pending') {
+    return true;
+  }
+
+  if (membershipStatus !== 'active') {
+    return false;
+  }
+
+  return (
+    hasLoadedMembers &&
+    hasLoadedOpportunity &&
+    expectedPeriodSnapshotCount > 0 &&
+    loadedPeriodSnapshotCount >= expectedPeriodSnapshotCount
+  );
+}
 
 const activeStatuses = new Set(['active', 'pending']);
 
@@ -776,6 +843,7 @@ export function getHomeGreetingTimeWindow({
 
 export function getHomeGreetingCircleSummary(
   circles: readonly CircleManagementCard[],
+  now = new Date(),
 ): HomeGreetingCircleSummary {
   return circles.reduce(
     (summary, circle) => {
@@ -792,13 +860,11 @@ export function getHomeGreetingCircleSummary(
       }
 
       const viewerCanTapInToday = canTapInToday(circle);
-      const viewerNeedsInitialTapIn =
-        viewerCanTapInToday && !circle.viewerHasTappedInToday;
 
-      if (viewerNeedsInitialTapIn) {
+      if (viewerCanTapInToday) {
         summary.needsYouCount += 1;
       }
-      if (circle.state === 'risk' && viewerNeedsInitialTapIn) {
+      if (viewerCanTapInToday && isHomeCircleDeadlineUrgent(circle, now)) {
         summary.atRiskCount += 1;
       }
       if (circle.state === 'done') {
@@ -819,6 +885,223 @@ export function getHomeGreetingCircleSummary(
   );
 }
 
+function getHomeCircleDeadlineDateKey(circle: CircleManagementCard, now: Date) {
+  if (circle.viewerOpenOpportunityExpiresDateKey) {
+    return circle.viewerOpenOpportunityExpiresDateKey;
+  }
+
+  if (circle.commitmentCadence === 'daily' && !circle.viewerHasTappedInToday) {
+    return getDateKey(now, circle.timezone ?? 'UTC');
+  }
+
+  return undefined;
+}
+
+export function isHomeCircleDeadlineUrgent(
+  circle: CircleManagementCard,
+  now = new Date(),
+) {
+  if (
+    circle.viewerMembershipStatus !== 'active' ||
+    circle.viewerHasTappedInToday ||
+    !canTapInToday(circle)
+  ) {
+    return false;
+  }
+
+  const expiresDateKey = getHomeCircleDeadlineDateKey(circle, now);
+  if (!expiresDateKey) {
+    return false;
+  }
+
+  const localNow = DateTime.fromJSDate(now, {
+    zone: circle.timezone ?? 'UTC',
+  });
+
+  return (
+    localNow.toFormat('yyyy-LL-dd') === expiresDateKey && localNow.hour >= 18
+  );
+}
+
+export function getNextHomeActionBoundary({
+  circles,
+  now = new Date(),
+  timezone,
+}: {
+  circles: readonly CircleManagementCard[];
+  now?: Date;
+  timezone: string;
+}) {
+  const nowMs = now.getTime();
+  const profileMidnight = DateTime.fromJSDate(now, {zone: timezone})
+    .plus({days: 1})
+    .startOf('day')
+    .toMillis();
+  const boundaries = [profileMidnight];
+
+  circles.forEach(circle => {
+    if (
+      circle.viewerMembershipStatus !== 'active' ||
+      circle.viewerHasTappedInToday ||
+      !canTapInToday(circle)
+    ) {
+      return;
+    }
+
+    const expiresDateKey = getHomeCircleDeadlineDateKey(circle, now);
+    if (!expiresDateKey) {
+      return;
+    }
+
+    const deadlineDay = DateTime.fromISO(expiresDateKey, {
+      zone: circle.timezone ?? 'UTC',
+    }).startOf('day');
+    const warningBoundary = deadlineDay.plus({hours: 18}).toMillis();
+    const expirationBoundary = deadlineDay.plus({days: 1}).toMillis();
+
+    if (warningBoundary > nowMs) {
+      boundaries.push(warningBoundary);
+    } else if (expirationBoundary > nowMs) {
+      boundaries.push(expirationBoundary);
+    }
+  });
+
+  return Math.min(...boundaries);
+}
+
+function getPrimaryActionCopySuffix(
+  action: Omit<HomeGreetingPrimaryAction, 'circleTitle'>,
+) {
+  const remainingCopy =
+    action.remainingActionCount > 0
+      ? ` ${action.remainingActionCount} more need attention.`
+      : '';
+
+  if (action.kind === 'tap_in') {
+    return action.urgency === 'deadline'
+      ? ` needs your Tap In before midnight.${remainingCopy}`
+      : ` needs your Tap In today.${remainingCopy}`;
+  }
+  if (action.kind === 'update_tap_in') {
+    return action.isAtRisk
+      ? ` is at risk. Update your Tap In.${remainingCopy}`
+      : ` needs a Tap In update.${remainingCopy}`;
+  }
+  if (action.kind === 'nudge') {
+    return ` needs a nudge.${remainingCopy}`;
+  }
+
+  return ` is pending approval.${remainingCopy}`;
+}
+
+export function normalizeHomeGreetingCircleTitle(
+  value: string,
+  maxLength = 36,
+) {
+  const normalized = value
+    .replace(/[\r\n\t]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  if (normalized.length <= maxLength) {
+    return normalized;
+  }
+
+  const candidate = normalized.slice(0, Math.max(1, maxLength - 1));
+  const lastSpace = candidate.lastIndexOf(' ');
+  const wordBoundaryCandidate =
+    lastSpace >= Math.min(10, Math.floor(maxLength / 2))
+      ? candidate.slice(0, lastSpace)
+      : candidate;
+
+  return `${wordBoundaryCandidate.trimEnd()}…`;
+}
+
+export function getHomePrimaryAction({
+  circles,
+  firstName,
+  now = new Date(),
+}: {
+  circles: readonly CircleManagementCard[];
+  firstName?: string;
+  now?: Date;
+}): HomePrimaryAction {
+  const sortedCircles = sortHomeCircles([...circles]);
+  const actionCircles = sortedCircles
+    .filter(circle => {
+      const variant = getHomeCircleActionVariant(circle);
+
+      return (
+        variant === 'check_in' ||
+        variant === 'nudge' ||
+        circle.viewerMembershipStatus === 'pending'
+      );
+    })
+    .sort(
+      (left, right) =>
+        Number(isHomeCircleDeadlineUrgent(right, now)) -
+        Number(isHomeCircleDeadlineUrgent(left, now)),
+    );
+  const primaryCircle = actionCircles[0];
+
+  if (!primaryCircle) {
+    return {
+      context: {
+        isAtRisk: false,
+        kind: circles.length === 0 ? 'no_commitments' : 'momentum',
+        remainingActionCount: 0,
+      },
+    };
+  }
+
+  const variant = getHomeCircleActionVariant(primaryCircle);
+  const kind: HomeGreetingPrimaryActionKind =
+    primaryCircle.viewerMembershipStatus === 'pending'
+      ? 'pending_approval'
+      : variant === 'nudge'
+      ? 'nudge'
+      : primaryCircle.viewerHasTappedInToday
+      ? 'update_tap_in'
+      : 'tap_in';
+  const actionWithoutTitle = {
+    circleMode: primaryCircle.circleMode,
+    isAtRisk:
+      kind === 'tap_in'
+        ? isHomeCircleDeadlineUrgent(primaryCircle, now)
+        : kind === 'update_tap_in'
+        ? false
+        : primaryCircle.state === 'risk',
+    kind,
+    remainingActionCount: Math.max(0, actionCircles.length - 1),
+    urgency:
+      kind === 'tap_in' && isHomeCircleDeadlineUrgent(primaryCircle, now)
+        ? 'deadline'
+        : 'routine',
+  } satisfies Omit<HomeGreetingPrimaryAction, 'circleTitle'>;
+  const cleanName = getCleanFirstName(firstName);
+  const namePrefixLength = cleanName ? cleanName.length + 2 : 0;
+  const titleBudget = Math.max(
+    4,
+    Math.min(
+      36,
+      90 -
+        namePrefixLength -
+        getPrimaryActionCopySuffix(actionWithoutTitle).length,
+    ),
+  );
+
+  return {
+    circle: primaryCircle,
+    context: {
+      ...actionWithoutTitle,
+      circleTitle: normalizeHomeGreetingCircleTitle(
+        primaryCircle.title,
+        titleBudget,
+      ),
+    },
+  };
+}
+
 export function getHomeGreetingContext({
   circles,
   firstName,
@@ -831,8 +1114,9 @@ export function getHomeGreetingContext({
   timezone: string;
 }): HomeGreetingContext {
   return {
-    circleSummary: getHomeGreetingCircleSummary(circles),
+    circleSummary: getHomeGreetingCircleSummary(circles, now),
     firstName: getCleanFirstName(firstName),
+    primaryAction: getHomePrimaryAction({circles, firstName, now}).context,
     timeWindow: getHomeGreetingTimeWindow({now, timezone}),
   };
 }
@@ -857,9 +1141,43 @@ export function getHomeGreetingFallback({
   timezone: string;
 }) {
   const context = getHomeGreetingContext({circles, firstName, now, timezone});
-  const {circleSummary, timeWindow} = context;
+  return buildHomeGreetingFallback(context);
+}
 
-  if (circleSummary.circleCount === 0) {
+export function buildHomeGreetingFallback(context: HomeGreetingContext) {
+  const {circleSummary, primaryAction, timeWindow} = context;
+
+  if (primaryAction?.circleTitle) {
+    const directCopy = getPrimaryActionCopySuffix(primaryAction);
+    const playfulCandidate =
+      primaryAction.remainingActionCount > 0
+        ? ''
+        : primaryAction.kind === 'tap_in'
+        ? primaryAction.isAtRisk
+          ? ' Steady it.'
+          : ' Finish the day clean.'
+        : primaryAction.kind === 'update_tap_in'
+        ? ' Finish what you started.'
+        : primaryAction.kind === 'nudge'
+        ? ' Wake the crew up.'
+        : ' Check where it stands.';
+    const directGreeting = buildGreetingWithName(
+      context.firstName,
+      `${primaryAction.circleTitle}${directCopy}`,
+      `${primaryAction.circleTitle}${directCopy}`,
+    );
+    const playfulCopy =
+      directGreeting.length + playfulCandidate.length <= 90
+        ? playfulCandidate
+        : '';
+
+    return `${directGreeting}${playfulCopy}`;
+  }
+
+  if (
+    primaryAction?.kind === 'no_commitments' ||
+    circleSummary.circleCount === 0
+  ) {
     return buildGreetingWithName(
       context.firstName,
       'no commitments yet. Bold strategy, let us fix it.',
@@ -953,6 +1271,7 @@ export function createEmptyHomeData(
     circles: [],
     hasLoadedMemberships: false,
     hasRealProgress: false,
+    hasResolvedGreetingContext: false,
     membershipCount: 0,
     personalStreakDays: 0,
     progressDays,
@@ -966,6 +1285,7 @@ export function buildHomeDataFromCircles({
   circles,
   completedDateKeys,
   hasLoadedMemberships = true,
+  hasResolvedGreetingContext = hasLoadedMemberships,
   lookbackDays = 7,
   membershipCount = circles.length,
   quantityMarkers,
@@ -975,6 +1295,7 @@ export function buildHomeDataFromCircles({
   circles: CircleManagementCard[];
   completedDateKeys: ReadonlySet<string>;
   hasLoadedMemberships?: boolean;
+  hasResolvedGreetingContext?: boolean;
   lookbackDays?: number;
   membershipCount?: number;
   now?: Date;
@@ -998,6 +1319,7 @@ export function buildHomeDataFromCircles({
     circles,
     hasLoadedMemberships,
     hasRealProgress: completedDateKeys.size > 0,
+    hasResolvedGreetingContext,
     membershipCount,
     personalStreakDays: calculatePersonalStreak(
       completedDateKeys,
@@ -1092,6 +1414,7 @@ export function mapHomeCircleFromData({
   viewerSkipGraceDateKeys,
   viewerSkipGraceLoadedDateKeys,
   viewerSkipGraceStatuses,
+  viewerOpenOpportunityExpiresDateKey,
   viewerTodayCheckIn,
 }: HomeCircleMappingInput): CircleManagementCard | undefined {
   const membershipStatus = normalizeMembershipStatus(membershipData?.status);
@@ -1316,6 +1639,9 @@ export function mapHomeCircleFromData({
     viewerHasCheckedIn,
     viewerHasTappedInToday,
     viewerMembershipStatus: membershipStatus,
+    ...(viewerOpenOpportunityExpiresDateKey
+      ? {viewerOpenOpportunityExpiresDateKey}
+      : {}),
     ...(typeof viewerRemainingAmount === 'number'
       ? {viewerRemainingAmount}
       : {}),
@@ -1520,6 +1846,7 @@ function buildCircleFromState(
   circleId: string,
   membershipData: PlainData,
   state?: CircleSubscriptionState,
+  viewerOpenOpportunity?: PlainData,
 ) {
   return mapHomeCircleFromData({
     circleData: state?.circleData,
@@ -1533,6 +1860,9 @@ function buildCircleFromState(
     viewerSkipGraceDateKeys: state?.skipGraceDateKeys,
     viewerSkipGraceLoadedDateKeys: state?.skipGraceLoadedDateKeys,
     viewerSkipGraceStatuses: state?.skipGraceCheckInStatuses,
+    viewerOpenOpportunityExpiresDateKey: asString(
+      viewerOpenOpportunity?.expiresDateKey,
+    ),
     viewerTodayCheckIn: state?.viewerTodayCheckIn,
   });
 }
@@ -1542,6 +1872,7 @@ function clearCircleOpportunityListener(state: CircleSubscriptionState) {
   state.circleOpportunityUnsubscribe = undefined;
   state.circleOpportunityData = undefined;
   state.circleOpportunityKey = undefined;
+  state.hasLoadedOpportunity = false;
 }
 
 function syncCircleOpportunityListener({
@@ -1578,6 +1909,7 @@ function syncCircleOpportunityListener({
     .doc(periodKey)
     .onSnapshot(snapshot => {
       state.circleOpportunityData = snapshotData(snapshot);
+      state.hasLoadedOpportunity = true;
       onUpdate();
     }, onError);
 }
@@ -1719,6 +2051,8 @@ function clearPeriodCheckInListeners(state: CircleSubscriptionState) {
   state.periodCheckInUnsubscribes.forEach(unsubscribe => unsubscribe());
   state.periodCheckInUnsubscribes = [];
   state.periodCheckInKey = undefined;
+  state.periodCheckInExpectedDateKeys.clear();
+  state.periodCheckInLoadedDateKeys.clear();
   state.periodCheckInStatuses.clear();
   state.todayCheckInStatuses = new Map();
   state.viewerTodayCheckIn = undefined;
@@ -1768,6 +2102,7 @@ function syncPeriodCheckInListeners({
 
   clearPeriodCheckInListeners(state);
   state.periodCheckInKey = periodCheckInKey;
+  state.periodCheckInExpectedDateKeys = new Set(periodDateKeys);
 
   periodDateKeys.forEach(dateKey => {
     state.periodCheckInUnsubscribes.push(
@@ -1779,6 +2114,7 @@ function syncPeriodCheckInListeners({
           const dayStatuses = getCoveredStatusesFromSnapshot(snapshot);
 
           state.periodCheckInStatuses.set(dateKey, dayStatuses);
+          state.periodCheckInLoadedDateKeys.add(dateKey);
           if (dateKey === todayDateKey) {
             state.todayCheckInStatuses = dayStatuses;
             state.viewerTodayCheckIn = getViewerTodayCheckInFromSnapshot(
@@ -1915,7 +2251,7 @@ function recentCompletedDateKeys(
   );
 }
 
-function recentQuantityMarkers(
+function getRecentQuantityMarkers(
   states: Map<string, CircleSubscriptionState>,
   recentDateKeys: string[],
 ) {
@@ -1960,13 +2296,47 @@ export function subscribeToHomeData({
   );
   const memberships = new Map<string, PlainData>();
   const states = new Map<string, CircleSubscriptionState>();
+  const viewerOpenOpportunities = new Map<string, PlainData>();
+  let hasLoadedViewerOpportunities = false;
   let circleUnsubscribes: Array<() => void> = [];
+
+  const hasResolvedGreetingContext = () =>
+    hasLoadedViewerOpportunities &&
+    Array.from(memberships.entries()).every(([circleId, membershipData]) => {
+      const state = states.get(circleId);
+      const membershipStatus = normalizeMembershipStatus(membershipData.status);
+
+      if (!state) {
+        return false;
+      }
+
+      const loadedExpectedPeriodSnapshotCount = Array.from(
+        state.periodCheckInExpectedDateKeys,
+      ).filter(dateKey =>
+        state.periodCheckInLoadedDateKeys.has(dateKey),
+      ).length;
+
+      return isHomeCircleGreetingContextReady({
+        expectedPeriodSnapshotCount: state.periodCheckInExpectedDateKeys.size,
+        hasLoadedCircle: state.hasLoadedCircle,
+        hasLoadedMembers: state.hasLoadedMembers,
+        hasLoadedOpportunity: state.hasLoadedOpportunity,
+        hasLoadedViewerOpportunities,
+        loadedPeriodSnapshotCount: loadedExpectedPeriodSnapshotCount,
+        membershipStatus,
+      });
+    });
 
   const emit = () => {
     const circles = sortHomeCircles(
       Array.from(memberships.entries())
         .map(([circleId, membershipData]) =>
-          buildCircleFromState(circleId, membershipData, states.get(circleId)),
+          buildCircleFromState(
+            circleId,
+            membershipData,
+            states.get(circleId),
+            viewerOpenOpportunities.get(circleId),
+          ),
         )
         .filter((circle): circle is CircleManagementCard => Boolean(circle)),
     );
@@ -1976,9 +2346,10 @@ export function subscribeToHomeData({
         circles,
         completedDateKeys: recentCompletedDateKeys(states, recentDateKeys),
         hasLoadedMemberships: true,
+        hasResolvedGreetingContext: hasResolvedGreetingContext(),
         lookbackDays,
         membershipCount: memberships.size,
-        quantityMarkers: recentQuantityMarkers(states, recentDateKeys),
+        quantityMarkers: getRecentQuantityMarkers(states, recentDateKeys),
         timezone,
       }),
     );
@@ -2004,9 +2375,14 @@ export function subscribeToHomeData({
       const membershipStatus = normalizeMembershipStatus(membershipData.status);
       const circleRef = firestore.collection(collections.circles).doc(circleId);
       const state: CircleSubscriptionState = {
+        hasLoadedCircle: false,
+        hasLoadedMembers: false,
+        hasLoadedOpportunity: false,
         memberProfiles: new Map(),
         memberProfileUnsubscribes: new Map(),
         membersData: [membershipData],
+        periodCheckInExpectedDateKeys: new Set(),
+        periodCheckInLoadedDateKeys: new Set(),
         periodCheckInStatuses: new Map(),
         periodCheckInUnsubscribes: [],
         recentGroupQuantityMarkers: new Map(),
@@ -2031,6 +2407,7 @@ export function subscribeToHomeData({
       circleUnsubscribes.push(
         circleRef.onSnapshot(snapshot => {
           state.circleData = snapshotData(snapshot);
+          state.hasLoadedCircle = true;
           if (membershipStatus === 'active') {
             syncCircleOpportunityListener({
               circleRef,
@@ -2068,6 +2445,7 @@ export function subscribeToHomeData({
                 memberData && activeStatuses.has(asString(memberData.status)),
               ),
             );
+          state.hasLoadedMembers = true;
           syncMemberProfileListeners({
             memberRecords: state.membersData,
             onError,
@@ -2130,9 +2508,37 @@ export function subscribeToHomeData({
       });
       startCircleListeners();
     }, onError);
+  const unsubscribeViewerOpportunities = firestore
+    .collection(collections.userPrivate)
+    .doc(uid)
+    .collection('opportunities')
+    .where('isCurrentPeriod', '==', true)
+    .onSnapshot(snapshot => {
+      viewerOpenOpportunities.clear();
+      snapshot.docs.forEach(doc => {
+        const data = snapshotData(doc);
+        const circleId = asString(data?.circleId);
+
+        if (!circleId || data?.status !== 'available') {
+          return;
+        }
+
+        const currentOpportunity = viewerOpenOpportunities.get(circleId);
+        if (
+          !currentOpportunity ||
+          asString(data.expiresDateKey) <
+            asString(currentOpportunity.expiresDateKey, '9999-12-31')
+        ) {
+          viewerOpenOpportunities.set(circleId, data);
+        }
+      });
+      hasLoadedViewerOpportunities = true;
+      emit();
+    }, onError);
 
   return () => {
     unsubscribeMemberships();
+    unsubscribeViewerOpportunities();
     stopCircleListeners();
   };
 }
@@ -2148,8 +2554,13 @@ export function subscribeToMemberCircleDetail({
   const recentDateKeys = getRecentDates(timezone).map(day => day.dateKey);
   const circleRef = firestore.collection(collections.circles).doc(circleId);
   const state: CircleSubscriptionState = {
+    hasLoadedCircle: false,
+    hasLoadedMembers: false,
+    hasLoadedOpportunity: false,
     memberProfiles: new Map(),
     memberProfileUnsubscribes: new Map(),
+    periodCheckInExpectedDateKeys: new Set(),
+    periodCheckInLoadedDateKeys: new Set(),
     periodCheckInStatuses: new Map(),
     periodCheckInUnsubscribes: [],
     recentGroupQuantityMarkers: new Map(),

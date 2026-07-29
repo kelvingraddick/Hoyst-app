@@ -20,7 +20,7 @@ type CachedHomeGreeting = {
   source: 'gemini';
 };
 
-const homeGreetingCachePrefix = '@hoyst/homeGreeting/v2/';
+const homeGreetingCachePrefix = '@hoyst/homeGreeting/v4/';
 const homeGreetingCacheMaxAgeMs = 48 * 60 * 60 * 1000;
 const inFlightHomeGreetingRequests = new Map<
   string,
@@ -48,6 +48,7 @@ export function buildHomeGreetingCacheKey({
   uid,
 }: BuildHomeGreetingCacheKeyInput) {
   const {circleSummary, firstName, timeWindow} = context;
+  const primaryAction = context.primaryAction;
 
   return [
     homeGreetingCachePrefix,
@@ -62,6 +63,12 @@ export function buildHomeGreetingCacheKey({
     circleSummary.pendingCount,
     circleSummary.groupCircleCount ?? circleSummary.circleCount,
     circleSummary.personalCommitmentCount ?? 0,
+    primaryAction?.kind ?? 'legacy',
+    encodeCachePart(primaryAction?.circleTitle ?? 'none'),
+    primaryAction?.circleMode ?? 'none',
+    primaryAction?.isAtRisk ? 1 : 0,
+    primaryAction?.remainingActionCount ?? 0,
+    primaryAction?.urgency ?? 'legacy',
   ].join(':');
 }
 

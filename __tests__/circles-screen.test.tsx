@@ -167,6 +167,7 @@ function homeData(circles: CircleManagementCard[]): HomeData {
     circles,
     hasLoadedMemberships: true,
     hasRealProgress: circles.length > 0,
+    hasResolvedGreetingContext: true,
     membershipCount: circles.length,
     personalStreakDays: 0,
     progressDays: [],

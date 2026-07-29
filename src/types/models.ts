@@ -32,6 +32,14 @@ export type MomentumStatus =
   | 'strong_momentum'
   | 'peak_momentum';
 
+export type RollingMomentumSummary = {
+  hasUnrecoveredMiss: boolean;
+  percentage: number;
+  resolvedOpportunityCount: number;
+  status: MomentumStatus;
+  windowDays: number;
+};
+
 export type UserProfile = {
   id: string;
   handle: string;
@@ -77,6 +85,7 @@ export type MomentumSummary = {
   label: string;
   percentage: number;
   periodKey: string;
+  rollingMomentum?: RollingMomentumSummary;
   skippedOpportunities: number;
   status: MomentumStatus;
   tapInOpportunities: number;
@@ -326,6 +335,7 @@ export type CircleManagementFilter = 'all' | 'needsYou' | 'atRisk' | 'done';
 
 export type CircleManagementCard = TodayCircleCard & {
   privacy: CirclePrivacy;
+  viewerOpenOpportunityExpiresDateKey?: string;
   joinMode: CircleJoinMode;
   memberCount: number;
   maxSize: number;

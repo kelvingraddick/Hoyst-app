@@ -1,162 +1,46 @@
-# Compact Tap In content and footer separation QA
+# Contextual Hoy Actions and Notification Bell Design QA
 
-Source visual truth: user-provided `Simulator Appshot 2026-07-20T06-44-34.492Z.png` conversation attachment. The attachment did not expose a local filesystem path.
-
-Local pre-fix evidence: `/Users/kelvin/.codex/visualizations/2026/07/20/019f7d67-8f62-7d61-b037-013cccc2d1f3/add-details-row-fixed.jpg`
+Source visual truth: `/Users/kelvin/Pictures/Photos Library.photoslibrary/resources/derivatives/6/6D680874-9FB9-4BF9-9A70-94CC78A4A26E_1_101_o.jpeg`
 
 Implementation evidence:
 
-- Compact sheet: `/Users/kelvin/.codex/visualizations/2026/07/20/019f7d67-8f62-7d61-b037-013cccc2d1f3/tap-in-compact-content-footer-separated.jpg`
-- Expanded sheet: `/Users/kelvin/.codex/visualizations/2026/07/20/019f7d67-8f62-7d61-b037-013cccc2d1f3/tap-in-expanded-content-footer-separated.jpg`
-- Full-view comparison: `/Users/kelvin/.codex/visualizations/2026/07/20/019f7d67-8f62-7d61-b037-013cccc2d1f3/tap-in-footer-overlap-comparison.jpg`
+- Final dark Home: `/tmp/hoyst-header-dark-final.png`
+- Final light Home: `/tmp/hoyst-header-light-final.png`
+- Accessibility Large text: `/tmp/hoyst-header-light-large-stable.png`
+- Zero-unread bell: `/tmp/hoyst-header-light-zero.png`
+- Full-view source comparison: `/tmp/hoyst-design-comparison-full.jpg`
+- Focused header comparison: `/tmp/hoyst-design-comparison-header.jpg`
+- Light and dark comparison: `/tmp/hoyst-design-comparison-themes-final.jpg`
 
-Viewport: iPhone 17 Pro, iOS 26.5, compact 68% and expanded 92% native form-sheet detents.
+Viewport: iPhone 17 Pro simulator, iOS 26.5, 402 x 874 points.
 
-State: reopened saved Build quantity Tap In with Add details, Remove Tap In, Update Progress, and Skip visible.
+Pixels and density: source and implementation are both 1206 x 2622 pixels at native 3x density. CSS-equivalent size is 402 x 874 points. No resizing or density normalization was needed before comparison.
+
+State: the source shows Kelvin with an initial Tap In action and 9 unread updates. The implementation shows Phil with an at-risk Tap In update and 9 unread updates so the three-line contextual state can be evaluated. The account data differs intentionally; header geometry, typography, surfaces, assets, and action placement are the comparison targets.
 
 ## Findings
 
 - No actionable P0, P1, or P2 differences remain.
-- Layout passed. Scrollable Tap In content and the bottom action dock now occupy separate flex regions instead of sharing an overlapping absolute layer.
-- Spacing passed. Add details and Remove Tap In can scroll fully above Update Progress. The 24px Update Progress to Skip gap and bottom safe-area clearance remain intact.
-- Typography passed. Button labels remain centered, readable, and unchanged at both detents.
-- Colors and tokens passed. Existing Hoyst frosted surfaces, danger treatment, spectrum halo, and status colors remain unchanged.
-- Image quality passed. Existing Hoyst and commitment-type assets remain sharp and correctly masked.
-- Copy passed. Add details, Remove Tap In, Update Progress, and Use Skip retain their existing control-aware wording.
-- Accessibility passed. All four controls remain separately exposed to the iOS accessibility tree, with no overlapping hit regions.
-- Expanded-detent regression check passed. The content remains fully separated from the dock after the native sheet expands.
-- A focused crop was not needed because the full-view comparison renders all affected controls and gaps at readable size.
+- Fonts and typography passed. The existing system family, 15-point bubble copy, 20-point line height, and strong Home hierarchy are preserved. The contextual headline stays readable at three lines and at Accessibility Large without clipping the bubble, Hoy, logo, or bell.
+- Spacing and layout rhythm passed. The final focused comparison preserves the source bubble width, top inset, tail-dot spacing, 52-point Hoy slot, and horizontal margins. A three-line message adds only its required vertical height. The Hoyst logo and bell share one aligned row, and the bell keeps a bare 44-point hit target.
+- Colors and tokens passed. Frosted bubble treatments, brand background, text contrast, tail dots, orb state colors, red unread badge, and light/dark token mappings remain consistent with the existing Home design.
+- Image quality and asset fidelity passed. The existing Hoyst logo and Hoy orb assets remain sharp at native 3x density. The notification control uses the app's established icon library rather than a text glyph, emoji, custom SVG, or drawn substitute.
+- Copy and content passed. The bubble names the Circle, risk state, and Tap In update in a direct-then-playful voice. The 90-character limit remains visually compatible with the three-line bubble.
+- Icons passed. The 24-point bell has consistent stroke weight and optical alignment with the logo row. The 22-point unread badge sits above the bell's top-right edge, caps at 9, and disappears cleanly at zero.
+- Accessibility passed. The combined bubble, tail, and Hoy surface is exposed as one action button that announces the contextual message. The bell separately announces its unread count. The action remains disabled before greeting readiness, and the bell retains a practical 44-point target.
+- Interaction passed. Activating Hoy in the simulator opened the correct `TapInComposer` update for Sleep 7 Hours. Automated coverage verifies initial Tap In, nudge and pending Circle Detail routing, Explore, Momentum, bell Inbox navigation, unread clearing, and unresolved disabled behavior.
+- Full-view comparison passed. The header maintains the original composition and does not obscure the week strip or summary cards. The intentional three-line message moves later header content down by one text line without causing overlap.
+- Focused comparison was required because the bell, badge, three-line wrapping, tail spacing, and logo alignment were too small to judge reliably in the full screen alone.
 
 ## Comparison history
 
-- Initial state: Add details and Remove Tap In scrolled beneath an absolutely positioned action footer, making four actions appear stacked into the same visual space.
-- Fix: changed the footer from an absolute overlay to a non-shrinking bottom flex region inside the detent-sized sheet frame and reduced the obsolete scroll padding reserve.
-- Post-fix evidence: the compact capture shows Add details and Remove Tap In fully above the dock, while Update Progress and Skip remain fixed at the bottom. The expanded capture confirms the same separation at the large detent.
+- Initial comparison finding [P1]: applying the row layout directly to the outer `Pressable` caused the bubble to consume the available width and pushed the tail and Hoy onto a second row.
+- Fix: retained the outer combined action target but moved the horizontal layout onto an inner row container so native Pressable behavior cannot alter child sizing.
+- Post-fix evidence: `/tmp/hoyst-design-comparison-header.jpg` shows the bubble, tail, and Hoy restored to the source proportions at the same viewport and density. `/tmp/hoyst-design-comparison-full.jpg` confirms the rest of Home remains aligned.
+- Final polish: shifted the unread badge slightly farther above and right of the bell so the icon remains recognizable while the count stays visually attached.
 
-Primary interactions tested: scroll the compact sheet to its bottom controls and expand the native form sheet.
+Primary interactions tested: contextual Hoy action navigation, appearance switching, standard and Accessibility Large text sizes, three-line copy, 9 unread, and zero unread. Bell Inbox mutation was verified by automated tests rather than clearing the live simulator account's unread state.
 
-Automated coverage: 2 focused Jest suites with 28 tests, TypeScript typecheck, and diff whitespace validation.
-
-final result: passed
-
----
-
-# Add details disclosure design QA
-
-Source visual truth: user-provided iPhone 17 Pro completion-screen Simulator capture from July 20, 2026.
-
-Implementation evidence: `/Users/kelvin/.codex/visualizations/2026/07/20/019f7d67-8f62-7d61-b037-013cccc2d1f3/add-details-row-fixed.jpg`
-
-Viewport: iPhone 17 Pro, iOS 26.5.
-
-## Findings
-
-- No actionable P0, P1, or P2 differences remain in the shared collapsed Add details control.
-- Layout passed. The icon, two-line copy, and chevron now share one centered horizontal row inside a full-width surface.
-- Spacing passed. The row has consistent 16px horizontal padding, 12px internal gaps, and a 72px minimum tap target.
-- Hierarchy passed. Add details remains the primary label, Optional note or photo stays muted, and the chevron is clearly separated as the disclosure affordance.
-- Surface treatment passed. The elevated action surface, neutral border, rounded corners, subtle shadow, and soft purple icon background match the existing Hoyst visual language.
-- Accessibility passed. The outer Pressable retains the Add details accessibility label while the inner surface controls layout only.
-- Native runtime review showed no vertical stacking, clipping, overlap, or broken icon state in the shared same-day editor. The completion-screen test exercises the same component and collapsed state.
-
-Automated coverage: Tap In completion Jest suite, TypeScript typecheck, and diff whitespace validation.
-
-final result: passed
-
----
-
-# Tap In sticky action footer design QA
-
-Source visual truth: `/Users/kelvin/Desktop/Screenshot 2026-07-19 at 10.35.22 PM.png`
-
-Implementation evidence:
-
-- Compact direct Tap In: `/Users/kelvin/.codex/visualizations/2026/07/20/019f7d67-8f62-7d61-b037-013cccc2d1f3/tap-in-sticky-footer-compact-final-v2.jpg`
-- Compact quantity progress: `/Users/kelvin/.codex/visualizations/2026/07/20/019f7d67-8f62-7d61-b037-013cccc2d1f3/tap-in-sticky-footer-quantity-final.jpg`
-- Expanded direct Tap In: `/Users/kelvin/.codex/visualizations/2026/07/20/019f7d67-8f62-7d61-b037-013cccc2d1f3/tap-in-sticky-footer-expanded-final.jpg`
-- Full comparison: `/Users/kelvin/.codex/visualizations/2026/07/20/019f7d67-8f62-7d61-b037-013cccc2d1f3/tap-in-sticky-footer-comparison.jpg`
-- Focused action comparison: `/Users/kelvin/.codex/visualizations/2026/07/20/019f7d67-8f62-7d61-b037-013cccc2d1f3/tap-in-sticky-footer-focused-comparison.jpg`
-
-Viewport: iPhone 17 Pro, iOS 26.5, compact 68% and expanded 92% native form-sheet detents.
-
-States reviewed: new direct Build Tap In with optional photo, new Build quantity progress, compact sheet, expanded sheet, and enabled primary action.
-
-## Findings
-
-- No actionable P0, P1, or P2 differences remain.
-- Sticky action placement passed. Tap In or Log Progress and Skip remain fixed at the bottom while the sheet content scrolls independently. Both detents preserve a full-width action and bottom safe-area clearance.
-- CTA emphasis passed. The black primary pill now has only a broad, translucent Hoyst spectrum halo. The former permanent spectrum edge is removed, so there is no crisp rainbow border.
-- Typography passed. The primary action label is 18px with a 23px line height and strong Hoyst weight, improving scanability while preserving a single line for Tap In, Log Progress, and Update Progress.
-- Spacing and layout rhythm passed. The fixed footer has consistent horizontal padding, a compact gap to Skip, and safe spacing below. The scroll content reserves enough bottom space to avoid being covered by the footer.
-- Colors and tokens passed. The primary fill remains Hoyst black, the halo stays restrained and translucent, and Skip retains its warm semantic foreground. Disabled and submitting states remove the animated halo.
-- Image and asset fidelity passed. Existing Hoyst and commitment-type assets remain sharp and correctly masked. No placeholder, synthetic, or code-drawn assets were introduced in this refinement.
-- Copy and content passed. Control-aware Tap In, Log Progress, Update Progress, and Skip labels remain unchanged and readable at the larger size.
-- Accessibility passed. Practical tap targets, semantic button labels, Reduce Motion fallback, safe-area spacing, and detent-change layout updates remain supported.
-- Native runtime review showed no clipping, overlapping action controls, blocked interaction, or broken asset state. Browser console inspection is not applicable to this native Simulator flow.
-
-## Comparison history
-
-- Initial refinement: the action controls still followed the scroll content, leaving unused space below in taller sheet states.
-- First footer attempt: a normal JavaScript footer remained content-sized because the iOS form-sheet content host has no bottom constraint.
-- Second footer attempt: the unstable native sheet footer rendered at the top on iOS because its iOS constraints are not implemented in the installed native-screen version.
-- Final fix: the screen tracks the active native detent and gives the sheet content an explicit matching frame. The action footer is positioned against that frame with device safe-area padding. Post-fix compact, expanded, and quantity captures show the controls anchored correctly.
-- The previous permanent 2px spectrum edge was removed. The focused comparison confirms only the broader translucent halo remains around the black pill.
-
-Primary interactions tested: open and close the compact sheet, switch to the expanded detent, reopen the compact sheet, open direct and quantity commitments, and inspect Tap In, Log Progress, and Skip placement.
-
-Automated coverage: 8 focused Jest suites, TypeScript typecheck, and Firebase Functions build. The final focused rerun includes dedicated detent-change, glow-only, and enlarged-label assertions.
-
-final result: passed
-
----
-
-# Hoy Home Header Design QA
-
-## Scope
-
-- Device: iPhone 17 Pro simulator, iOS 26.5
-- Source references:
-  - `/Users/kelvin/Desktop/Screenshot 2026-07-26 at 11.55.35 PM.png`
-  - `/Users/kelvin/Desktop/Screenshot 2026-07-26 at 11.55.49 PM.png`
-- Comparison image: `/tmp/hoy-design-comparison.png`
-- Implementation captures:
-  - `/tmp/hoy-qa-dark/`
-  - `/tmp/hoy-qa-light/`
-
-## Visual checks
-
-| Check | Result |
-| --- | --- |
-| Glossy 3D orb treatment follows the selected references | Pass |
-| Orb remains readable in the 52-point Home header slot | Pass |
-| Large white eyes, brows, and mouth remain distinct in every state | Pass |
-| Soft glow and floating shadow remain visible in light and dark modes | Pass |
-| Speech bubble, tail dots, greeting, and surrounding layout remain aligned | Pass |
-| Existing red unread badge stays at Hoy's lower-right edge | Pass |
-| State glyphs remain restrained and do not replace the face | Pass |
-| Celebration uses temporary confetti without a permanent glyph | Pass |
-
-## State checks
-
-| State | Light | Dark | Glyph rule |
-| --- | --- | --- | --- |
-| Locked | Pass | Pass | Blue lock |
-| Thinking | Pass | Pass | None |
-| Celebrating | Pass | Pass | Temporary confetti |
-| Risk / attention | Pass | Pass | Warning triangle |
-| Tap In needed | Pass | Pass | Exclamation |
-| Goal completed | Pass | Pass | Green check |
-| Streak active | Pass | Pass | None |
-| Default | Pass | Pass | None |
-
-## Interaction and motion checks
-
-- Hoy remains the Inbox button and preserves unread clearing.
-- State changes crossfade and scale over 210 ms.
-- Default, streak, thinking, Tap In, goal, and risk loops use native-driven transforms.
-- Locked does not loop.
-- Celebration runs for 2.2 seconds and does not replay on the initial loaded snapshot.
-- Reduce Motion and the test environment use the static composition.
-- The temporary local state and appearance overrides used for capture were removed.
+Automated coverage: focused Home data, Hoy state, greeting client, greeting function, Home screen, Tap In picker, and Circles suites; TypeScript typecheck; Firebase Functions build.
 
 final result: passed

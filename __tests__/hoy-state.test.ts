@@ -1,5 +1,6 @@
 import {
   getHoyAccessibilityLabel,
+  getNotificationAccessibilityLabel,
   getStableHoyDisplayState,
   getHoyState,
   type HoyStateInput,
@@ -7,16 +8,15 @@ import {
 
 const baseInput: HoyStateInput = {
   activeCircleCount: 0,
-  atRiskCount: 0,
-  doneCount: 0,
+  hasDeadlineRisk: false,
+  hasUnrecoveredMiss: false,
   isAuthenticatedHome: true,
   isCelebrating: false,
   isGreetingLoading: false,
   isIncompleteProfile: false,
   isLoadingHomeData: false,
-  needsYouCount: 0,
   pendingCount: 0,
-  personalStreakDays: 0,
+  rollingMomentumStatus: 'building_momentum',
 };
 
 describe('getHoyState', () => {
@@ -24,14 +24,11 @@ describe('getHoyState', () => {
     ['locked', {isAuthenticatedHome: false}],
     ['thinking', {isLoadingHomeData: true}],
     ['celebrating', {isCelebrating: true}],
-    ['risk_attention', {atRiskCount: 1}],
-    ['tap_in_needed', {needsYouCount: 1}],
-    [
-      'goal_completed',
-      {activeCircleCount: 2, doneCount: 2, personalStreakDays: 4},
-    ],
-    ['streak_active', {personalStreakDays: 1}],
-    ['default', {}],
+    ['risk_attention', {hasUnrecoveredMiss: true}],
+    ['tap_in_needed', {hasDeadlineRisk: true}],
+    ['momentum_peak', {rollingMomentumStatus: 'peak_momentum'}],
+    ['momentum_strong', {rollingMomentumStatus: 'strong_momentum'}],
+    ['momentum_building', {}],
   ] as const)('resolves %s from live Home data', (expected, overrides) => {
     expect(getHoyState({...baseInput, ...overrides})).toBe(expected);
   });
@@ -41,13 +38,12 @@ describe('getHoyState', () => {
       getHoyState({
         ...baseInput,
         activeCircleCount: 1,
-        atRiskCount: 1,
-        doneCount: 1,
+        hasDeadlineRisk: true,
+        hasUnrecoveredMiss: true,
         isCelebrating: true,
         isGreetingLoading: true,
         isLoadingHomeData: true,
-        needsYouCount: 1,
-        personalStreakDays: 12,
+        rollingMomentumStatus: 'peak_momentum',
       }),
     ).toBe('thinking');
 
@@ -55,11 +51,10 @@ describe('getHoyState', () => {
       getHoyState({
         ...baseInput,
         activeCircleCount: 1,
-        atRiskCount: 1,
-        doneCount: 1,
+        hasDeadlineRisk: true,
+        hasUnrecoveredMiss: true,
         isCelebrating: true,
-        needsYouCount: 1,
-        personalStreakDays: 12,
+        rollingMomentumStatus: 'peak_momentum',
       }),
     ).toBe('celebrating');
 
@@ -67,30 +62,26 @@ describe('getHoyState', () => {
       getHoyState({
         ...baseInput,
         activeCircleCount: 1,
-        atRiskCount: 1,
-        doneCount: 1,
-        needsYouCount: 1,
-        personalStreakDays: 12,
+        hasDeadlineRisk: true,
+        hasUnrecoveredMiss: true,
+        rollingMomentumStatus: 'peak_momentum',
       }),
     ).toBe('risk_attention');
   });
 
   it('locks guests, incomplete profiles, and pending-only memberships', () => {
-    expect(
-      getHoyState({...baseInput, isAuthenticatedHome: false}),
-    ).toBe('locked');
-    expect(
-      getHoyState({...baseInput, isIncompleteProfile: true}),
-    ).toBe('locked');
-    expect(
-      getHoyState({...baseInput, pendingCount: 2}),
-    ).toBe('locked');
+    expect(getHoyState({...baseInput, isAuthenticatedHome: false})).toBe(
+      'locked',
+    );
+    expect(getHoyState({...baseInput, isIncompleteProfile: true})).toBe(
+      'locked',
+    );
+    expect(getHoyState({...baseInput, pendingCount: 2})).toBe('locked');
   });
 
-  it('keeps an authenticated zero-Circle Home in the default state', () => {
-    expect(getHoyState(baseInput)).toBe('default');
+  it('keeps an authenticated zero-Circle Home in the calm building state', () => {
+    expect(getHoyState(baseInput)).toBe('momentum_building');
   });
-
 });
 
 describe('getStableHoyDisplayState', () => {
@@ -121,38 +112,62 @@ describe('getStableHoyDisplayState', () => {
       getStableHoyDisplayState({
         candidateState: 'locked',
         isSessionResolving: true,
-        previousResolvedState: 'streak_active',
+        previousResolvedState: 'momentum_strong',
       }),
-    ).toBe('streak_active');
+    ).toBe('momentum_strong');
   });
 
   it('uses a newly resolved final state immediately', () => {
     expect(
       getStableHoyDisplayState({
-        candidateState: 'goal_completed',
+        candidateState: 'momentum_peak',
         isSessionResolving: false,
         previousResolvedState: 'risk_attention',
       }),
-    ).toBe('goal_completed');
+    ).toBe('momentum_peak');
   });
 });
 
 describe('getHoyAccessibilityLabel', () => {
-  it('announces state, Inbox action, and unread count', () => {
+  it('announces Hoy state and contextual action', () => {
     expect(
-      getHoyAccessibilityLabel({state: 'tap_in_needed', unreadCount: 1}),
-    ).toBe('Hoy, Tap In needed. Open Inbox, 1 unread update');
+      getHoyAccessibilityLabel({
+        headline: 'Kelvin, Workout Circle needs your Tap In.',
+        isDisabled: false,
+        state: 'tap_in_needed',
+      }),
+    ).toBe(
+      'Hoy, Tap In deadline approaching. Kelvin, Workout Circle needs your Tap In. Open this action.',
+    );
     expect(
-      getHoyAccessibilityLabel({state: 'risk_attention', unreadCount: 13}),
-    ).toBe('Hoy, Risk and attention. Open Inbox, 9 or more unread updates');
-    expect(
-      getHoyAccessibilityLabel({state: 'default', unreadCount: 0}),
-    ).toBe('Hoy, Ready. Open Inbox');
+      getHoyAccessibilityLabel({
+        headline: 'Kelvin, Workout Circle is at risk. Tap In now.',
+        isDisabled: false,
+        state: 'risk_attention',
+      }),
+    ).toContain('Workout Circle is at risk');
   });
 
-  it('uses a neutral loading label before a face is resolved', () => {
-    expect(getHoyAccessibilityLabel({state: undefined, unreadCount: 4})).toBe(
-      'Hoy is getting ready. Open Inbox.',
+  it('uses a neutral loading label until the action is resolved', () => {
+    expect(
+      getHoyAccessibilityLabel({
+        isDisabled: true,
+        state: undefined,
+      }),
+    ).toBe('Hoy is getting your next action ready.');
+  });
+});
+
+describe('getNotificationAccessibilityLabel', () => {
+  it('announces the unread count separately from Hoy', () => {
+    expect(getNotificationAccessibilityLabel(0)).toBe(
+      'Notifications, no unread updates',
+    );
+    expect(getNotificationAccessibilityLabel(1)).toBe(
+      'Notifications, 1 unread update',
+    );
+    expect(getNotificationAccessibilityLabel(13)).toBe(
+      'Notifications, 9 or more unread updates',
     );
   });
 });

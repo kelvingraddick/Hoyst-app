@@ -2,10 +2,7 @@ import React from 'react';
 import {StyleSheet} from 'react-native';
 import renderer, {act} from 'react-test-renderer';
 
-import {
-  getHoyAssetSource,
-  HoyOrb,
-} from '../src/design/components/HoyOrb';
+import {getHoyAssetSource, HoyOrb} from '../src/design/components/HoyOrb';
 import type {HoyState} from '../src/features/home/services/hoy-state';
 
 const allStates: readonly HoyState[] = [
@@ -14,9 +11,9 @@ const allStates: readonly HoyState[] = [
   'celebrating',
   'risk_attention',
   'tap_in_needed',
-  'goal_completed',
-  'streak_active',
-  'default',
+  'momentum_peak',
+  'momentum_strong',
+  'momentum_building',
 ];
 
 function renderOrb(state: HoyState, animated = true) {
@@ -51,7 +48,7 @@ describe('HoyOrb', () => {
     'locked',
     'risk_attention',
     'tap_in_needed',
-    'goal_completed',
+    'momentum_peak',
   ] as const)('renders the documented glyph for %s', state => {
     const tree = renderOrb(state);
 
@@ -63,8 +60,8 @@ describe('HoyOrb', () => {
   it.each([
     'thinking',
     'celebrating',
-    'streak_active',
-    'default',
+    'momentum_strong',
+    'momentum_building',
   ] as const)('does not badge the %s expression', state => {
     const tree = renderOrb(state);
 
@@ -75,7 +72,7 @@ describe('HoyOrb', () => {
 
   it('uses temporary confetti only while celebrating', () => {
     const celebrating = renderOrb('celebrating');
-    const defaultOrb = renderOrb('default');
+    const defaultOrb = renderOrb('momentum_building');
 
     expect(
       celebrating.root.findAllByProps({testID: 'test-hoy-confetti'}),
@@ -86,7 +83,7 @@ describe('HoyOrb', () => {
   });
 
   it('renders a static composition in the test and reduced-motion path', () => {
-    const tree = renderOrb('default');
+    const tree = renderOrb('momentum_building');
     const animatedSurfaceStyle = StyleSheet.flatten(
       tree.root.findByProps({testID: 'test-hoy-animated-surface'}).props.style,
     );

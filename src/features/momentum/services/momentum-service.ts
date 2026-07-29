@@ -7,6 +7,7 @@ import type {
   CommitmentCadence,
   MomentumStatus,
   MomentumSummary,
+  RollingMomentumSummary,
 } from '../../../types/models';
 
 function asNumber(value: unknown, fallback: number) {
@@ -243,6 +244,32 @@ export function mapMomentumSummarySnapshot(
     data.status === 'getting_started'
       ? data.status
       : getMomentumStatus(percentage);
+  const rollingMomentumData =
+    data.rollingMomentum && typeof data.rollingMomentum === 'object'
+      ? (data.rollingMomentum as Record<string, unknown>)
+      : undefined;
+  const rollingMomentumStatus =
+    rollingMomentumData?.status === 'building_momentum' ||
+    rollingMomentumData?.status === 'strong_momentum' ||
+    rollingMomentumData?.status === 'peak_momentum' ||
+    rollingMomentumData?.status === 'getting_started'
+      ? rollingMomentumData.status
+      : undefined;
+  const rollingMomentum: RollingMomentumSummary | undefined =
+    rollingMomentumData &&
+    rollingMomentumStatus &&
+    typeof rollingMomentumData.hasUnrecoveredMiss === 'boolean'
+      ? {
+          hasUnrecoveredMiss: rollingMomentumData.hasUnrecoveredMiss,
+          percentage: asNumber(rollingMomentumData.percentage, 0),
+          resolvedOpportunityCount: asNumber(
+            rollingMomentumData.resolvedOpportunityCount,
+            0,
+          ),
+          status: rollingMomentumStatus,
+          windowDays: asNumber(rollingMomentumData.windowDays, 14),
+        }
+      : undefined;
 
   return {
     availableOpportunities: asNumber(data.availableOpportunities, 0),
@@ -253,6 +280,7 @@ export function mapMomentumSummarySnapshot(
     label: asString(data.label, getMomentumLabel(status)),
     percentage,
     periodKey: asString(data.periodKey, 'current'),
+    ...(rollingMomentum ? {rollingMomentum} : {}),
     skippedOpportunities,
     status,
     tapInOpportunities: asNumber(

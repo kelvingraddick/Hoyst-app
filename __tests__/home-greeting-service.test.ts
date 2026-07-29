@@ -30,6 +30,14 @@ const context: HomeGreetingContext = {
     pendingCount: 0,
   },
   firstName: 'Aaron',
+  primaryAction: {
+    circleMode: 'group',
+    circleTitle: 'Workout Circle',
+    isAtRisk: false,
+    kind: 'tap_in',
+    remainingActionCount: 0,
+    urgency: 'routine',
+  },
   timeWindow: 'midday',
 };
 
@@ -61,9 +69,56 @@ describe('Home greeting client cache', () => {
     });
 
     expect(cacheKey).toBe(
-      '@hoyst/homeGreeting/v2/:user-1:2026-05-17:midday:Aaron:1:1:0:0:0:1:0',
+      '@hoyst/homeGreeting/v4/:user-1:2026-05-17:midday:Aaron:1:1:0:0:0:1:0:tap_in:Workout%20Circle:group:0:0:routine',
     );
     expect(changedStatusKey).not.toBe(cacheKey);
+  });
+
+  it('invalidates v4 cache entries when the primary action changes', () => {
+    const tapInKey = buildHomeGreetingCacheKey({
+      context,
+      dateKey: '2026-05-17',
+      uid: 'user-1',
+    });
+    const updateKey = buildHomeGreetingCacheKey({
+      context: {
+        ...context,
+        primaryAction: {
+          ...context.primaryAction!,
+          kind: 'update_tap_in',
+          remainingActionCount: 2,
+        },
+      },
+      dateKey: '2026-05-17',
+      uid: 'user-1',
+    });
+
+    expect(updateKey).not.toBe(tapInKey);
+    expect(updateKey).toContain(':update_tap_in:');
+    expect(updateKey).toContain(':2');
+  });
+
+  it('invalidates v4 cache entries when deadline urgency begins', () => {
+    const routineKey = buildHomeGreetingCacheKey({
+      context,
+      dateKey: '2026-05-17',
+      uid: 'user-1',
+    });
+    const deadlineKey = buildHomeGreetingCacheKey({
+      context: {
+        ...context,
+        primaryAction: {
+          ...context.primaryAction!,
+          isAtRisk: true,
+          urgency: 'deadline',
+        },
+      },
+      dateKey: '2026-05-17',
+      uid: 'user-1',
+    });
+
+    expect(deadlineKey).not.toBe(routineKey);
+    expect(deadlineKey).toContain(':deadline');
   });
 
   it('reads and writes exact-key Gemini greetings', async () => {

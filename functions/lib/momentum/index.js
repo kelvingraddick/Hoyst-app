@@ -24,6 +24,24 @@ function asString(value, fallback = '') {
 function asNumber(value, fallback) {
     return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
 }
+function asTimestampMs(value) {
+    if (!value || typeof value !== 'object') {
+        return undefined;
+    }
+    if ('toMillis' in value &&
+        typeof value.toMillis === 'function') {
+        return value.toMillis();
+    }
+    if ('toDate' in value &&
+        typeof value.toDate === 'function') {
+        return value.toDate().getTime();
+    }
+    if ('seconds' in value &&
+        typeof value.seconds === 'number') {
+        return value.seconds * 1000;
+    }
+    return undefined;
+}
 function asStringArray(value) {
     return Array.isArray(value)
         ? value.filter((item) => typeof item === 'string' && item.trim().length > 0)
@@ -112,9 +130,17 @@ function mapOpportunitySnapshot(snapshot) {
     }
     return {
         availableDateKey: asString(data?.availableDateKey),
+        expiresDateKey: asString(data?.expiresDateKey) || undefined,
         periodKey: asString(data?.periodKey),
+        resolvedAtMs: asTimestampMs(data?.resolvedAt) ??
+            asTimestampMs(data?.completedAt) ??
+            asTimestampMs(data?.updatedAt),
+        resolvedDateKey: asString(data?.completionDateKey) ||
+            asString(data?.expiresDateKey) ||
+            undefined,
         slotIndex: asNumber(data?.slotIndex, 0),
         status,
+        timezone: asString(data?.timezone, 'UTC'),
     };
 }
 function mapOpportunitySnapshotWithId(snapshot) {
@@ -202,14 +228,21 @@ async function recalculateMomentumSummaryForUser(uid) {
         opportunities: currentOpportunities,
         periodKey: 'current',
     });
-    const reconciledSummary = { ...summary, ...streaks };
+    const rollingMomentum = (0, schedule_1.calculateRollingMomentumSummary)({
+        opportunities: allOpportunities,
+    });
+    const reconciledSummary = { ...summary, ...streaks, rollingMomentum };
     await momentumRef.set({
         ...reconciledSummary,
         updatedAt: firestore_1.FieldValue.serverTimestamp(),
     }, { merge: true });
     return reconciledSummary;
 }
-function buildOpportunityPayload({ checkInId, circle, circleId, dateKey, profile, slot, status, uid, }) {
+function buildOpportunityPayload({ checkInId, circle, circleId, dateKey, profile, stampResolution = true, slot, status, uid, }) {
+    const isResolved = status === 'completed' ||
+        status === 'skipped' ||
+        status === 'missed' ||
+        status === 'expired';
     return {
         availableDateKey: slot.availableDateKey,
         cadence: (0, schedule_1.normalizeCommitmentSchedule)(circle).cadence,
@@ -231,6 +264,9 @@ function buildOpportunityPayload({ checkInId, circle, circleId, dateKey, profile
         ...(dateKey ? { completionDateKey: dateKey } : {}),
         ...(status === 'completed' || status === 'skipped'
             ? { completedAt: firestore_1.FieldValue.serverTimestamp() }
+            : {}),
+        ...(stampResolution && isResolved
+            ? { resolvedAt: firestore_1.FieldValue.serverTimestamp() }
             : {}),
         ...(profile
             ? {
@@ -406,6 +442,7 @@ async function removeTapInOpportunity({ circle, circleId, dateKey, transaction, 
         completedAt: firestore_1.FieldValue.delete(),
         completionDateKey: firestore_1.FieldValue.delete(),
         linkedCheckInId: firestore_1.FieldValue.delete(),
+        resolvedAt: firestore_1.FieldValue.delete(),
         status: nextStatus,
         updatedAt: firestore_1.FieldValue.serverTimestamp(),
     }, { merge: true });
@@ -617,7 +654,8 @@ async function materializeCurrentCircleOpportunities(circleId, now = new Date())
     const periodRef = circleRef.collection('opportunities').doc(periodKey);
     const slotAggregates = new Map();
     eligibleEntries.forEach((entry, index) => {
-        const existingStatus = existingOpportunitySnapshots[index].data()?.status;
+        const existingOpportunityData = existingOpportunitySnapshots[index].data();
+        const existingStatus = existingOpportunityData?.status;
         const status = (0, schedule_1.getOpportunityStatusForSlot)({
             completionStatus: existingStatus,
             now,
@@ -645,6 +683,7 @@ async function materializeCurrentCircleOpportunities(circleId, now = new Date())
             data: buildOpportunityPayload({
                 circle,
                 circleId,
+                stampResolution: !existingOpportunityData?.resolvedAt,
                 slot: entry.slot,
                 status,
                 uid: entry.uid,
@@ -742,6 +781,7 @@ exports.backfillMomentumOpportunities = (0, https_1.onCall)(async (request) => {
                 .doc(getOpportunityId(circleRef.id, slot.periodKey, slot.slotIndex)), buildOpportunityPayload({
                 circle,
                 circleId: circleRef.id,
+                stampResolution: false,
                 slot,
                 status: (0, schedule_1.getOpportunityStatusForSlot)({
                     slot,

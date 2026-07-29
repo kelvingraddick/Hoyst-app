@@ -7,6 +7,7 @@ exports.getOpportunityStatusForSlot = getOpportunityStatusForSlot;
 exports.getMomentumStatus = getMomentumStatus;
 exports.getMomentumLabel = getMomentumLabel;
 exports.calculateMomentumSummary = calculateMomentumSummary;
+exports.calculateRollingMomentumSummary = calculateRollingMomentumSummary;
 exports.calculateMomentumStreaks = calculateMomentumStreaks;
 const commitments_1 = require("../shared/commitments");
 function padDatePart(value) {
@@ -198,6 +199,83 @@ function calculateMomentumSummary({ opportunities, periodKey, priorBestStreak = 
         skippedOpportunities,
         status,
         tapInOpportunities,
+    };
+}
+const rollingMomentumWindowDays = 14;
+const recentRollingMomentumDays = 7;
+function getDateKeyDifference(laterDateKey, earlierDateKey) {
+    return Math.round((parseDateKey(laterDateKey).getTime() -
+        parseDateKey(earlierDateKey).getTime()) /
+        (24 * 60 * 60 * 1000));
+}
+function isResolvedOpportunity(opportunity) {
+    return (opportunity.status === 'completed' ||
+        opportunity.status === 'skipped' ||
+        opportunity.status === 'missed' ||
+        opportunity.status === 'expired');
+}
+function isCoveredOpportunity(opportunity) {
+    return opportunity.status === 'completed' || opportunity.status === 'skipped';
+}
+function compareOpportunityResolution(left, right) {
+    if (typeof left.resolvedAtMs === 'number' &&
+        typeof right.resolvedAtMs === 'number' &&
+        left.resolvedAtMs !== right.resolvedAtMs) {
+        return left.resolvedAtMs - right.resolvedAtMs;
+    }
+    const dateDelta = (left.resolvedDateKey ??
+        left.expiresDateKey ??
+        left.availableDateKey).localeCompare(right.resolvedDateKey ?? right.expiresDateKey ?? right.availableDateKey);
+    return dateDelta !== 0 ? dateDelta : left.slotIndex - right.slotIndex;
+}
+function calculateRollingMomentumSummary({ now = new Date(), opportunities, }) {
+    const resolvedOpportunities = opportunities.filter(opportunity => {
+        if (!isResolvedOpportunity(opportunity)) {
+            return false;
+        }
+        const timezone = opportunity.timezone ?? 'UTC';
+        const todayDateKey = getDateKey(timezone, now);
+        const resolutionDateKey = opportunity.resolvedDateKey ??
+            opportunity.expiresDateKey ??
+            opportunity.availableDateKey;
+        const daysAgo = getDateKeyDifference(todayDateKey, resolutionDateKey);
+        return daysAgo >= 0 && daysAgo < rollingMomentumWindowDays;
+    });
+    if (resolvedOpportunities.length === 0) {
+        return {
+            hasUnrecoveredMiss: false,
+            percentage: 0,
+            resolvedOpportunityCount: 0,
+            status: 'building_momentum',
+            windowDays: rollingMomentumWindowDays,
+        };
+    }
+    const weightedTotals = resolvedOpportunities.reduce((totals, opportunity) => {
+        const timezone = opportunity.timezone ?? 'UTC';
+        const todayDateKey = getDateKey(timezone, now);
+        const resolutionDateKey = opportunity.resolvedDateKey ??
+            opportunity.expiresDateKey ??
+            opportunity.availableDateKey;
+        const daysAgo = getDateKeyDifference(todayDateKey, resolutionDateKey);
+        const weight = daysAgo < recentRollingMomentumDays ? 2 : 1;
+        totals.available += weight;
+        if (isCoveredOpportunity(opportunity)) {
+            totals.covered += weight;
+        }
+        return totals;
+    }, { available: 0, covered: 0 });
+    const percentage = weightedTotals.available > 0
+        ? Math.round((weightedTotals.covered / weightedTotals.available) * 100)
+        : 0;
+    const latestResolution = [...resolvedOpportunities].sort(compareOpportunityResolution)[resolvedOpportunities.length - 1];
+    const hasUnrecoveredMiss = latestResolution?.status === 'missed' ||
+        latestResolution?.status === 'expired';
+    return {
+        hasUnrecoveredMiss,
+        percentage,
+        resolvedOpportunityCount: resolvedOpportunities.length,
+        status: getMomentumStatus(percentage),
+        windowDays: rollingMomentumWindowDays,
     };
 }
 function calculateMomentumStreaks({ opportunities, priorBestStreak = 0, }) {

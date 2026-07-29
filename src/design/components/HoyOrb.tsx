@@ -24,10 +24,10 @@ const CELEBRATION_DURATION = 2200;
 const IS_TEST_ENVIRONMENT = process.env.NODE_ENV === 'test';
 
 const hoyAssetSources: Record<HoyState, number> = {
-  default: require('../../assets/hoy/default.png'),
+  momentum_building: require('../../assets/hoy/default.png'),
   tap_in_needed: require('../../assets/hoy/tap-in-needed.png'),
-  streak_active: require('../../assets/hoy/streak-active.png'),
-  goal_completed: require('../../assets/hoy/goal-completed.png'),
+  momentum_strong: require('../../assets/hoy/streak-active.png'),
+  momentum_peak: require('../../assets/hoy/goal-completed.png'),
   thinking: require('../../assets/hoy/thinking.png'),
   celebrating: require('../../assets/hoy/celebrating.png'),
   locked: require('../../assets/hoy/locked.png'),
@@ -57,11 +57,11 @@ function getLoopDuration(state: HoyState) {
       return 2800;
     case 'tap_in_needed':
       return 4200;
-    case 'goal_completed':
+    case 'momentum_peak':
       return 3200;
-    case 'streak_active':
+    case 'momentum_strong':
       return 2800;
-    case 'default':
+    case 'momentum_building':
       return 3400;
     default:
       return 0;
@@ -80,7 +80,7 @@ function getGlyph(state: HoyState, size: number) {
           strokeWidth={3}
         />
       );
-    case 'goal_completed':
+    case 'momentum_peak':
       return (
         <Check color={brandColors.green} size={iconSize} strokeWidth={3.2} />
       );
@@ -185,12 +185,7 @@ export function HoyOrb({
     });
 
     return () => transition.stop();
-  }, [
-    animated,
-    reduceMotion,
-    state,
-    transitionProgress,
-  ]);
+  }, [animated, reduceMotion, state, transitionProgress]);
 
   useEffect(() => {
     loopProgress.stopAnimation();
@@ -237,12 +232,7 @@ export function HoyOrb({
     celebration.start();
 
     return () => celebration.stop();
-  }, [
-    celebrationKey,
-    celebrationProgress,
-    displayedState,
-    motionEnabled,
-  ]);
+  }, [celebrationKey, celebrationProgress, displayedState, motionEnabled]);
 
   const loopStyle = useMemo(() => {
     if (!motionEnabled) {
@@ -289,7 +279,7 @@ export function HoyOrb({
             },
           ],
         };
-      case 'goal_completed':
+      case 'momentum_peak':
         return {
           transform: [
             {
@@ -300,7 +290,7 @@ export function HoyOrb({
             },
           ],
         };
-      case 'streak_active':
+      case 'momentum_strong':
         return {
           transform: [
             {
@@ -317,7 +307,7 @@ export function HoyOrb({
             },
           ],
         };
-      case 'default':
+      case 'momentum_building':
         return {
           transform: [
             {

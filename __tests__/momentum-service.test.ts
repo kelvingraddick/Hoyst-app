@@ -4,6 +4,7 @@ import {
   buildMomentumSummaryFromHomeData,
   formatOpportunityCount,
   getMomentumLabel,
+  mapMomentumSummarySnapshot,
 } from '../src/features/momentum/services/momentum-service';
 import type {CircleManagementCard} from '../src/types/models';
 
@@ -158,5 +159,56 @@ describe('momentum summary fallback', () => {
       completedOpportunities: 0,
       percentage: 0,
     });
+  });
+});
+
+describe('momentum summary snapshot mapping', () => {
+  it('maps the optional rolling momentum fields without changing card fields', () => {
+    const summary = mapMomentumSummarySnapshot({
+      data: () => ({
+        availableOpportunities: 1,
+        bestStreak: 4,
+        creditedOpportunities: 1,
+        currentStreak: 4,
+        label: 'Peak',
+        percentage: 100,
+        periodKey: 'current',
+        rollingMomentum: {
+          hasUnrecoveredMiss: true,
+          percentage: 75,
+          resolvedOpportunityCount: 8,
+          status: 'peak_momentum',
+          windowDays: 14,
+        },
+        skippedOpportunities: 0,
+        status: 'peak_momentum',
+        tapInOpportunities: 1,
+      }),
+    } as never);
+
+    expect(summary).toMatchObject({
+      percentage: 100,
+      rollingMomentum: {
+        hasUnrecoveredMiss: true,
+        percentage: 75,
+        resolvedOpportunityCount: 8,
+        status: 'peak_momentum',
+        windowDays: 14,
+      },
+    });
+  });
+
+  it('keeps legacy summaries compatible when rolling momentum is absent', () => {
+    const summary = mapMomentumSummarySnapshot({
+      data: () => ({
+        availableOpportunities: 1,
+        creditedOpportunities: 0,
+        percentage: 0,
+        periodKey: 'current',
+        status: 'getting_started',
+      }),
+    } as never);
+
+    expect(summary?.rollingMomentum).toBeUndefined();
   });
 });

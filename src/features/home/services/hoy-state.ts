@@ -4,33 +4,36 @@ export type HoyState =
   | 'celebrating'
   | 'risk_attention'
   | 'tap_in_needed'
-  | 'goal_completed'
-  | 'streak_active'
-  | 'default';
+  | 'momentum_peak'
+  | 'momentum_strong'
+  | 'momentum_building';
 
 export type HoyStateInput = {
   activeCircleCount: number;
-  atRiskCount: number;
-  doneCount: number;
+  hasDeadlineRisk: boolean;
+  hasUnrecoveredMiss: boolean;
   isAuthenticatedHome: boolean;
   isCelebrating: boolean;
   isGreetingLoading: boolean;
   isIncompleteProfile: boolean;
   isLoadingHomeData: boolean;
-  needsYouCount: number;
   pendingCount: number;
-  personalStreakDays: number;
+  rollingMomentumStatus:
+    | 'getting_started'
+    | 'building_momentum'
+    | 'strong_momentum'
+    | 'peak_momentum';
 };
 
 export const hoyStateLabels: Record<HoyState, string> = {
   locked: 'Locked',
   thinking: 'Thinking',
   celebrating: 'Celebrating',
-  risk_attention: 'Risk and attention',
-  tap_in_needed: 'Tap In needed',
-  goal_completed: 'Goal completed',
-  streak_active: 'Streak active',
-  default: 'Ready',
+  risk_attention: 'Momentum needs attention',
+  tap_in_needed: 'Tap In deadline approaching',
+  momentum_peak: 'Peak momentum',
+  momentum_strong: 'Strong momentum',
+  momentum_building: 'Building momentum',
 };
 
 /**
@@ -57,26 +60,23 @@ export function getHoyState(input: HoyStateInput): HoyState {
     return 'celebrating';
   }
 
-  if (input.atRiskCount > 0) {
+  if (input.hasUnrecoveredMiss) {
     return 'risk_attention';
   }
 
-  if (input.needsYouCount > 0) {
+  if (input.hasDeadlineRisk) {
     return 'tap_in_needed';
   }
 
-  if (
-    input.activeCircleCount > 0 &&
-    input.doneCount === input.activeCircleCount
-  ) {
-    return 'goal_completed';
+  if (input.rollingMomentumStatus === 'peak_momentum') {
+    return 'momentum_peak';
   }
 
-  if (input.personalStreakDays > 0) {
-    return 'streak_active';
+  if (input.rollingMomentumStatus === 'strong_momentum') {
+    return 'momentum_strong';
   }
 
-  return 'default';
+  return 'momentum_building';
 }
 
 export function getStableHoyDisplayState({
@@ -96,24 +96,30 @@ export function getStableHoyDisplayState({
 }
 
 export function getHoyAccessibilityLabel({
+  headline,
+  isDisabled,
   state,
-  unreadCount,
 }: {
+  headline?: string;
+  isDisabled: boolean;
   state?: HoyState;
-  unreadCount: number;
 }) {
-  if (!state) {
-    return 'Hoy is getting ready. Open Inbox.';
+  if (!state || isDisabled || !headline) {
+    return 'Hoy is getting your next action ready.';
   }
 
   const stateLabel = hoyStateLabels[state];
 
+  return `Hoy, ${stateLabel}. ${headline} Open this action.`;
+}
+
+export function getNotificationAccessibilityLabel(unreadCount: number) {
   if (unreadCount <= 0) {
-    return `Hoy, ${stateLabel}. Open Inbox`;
+    return 'Notifications, no unread updates';
   }
 
   const countLabel = unreadCount > 9 ? '9 or more' : String(unreadCount);
   const updateLabel = unreadCount === 1 ? 'update' : 'updates';
 
-  return `Hoy, ${stateLabel}. Open Inbox, ${countLabel} unread ${updateLabel}`;
+  return `Notifications, ${countLabel} unread ${updateLabel}`;
 }

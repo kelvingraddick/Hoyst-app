@@ -1,12 +1,7 @@
-import React, {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
+import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {
   Alert,
+  AppState,
   Pressable,
   ScrollView,
   Share,
@@ -36,6 +31,8 @@ import {
   getHomeCircleActionVariant,
   getHomeGreetingContext,
   getHomeGreetingFallback,
+  getHomePrimaryAction,
+  getNextHomeActionBoundary,
   getTodayAttentionCircles,
   getUpcomingAttentionCircles,
   shouldShowAuthenticatedHomeEmptyState,
@@ -52,6 +49,7 @@ import {
 } from '../services/home-greeting-service';
 import {
   getHoyAccessibilityLabel,
+  getNotificationAccessibilityLabel,
   getStableHoyDisplayState,
   getHoyState,
   type HoyState,
@@ -231,14 +229,21 @@ export function HomeScreen(): React.JSX.Element {
   );
   const [homeGreetingState, setHomeGreetingState] =
     useState<HomeGreetingState>();
+  const [homeClock, setHomeClock] = useState(() => new Date());
   const [hoyCelebrationKey, setHoyCelebrationKey] = useState(0);
   const [isHoyCelebrating, setIsHoyCelebrating] = useState(false);
   const [remoteMomentumSummary, setRemoteMomentumSummary] =
     useState<MomentumSummary>();
-  const lastResolvedHoyStateRef = useRef<{
-    sessionKey: string;
-    state: HoyState;
-  } | undefined>(undefined);
+  const lastResolvedHoyStateRef = useRef<
+    | {
+        sessionKey: string;
+        state: HoyState;
+      }
+    | undefined
+  >(undefined);
+  const lastResolvedGreetingRef = useRef<
+    {headline: string; sessionKey: string} | undefined
+  >(undefined);
   const hoyCelebrationTimerRef = useRef<
     ReturnType<typeof setTimeout> | undefined
   >(undefined);
@@ -275,7 +280,7 @@ export function HomeScreen(): React.JSX.Element {
   useFocusEffect(
     useCallback(() => {
       if (!isAuthenticatedHome || !user?.uid) {
-        setHomeData(createEmptyHomeData(timezone));
+        setHomeData(createEmptyHomeData(timezone, homeClock));
         setIsLoadingHomeData(false);
         setHasHomeDataError(false);
         return undefined;
@@ -297,7 +302,7 @@ export function HomeScreen(): React.JSX.Element {
         timezone,
         uid: user.uid,
       });
-    }, [isAuthenticatedHome, timezone, user?.uid]),
+    }, [homeClock, isAuthenticatedHome, timezone, user?.uid]),
   );
 
   useEffect(() => {
@@ -338,6 +343,39 @@ export function HomeScreen(): React.JSX.Element {
     });
   }, [isAuthenticatedHome, user?.uid]);
 
+  useFocusEffect(
+    useCallback(() => {
+      setHomeClock(new Date());
+      return undefined;
+    }, []),
+  );
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', nextState => {
+      if (nextState === 'active') {
+        setHomeClock(new Date());
+      }
+    });
+
+    return () => subscription.remove();
+  }, []);
+
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'test') {
+      return undefined;
+    }
+
+    const nextBoundaryMs = getNextHomeActionBoundary({
+      circles: homeData.circles,
+      now: homeClock,
+      timezone,
+    });
+    const delayMs = Math.max(100, nextBoundaryMs - Date.now() + 100);
+    const timer = setTimeout(() => setHomeClock(new Date()), delayMs);
+
+    return () => clearTimeout(timer);
+  }, [homeClock, homeData.circles, timezone]);
+
   const personalCommitments = useMemo(
     () => homeData.circles.filter(circle => circle.circleMode === 'personal'),
     [homeData.circles],
@@ -354,23 +392,34 @@ export function HomeScreen(): React.JSX.Element {
     () => getUpcomingAttentionCircles(groupCircles),
     [groupCircles],
   );
+  const homePrimaryAction = useMemo(
+    () =>
+      getHomePrimaryAction({
+        circles: homeData.circles,
+        firstName: profile?.name,
+        now: homeClock,
+      }),
+    [homeClock, homeData.circles, profile?.name],
+  );
   const homeGreetingContext = useMemo(
     () =>
       getHomeGreetingContext({
         circles: homeData.circles,
         firstName: profile?.name,
+        now: homeClock,
         timezone,
       }),
-    [homeData.circles, profile?.name, timezone],
+    [homeClock, homeData.circles, profile?.name, timezone],
   );
   const homeGreetingFallback = useMemo(
     () =>
       getHomeGreetingFallback({
         circles: homeData.circles,
         firstName: profile?.name,
+        now: homeClock,
         timezone,
       }),
-    [homeData.circles, profile?.name, timezone],
+    [homeClock, homeData.circles, profile?.name, timezone],
   );
   const homeGreetingRequestKey = useMemo(
     () =>
@@ -389,29 +438,44 @@ export function HomeScreen(): React.JSX.Element {
   const canGenerateHomeGreeting =
     isAuthenticatedHome &&
     !isLoadingHomeData &&
-    (homeData.hasLoadedMemberships || hasHomeDataError);
+    !hasHomeDataError &&
+    homeData.hasResolvedGreetingContext;
+  const greetingSessionKey = user?.uid ?? status;
+  const retainedGreeting =
+    lastResolvedGreetingRef.current?.sessionKey === greetingSessionKey
+      ? lastResolvedGreetingRef.current.headline
+      : undefined;
   const bubbleText =
     activeHomeGreetingState?.headline ??
     (status === 'guest' || isIncompleteProfile
       ? homeGreetingFallback
-      : undefined);
+      : homeData.hasResolvedGreetingContext
+      ? homeGreetingFallback
+      : retainedGreeting);
   const momentumSummary =
     remoteMomentumSummary ?? buildMomentumSummaryFromHomeData(homeData);
   const activeCircleCount =
     homeGreetingContext.circleSummary.circleCount -
     homeGreetingContext.circleSummary.pendingCount;
+  const rollingMomentumStatus =
+    momentumSummary.rollingMomentum?.status ??
+    (homeData.personalStreakDays > 0 ? 'strong_momentum' : 'building_momentum');
   const candidateHoyState = getHoyState({
     activeCircleCount,
-    atRiskCount: homeGreetingContext.circleSummary.atRiskCount,
-    doneCount: homeGreetingContext.circleSummary.doneCount,
+    hasDeadlineRisk:
+      homeGreetingContext.primaryAction?.kind === 'tap_in' &&
+      homeGreetingContext.primaryAction.urgency === 'deadline',
+    hasUnrecoveredMiss:
+      momentumSummary.rollingMomentum?.hasUnrecoveredMiss ?? false,
     isAuthenticatedHome,
     isCelebrating: isHoyCelebrating,
     isGreetingLoading: isAuthenticatedHome && !bubbleText,
     isIncompleteProfile,
-    isLoadingHomeData,
-    needsYouCount: homeGreetingContext.circleSummary.needsYouCount,
+    isLoadingHomeData:
+      isLoadingHomeData ||
+      (isAuthenticatedHome && !homeData.hasResolvedGreetingContext),
     pendingCount: homeGreetingContext.circleSummary.pendingCount,
-    personalStreakDays: homeData.personalStreakDays,
+    rollingMomentumStatus,
   });
   const hoySessionKey = user?.uid ?? status;
   const previousResolvedHoyState =
@@ -427,6 +491,7 @@ export function HomeScreen(): React.JSX.Element {
     !isSessionResolving && candidateHoyState !== 'thinking';
   const heroCopy = getHomeHeroCopy({
     dateKey: homeData.todayDateKey,
+    firstName: homeGreetingContext.firstName,
     momentumStatus: momentumSummary.status,
     streakDays: homeData.personalStreakDays,
     timeWindow: homeGreetingContext.timeWindow,
@@ -462,6 +527,24 @@ export function HomeScreen(): React.JSX.Element {
     styles.homeCardLift,
     {shadowColor: theme.glassShadow},
   ];
+
+  useEffect(() => {
+    if (
+      isAuthenticatedHome &&
+      homeData.hasResolvedGreetingContext &&
+      bubbleText
+    ) {
+      lastResolvedGreetingRef.current = {
+        headline: bubbleText,
+        sessionKey: greetingSessionKey,
+      };
+    }
+  }, [
+    bubbleText,
+    greetingSessionKey,
+    homeData.hasResolvedGreetingContext,
+    isAuthenticatedHome,
+  ]);
 
   useEffect(() => {
     if (isCandidateHoyStateResolved) {
@@ -552,7 +635,6 @@ export function HomeScreen(): React.JSX.Element {
 
   useEffect(() => {
     if (!canGenerateHomeGreeting) {
-      setHomeGreetingState(undefined);
       return undefined;
     }
 
@@ -573,8 +655,6 @@ export function HomeScreen(): React.JSX.Element {
           headline: cachedGreeting.headline,
           source: 'gemini',
         });
-      } else {
-        setHomeGreetingState(undefined);
       }
 
       try {
@@ -732,6 +812,56 @@ export function HomeScreen(): React.JSX.Element {
     shareCircle(circle);
   };
 
+  const isHoyActionDisabled =
+    isSessionResolving ||
+    (isAuthenticatedHome && !homeData.hasResolvedGreetingContext);
+
+  const handleHoyAction = () => {
+    if (status === 'guest' || isIncompleteProfile) {
+      openAccountAuth();
+      return;
+    }
+
+    if (
+      !isAuthenticatedHome ||
+      isHoyActionDisabled ||
+      !homeGreetingContext.primaryAction
+    ) {
+      return;
+    }
+
+    const action = homeGreetingContext.primaryAction;
+    const circle = homePrimaryAction.circle;
+
+    if (
+      (action.kind === 'tap_in' || action.kind === 'update_tap_in') &&
+      circle
+    ) {
+      requireAccount({circleId: circle.id, source: 'home', type: 'tapIn'}, () =>
+        rootNavigation?.navigate('TapInComposer', {
+          circleId: circle.id,
+          source: 'home',
+        }),
+      );
+      return;
+    }
+
+    if (
+      (action.kind === 'nudge' || action.kind === 'pending_approval') &&
+      circle
+    ) {
+      openCircleDetail(circle.id);
+      return;
+    }
+
+    if (action.kind === 'no_commitments') {
+      navigation.navigate('Explore');
+      return;
+    }
+
+    navigation.navigate('Momentum');
+  };
+
   const openInbox = () => {
     setUnreadInboxCount(0);
 
@@ -777,16 +907,22 @@ export function HomeScreen(): React.JSX.Element {
           bubbleText={bubbleText}
           copy={heroCopy}
           hoyAccessibilityLabel={getHoyAccessibilityLabel({
+            headline: bubbleText,
+            isDisabled: isHoyActionDisabled,
             state: displayedHoyState,
-            unreadCount: unreadInboxCount,
           })}
           hoyCelebrationKey={hoyCelebrationKey}
           hoyState={displayedHoyState}
+          isHoyActionDisabled={isHoyActionDisabled}
           momentumPercent={momentumSummary.percentage}
           momentumStatus={momentumSummary.status}
-          onHoyPress={openInbox}
+          notificationAccessibilityLabel={getNotificationAccessibilityLabel(
+            unreadInboxCount,
+          )}
+          notificationBadgeText={getInboxBadgeText(unreadInboxCount)}
+          onHoyActionPress={handleHoyAction}
           onMomentumPress={() => navigation.navigate('Momentum')}
-          unreadBadgeText={getInboxBadgeText(unreadInboxCount)}
+          onNotificationPress={openInbox}
         />
         <View style={styles.sheet}>
           <GlassPanel padding="regular" style={homeCardLiftStyle}>

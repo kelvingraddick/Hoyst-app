@@ -11,9 +11,13 @@ import {brandColors} from '../src/design/tokens/colors';
 import {HomeScreen} from '../src/features/home/screens/HomeScreen';
 import type {HomeData} from '../src/features/home/services/home-data-service';
 import {
+  getHomeGreetingContext,
+  getHomePrimaryAction,
   getTodayAttentionCircles,
   shouldShowAuthenticatedHomeEmptyState,
 } from '../src/features/home/services/home-data-service';
+import {generateHomeGreeting} from '../src/features/home/services/home-greeting-service';
+import {nudgeCircleMembers} from '../src/features/circles/services/circle-service';
 import type {
   AuthSessionStatus,
   AuthSessionUser,
@@ -37,6 +41,7 @@ const mockRequireAccount = jest.fn(
 
 let mockHomeData: HomeData;
 let mockInboxEvents: InboxEvent[];
+let mockUnreadInboxCount = 1;
 let mockMomentumSummary: MomentumSummary;
 let mockAppearance: 'dark' | 'light' = 'light';
 let mockSessionStatus: AuthSessionStatus = 'authenticatedReady';
@@ -194,6 +199,7 @@ jest.mock('../src/features/home/services/home-data-service', () => ({
     circles: [],
     hasLoadedMemberships: false,
     hasRealProgress: false,
+    hasResolvedGreetingContext: false,
     membershipCount: 0,
     personalStreakDays: 0,
     progressDays: [],
@@ -201,6 +207,7 @@ jest.mock('../src/features/home/services/home-data-service', () => ({
     todayDateKey: '2026-05-26',
     todayLabel: 'Today',
   })),
+  getDateKey: jest.fn(() => '2026-05-26'),
   getHomeCircleActionVariant: jest.fn(() => 'view'),
   getHomeGreetingContext: jest.fn(() => ({
     circleSummary: {
@@ -213,9 +220,22 @@ jest.mock('../src/features/home/services/home-data-service', () => ({
       personalCommitmentCount: 0,
     },
     firstName: 'Kelvin',
+    primaryAction: {
+      isAtRisk: false,
+      kind: 'no_commitments',
+      remainingActionCount: 0,
+    },
     timeWindow: 'morning',
   })),
   getHomeGreetingFallback: jest.fn(() => 'Keep moving today'),
+  getHomePrimaryAction: jest.fn(() => ({
+    context: {
+      isAtRisk: false,
+      kind: 'no_commitments',
+      remainingActionCount: 0,
+    },
+  })),
+  getNextHomeActionBoundary: jest.fn(() => Date.now() + 24 * 60 * 60 * 1000),
   getTodayAttentionCircles: jest.fn(() => []),
   getUpcomingAttentionCircles: jest.fn(() => []),
   shouldShowAuthenticatedHomeEmptyState: jest.fn(() => false),
@@ -253,7 +273,7 @@ jest.mock(
       return jest.fn();
     }),
     subscribeToInboxUnreadCount: jest.fn(({onCount}) => {
-      onCount(1);
+      onCount(mockUnreadInboxCount);
       return jest.fn();
     }),
   }),
@@ -264,6 +284,7 @@ function homeData(): HomeData {
     circles: [],
     hasLoadedMemberships: false,
     hasRealProgress: false,
+    hasResolvedGreetingContext: false,
     membershipCount: 0,
     personalStreakDays: 0,
     progressDays: [],
@@ -354,11 +375,62 @@ function renderScreen() {
   return JSON.stringify(renderScreenTree().toJSON());
 }
 
+function setResolvedHoyAction({
+  action,
+  circle,
+}: {
+  action: {
+    circleMode?: 'group' | 'personal';
+    circleTitle?: string;
+    isAtRisk: boolean;
+    kind:
+      | 'tap_in'
+      | 'update_tap_in'
+      | 'nudge'
+      | 'pending_approval'
+      | 'no_commitments'
+      | 'momentum';
+    remainingActionCount: number;
+  };
+  circle?: CircleManagementCard;
+}) {
+  mockHomeData = {
+    ...homeData(),
+    circles: circle ? [circle] : [],
+    hasLoadedMemberships: true,
+    hasResolvedGreetingContext: true,
+    membershipCount: circle ? 1 : 0,
+  };
+  (getHomeGreetingContext as jest.Mock).mockReturnValue({
+    circleSummary: {
+      atRiskCount: action.isAtRisk ? 1 : 0,
+      circleCount: circle ? 1 : 0,
+      doneCount: action.kind === 'momentum' && circle ? 1 : 0,
+      groupCircleCount: circle?.circleMode === 'personal' ? 0 : circle ? 1 : 0,
+      needsYouCount:
+        action.kind === 'tap_in' || action.kind === 'update_tap_in' ? 1 : 0,
+      pendingCount: action.kind === 'pending_approval' ? 1 : 0,
+      personalCommitmentCount: circle?.circleMode === 'personal' ? 1 : 0,
+    },
+    firstName: 'Kelvin',
+    primaryAction: action,
+    timeWindow: 'morning',
+  });
+  (getHomePrimaryAction as jest.Mock).mockReturnValue({
+    circle,
+    context: action,
+  });
+  (generateHomeGreeting as jest.Mock).mockReturnValue(
+    new Promise(() => undefined),
+  );
+}
+
 describe('HomeScreen companion updates', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockHomeData = homeData();
     mockInboxEvents = [];
+    mockUnreadInboxCount = 1;
     mockMomentumSummary = momentumSummary();
     mockAppearance = 'light';
     mockSessionStatus = 'authenticatedReady';
@@ -381,6 +453,31 @@ describe('HomeScreen companion updates', () => {
       },
     );
     (getTodayAttentionCircles as jest.Mock).mockReturnValue([]);
+    (getHomeGreetingContext as jest.Mock).mockReturnValue({
+      circleSummary: {
+        atRiskCount: 0,
+        circleCount: 0,
+        doneCount: 0,
+        groupCircleCount: 0,
+        needsYouCount: 0,
+        pendingCount: 0,
+        personalCommitmentCount: 0,
+      },
+      firstName: 'Kelvin',
+      primaryAction: {
+        isAtRisk: false,
+        kind: 'no_commitments',
+        remainingActionCount: 0,
+      },
+      timeWindow: 'morning',
+    });
+    (getHomePrimaryAction as jest.Mock).mockReturnValue({
+      context: {
+        isAtRisk: false,
+        kind: 'no_commitments',
+        remainingActionCount: 0,
+      },
+    });
     (shouldShowAuthenticatedHomeEmptyState as jest.Mock).mockReturnValue(false);
   });
 
@@ -539,6 +636,15 @@ describe('HomeScreen companion updates', () => {
     });
   });
 
+  it('passes the cleaned first name into the rotating hero headline', () => {
+    mockHomeData = {
+      ...homeData(),
+      todayDateKey: '2026-01-01',
+    };
+
+    expect(renderScreen()).toContain('Set the tone, Kelvin.');
+  });
+
   it('keeps the lifted hero bubble and replaces the avatar with Hoy', () => {
     const tree = renderScreenTree();
     const bubbleSurfaceStyle = StyleSheet.flatten(
@@ -553,12 +659,21 @@ describe('HomeScreen companion updates', () => {
     const smallTailDotStyle = StyleSheet.flatten(
       tree.root.findByProps({testID: 'home-hero-tail-dot-small'}).props.style,
     );
-    const hoyButton = tree.root.findByProps({
-      testID: 'home-hero-hoy-button',
+    const hoyAction = tree.root.findByProps({
+      testID: 'home-hero-hoy-action',
+    });
+    const notificationButton = tree.root.findByProps({
+      testID: 'home-hero-notification-button',
     });
     const unreadBadgeStyle = StyleSheet.flatten(
-      tree.root.findByProps({testID: 'home-hero-hoy-unread-badge'}).props
-        .style,
+      tree.root.findByProps({
+        testID: 'home-hero-notification-unread-badge',
+      }).props.style,
+    );
+    const notificationButtonStyle = StyleSheet.flatten(
+      typeof notificationButton.props.style === 'function'
+        ? notificationButton.props.style({pressed: false})
+        : notificationButton.props.style,
     );
 
     expect(bubbleSurfaceStyle.elevation).toBe(4);
@@ -591,16 +706,24 @@ describe('HomeScreen companion updates', () => {
     expect(smallTailDotStyle.shadowOffset).toEqual({height: 5, width: 0});
     expect(smallTailDotStyle.shadowOpacity).toBe(0.58);
     expect(smallTailDotStyle.shadowRadius).toBe(10);
-    expect(hoyButton.props.accessibilityRole).toBe('button');
-    expect(hoyButton.props.accessibilityLabel).toBe(
-      'Hoy is getting ready. Open Inbox.',
+    expect(hoyAction.props.accessibilityRole).toBe('button');
+    expect(hoyAction.props.disabled).toBe(true);
+    expect(hoyAction.props.accessibilityLabel).toBe(
+      'Hoy is getting your next action ready.',
     );
+    expect(notificationButton.props.accessibilityLabel).toBe(
+      'Notifications, 1 unread update',
+    );
+    expect(notificationButtonStyle).toMatchObject({
+      height: 44,
+      width: 44,
+    });
     expect(unreadBadgeStyle).toMatchObject({
       backgroundColor: brandColors.red,
       borderRadius: 11,
-      bottom: -3,
       height: 22,
-      right: -3,
+      right: -7,
+      top: -7,
       width: 22,
     });
   });
@@ -627,6 +750,7 @@ describe('HomeScreen companion updates', () => {
     mockHomeData = {
       ...homeData(),
       hasLoadedMemberships: true,
+      hasResolvedGreetingContext: true,
     };
     let tree: renderer.ReactTestRenderer | undefined;
 
@@ -642,7 +766,7 @@ describe('HomeScreen companion updates', () => {
     ).toHaveLength(0);
     expect(
       tree!.root.findAllByProps({
-        testID: 'home-hero-hoy-orb-default-image',
+        testID: 'home-hero-hoy-orb-momentum_building-image',
       }),
     ).not.toHaveLength(0);
     expect(
@@ -657,11 +781,67 @@ describe('HomeScreen companion updates', () => {
     ).toHaveLength(0);
   });
 
+  it('uses rolling erosion before deadline urgency for Hoy emotion', async () => {
+    mockHomeData = {
+      ...homeData(),
+      hasLoadedMemberships: true,
+      hasResolvedGreetingContext: true,
+    };
+    mockMomentumSummary = momentumSummary({
+      rollingMomentum: {
+        hasUnrecoveredMiss: true,
+        percentage: 80,
+        resolvedOpportunityCount: 5,
+        status: 'peak_momentum',
+        windowDays: 14,
+      },
+    });
+    (getHomeGreetingContext as jest.Mock).mockReturnValue({
+      circleSummary: {
+        atRiskCount: 1,
+        circleCount: 1,
+        doneCount: 0,
+        needsYouCount: 1,
+        pendingCount: 0,
+      },
+      firstName: 'Kelvin',
+      primaryAction: {
+        circleTitle: 'Workout Circle',
+        isAtRisk: true,
+        kind: 'tap_in',
+        remainingActionCount: 0,
+        urgency: 'deadline',
+      },
+      timeWindow: 'evening',
+    });
+    let tree: renderer.ReactTestRenderer | undefined;
+
+    await act(async () => {
+      tree = renderer.create(<HomeScreen />);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(
+      tree!.root.findAllByProps({
+        testID: 'home-hero-hoy-orb-risk_attention-image',
+      }),
+    ).not.toHaveLength(0);
+    expect(
+      tree!.root.findAllByProps({
+        testID: 'home-hero-hoy-orb-tap_in_needed-image',
+      }),
+    ).toHaveLength(0);
+
+    act(() => tree!.unmount());
+  });
+
   it('consumes a covered Tap In celebration only after Hoy resolves', async () => {
     jest.useFakeTimers();
     mockHomeData = {
       ...homeData(),
       hasLoadedMemberships: true,
+      hasResolvedGreetingContext: true,
     };
     mockPendingHoyTapInCelebration = {
       circleId: 'circle-1',
@@ -694,7 +874,7 @@ describe('HomeScreen companion updates', () => {
 
     expect(
       tree!.root.findAllByProps({
-        testID: 'home-hero-hoy-orb-default-image',
+        testID: 'home-hero-hoy-orb-momentum_building-image',
       }),
     ).not.toHaveLength(0);
 
@@ -704,18 +884,209 @@ describe('HomeScreen companion updates', () => {
     jest.useRealTimers();
   });
 
-  it('keeps Hoy wired to unread clearing and Inbox navigation', () => {
+  it('keeps Inbox clearing and navigation on the notification bell', () => {
     const tree = renderScreenTree();
-    const hoyButton = tree.root.findByProps({
-      testID: 'home-hero-hoy-button',
+    const notificationButton = tree.root.findByProps({
+      testID: 'home-hero-notification-button',
     });
 
     act(() => {
-      hoyButton.props.onPress();
+      notificationButton.props.onPress();
     });
 
     expect(markAllInboxEventsRead).toHaveBeenCalledTimes(1);
     expect(mockRootNavigate).toHaveBeenCalledWith('Inbox');
+  });
+
+  it('hides the notification badge at zero and caps it at nine', () => {
+    mockUnreadInboxCount = 0;
+    let tree = renderScreenTree();
+
+    expect(
+      tree.root.findAllByProps({
+        testID: 'home-hero-notification-unread-badge',
+      }),
+    ).toHaveLength(0);
+    expect(
+      tree.root.findByProps({testID: 'home-hero-notification-button'}).props
+        .accessibilityLabel,
+    ).toBe('Notifications, no unread updates');
+
+    act(() => {
+      tree.unmount();
+    });
+
+    mockUnreadInboxCount = 14;
+    tree = renderScreenTree();
+
+    expect(
+      tree.root.findByProps({
+        testID: 'home-hero-notification-unread-badge',
+      }).props.children.props.children,
+    ).toBe('9');
+    expect(
+      tree.root.findByProps({testID: 'home-hero-notification-button'}).props
+        .accessibilityLabel,
+    ).toBe('Notifications, 9 or more unread updates');
+  });
+
+  it('opens the primary Tap In action from the combined Hoy target', () => {
+    const circle = attentionCircle({
+      id: 'workout-circle',
+      title: 'Workout Circle',
+    });
+
+    setResolvedHoyAction({
+      action: {
+        circleMode: 'group',
+        circleTitle: 'Workout Circle',
+        isAtRisk: false,
+        kind: 'tap_in',
+        remainingActionCount: 0,
+      },
+      circle,
+    });
+
+    const tree = renderScreenTree();
+    const hoyAction = tree.root.findByProps({
+      testID: 'home-hero-hoy-action',
+    });
+
+    expect(hoyAction.props.disabled).toBe(false);
+    expect(hoyAction.props.accessibilityLabel).toContain('Keep moving today');
+
+    act(() => {
+      hoyAction.props.onPress();
+    });
+
+    expect(mockRequireAccount).toHaveBeenCalledWith(
+      {circleId: 'workout-circle', source: 'home', type: 'tapIn'},
+      expect.any(Function),
+    );
+    expect(mockRootNavigate).toHaveBeenCalledWith('TapInComposer', {
+      circleId: 'workout-circle',
+      source: 'home',
+    });
+  });
+
+  it('opens nudge and pending actions in Circle Detail without sending a nudge', () => {
+    const circle = attentionCircle({
+      id: 'morning-crew',
+      nudgeTargetCount: 2,
+      title: 'Morning Crew',
+      viewerHasCheckedIn: true,
+      viewerHasTappedInToday: true,
+      viewerTodayStatus: 'done',
+    });
+
+    setResolvedHoyAction({
+      action: {
+        circleMode: 'group',
+        circleTitle: 'Morning Crew',
+        isAtRisk: false,
+        kind: 'nudge',
+        remainingActionCount: 0,
+      },
+      circle,
+    });
+
+    const tree = renderScreenTree();
+
+    act(() => {
+      tree.root.findByProps({testID: 'home-hero-hoy-action'}).props.onPress();
+    });
+
+    expect(mockRootNavigate).toHaveBeenCalledWith('CircleDetail', {
+      circleId: 'morning-crew',
+    });
+    expect(nudgeCircleMembers).not.toHaveBeenCalled();
+
+    act(() => {
+      tree.unmount();
+    });
+    mockRootNavigate.mockClear();
+
+    const pendingCircle = attentionCircle({
+      id: 'sleep-circle',
+      title: 'Sleep Circle',
+      viewerMembershipStatus: 'pending',
+    });
+    setResolvedHoyAction({
+      action: {
+        circleMode: 'group',
+        circleTitle: 'Sleep Circle',
+        isAtRisk: false,
+        kind: 'pending_approval',
+        remainingActionCount: 0,
+      },
+      circle: pendingCircle,
+    });
+    const pendingTree = renderScreenTree();
+
+    act(() => {
+      pendingTree.root
+        .findByProps({testID: 'home-hero-hoy-action'})
+        .props.onPress();
+    });
+
+    expect(mockRootNavigate).toHaveBeenCalledWith('CircleDetail', {
+      circleId: 'sleep-circle',
+    });
+    expect(nudgeCircleMembers).not.toHaveBeenCalled();
+  });
+
+  it('routes no-commitment and all-clear Hoy actions to their overview tabs', () => {
+    setResolvedHoyAction({
+      action: {
+        isAtRisk: false,
+        kind: 'no_commitments',
+        remainingActionCount: 0,
+      },
+    });
+    let tree = renderScreenTree();
+
+    act(() => {
+      tree.root.findByProps({testID: 'home-hero-hoy-action'}).props.onPress();
+    });
+
+    expect(mockNavigate).toHaveBeenCalledWith('Explore');
+
+    act(() => {
+      tree.unmount();
+    });
+    jest.clearAllMocks();
+
+    setResolvedHoyAction({
+      action: {
+        isAtRisk: false,
+        kind: 'momentum',
+        remainingActionCount: 0,
+      },
+      circle: attentionCircle({
+        remainingCheckIns: 0,
+        state: 'done',
+        viewerHasCheckedIn: true,
+        viewerHasTappedInToday: true,
+        viewerTodayStatus: 'done',
+      }),
+    });
+    tree = renderScreenTree();
+
+    act(() => {
+      tree.root.findByProps({testID: 'home-hero-hoy-action'}).props.onPress();
+    });
+
+    expect(mockNavigate).toHaveBeenCalledWith('Momentum');
+  });
+
+  it('does not generate or activate Hoy before greeting context resolves', () => {
+    const tree = renderScreenTree();
+    const hoyAction = tree.root.findByProps({
+      testID: 'home-hero-hoy-action',
+    });
+
+    expect(hoyAction.props.disabled).toBe(true);
+    expect(generateHomeGreeting).not.toHaveBeenCalled();
   });
 
   it('keeps the hero tail dots visible in dark mode', () => {

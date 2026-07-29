@@ -293,6 +293,13 @@ describe('momentum transaction ordering', () => {
     ).resolves.toBeUndefined();
 
     expectReadsBeforeWrites(calls);
+    expect(
+      transaction.set.mock.calls.some(
+        ([, data]) =>
+          (data as {resolvedAt?: {type?: string}}).resolvedAt?.type ===
+          'serverTimestamp',
+      ),
+    ).toBe(true);
   });
 
   it.each([
@@ -453,6 +460,13 @@ describe('momentum transaction ordering', () => {
     ).resolves.toBeUndefined();
 
     expectReadsBeforeWrites(calls);
+    expect(
+      transaction.set.mock.calls.some(
+        ([, data]) =>
+          (data as {resolvedAt?: {type?: string}}).resolvedAt?.type ===
+          'delete',
+      ),
+    ).toBe(true);
   });
 
   it('does not decrement momentum opportunities for surplus Tap In removal', async () => {
