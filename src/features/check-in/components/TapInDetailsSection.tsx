@@ -19,6 +19,7 @@ import {TapInActionButton} from '../../../design/components/TapInActionButton';
 import {actionMotion} from '../../../design/tokens/actions';
 import {radius} from '../../../design/tokens/radius';
 import {useHoystTheme} from '../../../design/theme/useHoystTheme';
+import {getPhotoUploadErrorMessage} from '../../../lib/firebase/storage-error';
 import {useSessionStore} from '../../../store/session-store';
 import {
   updateTapInDetails,
@@ -30,6 +31,13 @@ export type SavedTapInDetails = {
   photoUrl?: string;
 };
 
+export type TapInDetailsSaveState = {
+  hasPendingPhoto: boolean;
+  isDirty: boolean;
+  isSaving: boolean;
+  saveError?: string;
+};
+
 type Props = {
   autoSaveInitialPhoto?: boolean;
   circleId: string;
@@ -37,6 +45,10 @@ type Props = {
   initialNote?: string;
   initialPhotoUrl?: string;
   onDirtyChange?: (isDirty: boolean) => void;
+  onSavePendingDetailsReady?: (
+    savePendingDetails: (() => void) | undefined,
+  ) => void;
+  onSaveStateChange?: (state: TapInDetailsSaveState) => void;
   onSaved?: (details: SavedTapInDetails) => void;
 };
 
@@ -51,6 +63,8 @@ export function TapInDetailsSection({
   initialNote,
   initialPhotoUrl,
   onDirtyChange,
+  onSavePendingDetailsReady,
+  onSaveStateChange,
   onSaved,
 }: Props): React.JSX.Element {
   const theme = useHoystTheme();
@@ -86,9 +100,32 @@ export function TapInDetailsSection({
 
   useEffect(() => {
     onDirtyChange?.(isDirty);
+    onSaveStateChange?.({
+      hasPendingPhoto: Boolean(localPhotoUri),
+      isDirty,
+      isSaving,
+      ...(saveError ? {saveError} : {}),
+    });
+  }, [
+    isDirty,
+    isSaving,
+    localPhotoUri,
+    onDirtyChange,
+    onSaveStateChange,
+    saveError,
+  ]);
 
-    return () => onDirtyChange?.(false);
-  }, [isDirty, onDirtyChange]);
+  useEffect(
+    () => () => {
+      onDirtyChange?.(false);
+      onSaveStateChange?.({
+        hasPendingPhoto: false,
+        isDirty: false,
+        isSaving: false,
+      });
+    },
+    [onDirtyChange, onSaveStateChange],
+  );
 
   useEffect(() => {
     if (isExpandedRef.current && isDirtyRef.current) {
@@ -218,8 +255,10 @@ export function TapInDetailsSection({
         }
         onSaved?.(details);
       } catch (error) {
-        const message =
-          (error as {message?: string}).message ?? 'Try again in a moment.';
+        const message = getPhotoUploadErrorMessage(
+          error,
+          "We couldn't save these details. Try again in a moment.",
+        );
 
         setSaveError(message);
         if (showAlertOnError) {
@@ -240,6 +279,23 @@ export function TapInDetailsSection({
       user?.uid,
     ],
   );
+
+  const savePendingDetails = useCallback(() => {
+    if (isSaving || !isDirty) {
+      return;
+    }
+
+    saveDetails({
+      collapseOnSuccess: false,
+      showAlertOnError: false,
+    }).catch(() => undefined);
+  }, [isDirty, isSaving, saveDetails]);
+
+  useEffect(() => {
+    onSavePendingDetailsReady?.(savePendingDetails);
+
+    return () => onSavePendingDetailsReady?.(undefined);
+  }, [onSavePendingDetailsReady, savePendingDetails]);
 
   useEffect(() => {
     if (

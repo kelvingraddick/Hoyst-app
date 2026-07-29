@@ -37,6 +37,7 @@ import {actionMotion} from '../../../design/tokens/actions';
 import {brandColors} from '../../../design/tokens/colors';
 import {radius} from '../../../design/tokens/radius';
 import {useHoystTheme} from '../../../design/theme/useHoystTheme';
+import {getPhotoUploadErrorMessage} from '../../../lib/firebase/storage-error';
 import type {RootStackParamList} from '../../../navigation/types';
 import {useSessionStore} from '../../../store/session-store';
 import {useUserProfileStore} from '../../../store/profile-store';
@@ -448,6 +449,7 @@ export function CircleThreadScreen({
 
   const handleSend = async (overrideText?: string) => {
     const text = (overrideText ?? draft).trim();
+    let isUploadingPhoto = Boolean(photoUri);
 
     if (isSending || (!text && !photoUri) || !user?.uid) {
       return;
@@ -465,6 +467,7 @@ export function CircleThreadScreen({
           })
         : undefined;
 
+      isUploadingPhoto = false;
       await sendCircleThreadMessage({
         circleId: route.params.circleId,
         mediaImageUrl,
@@ -474,10 +477,12 @@ export function CircleThreadScreen({
       setDraft('');
       setPhotoUri(undefined);
     } catch (error) {
-      Alert.alert(
-        'Message failed',
-        (error as {message?: string}).message ?? 'Could not send this message.',
-      );
+      const message = isUploadingPhoto
+        ? getPhotoUploadErrorMessage(error)
+        : (error as {message?: string}).message ??
+          'Could not send this message.';
+
+      Alert.alert('Message failed', message);
     } finally {
       setIsSending(false);
     }

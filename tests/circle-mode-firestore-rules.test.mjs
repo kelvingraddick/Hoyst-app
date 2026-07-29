@@ -48,6 +48,10 @@ describe('circle mode Firestore rules', () => {
           status: 'active',
           uid: 'user-1',
         }),
+        setDoc(doc(firestore, 'circles/legacy-group/members/inactive-1'), {
+          status: 'inactive',
+          uid: 'inactive-1',
+        }),
         setDoc(doc(firestore, 'circles/legacy-group/feedItems/activity-1'), {
           text: 'Group activity',
         }),
@@ -196,6 +200,125 @@ describe('circle mode Firestore rules', () => {
     );
     await assertSucceeds(
       getDoc(doc(firestore, 'circles/legacy-group/threadReads/user-1')),
+    );
+  });
+
+  it('lets active members upload their own Tap In proof in group and personal circles', async () => {
+    const storage = testEnvironment.authenticatedContext('user-1').storage();
+
+    await assertSucceeds(
+      uploadBytes(
+        storageRef(
+          storage,
+          'circles/legacy-group/check-ins/2026-07-15/user-1/proof.jpg',
+        ),
+        new Uint8Array([1, 2, 3]),
+      ),
+    );
+    await assertSucceeds(
+      uploadBytes(
+        storageRef(
+          storage,
+          'circles/personal/check-ins/2026-07-15/user-1/proof.jpg',
+        ),
+        new Uint8Array([4, 5, 6]),
+      ),
+    );
+  });
+
+  it('keeps Tap In proof writes scoped to the active authenticated member', async () => {
+    const activeStorage = testEnvironment
+      .authenticatedContext('user-1')
+      .storage();
+    const inactiveStorage = testEnvironment
+      .authenticatedContext('inactive-1')
+      .storage();
+    const outsiderStorage = testEnvironment
+      .authenticatedContext('outsider-1')
+      .storage();
+    const path =
+      'circles/legacy-group/check-ins/2026-07-15/inactive-1/proof.jpg';
+
+    await assertFails(
+      uploadBytes(
+        storageRef(
+          activeStorage,
+          'circles/legacy-group/check-ins/2026-07-15/other-1/proof.jpg',
+        ),
+        new Uint8Array([1]),
+      ),
+    );
+    await assertFails(
+      uploadBytes(storageRef(inactiveStorage, path), new Uint8Array([2])),
+    );
+    await assertFails(
+      uploadBytes(
+        storageRef(
+          outsiderStorage,
+          'circles/legacy-group/check-ins/2026-07-15/outsider-1/proof.jpg',
+        ),
+        new Uint8Array([3]),
+      ),
+    );
+  });
+
+  it('allows group message images but blocks personal Circle message images', async () => {
+    const storage = testEnvironment.authenticatedContext('user-1').storage();
+
+    await assertSucceeds(
+      uploadBytes(
+        storageRef(
+          storage,
+          'circles/legacy-group/messages/user-1/message-1.jpg',
+        ),
+        new Uint8Array([1, 2, 3]),
+      ),
+    );
+    await assertFails(
+      uploadBytes(
+        storageRef(storage, 'circles/personal/messages/user-1/message-1.jpg'),
+        new Uint8Array([4, 5, 6]),
+      ),
+    );
+  });
+
+  it('keeps group message image writes scoped to the active authenticated member', async () => {
+    const activeStorage = testEnvironment
+      .authenticatedContext('user-1')
+      .storage();
+    const inactiveStorage = testEnvironment
+      .authenticatedContext('inactive-1')
+      .storage();
+    const outsiderStorage = testEnvironment
+      .authenticatedContext('outsider-1')
+      .storage();
+
+    await assertFails(
+      uploadBytes(
+        storageRef(
+          activeStorage,
+          'circles/legacy-group/messages/other-1/message-1.jpg',
+        ),
+        new Uint8Array([1]),
+      ),
+    );
+    await assertFails(
+      uploadBytes(
+        storageRef(
+          inactiveStorage,
+          'circles/legacy-group/messages/inactive-1/message-1.jpg',
+        ),
+        new Uint8Array([2]),
+      ),
+    );
+    await assertFails(
+      uploadBytes(
+        storageRef(
+          outsiderStorage,
+          'circles/legacy-group/messages/outsider-1/message-1.jpg',
+        ),
+        new Uint8Array([3]),
+      ),
     );
   });
 

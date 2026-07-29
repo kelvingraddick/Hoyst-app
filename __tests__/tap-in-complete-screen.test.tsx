@@ -22,10 +22,12 @@ const mockSubscribeToMemberCircleDetail = jest.fn((_options: unknown) =>
 );
 const mockUpdateTapInDetails = jest.fn();
 const mockUploadTapInPhoto = jest.fn();
+const mockLaunchCamera = jest.fn();
+const mockLaunchImageLibrary = jest.fn();
 
 jest.mock('react-native-image-picker', () => ({
-  launchCamera: jest.fn(),
-  launchImageLibrary: jest.fn(),
+  launchCamera: (...args: unknown[]) => mockLaunchCamera(...args),
+  launchImageLibrary: (...args: unknown[]) => mockLaunchImageLibrary(...args),
 }));
 
 jest.mock('../src/features/check-in/services/check-in-service', () => ({
@@ -162,6 +164,8 @@ describe('TapInCompleteScreen', () => {
     mockUploadTapInPhoto.mockResolvedValue(
       'https://example.com/uploaded-proof.jpg',
     );
+    mockLaunchCamera.mockResolvedValue({assets: []});
+    mockLaunchImageLibrary.mockResolvedValue({assets: []});
     mockUpdateTapInDetails.mockResolvedValue({
       dateKey: '2026-05-29',
       note: 'Saved after the Tap In.',
@@ -217,7 +221,9 @@ describe('TapInCompleteScreen', () => {
     const disclosure = tree!.root.findByProps({
       testID: 'tap-in-details-disclosure',
     });
-    expect(StyleSheet.flatten(disclosure.props.style({pressed: false}))).toEqual(
+    expect(
+      StyleSheet.flatten(disclosure.props.style({pressed: false})),
+    ).toEqual(
       expect.objectContaining({
         alignSelf: 'stretch',
       }),
@@ -442,6 +448,92 @@ describe('TapInCompleteScreen', () => {
     expect(JSON.stringify(tree.toJSON())).toContain('Edit details');
   });
 
+  it('waits for an active photo save before completing Done', async () => {
+    let resolveUpload: ((photoUrl: string) => void) | undefined;
+    mockUploadTapInPhoto.mockImplementationOnce(
+      () =>
+        new Promise<string>(resolve => {
+          resolveUpload = resolve;
+        }),
+    );
+    mockUpdateTapInDetails.mockResolvedValueOnce({
+      dateKey: '2026-05-29',
+      note: null,
+      photoUrl: 'https://example.com/done-proof.jpg',
+    });
+    const tree = await renderReadyCompleteScreen({
+      photoUri: 'file:///proof.jpg',
+    });
+    const navigation =
+      tree.root.findByType(TapInCompleteScreen).props.navigation;
+
+    await act(async () => {
+      tree.root
+        .findAllByType(HoystButton)
+        .find(button => button.props.label === 'Done')
+        ?.props.onPress();
+    });
+
+    expect(navigation.goBack).not.toHaveBeenCalled();
+    expect(
+      tree.root
+        .findAllByType(HoystButton)
+        .some(button => button.props.label === 'Saving Photo...'),
+    ).toBe(true);
+
+    await act(async () => {
+      resolveUpload?.('https://example.com/done-proof.jpg');
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(navigation.goBack).toHaveBeenCalledTimes(1);
+  });
+
+  it('waits for an active photo save before opening Share Story', async () => {
+    let resolveUpload: ((photoUrl: string) => void) | undefined;
+    mockUploadTapInPhoto.mockImplementationOnce(
+      () =>
+        new Promise<string>(resolve => {
+          resolveUpload = resolve;
+        }),
+    );
+    mockUpdateTapInDetails.mockResolvedValueOnce({
+      dateKey: '2026-05-29',
+      note: null,
+      photoUrl: 'https://example.com/shared-proof.jpg',
+    });
+    const tree = await renderReadyCompleteScreen({
+      photoUri: 'file:///proof.jpg',
+    });
+    const navigation =
+      tree.root.findByType(TapInCompleteScreen).props.navigation;
+
+    await act(async () => {
+      tree.root
+        .findAllByType(HoystButton)
+        .find(button => button.props.label === 'Share Story')
+        ?.props.onPress();
+    });
+
+    expect(navigation.navigate).not.toHaveBeenCalled();
+
+    await act(async () => {
+      resolveUpload?.('https://example.com/shared-proof.jpg');
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(navigation.navigate).toHaveBeenCalledWith(
+      'TapInStoryShare',
+      expect.objectContaining({
+        photoUri: 'https://example.com/shared-proof.jpg',
+      }),
+    );
+  });
+
   it('keeps a failed proof upload retryable without rolling back the Tap In', async () => {
     mockUploadTapInPhoto
       .mockRejectedValueOnce(new Error('Upload unavailable'))
@@ -478,6 +570,126 @@ describe('TapInCompleteScreen', () => {
       'https://example.com/retried-proof.jpg',
     );
     expect(JSON.stringify(tree.toJSON())).toContain('Edit details');
+  });
+
+  it('offers retry or leave without a photo after a queued retry fails', async () => {
+    mockUploadTapInPhoto
+      .mockRejectedValueOnce({
+        code: 'storage/unauthorized',
+        message:
+          '[storage/unauthorized] User is not authorized to perform the desired action.',
+      })
+      .mockRejectedValueOnce({
+        code: 'storage/unauthorized',
+        message:
+          '[storage/unauthorized] User is not authorized to perform the desired action.',
+      });
+    const alertSpy = jest
+      .spyOn(Alert, 'alert')
+      .mockImplementation(() => undefined);
+    const tree = await renderReadyCompleteScreen({
+      photoUri: 'file:///proof.jpg',
+    });
+    const navigation =
+      tree.root.findByType(TapInCompleteScreen).props.navigation;
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      tree.root
+        .findAllByType(HoystButton)
+        .find(button => button.props.label === 'Done')
+        ?.props.onPress();
+    });
+
+    const firstButtons = alertSpy.mock.calls.at(-1)?.[2] as
+      | Array<{onPress?: () => void; text?: string}>
+      | undefined;
+
+    expect(alertSpy).toHaveBeenLastCalledWith(
+      'Photo not uploaded',
+      'Your Tap In is saved, but the photo still needs another try.',
+      expect.any(Array),
+    );
+
+    await act(async () => {
+      firstButtons?.find(button => button.text === 'Retry Photo')?.onPress?.();
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(mockUploadTapInPhoto).toHaveBeenCalledTimes(2);
+    expect(alertSpy).toHaveBeenLastCalledWith(
+      'Photo not uploaded',
+      'Your Tap In is saved, but the photo still needs another try.',
+      expect.any(Array),
+    );
+    expect(JSON.stringify(alertSpy.mock.calls)).not.toContain(
+      'storage/unauthorized',
+    );
+
+    const secondButtons = alertSpy.mock.calls.at(-1)?.[2] as
+      | Array<{onPress?: () => void; text?: string}>
+      | undefined;
+
+    await act(async () => {
+      secondButtons
+        ?.find(button => button.text === 'Leave Without Photo')
+        ?.onPress?.();
+    });
+
+    expect(navigation.goBack).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows friendly copy when an explicitly saved photo upload is rejected', async () => {
+    mockLaunchCamera.mockResolvedValueOnce({
+      assets: [{uri: 'file:///details-proof.jpg'}],
+    });
+    mockUploadTapInPhoto.mockRejectedValueOnce({
+      code: 'storage/unauthorized',
+      message:
+        '[storage/unauthorized] User is not authorized to perform the desired action.',
+    });
+    const alertSpy = jest
+      .spyOn(Alert, 'alert')
+      .mockImplementation(() => undefined);
+    const tree = await renderReadyCompleteScreen();
+
+    await act(async () => {
+      tree.root
+        .findByProps({testID: 'tap-in-details-disclosure'})
+        .props.onPress();
+    });
+    await act(async () => {
+      tree.root.findByProps({accessibilityLabel: 'Take photo'}).props.onPress();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      tree.root
+        .findAllByType(TapInActionButton)
+        .find(button => button.props.label === 'Save Details')
+        ?.props.onPress();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(alertSpy).toHaveBeenCalledWith(
+      'Could not save details',
+      "We couldn't upload this photo. Try again in a moment.",
+    );
+    expect(JSON.stringify(alertSpy.mock.calls)).not.toContain(
+      'storage/unauthorized',
+    );
+    expect(
+      tree.root.findByProps({testID: 'tap-in-details-photo-preview'}),
+    ).toBeTruthy();
   });
 
   it('clears an existing note and photo with explicit nullable fields', async () => {

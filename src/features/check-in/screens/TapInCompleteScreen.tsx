@@ -37,9 +37,11 @@ import {canShareTapInStory} from '../services/tap-in-story-share';
 import {
   TapInDetailsSection,
   type SavedTapInDetails,
+  type TapInDetailsSaveState,
 } from '../components/TapInDetailsSection';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'TapInComplete'>;
+type PendingCompletionAction = 'done' | 'share';
 
 type ParticleConfig = {
   left?: number;
@@ -245,7 +247,21 @@ export function TapInCompleteScreen({
   const [hasLaidOut, setHasLaidOut] = useState(false);
   const [hasSettledNavigation, setHasSettledNavigation] = useState(false);
   const [hasResolvedDetail, setHasResolvedDetail] = useState(false);
-  const [hasDirtyDetails, setHasDirtyDetails] = useState(false);
+  const savePendingDetailsRef = useRef<(() => void) | undefined>(undefined);
+  const [detailsSaveState, setDetailsSaveState] =
+    useState<TapInDetailsSaveState>({
+      hasPendingPhoto: false,
+      isDirty: false,
+      isSaving: false,
+    });
+  const [pendingCompletionAction, setPendingCompletionAction] =
+    useState<PendingCompletionAction>();
+  const handleSavePendingDetailsReady = useCallback(
+    (savePendingDetails: (() => void) | undefined) => {
+      savePendingDetailsRef.current = savePendingDetails;
+    },
+    [],
+  );
   const [pendingPhotoUri, setPendingPhotoUri] = useState<string | undefined>(
     isRemotePhoto(route.params.photoUri) ? undefined : route.params.photoUri,
   );
@@ -354,25 +370,40 @@ export function TapInCompleteScreen({
 
   useEffect(() => {
     return navigation.addListener('beforeRemove', event => {
-      if (!hasDirtyDetails) {
+      if (!detailsSaveState.isDirty) {
         return;
       }
 
       event.preventDefault();
+
+      if (detailsSaveState.isSaving) {
+        Alert.alert(
+          'Saving photo',
+          'Wait a moment while your Tap In photo finishes saving.',
+          [{text: 'OK'}],
+        );
+        return;
+      }
+
+      const hasFailedPhoto =
+        detailsSaveState.hasPendingPhoto && Boolean(detailsSaveState.saveError);
+
       Alert.alert(
-        'Discard detail changes?',
-        'Your note or photo is not saved yet.',
+        hasFailedPhoto ? 'Leave without photo?' : 'Discard detail changes?',
+        hasFailedPhoto
+          ? 'Your Tap In is saved, but the photo has not uploaded.'
+          : 'Your note or photo is not saved yet.',
         [
           {style: 'cancel', text: 'Keep editing'},
           {
             onPress: () => navigation.dispatch(event.data.action),
             style: 'destructive',
-            text: 'Discard',
+            text: hasFailedPhoto ? 'Leave Without Photo' : 'Discard',
           },
         ],
       );
     });
-  }, [hasDirtyDetails, navigation]);
+  }, [detailsSaveState, navigation]);
 
   useEffect(() => {
     setHasResolvedDetail(false);
@@ -530,19 +561,19 @@ export function TapInCompleteScreen({
     particleProgresses,
   ]);
 
-  const finish = () => {
+  const finish = useCallback(() => {
     if (navigation.canGoBack()) {
       navigation.goBack();
       return;
     }
 
     navigation.replace('MainTabs', {screen: 'Home'});
-  };
+  }, [navigation]);
   const handleDetailsSaved = useCallback((details: SavedTapInDetails) => {
     setSavedDetails(details);
     setPendingPhotoUri(undefined);
   }, []);
-  const shareStory = () => {
+  const shareStory = useCallback(() => {
     navigation.navigate('TapInStoryShare', {
       circleId: route.params.circleId,
       circleTitle: displayDetail?.title ?? route.params.circleTitle,
@@ -558,7 +589,134 @@ export function TapInCompleteScreen({
       note: savedDetails.note,
       photoUri: visiblePhotoUri,
     });
-  };
+  }, [
+    displayDetail,
+    navigation,
+    route.params.circleId,
+    route.params.circleTitle,
+    route.params.commitment,
+    route.params.inviteUrl,
+    route.params.memberCount,
+    route.params.periodTapInCount,
+    route.params.progressLabel,
+    route.params.source,
+    route.params.streakDays,
+    route.params.streakLabel,
+    savedDetails.note,
+    visiblePhotoUri,
+  ]);
+  const promptForFailedPhoto = useCallback(
+    (action: PendingCompletionAction) => {
+      const retryPhoto = () => {
+        const savePendingDetails = savePendingDetailsRef.current;
+
+        if (!savePendingDetails) {
+          return;
+        }
+
+        setDetailsSaveState(current => ({
+          ...current,
+          isSaving: true,
+          saveError: undefined,
+        }));
+        setPendingCompletionAction(action);
+        savePendingDetails();
+      };
+
+      if (action === 'done') {
+        Alert.alert(
+          'Photo not uploaded',
+          'Your Tap In is saved, but the photo still needs another try.',
+          [
+            {onPress: retryPhoto, text: 'Retry Photo'},
+            {
+              onPress: finish,
+              style: 'destructive',
+              text: 'Leave Without Photo',
+            },
+          ],
+        );
+        return;
+      }
+
+      Alert.alert(
+        'Photo not uploaded',
+        'Save the photo before sharing this Tap In story.',
+        [
+          {style: 'cancel', text: 'Keep Editing'},
+          {onPress: retryPhoto, text: 'Retry Photo'},
+        ],
+      );
+    },
+    [finish],
+  );
+  const requestCompletionAction = useCallback(
+    (action: PendingCompletionAction) => {
+      if (detailsSaveState.isSaving) {
+        setPendingCompletionAction(action);
+        return;
+      }
+
+      if (
+        detailsSaveState.isDirty &&
+        detailsSaveState.hasPendingPhoto &&
+        detailsSaveState.saveError
+      ) {
+        promptForFailedPhoto(action);
+        return;
+      }
+
+      if (action === 'share' && detailsSaveState.isDirty) {
+        Alert.alert(
+          'Save details before sharing',
+          'Finish saving your note or photo, then try Share Story again.',
+          [{text: 'OK'}],
+        );
+        return;
+      }
+
+      if (action === 'share') {
+        shareStory();
+        return;
+      }
+
+      finish();
+    },
+    [detailsSaveState, finish, promptForFailedPhoto, shareStory],
+  );
+
+  useEffect(() => {
+    if (!pendingCompletionAction || detailsSaveState.isSaving) {
+      return;
+    }
+
+    const action = pendingCompletionAction;
+    setPendingCompletionAction(undefined);
+
+    if (!detailsSaveState.isDirty) {
+      if (action === 'share') {
+        shareStory();
+      } else {
+        finish();
+      }
+      return;
+    }
+
+    if (detailsSaveState.hasPendingPhoto && detailsSaveState.saveError) {
+      promptForFailedPhoto(action);
+      return;
+    }
+
+    if (detailsSaveState.saveError) {
+      Alert.alert('Details not saved', detailsSaveState.saveError);
+    }
+  }, [
+    detailsSaveState,
+    finish,
+    pendingCompletionAction,
+    promptForFailedPhoto,
+    shareStory,
+  ]);
   const commitment = hasCompletionContent
     ? displayDetail?.commitment ?? "Today's Tap In"
     : 'Loading Tap In details';
@@ -872,7 +1030,8 @@ export function TapInCompleteScreen({
                 dateKey={route.params.dateKey}
                 initialNote={savedDetails.note}
                 initialPhotoUrl={visiblePhotoUri}
-                onDirtyChange={setHasDirtyDetails}
+                onSavePendingDetailsReady={handleSavePendingDetailsReady}
+                onSaveStateChange={setDetailsSaveState}
                 onSaved={handleDetailsSaved}
               />
             ) : null}
@@ -889,7 +1048,9 @@ export function TapInCompleteScreen({
                     ? 'rgba(122,85,255,0.14)'
                     : 'rgba(122,85,255,0.12)'
                 }
-                disabled={!isReadyForCelebration}
+                disabled={
+                  !isReadyForCelebration || Boolean(pendingCompletionAction)
+                }
                 icon={
                   <Share2
                     color={
@@ -901,8 +1062,13 @@ export function TapInCompleteScreen({
                     strokeWidth={2.45}
                   />
                 }
-                label="Share Story"
-                onPress={shareStory}
+                label={
+                  pendingCompletionAction === 'share' &&
+                  detailsSaveState.isSaving
+                    ? 'Saving Photo...'
+                    : 'Share Story'
+                }
+                onPress={() => requestCompletionAction('share')}
                 style={styles.shareButton}
                 textColor={
                   isReadyForCelebration
@@ -919,8 +1085,13 @@ export function TapInCompleteScreen({
           <HoystButton
             backgroundColor={theme.isDark ? theme.actionSurface : '#15171D'}
             borderColor="transparent"
-            label="Done"
-            onPress={finish}
+            disabled={Boolean(pendingCompletionAction)}
+            label={
+              pendingCompletionAction === 'done' && detailsSaveState.isSaving
+                ? 'Saving Photo...'
+                : 'Done'
+            }
+            onPress={() => requestCompletionAction('done')}
             style={styles.doneButton}
             textColor="#FFFFFF"
           />

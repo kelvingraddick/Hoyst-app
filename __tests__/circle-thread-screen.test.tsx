@@ -18,6 +18,7 @@ const mockSendCircleThreadMessage = jest.fn();
 const mockToggleCircleThreadItemLike = jest.fn();
 const mockUploadCircleThreadImage = jest.fn();
 const mockCreateCircleThreadMessageId = jest.fn();
+const mockLaunchImageLibrary = jest.fn();
 
 let mockDetail: CircleDetailModel | undefined;
 let mockThreadError: Error | undefined;
@@ -58,7 +59,7 @@ jest.mock('react-native-safe-area-context', () => {
 });
 
 jest.mock('react-native-image-picker', () => ({
-  launchImageLibrary: jest.fn(async () => ({assets: []})),
+  launchImageLibrary: (...args: unknown[]) => mockLaunchImageLibrary(...args),
 }));
 
 jest.mock('@react-navigation/native', () => ({
@@ -284,6 +285,7 @@ describe('CircleThreadScreen', () => {
     mockUploadCircleThreadImage.mockResolvedValue(
       'https://example.com/uploaded.jpg',
     );
+    mockLaunchImageLibrary.mockResolvedValue({assets: []});
     mockMarkCircleThreadRead.mockResolvedValue({read: true});
   });
 
@@ -526,6 +528,48 @@ describe('CircleThreadScreen', () => {
       circleId: 'circle-1',
       itemId: 'activity-1',
     });
+  });
+
+  it('keeps a failed message photo retryable without exposing Storage codes', async () => {
+    mockLaunchImageLibrary.mockResolvedValueOnce({
+      assets: [{uri: 'file:///message-photo.jpg'}],
+    });
+    mockUploadCircleThreadImage.mockRejectedValueOnce({
+      code: 'storage/unauthorized',
+      message:
+        '[storage/unauthorized] User is not authorized to perform the desired action.',
+    });
+    const {tree} = renderScreen();
+
+    await act(async () => {
+      tree.root.findByProps({accessibilityLabel: 'Add image'}).props.onPress();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      tree.root
+        .findByProps({accessibilityLabel: 'Send message'})
+        .props.onPress();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(mockUploadCircleThreadImage).toHaveBeenCalledWith({
+      circleId: 'circle-1',
+      messageId: 'new-message-id',
+      uid: 'user-1',
+      uri: 'file:///message-photo.jpg',
+    });
+    expect(mockSendCircleThreadMessage).not.toHaveBeenCalled();
+    expect(alertSpy).toHaveBeenCalledWith(
+      'Message failed',
+      "We couldn't upload this photo. Try again in a moment.",
+    );
+    expect(JSON.stringify(alertSpy.mock.calls)).not.toContain(
+      'storage/unauthorized',
+    );
+    expect(outputOf(tree)).toContain('file:///message-photo.jpg');
   });
 
   it('shows the empty state when the thread has no items', () => {
