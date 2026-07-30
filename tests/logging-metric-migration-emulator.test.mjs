@@ -264,10 +264,10 @@ describe('logging and metric integrity migration', () => {
       .collection('momentum')
       .doc('current')
       .get();
-    assert.equal(memberMomentum.data().creditedOpportunities, 1);
-    assert.equal(memberMomentum.data().skippedOpportunities, 1);
+    assert.equal(memberMomentum.data().creditedOpportunities, 0);
+    assert.equal(memberMomentum.data().skippedOpportunities, 0);
     assert.equal(memberMomentum.data().tapInOpportunities, 0);
-    assert.equal(memberMomentum.data().currentStreak, 1);
+    assert.equal(memberMomentum.data().currentStreak, 0);
 
     const effect = await circleRef
       .collection('checkInEffects')

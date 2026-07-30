@@ -52,6 +52,7 @@ type HomeHeroHeaderProps = {
   hoyAccessibilityLabel: string;
   hoyCelebrationKey?: number;
   hoyState?: HoyState;
+  momentumDetail: string;
   momentumPercent: number;
   momentumStatus: MomentumStatus;
   notificationAccessibilityLabel: string;
@@ -168,6 +169,7 @@ export function HomeHeroHeader({
   hoyAccessibilityLabel,
   hoyCelebrationKey,
   hoyState,
+  momentumDetail,
   momentumPercent,
   momentumStatus,
   notificationAccessibilityLabel,
@@ -318,7 +320,7 @@ export function HomeHeroHeader({
       </View>
 
       <Pressable
-        accessibilityLabel={`Your momentum, ${clampedPercent}%`}
+        accessibilityLabel={`14-day momentum, ${momentumDetail}`}
         accessibilityRole="button"
         onPress={onMomentumPress}
         style={({pressed}) => [
@@ -327,6 +329,15 @@ export function HomeHeroHeader({
             transform: [{scale: pressed ? actionMotion.pressedScale : 1}],
           },
         ]}>
+        <View style={styles.momentumLabelRow}>
+          <HoystText
+            style={[styles.momentumLabel, {color: palette.bubbleSubtle}]}>
+            14-DAY MOMENTUM
+          </HoystText>
+          <HoystText style={[styles.momentumDetail, {color: theme.text}]}>
+            {momentumDetail}
+          </HoystText>
+        </View>
         <View style={styles.barLayout}>
           <View style={[styles.barTrack, {backgroundColor: palette.track}]}>
             <View
@@ -335,7 +346,7 @@ export function HomeHeroHeader({
                 styles.barFill,
                 {
                   backgroundColor: momentumVisualColor,
-                  width: `${knobPercent}%`,
+                  width: `${clampedPercent}%`,
                 },
               ]}
             />
@@ -516,6 +527,27 @@ const styles = StyleSheet.create({
     height: KNOB_SIZE + 6,
     justifyContent: 'center',
     marginTop: 8,
+  },
+  momentumLabelRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 12,
+    justifyContent: 'space-between',
+    marginTop: 14,
+  },
+  momentumLabel: {
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.9,
+    lineHeight: 15,
+  },
+  momentumDetail: {
+    flexShrink: 1,
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 0,
+    lineHeight: 16,
+    textAlign: 'right',
   },
   barTrack: {
     borderRadius: BAR_HEIGHT / 2,

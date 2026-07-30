@@ -4,7 +4,9 @@ exports.getDateKey = getDateKey;
 exports.normalizeCommitmentSchedule = normalizeCommitmentSchedule;
 exports.getOpportunitySlots = getOpportunitySlots;
 exports.getOpportunityStatusForSlot = getOpportunityStatusForSlot;
+exports.isExpiredExpectedOpenOpportunity = isExpiredExpectedOpenOpportunity;
 exports.getMomentumStatus = getMomentumStatus;
+exports.getRollingMomentumStatus = getRollingMomentumStatus;
 exports.getMomentumLabel = getMomentumLabel;
 exports.calculateMomentumSummary = calculateMomentumSummary;
 exports.calculateRollingMomentumSummary = calculateRollingMomentumSummary;
@@ -150,8 +152,28 @@ function getOpportunityStatusForSlot({ completionStatus, now = new Date(), slot,
     }
     return 'available';
 }
+function isExpiredExpectedOpenOpportunity({ now = new Date(), opportunity, }) {
+    const isOpen = opportunity.status === 'available' || opportunity.status === 'upcoming';
+    const expiresDateKey = opportunity.expiresDateKey;
+    if (!isOpen || opportunity.expectedForCircle === false || !expiresDateKey) {
+        return false;
+    }
+    return expiresDateKey < getDateKey(opportunity.timezone ?? 'UTC', now);
+}
 function getMomentumStatus(percentage) {
     if (percentage <= 0) {
+        return 'getting_started';
+    }
+    if (percentage <= 30) {
+        return 'building_momentum';
+    }
+    if (percentage <= 70) {
+        return 'strong_momentum';
+    }
+    return 'peak_momentum';
+}
+function getRollingMomentumStatus({ percentage, resolvedOpportunityCount, }) {
+    if (resolvedOpportunityCount < 3) {
         return 'getting_started';
     }
     if (percentage <= 30) {
@@ -175,15 +197,16 @@ function getMomentumLabel(status) {
     return 'Getting Started';
 }
 function calculateMomentumSummary({ opportunities, periodKey, priorBestStreak = 0, }) {
-    const availableOpportunities = opportunities.filter(opportunity => opportunity.status !== 'upcoming').length;
-    const tapInOpportunities = opportunities.filter(opportunity => opportunity.status === 'completed').length;
-    const skippedOpportunities = opportunities.filter(opportunity => opportunity.status === 'skipped').length;
+    const eligibleOpportunities = opportunities.filter(isEligibleMomentumOpportunity);
+    const availableOpportunities = eligibleOpportunities.filter(opportunity => opportunity.status !== 'upcoming').length;
+    const tapInOpportunities = eligibleOpportunities.filter(opportunity => opportunity.status === 'completed').length;
+    const skippedOpportunities = eligibleOpportunities.filter(opportunity => opportunity.status === 'skipped').length;
     const creditedOpportunities = tapInOpportunities + skippedOpportunities;
     const percentage = availableOpportunities > 0
         ? Math.round((creditedOpportunities / availableOpportunities) * 100)
         : 0;
     const { bestStreak, currentStreak } = calculateMomentumStreaks({
-        opportunities,
+        opportunities: eligibleOpportunities,
         priorBestStreak,
     });
     const status = getMomentumStatus(percentage);
@@ -217,6 +240,9 @@ function isResolvedOpportunity(opportunity) {
 function isCoveredOpportunity(opportunity) {
     return opportunity.status === 'completed' || opportunity.status === 'skipped';
 }
+function isEligibleMomentumOpportunity(opportunity) {
+    return (isCoveredOpportunity(opportunity) || opportunity.expectedForCircle !== false);
+}
 function compareOpportunityResolution(left, right) {
     if (typeof left.resolvedAtMs === 'number' &&
         typeof right.resolvedAtMs === 'number' &&
@@ -233,6 +259,10 @@ function calculateRollingMomentumSummary({ now = new Date(), opportunities, }) {
         if (!isResolvedOpportunity(opportunity)) {
             return false;
         }
+        if (!isCoveredOpportunity(opportunity) &&
+            opportunity.expectedForCircle === false) {
+            return false;
+        }
         const timezone = opportunity.timezone ?? 'UTC';
         const todayDateKey = getDateKey(timezone, now);
         const resolutionDateKey = opportunity.resolvedDateKey ??
@@ -246,7 +276,7 @@ function calculateRollingMomentumSummary({ now = new Date(), opportunities, }) {
             hasUnrecoveredMiss: false,
             percentage: 0,
             resolvedOpportunityCount: 0,
-            status: 'building_momentum',
+            status: 'getting_started',
             windowDays: rollingMomentumWindowDays,
         };
     }
@@ -274,7 +304,10 @@ function calculateRollingMomentumSummary({ now = new Date(), opportunities, }) {
         hasUnrecoveredMiss,
         percentage,
         resolvedOpportunityCount: resolvedOpportunities.length,
-        status: getMomentumStatus(percentage),
+        status: getRollingMomentumStatus({
+            percentage,
+            resolvedOpportunityCount: resolvedOpportunities.length,
+        }),
         windowDays: rollingMomentumWindowDays,
     };
 }
@@ -282,7 +315,8 @@ function calculateMomentumStreaks({ opportunities, priorBestStreak = 0, }) {
     let currentStreak = 0;
     let bestStreak = priorBestStreak;
     [...opportunities]
-        .filter(opportunity => opportunity.status !== 'upcoming')
+        .filter(opportunity => isEligibleMomentumOpportunity(opportunity) &&
+        opportunity.status !== 'upcoming')
         .sort((left, right) => {
         const dateDelta = left.availableDateKey.localeCompare(right.availableDateKey);
         return dateDelta !== 0 ? dateDelta : left.slotIndex - right.slotIndex;

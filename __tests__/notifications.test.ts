@@ -217,16 +217,27 @@ describe('companion milestone detection', () => {
   it('detects achievements, substantial streaks, and momentum upgrades', () => {
     expect(
       getCompanionMilestoneEvents({
+        metrics: {
+          longestStreakDays: 10,
+          personalStreakDays: 7,
+          totalTapIns: 24,
+        },
+        priorMetrics: {
+          longestStreakDays: 6,
+          personalStreakDays: 2,
+          totalTapIns: 23,
+        },
         priorSummary: {
-          bestStreak: 6,
-          currentStreak: 2,
-          status: 'building_momentum',
+          rollingMomentum: {
+            resolvedOpportunityCount: 7,
+            status: 'building_momentum',
+          },
         },
         summary: {
-          bestStreak: 10,
-          currentStreak: 7,
-          label: 'Strong',
-          status: 'strong_momentum',
+          rollingMomentum: {
+            resolvedOpportunityCount: 8,
+            status: 'strong_momentum',
+          },
         },
       }),
     ).toEqual([
@@ -254,6 +265,46 @@ describe('companion milestone detection', () => {
         key: 'strong_momentum',
         momentumLabel: 'Strong',
         type: 'companion_momentum_level_up',
+      },
+    ]);
+  });
+
+  it('uses completed Tap Ins for 50 Taps and suppresses initial level reveal', () => {
+    expect(
+      getCompanionMilestoneEvents({
+        metrics: {
+          longestStreakDays: 12,
+          personalStreakDays: 3,
+          totalTapIns: 50,
+        },
+        priorMetrics: {
+          longestStreakDays: 12,
+          personalStreakDays: 2,
+          totalTapIns: 49,
+        },
+        priorSummary: {
+          rollingMomentum: {
+            resolvedOpportunityCount: 2,
+            status: 'getting_started',
+          },
+        },
+        summary: {
+          rollingMomentum: {
+            resolvedOpportunityCount: 3,
+            status: 'peak_momentum',
+          },
+        },
+      }),
+    ).toEqual([
+      {
+        achievementTitle: '50 Taps',
+        key: '50-taps',
+        type: 'companion_achievement_unlocked',
+      },
+      {
+        key: '3-day-streak',
+        streakDays: 3,
+        type: 'companion_streak_milestone',
       },
     ]);
   });

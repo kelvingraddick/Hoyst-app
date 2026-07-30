@@ -1,5 +1,6 @@
 import React, {useEffect, useMemo, useState} from 'react';
 import {ScrollView, StyleSheet, View} from 'react-native';
+import {useQuery} from '@tanstack/react-query';
 
 import {AchievementCard} from '../../../design/components/AchievementCard';
 import {GlassPanel} from '../../../design/components/GlassPanel';
@@ -32,8 +33,10 @@ import {
 import {
   buildMomentumSummaryFromHomeData,
   formatOpportunityCount,
+  getMomentumDisplayModel,
   subscribeToMomentumSummary,
 } from '../services/momentum-service';
+import {getProfileSummary} from '../../profile/services/profile-summary-service';
 
 const MOMENTUM_LOOKBACK_DAYS = 28;
 const CURRENT_STREAK_VISIBLE_DAYS = 14;
@@ -42,30 +45,35 @@ const MOMENTUM_ICON_SIZE = 54;
 const achievementSpecs = [
   {
     detail: 'Keep showing up.',
+    metric: 'longestStreakDays',
     threshold: 10,
     title: '10 Day Streak',
     visual: 'orange_flame',
   },
   {
     detail: "You're on fire.",
+    metric: 'longestStreakDays',
     threshold: 20,
     title: '20 Day Streak',
     visual: 'purple_flame',
   },
   {
     detail: 'One week strong.',
+    metric: 'longestStreakDays',
     threshold: 7,
     title: '7 Days Straight',
     visual: 'calendar',
   },
   {
     detail: 'Action taker.',
+    metric: 'totalTapIns',
     threshold: 50,
     title: '50 Taps',
     visual: 'lightning',
   },
   {
     detail: 'Keep it legendary.',
+    metric: 'longestStreakDays',
     threshold: 30,
     title: '30 Day Streak',
     visual: 'medal',
@@ -271,9 +279,28 @@ export function MomentumScreen(): React.JSX.Element {
     [homeData],
   );
   const summary = remoteSummary ?? fallbackSummary;
-  const scoreValue = `${summary.percentage}%`;
-  const currentStreakDays = Math.max(0, Math.round(summary.currentStreak));
-  const bestStreakDays = Math.max(0, Math.round(summary.bestStreak));
+  const momentumDisplay = getMomentumDisplayModel(remoteSummary);
+  const scoreValue = momentumDisplay.isCalibrating
+    ? `${momentumDisplay.resolvedOpportunityCount} of ${momentumDisplay.requiredResolvedOpportunityCount}`
+    : `${momentumDisplay.rawRollingPercentage}%`;
+  const profileSummaryQuery = useQuery({
+    enabled: canLoad,
+    queryFn: getProfileSummary,
+    queryKey: ['profileSummary', profile?.id],
+    refetchOnMount: 'always',
+  });
+  const currentStreakDays = Math.max(
+    0,
+    Math.round(homeData.personalStreakDays),
+  );
+  const bestStreakDays = Math.max(
+    0,
+    Math.round(profileSummaryQuery.data?.longestStreakDays ?? 0),
+  );
+  const totalTapIns = Math.max(
+    0,
+    Math.round(profileSummaryQuery.data?.totalTapIns ?? 0),
+  );
   const currentStreakRows = useMemo(() => {
     const visibleDays = homeData.progressDays.slice(
       -CURRENT_STREAK_VISIBLE_DAYS,
@@ -288,7 +315,9 @@ export function MomentumScreen(): React.JSX.Element {
     [homeData.circles],
   );
   const unlockedCount = achievementSpecs.filter(
-    achievement => summary.bestStreak >= achievement.threshold,
+    achievement =>
+      (achievement.metric === 'totalTapIns' ? totalTapIns : bestStreakDays) >=
+      achievement.threshold,
   ).length;
   const achievementProgress =
     achievementSpecs.length > 0
@@ -308,31 +337,43 @@ export function MomentumScreen(): React.JSX.Element {
         <View style={styles.momentumOverviewTop}>
           <View style={styles.momentumStageIconWrap}>
             <MomentumStageIcon
-              status={summary.status}
+              status={momentumDisplay.status}
               size={MOMENTUM_ICON_SIZE}
             />
           </View>
           <View style={styles.momentumOverviewCopy}>
             <HoystText numberOfLines={1} style={styles.cardLabel} tone="muted">
-              Your momentum
+              14-Day Momentum
             </HoystText>
             <View style={styles.momentumValueRow}>
               <HoystText style={styles.momentumPercent}>{scoreValue}</HoystText>
               <MomentumStatusPill
-                label={summary.label}
-                status={summary.status}
+                label={momentumDisplay.label}
+                status={momentumDisplay.status}
               />
             </View>
             <HoystText
               numberOfLines={2}
               style={styles.momentumMetaText}
               tone="muted">
-              {formatOpportunityCount(summary)}
+              {momentumDisplay.isCalibrating
+                ? `Complete 3 opportunities to set your Momentum level. ${momentumDisplay.resolvedOpportunityCount} of ${momentumDisplay.requiredResolvedOpportunityCount} resolved.`
+                : 'Your last 14 days. Recent progress counts more.'}
             </HoystText>
           </View>
           <View style={styles.momentumTrendWrap}>
-            <MomentumBars percentage={summary.percentage} />
+            <MomentumBars percentage={momentumDisplay.displayProgress} />
           </View>
+        </View>
+
+        <View
+          style={[styles.currentProgressRow, {borderTopColor: theme.border}]}>
+          <HoystText style={styles.cardLabel} tone="muted">
+            Current progress
+          </HoystText>
+          <HoystText style={styles.currentProgressValue}>
+            {formatOpportunityCount(summary)}
+          </HoystText>
         </View>
 
         <View style={[styles.momentumWinRow, {borderTopColor: theme.border}]}>
@@ -454,7 +495,10 @@ export function MomentumScreen(): React.JSX.Element {
           style={styles.achievementScroller}
           contentContainerStyle={styles.achievementRow}>
           {achievementSpecs.map(achievement => {
-            const isUnlocked = summary.bestStreak >= achievement.threshold;
+            const isUnlocked =
+              (achievement.metric === 'totalTapIns'
+                ? totalTapIns
+                : bestStreakDays) >= achievement.threshold;
             return (
               <AchievementCard
                 detail={achievement.detail}
@@ -609,6 +653,21 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     letterSpacing: 0,
     lineHeight: 17,
+  },
+  currentProgressRow: {
+    alignItems: 'center',
+    borderTopWidth: StyleSheet.hairlineWidth,
+    flexDirection: 'row',
+    gap: 12,
+    justifyContent: 'space-between',
+    paddingTop: 14,
+  },
+  currentProgressValue: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '700',
+    lineHeight: 19,
+    textAlign: 'right',
   },
   currentStreakRow: {
     flexDirection: 'row',

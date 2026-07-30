@@ -10,6 +10,16 @@ import type {
   RollingMomentumSummary,
 } from '../../../types/models';
 
+export type MomentumDisplayModel = {
+  displayProgress: number;
+  isCalibrating: boolean;
+  label: string;
+  rawRollingPercentage: number;
+  requiredResolvedOpportunityCount: 3;
+  resolvedOpportunityCount: number;
+  status: MomentumStatus;
+};
+
 function asNumber(value: unknown, fallback: number) {
   return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
 }
@@ -160,6 +170,56 @@ export function getMomentumLabel(status: MomentumStatus) {
   }
 
   return 'Getting Started';
+}
+
+function getCalibratedMomentumStatus(percentage: number): MomentumStatus {
+  if (percentage <= 30) {
+    return 'building_momentum';
+  }
+
+  if (percentage <= 70) {
+    return 'strong_momentum';
+  }
+
+  return 'peak_momentum';
+}
+
+export function getMomentumDisplayModel(
+  summary?: MomentumSummary,
+): MomentumDisplayModel {
+  const requiredResolvedOpportunityCount = 3 as const;
+  const resolvedOpportunityCount = Math.max(
+    0,
+    Math.round(summary?.rollingMomentum?.resolvedOpportunityCount ?? 0),
+  );
+  const rawRollingPercentage = Math.max(
+    0,
+    Math.min(100, summary?.rollingMomentum?.percentage ?? 0),
+  );
+  const isCalibrating =
+    resolvedOpportunityCount < requiredResolvedOpportunityCount;
+  const status = isCalibrating
+    ? 'getting_started'
+    : getCalibratedMomentumStatus(rawRollingPercentage);
+
+  return {
+    displayProgress: isCalibrating
+      ? Math.round(
+          (Math.min(
+            resolvedOpportunityCount,
+            requiredResolvedOpportunityCount - 1,
+          ) /
+            requiredResolvedOpportunityCount) *
+            100,
+        )
+      : rawRollingPercentage,
+    isCalibrating,
+    label: getMomentumLabel(status),
+    rawRollingPercentage,
+    requiredResolvedOpportunityCount,
+    resolvedOpportunityCount,
+    status,
+  };
 }
 
 export function formatOpportunityCount(summary: MomentumSummary) {

@@ -2,8 +2,6 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.backfillMomentumOpportunities = exports.materializeMomentumOpportunities = void 0;
 exports.removeUidFromCircleSlotAggregate = removeUidFromCircleSlotAggregate;
-exports.buildTapInMomentumPreview = buildTapInMomentumPreview;
-exports.getTapInMomentumPreview = getTapInMomentumPreview;
 exports.recalculateMomentumSummaryForUser = recalculateMomentumSummaryForUser;
 exports.recordTapInOpportunity = recordTapInOpportunity;
 exports.removeTapInOpportunity = removeTapInOpportunity;
@@ -130,6 +128,9 @@ function mapOpportunitySnapshot(snapshot) {
     }
     return {
         availableDateKey: asString(data?.availableDateKey),
+        expectedForCircle: typeof data?.expectedForCircle === 'boolean'
+            ? data.expectedForCircle
+            : undefined,
         expiresDateKey: asString(data?.expiresDateKey) || undefined,
         periodKey: asString(data?.periodKey),
         resolvedAtMs: asTimestampMs(data?.resolvedAt) ??
@@ -142,66 +143,6 @@ function mapOpportunitySnapshot(snapshot) {
         status,
         timezone: asString(data?.timezone, 'UTC'),
     };
-}
-function mapOpportunitySnapshotWithId(snapshot) {
-    const opportunity = mapOpportunitySnapshot(snapshot);
-    if (!opportunity) {
-        return undefined;
-    }
-    return {
-        ...opportunity,
-        id: snapshot.id,
-    };
-}
-function getCurrentStreak(opportunities) {
-    return (0, schedule_1.calculateMomentumSummary)({
-        opportunities,
-        periodKey: 'current',
-    }).currentStreak;
-}
-function buildTapInMomentumPreview({ opportunities, targetOpportunity, }) {
-    const priorCurrentStreak = getCurrentStreak(opportunities);
-    const nextOpportunities = targetOpportunity
-        ? [
-            ...opportunities.filter(opportunity => opportunity.id !== targetOpportunity.id),
-            targetOpportunity,
-        ]
-        : opportunities;
-    const currentStreak = getCurrentStreak(nextOpportunities);
-    return {
-        currentStreak,
-        streakDelta: currentStreak - priorCurrentStreak,
-    };
-}
-async function getTapInMomentumPreview({ circle, circleId, dateKey, member, status, transaction, uid, }) {
-    const userPrivateRef = firebase_1.db.collection('userPrivate').doc(uid);
-    const opportunitySnapshots = await transaction.get(userPrivateRef
-        .collection('opportunities')
-        .where('isCurrentPeriod', '==', true));
-    const opportunities = opportunitySnapshots.docs
-        .map(mapOpportunitySnapshotWithId)
-        .filter((opportunity) => Boolean(opportunity));
-    const slots = getCurrentSlots(circle);
-    const existingStatuses = new Map(slots.map(slot => [
-        slot.slotIndex,
-        opportunities.find(opportunity => opportunity.id ===
-            getOpportunityId(circleId, slot.periodKey, slot.slotIndex))?.status,
-    ]));
-    const slot = getSlotForDate(circle, dateKey, existingStatuses, member);
-    const opportunityStatus = status === 'done' ? 'completed' : 'skipped';
-    const targetOpportunity = slot
-        ? {
-            availableDateKey: slot.availableDateKey,
-            id: getOpportunityId(circleId, slot.periodKey, slot.slotIndex),
-            periodKey: slot.periodKey,
-            slotIndex: slot.slotIndex,
-            status: opportunityStatus,
-        }
-        : undefined;
-    return buildTapInMomentumPreview({
-        opportunities,
-        targetOpportunity,
-    });
 }
 async function recalculateMomentumSummaryForUser(uid) {
     const momentumRef = firebase_1.db
@@ -252,7 +193,7 @@ function buildOpportunityPayload({ checkInId, circle, circleId, dateKey, profile
         expiresDateKey: slot.expiresDateKey,
         expectedForCircle: true,
         id: getOpportunityId(circleId, slot.periodKey, slot.slotIndex),
-        isCurrentPeriod: true,
+        isCurrentPeriod: status !== 'missed' && status !== 'expired',
         periodKey: slot.periodKey,
         slotIndex: slot.slotIndex,
         status,
@@ -638,8 +579,32 @@ async function materializeCurrentCircleOpportunities(circleId, now = new Date())
         .get()));
     priorCircleOpportunitySnapshots.forEach(snapshot => {
         snapshot.docs.forEach(doc => {
-            if (doc.data().periodKey !== periodKey &&
-                doc.data().isCurrentPeriod !== false) {
+            const opportunity = doc.data();
+            const isExpired = (0, schedule_1.isExpiredExpectedOpenOpportunity)({
+                now,
+                opportunity: {
+                    expectedForCircle: typeof opportunity.expectedForCircle === 'boolean'
+                        ? opportunity.expectedForCircle
+                        : undefined,
+                    expiresDateKey: asString(opportunity.expiresDateKey) || undefined,
+                    status: opportunity.status,
+                    timezone: asString(opportunity.timezone, timezone),
+                },
+            });
+            if (isExpired) {
+                writes.push({
+                    data: {
+                        isCurrentPeriod: false,
+                        resolvedAt: firestore_1.FieldValue.serverTimestamp(),
+                        status: 'missed',
+                        updatedAt: firestore_1.FieldValue.serverTimestamp(),
+                    },
+                    merge: true,
+                    ref: doc.ref,
+                });
+            }
+            else if (opportunity.periodKey !== periodKey &&
+                opportunity.isCurrentPeriod !== false) {
                 writes.push({
                     data: {
                         isCurrentPeriod: false,

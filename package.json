@@ -9,9 +9,10 @@
     "lint": "eslint .",
     "migrate:circle-mode": "node scripts/migrate-circle-mode.mjs",
     "migrate:logging-metric-integrity": "node scripts/migrate-logging-metric-integrity.mjs",
+    "migrate:momentum-integrity": "node scripts/migrate-momentum-integrity.mjs",
     "start": "react-native start",
     "test": "jest --watchman=false",
-    "test:rules": "firebase emulators:exec --only firestore,storage \"node --test --test-concurrency=1 tests/circle-mode-firestore-rules.test.mjs tests/logging-metric-migration-emulator.test.mjs\"",
+    "test:rules": "firebase emulators:exec --only firestore,storage \"node --test --test-concurrency=1 tests/circle-mode-firestore-rules.test.mjs tests/logging-metric-migration-emulator.test.mjs tests/momentum-integrity-migration-emulator.test.mjs\"",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

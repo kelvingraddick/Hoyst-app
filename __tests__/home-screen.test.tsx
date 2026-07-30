@@ -260,7 +260,39 @@ jest.mock('../src/features/home/services/home-greeting-service', () => ({
 jest.mock('../src/features/momentum/services/momentum-service', () => ({
   buildMomentumSummaryFromHomeData: jest.fn(() => mockMomentumSummary),
   formatOpportunityCount: jest.fn(() => '0 opportunities'),
-  subscribeToMomentumSummary: jest.fn(() => jest.fn()),
+  getMomentumDisplayModel: jest.fn((summary?: MomentumSummary) => {
+    const rollingMomentum = summary?.rollingMomentum;
+    const resolvedOpportunityCount =
+      rollingMomentum?.resolvedOpportunityCount ?? 0;
+    const isCalibrating = resolvedOpportunityCount < 3;
+    const rawRollingPercentage = rollingMomentum?.percentage ?? 0;
+    const status = isCalibrating
+      ? 'getting_started'
+      : rollingMomentum?.status ?? 'building_momentum';
+
+    return {
+      displayProgress: isCalibrating
+        ? Math.round((Math.min(resolvedOpportunityCount, 2) / 3) * 100)
+        : rawRollingPercentage,
+      isCalibrating,
+      label:
+        status === 'peak_momentum'
+          ? 'Peak'
+          : status === 'strong_momentum'
+          ? 'Strong'
+          : status === 'building_momentum'
+          ? 'Building'
+          : 'Getting Started',
+      rawRollingPercentage,
+      requiredResolvedOpportunityCount: 3,
+      resolvedOpportunityCount,
+      status,
+    };
+  }),
+  subscribeToMomentumSummary: jest.fn(({onSummary}) => {
+    onSummary(mockMomentumSummary);
+    return jest.fn();
+  }),
 }));
 
 jest.mock(
@@ -1186,6 +1218,13 @@ describe('HomeScreen companion updates', () => {
     mockMomentumSummary = momentumSummary({
       label: 'Building',
       percentage: 35,
+      rollingMomentum: {
+        hasUnrecoveredMiss: false,
+        percentage: 30,
+        resolvedOpportunityCount: 3,
+        status: 'building_momentum',
+        windowDays: 14,
+      },
       status: 'building_momentum',
     });
 
@@ -1262,6 +1301,34 @@ describe('HomeScreen companion updates', () => {
     expect(textLabels).toContain('0 days');
     expect(textLabels).not.toContain('Streak (0 Days!)');
     expect(textLabels).toContain('Building');
+  });
+
+  it('shows calibration progress instead of the provisional rolling score', () => {
+    mockMomentumSummary = momentumSummary({
+      rollingMomentum: {
+        hasUnrecoveredMiss: false,
+        percentage: 100,
+        resolvedOpportunityCount: 2,
+        status: 'getting_started',
+        windowDays: 14,
+      },
+    });
+
+    const tree = renderScreenTree();
+    const textLabels = tree.root
+      .findAll(node => typeof node.props.children === 'string')
+      .map(node => node.props.children);
+    const barFillStyle = StyleSheet.flatten(
+      tree.root.findByProps({testID: 'home-momentum-bar-fill'}).props.style,
+    );
+
+    expect(textLabels).toContain('14-DAY MOMENTUM');
+    expect(textLabels).toContain('Getting Started · 2 of 3');
+    expect(textLabels).not.toContain('Peak · 100%');
+    expect(barFillStyle.width).toBe('67%');
+    expect(
+      tree.root.findByProps({testID: 'home-momentum-stage-icon'}).props.status,
+    ).toBe('getting_started');
   });
 
   it('renders Your week day circles with state-based frosted styling', () => {

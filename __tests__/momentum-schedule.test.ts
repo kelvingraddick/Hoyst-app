@@ -4,6 +4,7 @@ import {
   calculateMomentumStreaks,
   getMomentumStatus,
   getOpportunitySlots,
+  isExpiredExpectedOpenOpportunity,
   normalizeCommitmentSchedule,
 } from '../functions/src/momentum/schedule';
 
@@ -43,6 +44,67 @@ describe('Momentum opportunity scheduling', () => {
       '2026-05-28',
       '2026-05-30',
     ]);
+  });
+
+  it('closes expected open opportunities only after expiration', () => {
+    const now = new Date('2026-07-30T04:30:00Z');
+
+    expect(
+      isExpiredExpectedOpenOpportunity({
+        now,
+        opportunity: {
+          expiresDateKey: '2026-07-29',
+          status: 'available',
+          timezone: 'America/New_York',
+        },
+      }),
+    ).toBe(true);
+    expect(
+      isExpiredExpectedOpenOpportunity({
+        now,
+        opportunity: {
+          expiresDateKey: '2026-07-30',
+          status: 'available',
+          timezone: 'America/New_York',
+        },
+      }),
+    ).toBe(false);
+    expect(
+      isExpiredExpectedOpenOpportunity({
+        now,
+        opportunity: {
+          expiresDateKey: '2026-07-31',
+          status: 'upcoming',
+          timezone: 'America/New_York',
+        },
+      }),
+    ).toBe(false);
+  });
+
+  it('does not close covered or explicitly non-expected opportunities', () => {
+    const now = new Date('2026-07-30T12:00:00Z');
+
+    expect(
+      isExpiredExpectedOpenOpportunity({
+        now,
+        opportunity: {
+          expiresDateKey: '2026-07-29',
+          status: 'completed',
+          timezone: 'UTC',
+        },
+      }),
+    ).toBe(false);
+    expect(
+      isExpiredExpectedOpenOpportunity({
+        now,
+        opportunity: {
+          expectedForCircle: false,
+          expiresDateKey: '2026-07-29',
+          status: 'available',
+          timezone: 'UTC',
+        },
+      }),
+    ).toBe(false);
   });
 
   it('keeps upcoming opportunities out of the Momentum denominator', () => {
@@ -310,7 +372,7 @@ describe('Momentum opportunity scheduling', () => {
     expect(rollingMomentum.hasUnrecoveredMiss).toBe(true);
   });
 
-  it('returns a neutral building state without resolved 14-day history', () => {
+  it('returns Getting Started without resolved 14-day history', () => {
     expect(
       calculateRollingMomentumSummary({
         now: new Date('2026-07-29T12:00:00Z'),
@@ -328,8 +390,92 @@ describe('Momentum opportunity scheduling', () => {
       hasUnrecoveredMiss: false,
       percentage: 0,
       resolvedOpportunityCount: 0,
-      status: 'building_momentum',
+      status: 'getting_started',
       windowDays: 14,
+    });
+  });
+
+  it('stores provisional scores while holding status through two resolutions', () => {
+    const opportunities = [
+      {
+        availableDateKey: '2026-07-29',
+        periodKey: '2026-07-29',
+        resolvedDateKey: '2026-07-29',
+        slotIndex: 0,
+        status: 'completed' as const,
+        timezone: 'UTC',
+      },
+      {
+        availableDateKey: '2026-07-28',
+        periodKey: '2026-07-28',
+        resolvedDateKey: '2026-07-28',
+        slotIndex: 0,
+        status: 'missed' as const,
+        timezone: 'UTC',
+      },
+    ];
+
+    expect(
+      calculateRollingMomentumSummary({
+        now: new Date('2026-07-29T12:00:00Z'),
+        opportunities,
+      }),
+    ).toMatchObject({
+      percentage: 50,
+      resolvedOpportunityCount: 2,
+      status: 'getting_started',
+    });
+  });
+
+  it('reveals Building at zero percent once calibration completes', () => {
+    const rollingMomentum = calculateRollingMomentumSummary({
+      now: new Date('2026-07-29T12:00:00Z'),
+      opportunities: [0, 1, 2].map(slotIndex => ({
+        availableDateKey: '2026-07-29',
+        periodKey: '2026-07-29',
+        resolvedDateKey: '2026-07-29',
+        slotIndex,
+        status: 'missed' as const,
+        timezone: 'UTC',
+      })),
+    });
+
+    expect(rollingMomentum).toMatchObject({
+      percentage: 0,
+      resolvedOpportunityCount: 3,
+      status: 'building_momentum',
+    });
+  });
+
+  it('excludes uncovered non-expected opportunities but preserves coverage', () => {
+    const rollingMomentum = calculateRollingMomentumSummary({
+      now: new Date('2026-07-29T12:00:00Z'),
+      opportunities: [
+        {
+          availableDateKey: '2026-07-29',
+          expectedForCircle: false,
+          periodKey: '2026-07-29',
+          resolvedDateKey: '2026-07-29',
+          slotIndex: 0,
+          status: 'missed',
+          timezone: 'UTC',
+        },
+        {
+          availableDateKey: '2026-07-28',
+          expectedForCircle: false,
+          periodKey: '2026-07-28',
+          resolvedDateKey: '2026-07-28',
+          slotIndex: 0,
+          status: 'completed',
+          timezone: 'UTC',
+        },
+      ],
+    });
+
+    expect(rollingMomentum).toMatchObject({
+      percentage: 100,
+      resolvedOpportunityCount: 1,
+      status: 'getting_started',
     });
   });
 });

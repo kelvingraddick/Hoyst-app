@@ -197,7 +197,18 @@ export type CompanionMomentumSummary = {
   currentStreak?: unknown;
   label?: unknown;
   percentage?: unknown;
+  rollingMomentum?: {
+    percentage?: unknown;
+    resolvedOpportunityCount?: unknown;
+    status?: unknown;
+  };
   status?: unknown;
+};
+
+export type CompanionPersonalMetrics = {
+  longestStreakDays?: unknown;
+  personalStreakDays?: unknown;
+  totalTapIns?: unknown;
 };
 
 export type CompanionMilestoneEvent =
@@ -281,11 +292,36 @@ const discoveryInactivityMs = 3 * 24 * 60 * 60 * 1000;
 const eveningSummaryHour = 19;
 const maxPushCircleTitleLength = 22;
 const companionAchievementCatalog = [
-  {key: '7-days-straight', threshold: 7, title: '7 Days Straight'},
-  {key: '10-day-streak', threshold: 10, title: '10 Day Streak'},
-  {key: '20-day-streak', threshold: 20, title: '20 Day Streak'},
-  {key: '30-day-streak', threshold: 30, title: '30 Day Streak'},
-  {key: '50-taps', threshold: 50, title: '50 Taps'},
+  {
+    key: '7-days-straight',
+    metric: 'longestStreakDays',
+    threshold: 7,
+    title: '7 Days Straight',
+  },
+  {
+    key: '10-day-streak',
+    metric: 'longestStreakDays',
+    threshold: 10,
+    title: '10 Day Streak',
+  },
+  {
+    key: '20-day-streak',
+    metric: 'longestStreakDays',
+    threshold: 20,
+    title: '20 Day Streak',
+  },
+  {
+    key: '30-day-streak',
+    metric: 'longestStreakDays',
+    threshold: 30,
+    title: '30 Day Streak',
+  },
+  {
+    key: '50-taps',
+    metric: 'totalTapIns',
+    threshold: 50,
+    title: '50 Taps',
+  },
 ] as const;
 const milestoneStatuses: CompanionMomentumStatus[] = [
   'getting_started',
@@ -424,25 +460,37 @@ function getStreakMilestonesCrossed({
 }
 
 export function getCompanionMilestoneEvents({
+  metrics,
+  priorMetrics,
   priorSummary,
   summary,
 }: {
+  metrics: CompanionPersonalMetrics;
+  priorMetrics?: CompanionPersonalMetrics;
   priorSummary?: CompanionMomentumSummary;
   summary: CompanionMomentumSummary;
 }): CompanionMilestoneEvent[] {
-  const priorBestStreak = asNumber(priorSummary?.bestStreak, 0);
-  const bestStreak = asNumber(summary.bestStreak, 0);
-  const priorCurrentStreak = asNumber(priorSummary?.currentStreak, 0);
-  const currentStreak = asNumber(summary.currentStreak, 0);
-  const priorStatus = normalizeMomentumStatus(priorSummary?.status);
-  const status = normalizeMomentumStatus(summary.status);
+  const priorCurrentStreak = asNumber(priorMetrics?.personalStreakDays, 0);
+  const currentStreak = asNumber(metrics.personalStreakDays, 0);
+  const priorRollingMomentum = priorSummary?.rollingMomentum;
+  const rollingMomentum = summary.rollingMomentum;
+  const priorResolvedOpportunityCount = asNumber(
+    priorRollingMomentum?.resolvedOpportunityCount,
+    0,
+  );
+  const resolvedOpportunityCount = asNumber(
+    rollingMomentum?.resolvedOpportunityCount,
+    0,
+  );
+  const priorStatus = normalizeMomentumStatus(priorRollingMomentum?.status);
+  const status = normalizeMomentumStatus(rollingMomentum?.status);
   const events: CompanionMilestoneEvent[] = [];
 
   companionAchievementCatalog.forEach(achievement => {
-    if (
-      priorBestStreak < achievement.threshold &&
-      bestStreak >= achievement.threshold
-    ) {
+    const priorValue = asNumber(priorMetrics?.[achievement.metric], 0);
+    const value = asNumber(metrics[achievement.metric], 0);
+
+    if (priorValue < achievement.threshold && value >= achievement.threshold) {
       events.push({
         achievementTitle: achievement.title,
         key: achievement.key,
@@ -463,13 +511,14 @@ export function getCompanionMilestoneEvents({
   });
 
   if (
+    priorResolvedOpportunityCount >= 3 &&
+    resolvedOpportunityCount >= 3 &&
     status &&
     getMomentumStatusRank(status) > getMomentumStatusRank(priorStatus)
   ) {
     events.push({
       key: status,
-      momentumLabel:
-        asOptionalString(summary.label) ?? getMomentumStatusLabel(status),
+      momentumLabel: getMomentumStatusLabel(status),
       type: 'companion_momentum_level_up',
     });
   }

@@ -31,6 +31,7 @@ export type OpportunitySlot = {
 
 export type MomentumOpportunity = {
   availableDateKey: string;
+  expectedForCircle?: boolean;
   expiresDateKey?: string;
   periodKey: string;
   resolvedAtMs?: number;
@@ -277,8 +278,53 @@ export function getOpportunityStatusForSlot({
   return 'available';
 }
 
+export function isExpiredExpectedOpenOpportunity({
+  now = new Date(),
+  opportunity,
+}: {
+  now?: Date;
+  opportunity: {
+    expectedForCircle?: boolean;
+    expiresDateKey?: string;
+    status?: unknown;
+    timezone?: string;
+  };
+}) {
+  const isOpen =
+    opportunity.status === 'available' || opportunity.status === 'upcoming';
+  const expiresDateKey = opportunity.expiresDateKey;
+
+  if (!isOpen || opportunity.expectedForCircle === false || !expiresDateKey) {
+    return false;
+  }
+
+  return expiresDateKey < getDateKey(opportunity.timezone ?? 'UTC', now);
+}
+
 export function getMomentumStatus(percentage: number): MomentumStatus {
   if (percentage <= 0) {
+    return 'getting_started';
+  }
+
+  if (percentage <= 30) {
+    return 'building_momentum';
+  }
+
+  if (percentage <= 70) {
+    return 'strong_momentum';
+  }
+
+  return 'peak_momentum';
+}
+
+export function getRollingMomentumStatus({
+  percentage,
+  resolvedOpportunityCount,
+}: {
+  percentage: number;
+  resolvedOpportunityCount: number;
+}): MomentumStatus {
+  if (resolvedOpportunityCount < 3) {
     return 'getting_started';
   }
 
@@ -318,13 +364,16 @@ export function calculateMomentumSummary({
   periodKey: string;
   priorBestStreak?: number;
 }): MomentumSummary {
-  const availableOpportunities = opportunities.filter(
+  const eligibleOpportunities = opportunities.filter(
+    isEligibleMomentumOpportunity,
+  );
+  const availableOpportunities = eligibleOpportunities.filter(
     opportunity => opportunity.status !== 'upcoming',
   ).length;
-  const tapInOpportunities = opportunities.filter(
+  const tapInOpportunities = eligibleOpportunities.filter(
     opportunity => opportunity.status === 'completed',
   ).length;
-  const skippedOpportunities = opportunities.filter(
+  const skippedOpportunities = eligibleOpportunities.filter(
     opportunity => opportunity.status === 'skipped',
   ).length;
   const creditedOpportunities = tapInOpportunities + skippedOpportunities;
@@ -333,7 +382,7 @@ export function calculateMomentumSummary({
       ? Math.round((creditedOpportunities / availableOpportunities) * 100)
       : 0;
   const {bestStreak, currentStreak} = calculateMomentumStreaks({
-    opportunities,
+    opportunities: eligibleOpportunities,
     priorBestStreak,
   });
   const status = getMomentumStatus(percentage);
@@ -377,6 +426,12 @@ function isCoveredOpportunity(opportunity: MomentumOpportunity) {
   return opportunity.status === 'completed' || opportunity.status === 'skipped';
 }
 
+function isEligibleMomentumOpportunity(opportunity: MomentumOpportunity) {
+  return (
+    isCoveredOpportunity(opportunity) || opportunity.expectedForCircle !== false
+  );
+}
+
 function compareOpportunityResolution(
   left: MomentumOpportunity,
   right: MomentumOpportunity,
@@ -412,6 +467,13 @@ export function calculateRollingMomentumSummary({
       return false;
     }
 
+    if (
+      !isCoveredOpportunity(opportunity) &&
+      opportunity.expectedForCircle === false
+    ) {
+      return false;
+    }
+
     const timezone = opportunity.timezone ?? 'UTC';
     const todayDateKey = getDateKey(timezone, now);
     const resolutionDateKey =
@@ -428,7 +490,7 @@ export function calculateRollingMomentumSummary({
       hasUnrecoveredMiss: false,
       percentage: 0,
       resolvedOpportunityCount: 0,
-      status: 'building_momentum',
+      status: 'getting_started',
       windowDays: rollingMomentumWindowDays,
     };
   }
@@ -468,7 +530,10 @@ export function calculateRollingMomentumSummary({
     hasUnrecoveredMiss,
     percentage,
     resolvedOpportunityCount: resolvedOpportunities.length,
-    status: getMomentumStatus(percentage),
+    status: getRollingMomentumStatus({
+      percentage,
+      resolvedOpportunityCount: resolvedOpportunities.length,
+    }),
     windowDays: rollingMomentumWindowDays,
   };
 }
@@ -484,7 +549,11 @@ export function calculateMomentumStreaks({
   let bestStreak = priorBestStreak;
 
   [...opportunities]
-    .filter(opportunity => opportunity.status !== 'upcoming')
+    .filter(
+      opportunity =>
+        isEligibleMomentumOpportunity(opportunity) &&
+        opportunity.status !== 'upcoming',
+    )
     .sort((left, right) => {
       const dateDelta = left.availableDateKey.localeCompare(
         right.availableDateKey,

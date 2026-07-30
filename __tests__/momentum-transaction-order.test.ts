@@ -56,8 +56,6 @@ jest.mock(
 );
 
 import {
-  buildTapInMomentumPreview,
-  getTapInMomentumPreview,
   recordTapInOpportunity,
   removeUidFromCircleSlotAggregate,
   removeTapInOpportunity,
@@ -184,93 +182,6 @@ describe('momentum transaction ordering', () => {
       skippedMemberCount: 0,
       skippedMemberUids: [],
     });
-  });
-
-  it('previews the post-submit momentum streak without writing', () => {
-    const dateKey = '2026-05-29';
-
-    expect(
-      buildTapInMomentumPreview({
-        opportunities: [
-          {
-            availableDateKey: dateKey,
-            id: 'other-circle_2026-05-29_0',
-            periodKey: dateKey,
-            slotIndex: 0,
-            status: 'completed',
-          },
-          {
-            availableDateKey: dateKey,
-            id: 'circle-1_2026-05-29_0',
-            periodKey: dateKey,
-            slotIndex: 0,
-            status: 'available',
-          },
-        ],
-        targetOpportunity: {
-          availableDateKey: dateKey,
-          id: 'circle-1_2026-05-29_0',
-          periodKey: dateKey,
-          slotIndex: 0,
-          status: 'completed',
-        },
-      }),
-    ).toEqual({
-      currentStreak: 2,
-      streakDelta: 1,
-    });
-  });
-
-  it('reads current opportunities for Tap In momentum preview before writes', async () => {
-    const dateKey = getDateKey('UTC');
-    const targetId = `circle-1_${dateKey}_0`;
-    const snapshots = new Map<string, SnapshotData>([
-      [
-        'userPrivate/user-1/opportunities?isCurrentPeriod==true',
-        [
-          {
-            data: {
-              availableDateKey: dateKey,
-              periodKey: dateKey,
-              slotIndex: 0,
-              status: 'completed',
-            },
-            id: `other-circle_${dateKey}_0`,
-          },
-          {
-            data: {
-              availableDateKey: dateKey,
-              periodKey: dateKey,
-              slotIndex: 0,
-              status: 'available',
-            },
-            id: targetId,
-          },
-        ],
-      ],
-    ]);
-    const {calls, transaction} = createReadBeforeWriteTransaction(snapshots);
-
-    await expect(
-      getTapInMomentumPreview({
-        circle,
-        circleId: 'circle-1',
-        dateKey,
-        member: {status: 'active'},
-        status: 'done',
-        transaction: transaction as never,
-        uid: 'user-1',
-      }),
-    ).resolves.toEqual({
-      currentStreak: 2,
-      streakDelta: 1,
-    });
-
-    expect(calls).toEqual([
-      'get:userPrivate/user-1/opportunities?isCurrentPeriod==true',
-    ]);
-    expect(transaction.set).not.toHaveBeenCalled();
-    expect(transaction.delete).not.toHaveBeenCalled();
   });
 
   it('records Tap In opportunity reads before transaction writes', async () => {

@@ -127,8 +127,11 @@ export function getCircleThreadNudgeText({
   return `${actorName} nudged ${targetCount} companions`;
 }
 
-export function getCircleThreadStreakText(streakDays: number) {
-  return `Circle hit a ${streakDays}-day streak!`;
+export function getCircleThreadStreakText(
+  actorName: string,
+  streakDays: number,
+) {
+  return `${actorName} reached a ${streakDays}-day streak.`;
 }
 
 export async function createCircleThreadActivity({

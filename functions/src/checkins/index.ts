@@ -17,12 +17,12 @@ import {db} from '../firebase';
 import {canUseSkipGrace, getRollingDateKeys} from './grace';
 import {getRemoveTapInDecision} from './remove';
 import {
+  getCreditedOutcomeStatus,
   getNextCoverageRevision,
   isCoveredOutcomeChange,
   shouldRetainCorrectedMetricEffect,
 } from './reconciliation';
 import {
-  getTapInMomentumPreview,
   recordTapInOpportunity,
   recalculateMomentumSummaryForUser,
   removeTapInOpportunity,
@@ -47,6 +47,10 @@ import {
   isSingleTapInCommitment,
 } from '../shared/commitments';
 import {getCircleMode} from '../shared/circle-mode';
+import {
+  calculatePersonalMetricsForUser,
+  getPersonalStreakTransition,
+} from '../profile';
 import {createCircleThreadActivity, getCircleThreadStreakText} from '../thread';
 import {getCircleCompleteNotificationTargets} from './notification-plan';
 import {getTapInDetailsPatch} from './details';
@@ -132,34 +136,41 @@ async function retractTapInEffects({
   const momentumSummary = accountDeletion
     ? undefined
     : await recalculateMomentumSummaryForUser(uid);
-  const retainedInboxSnapshots = momentumSummary
-    ? sourceInboxSnapshots.docs.filter(snapshot =>
-        shouldRetainCorrectedMetricEffect({
-          bestStreak: momentumSummary.bestStreak,
-          currentStreak: momentumSummary.currentStreak,
-          effectId: snapshot.id,
-          momentumStatus: momentumSummary.status,
-          type: snapshot.data().type,
-        }),
-      )
-    : [];
+  const personalMetrics = accountDeletion
+    ? undefined
+    : await calculatePersonalMetricsForUser({uid});
+  const retainedInboxSnapshots =
+    momentumSummary && personalMetrics
+      ? sourceInboxSnapshots.docs.filter(snapshot =>
+          shouldRetainCorrectedMetricEffect({
+            currentStreakDays: personalMetrics.personalStreakDays,
+            effectId: snapshot.id,
+            longestStreakDays: personalMetrics.longestStreakDays,
+            rollingMomentumStatus: momentumSummary.rollingMomentum?.status,
+            totalTapIns: personalMetrics.totalTapIns,
+            type: snapshot.data().type,
+          }),
+        )
+      : [];
   const retainedInboxIds = new Set(
     retainedInboxSnapshots.map(snapshot => snapshot.id),
   );
   const removableInboxSnapshots = sourceInboxSnapshots.docs.filter(
     snapshot => !retainedInboxIds.has(snapshot.id),
   );
-  const retainedStreakSnapshots = momentumSummary
-    ? streakSnapshots.docs.filter(snapshot =>
-        shouldRetainCorrectedMetricEffect({
-          bestStreak: momentumSummary.bestStreak,
-          currentStreak: momentumSummary.currentStreak,
-          effectId: snapshot.id,
-          momentumStatus: momentumSummary.status,
-          type: 'streak_milestone',
-        }),
-      )
-    : [];
+  const retainedStreakSnapshots =
+    momentumSummary && personalMetrics
+      ? streakSnapshots.docs.filter(snapshot =>
+          shouldRetainCorrectedMetricEffect({
+            currentStreakDays: personalMetrics.personalStreakDays,
+            effectId: snapshot.id,
+            longestStreakDays: personalMetrics.longestStreakDays,
+            rollingMomentumStatus: momentumSummary.rollingMomentum?.status,
+            totalTapIns: personalMetrics.totalTapIns,
+            type: 'streak_milestone',
+          }),
+        )
+      : [];
   const retainedStreakIds = new Set(
     retainedStreakSnapshots.map(snapshot => snapshot.id),
   );
@@ -204,6 +215,75 @@ async function retractTapInEffects({
       },
       {merge: true},
     ),
+  ]);
+}
+
+async function reconcileCorrectedMetricEffects({
+  circleId,
+  dateKey,
+  uid,
+}: {
+  circleId: string;
+  dateKey: string;
+  uid: string;
+}) {
+  const circleRef = db.collection('circles').doc(circleId);
+  const sourceKey = getCheckInEffectSourceKey(circleId, dateKey, uid);
+  const streakPrefix = `streak_${dateKey}_${uid}_`;
+  const [sourceInboxSnapshots, streakSnapshots, momentumSummary, metrics] =
+    await Promise.all([
+      db.collectionGroup('inbox').where('sourceKey', '==', sourceKey).get(),
+      circleRef
+        .collection('feedItems')
+        .where(FieldPath.documentId(), '>=', streakPrefix)
+        .where(FieldPath.documentId(), '<', `${streakPrefix}\uf8ff`)
+        .get(),
+      recalculateMomentumSummaryForUser(uid),
+      calculatePersonalMetricsForUser({uid}),
+    ]);
+  const metricInboxSnapshots = sourceInboxSnapshots.docs.filter(snapshot =>
+    [
+      'companion_achievement_unlocked',
+      'companion_momentum_level_up',
+      'companion_streak_milestone',
+    ].includes(snapshot.data().type),
+  );
+  const retainedInboxSnapshots = metricInboxSnapshots.filter(snapshot =>
+    shouldRetainCorrectedMetricEffect({
+      currentStreakDays: metrics.personalStreakDays,
+      effectId: snapshot.id,
+      longestStreakDays: metrics.longestStreakDays,
+      rollingMomentumStatus: momentumSummary.rollingMomentum?.status,
+      totalTapIns: metrics.totalTapIns,
+      type: snapshot.data().type,
+    }),
+  );
+  const retainedInboxIds = new Set(
+    retainedInboxSnapshots.map(snapshot => snapshot.id),
+  );
+  const removableInboxSnapshots = metricInboxSnapshots.filter(
+    snapshot => !retainedInboxIds.has(snapshot.id),
+  );
+  const retainedStreakSnapshots = streakSnapshots.docs.filter(snapshot =>
+    shouldRetainCorrectedMetricEffect({
+      currentStreakDays: metrics.personalStreakDays,
+      effectId: snapshot.id,
+      longestStreakDays: metrics.longestStreakDays,
+      rollingMomentumStatus: momentumSummary.rollingMomentum?.status,
+      totalTapIns: metrics.totalTapIns,
+      type: 'streak_milestone',
+    }),
+  );
+  const retainedStreakIds = new Set(
+    retainedStreakSnapshots.map(snapshot => snapshot.id),
+  );
+  const removableStreakSnapshots = streakSnapshots.docs.filter(
+    snapshot => !retainedStreakIds.has(snapshot.id),
+  );
+
+  await Promise.all([
+    deleteSnapshotsInBatches(removableInboxSnapshots),
+    deleteSnapshotsInBatches(removableStreakSnapshots),
   ]);
 }
 
@@ -481,12 +561,22 @@ async function processTapInSideEffectsForCheckIn({
     .doc('current');
   const priorMomentumSnapshot = await momentumRef.get();
   const priorMomentumSummary = priorMomentumSnapshot.data();
-  const momentumSummary = await recalculateMomentumSummaryForUser(uid).catch(
-    error => {
+  const checkInPath = circleRef
+    .collection('days')
+    .doc(dateKey)
+    .collection('checkIns')
+    .doc(uid).path;
+  const [momentumSummary, metrics, priorMetrics] = await Promise.all([
+    recalculateMomentumSummaryForUser(uid).catch(error => {
       console.error('recalculate_momentum_summary_failed', error);
       return undefined;
-    },
-  );
+    }),
+    calculatePersonalMetricsForUser({uid}),
+    calculatePersonalMetricsForUser({
+      excludedCheckInPath: checkInPath,
+      uid,
+    }),
+  ]);
 
   const [circleSnapshot, memberSnapshots] = await Promise.all([
     circleRef.get(),
@@ -651,6 +741,8 @@ async function processTapInSideEffectsForCheckIn({
 
   if (momentumSummary) {
     const milestoneEvents = getCompanionMilestoneEvents({
+      metrics,
+      priorMetrics,
       priorSummary: priorMomentumSummary,
       summary: momentumSummary,
     });
@@ -672,7 +764,10 @@ async function processTapInSideEffectsForCheckIn({
             circleId,
             createdAt: checkIn.createdAt,
             itemId: `streak_${dateKey}_${uid}_${event.key}`,
-            text: getCircleThreadStreakText(event.streakDays),
+            text: getCircleThreadStreakText(
+              actor.displayName,
+              event.streakDays,
+            ),
             tone: 'alert',
             type: 'streak_milestone',
           }),
@@ -751,7 +846,7 @@ async function submitTapInHandler(request: CallableRequest) {
   const memberRef = circleRef.collection('members').doc(uid);
   const now = FieldValue.serverTimestamp();
 
-  return db.runTransaction(async transaction => {
+  const result = await db.runTransaction(async transaction => {
     const [circleSnapshot, memberSnapshot] = await Promise.all([
       transaction.get(circleRef),
       transaction.get(memberRef),
@@ -859,22 +954,6 @@ async function submitTapInHandler(request: CallableRequest) {
     });
     const quantityConfig = getQuantityConfig(circle);
     const commitmentType = getCommitmentType(circle);
-    let momentum:
-      | Awaited<ReturnType<typeof getTapInMomentumPreview>>
-      | undefined;
-
-    if (nextCovered && !existingCovered) {
-      momentum = await getTapInMomentumPreview({
-        circle,
-        circleId: input.circleId,
-        dateKey,
-        member: memberSnapshot.data(),
-        status: nextStatus === 'skip' ? 'skip' : 'done',
-        transaction,
-        uid,
-      });
-    }
-
     if (nextCovered && (!existingCovered || coveredOutcomeChanged)) {
       await recordTapInOpportunity({
         checkInId: uid,
@@ -990,11 +1069,35 @@ async function submitTapInHandler(request: CallableRequest) {
       coverageStatus,
       currentValue,
       dateKey,
-      momentum,
       coverageRevision,
+      checkInPath: checkInRef.path,
+      shouldReportMomentum: nextCovered && !existingCovered,
       status: nextStatus,
     };
   });
+
+  const momentum = result.shouldReportMomentum
+    ? await Promise.all([
+        calculatePersonalMetricsForUser({profile, uid}),
+        calculatePersonalMetricsForUser({
+          excludedCheckInPath: result.checkInPath,
+          profile,
+          uid,
+        }),
+      ]).then(([currentMetrics, priorMetrics]) => ({
+        ...getPersonalStreakTransition({currentMetrics, priorMetrics}),
+      }))
+    : undefined;
+
+  return {
+    checkInId: result.checkInId,
+    coverageStatus: result.coverageStatus,
+    currentValue: result.currentValue,
+    dateKey: result.dateKey,
+    momentum,
+    coverageRevision: result.coverageRevision,
+    status: result.status,
+  };
 }
 
 export const submitTapIn = onCall(submitTapInHandler);
@@ -1107,6 +1210,16 @@ export const processTapInSideEffects = onDocumentWritten(
         dateKey: event.params.dateKey,
         uid: event.params.uid,
       });
+      if (
+        getCreditedOutcomeStatus(priorCheckIn) !==
+        getCreditedOutcomeStatus(checkIn)
+      ) {
+        await reconcileCorrectedMetricEffects({
+          circleId: event.params.circleId,
+          dateKey: event.params.dateKey,
+          uid: event.params.uid,
+        });
+      }
       return;
     }
 

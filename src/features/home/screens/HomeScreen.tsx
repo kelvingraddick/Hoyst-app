@@ -72,7 +72,7 @@ import {useSessionStore} from '../../../store/session-store';
 import {CircleActionCard} from '../../circles/components/CircleActionCard';
 import {nudgeCircleMembers} from '../../circles/services/circle-service';
 import {
-  buildMomentumSummaryFromHomeData,
+  getMomentumDisplayModel,
   subscribeToMomentumSummary,
 } from '../../momentum/services/momentum-service';
 import {
@@ -452,21 +452,18 @@ export function HomeScreen(): React.JSX.Element {
       : homeData.hasResolvedGreetingContext
       ? homeGreetingFallback
       : retainedGreeting);
-  const momentumSummary =
-    remoteMomentumSummary ?? buildMomentumSummaryFromHomeData(homeData);
+  const momentumDisplay = getMomentumDisplayModel(remoteMomentumSummary);
   const activeCircleCount =
     homeGreetingContext.circleSummary.circleCount -
     homeGreetingContext.circleSummary.pendingCount;
-  const rollingMomentumStatus =
-    momentumSummary.rollingMomentum?.status ??
-    (homeData.personalStreakDays > 0 ? 'strong_momentum' : 'building_momentum');
+  const rollingMomentumStatus = momentumDisplay.status;
   const candidateHoyState = getHoyState({
     activeCircleCount,
     hasDeadlineRisk:
       homeGreetingContext.primaryAction?.kind === 'tap_in' &&
       homeGreetingContext.primaryAction.urgency === 'deadline',
     hasUnrecoveredMiss:
-      momentumSummary.rollingMomentum?.hasUnrecoveredMiss ?? false,
+      remoteMomentumSummary?.rollingMomentum?.hasUnrecoveredMiss ?? false,
     isAuthenticatedHome,
     isCelebrating: isHoyCelebrating,
     isGreetingLoading: isAuthenticatedHome && !bubbleText,
@@ -492,7 +489,7 @@ export function HomeScreen(): React.JSX.Element {
   const heroCopy = getHomeHeroCopy({
     dateKey: homeData.todayDateKey,
     firstName: homeGreetingContext.firstName,
-    momentumStatus: momentumSummary.status,
+    momentumStatus: momentumDisplay.status,
     streakDays: homeData.personalStreakDays,
     timeWindow: homeGreetingContext.timeWindow,
   });
@@ -914,8 +911,13 @@ export function HomeScreen(): React.JSX.Element {
           hoyCelebrationKey={hoyCelebrationKey}
           hoyState={displayedHoyState}
           isHoyActionDisabled={isHoyActionDisabled}
-          momentumPercent={momentumSummary.percentage}
-          momentumStatus={momentumSummary.status}
+          momentumDetail={
+            momentumDisplay.isCalibrating
+              ? `${momentumDisplay.label} · ${momentumDisplay.resolvedOpportunityCount} of ${momentumDisplay.requiredResolvedOpportunityCount}`
+              : `${momentumDisplay.label} · ${momentumDisplay.rawRollingPercentage}%`
+          }
+          momentumPercent={momentumDisplay.displayProgress}
+          momentumStatus={momentumDisplay.status}
           notificationAccessibilityLabel={getNotificationAccessibilityLabel(
             unreadInboxCount,
           )}
@@ -934,9 +936,9 @@ export function HomeScreen(): React.JSX.Element {
 
           <CircleSummaryRings
             contributionPercent={homeData.progressPercent}
-            momentumLabel={momentumSummary.label}
-            momentumPercent={momentumSummary.percentage}
-            momentumStatus={momentumSummary.status}
+            momentumLabel={momentumDisplay.label}
+            momentumPercent={momentumDisplay.displayProgress}
+            momentumStatus={momentumDisplay.status}
             onPress={() => navigation.navigate('Momentum')}
             surfaceStyle={homeCardLiftStyle}
             streakDays={homeData.personalStreakDays}

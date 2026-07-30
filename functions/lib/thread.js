@@ -88,8 +88,8 @@ function getCircleThreadNudgeText({ actorName, targetCount, targetName, }) {
     }
     return `${actorName} nudged ${targetCount} companions`;
 }
-function getCircleThreadStreakText(streakDays) {
-    return `Circle hit a ${streakDays}-day streak!`;
+function getCircleThreadStreakText(actorName, streakDays) {
+    return `${actorName} reached a ${streakDays}-day streak.`;
 }
 async function createCircleThreadActivity({ actor, circleId, createdAt, itemId, mediaImageUrl, note, targetActor, text, tone, type, }) {
     const cleanText = sanitizeCircleThreadText(text, 240);

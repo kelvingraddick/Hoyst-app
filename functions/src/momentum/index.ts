@@ -16,6 +16,7 @@ import {
   getDateKey,
   getOpportunitySlots,
   getOpportunityStatusForSlot,
+  isExpiredExpectedOpenOpportunity,
   normalizeCommitmentSchedule,
   type MomentumOpportunity,
   type OpportunitySlot,
@@ -42,25 +43,6 @@ type RemoveTapInOpportunityInput = {
   dateKey: string;
   transaction: Transaction;
   uid: string;
-};
-
-export type TapInMomentumPreview = {
-  currentStreak: number;
-  streakDelta: number;
-};
-
-type TapInMomentumPreviewInput = {
-  circle: DocumentData | undefined;
-  circleId: string;
-  dateKey: string;
-  member?: DocumentData;
-  status: 'done' | 'skip';
-  transaction: Transaction;
-  uid: string;
-};
-
-type MomentumOpportunityWithId = MomentumOpportunity & {
-  id: string;
 };
 
 function asString(value: unknown, fallback = '') {
@@ -246,6 +228,10 @@ function mapOpportunitySnapshot(
 
   return {
     availableDateKey: asString(data?.availableDateKey),
+    expectedForCircle:
+      typeof data?.expectedForCircle === 'boolean'
+        ? data.expectedForCircle
+        : undefined,
     expiresDateKey: asString(data?.expiresDateKey) || undefined,
     periodKey: asString(data?.periodKey),
     resolvedAtMs:
@@ -260,102 +246,6 @@ function mapOpportunitySnapshot(
     status,
     timezone: asString(data?.timezone, 'UTC'),
   };
-}
-
-function mapOpportunitySnapshotWithId(
-  snapshot: DocumentSnapshot,
-): MomentumOpportunityWithId | undefined {
-  const opportunity = mapOpportunitySnapshot(snapshot);
-
-  if (!opportunity) {
-    return undefined;
-  }
-
-  return {
-    ...opportunity,
-    id: snapshot.id,
-  };
-}
-
-function getCurrentStreak(opportunities: MomentumOpportunity[]) {
-  return calculateMomentumSummary({
-    opportunities,
-    periodKey: 'current',
-  }).currentStreak;
-}
-
-export function buildTapInMomentumPreview({
-  opportunities,
-  targetOpportunity,
-}: {
-  opportunities: MomentumOpportunityWithId[];
-  targetOpportunity?: MomentumOpportunityWithId;
-}): TapInMomentumPreview {
-  const priorCurrentStreak = getCurrentStreak(opportunities);
-  const nextOpportunities = targetOpportunity
-    ? [
-        ...opportunities.filter(
-          opportunity => opportunity.id !== targetOpportunity.id,
-        ),
-        targetOpportunity,
-      ]
-    : opportunities;
-  const currentStreak = getCurrentStreak(nextOpportunities);
-
-  return {
-    currentStreak,
-    streakDelta: currentStreak - priorCurrentStreak,
-  };
-}
-
-export async function getTapInMomentumPreview({
-  circle,
-  circleId,
-  dateKey,
-  member,
-  status,
-  transaction,
-  uid,
-}: TapInMomentumPreviewInput): Promise<TapInMomentumPreview> {
-  const userPrivateRef = db.collection('userPrivate').doc(uid);
-  const opportunitySnapshots = await transaction.get(
-    userPrivateRef
-      .collection('opportunities')
-      .where('isCurrentPeriod', '==', true),
-  );
-  const opportunities = opportunitySnapshots.docs
-    .map(mapOpportunitySnapshotWithId)
-    .filter((opportunity): opportunity is MomentumOpportunityWithId =>
-      Boolean(opportunity),
-    );
-  const slots = getCurrentSlots(circle);
-  const existingStatuses = new Map(
-    slots.map(slot => [
-      slot.slotIndex,
-      opportunities.find(
-        opportunity =>
-          opportunity.id ===
-          getOpportunityId(circleId, slot.periodKey, slot.slotIndex),
-      )?.status,
-    ]),
-  );
-  const slot = getSlotForDate(circle, dateKey, existingStatuses, member);
-  const opportunityStatus: OpportunityStatus =
-    status === 'done' ? 'completed' : 'skipped';
-  const targetOpportunity = slot
-    ? {
-        availableDateKey: slot.availableDateKey,
-        id: getOpportunityId(circleId, slot.periodKey, slot.slotIndex),
-        periodKey: slot.periodKey,
-        slotIndex: slot.slotIndex,
-        status: opportunityStatus,
-      }
-    : undefined;
-
-  return buildTapInMomentumPreview({
-    opportunities,
-    targetOpportunity,
-  });
 }
 
 export async function recalculateMomentumSummaryForUser(uid: string) {
@@ -439,7 +329,7 @@ function buildOpportunityPayload({
     expiresDateKey: slot.expiresDateKey,
     expectedForCircle: true,
     id: getOpportunityId(circleId, slot.periodKey, slot.slotIndex),
-    isCurrentPeriod: true,
+    isCurrentPeriod: status !== 'missed' && status !== 'expired',
     periodKey: slot.periodKey,
     slotIndex: slot.slotIndex,
     status,
@@ -1004,9 +894,34 @@ export async function materializeCurrentCircleOpportunities(
 
   priorCircleOpportunitySnapshots.forEach(snapshot => {
     snapshot.docs.forEach(doc => {
-      if (
-        doc.data().periodKey !== periodKey &&
-        doc.data().isCurrentPeriod !== false
+      const opportunity = doc.data();
+      const isExpired = isExpiredExpectedOpenOpportunity({
+        now,
+        opportunity: {
+          expectedForCircle:
+            typeof opportunity.expectedForCircle === 'boolean'
+              ? opportunity.expectedForCircle
+              : undefined,
+          expiresDateKey: asString(opportunity.expiresDateKey) || undefined,
+          status: opportunity.status,
+          timezone: asString(opportunity.timezone, timezone),
+        },
+      });
+
+      if (isExpired) {
+        writes.push({
+          data: {
+            isCurrentPeriod: false,
+            resolvedAt: FieldValue.serverTimestamp(),
+            status: 'missed',
+            updatedAt: FieldValue.serverTimestamp(),
+          },
+          merge: true,
+          ref: doc.ref,
+        });
+      } else if (
+        opportunity.periodKey !== periodKey &&
+        opportunity.isCurrentPeriod !== false
       ) {
         writes.push({
           data: {

@@ -236,35 +236,48 @@ describe('Tap In reconciliation revisions', () => {
   it('retains only milestone effects that still qualify after correction', () => {
     expect(
       shouldRetainCorrectedMetricEffect({
-        bestStreak: 8,
-        currentStreak: 7,
+        currentStreakDays: 7,
         effectId: 'companion_streak_milestone_7-day-streak_user-1',
+        longestStreakDays: 8,
+        totalTapIns: 9,
         type: 'companion_streak_milestone',
       }),
     ).toBe(true);
     expect(
       shouldRetainCorrectedMetricEffect({
-        bestStreak: 8,
-        currentStreak: 6,
+        currentStreakDays: 6,
         effectId: 'companion_streak_milestone_7-day-streak_user-1',
+        longestStreakDays: 8,
+        totalTapIns: 9,
         type: 'companion_streak_milestone',
       }),
     ).toBe(false);
     expect(
       shouldRetainCorrectedMetricEffect({
-        bestStreak: 10,
-        currentStreak: 2,
+        currentStreakDays: 2,
         effectId: 'companion_achievement_unlocked_10-day-streak_user-1',
+        longestStreakDays: 10,
+        totalTapIns: 9,
         type: 'companion_achievement_unlocked',
       }),
     ).toBe(true);
     expect(
       shouldRetainCorrectedMetricEffect({
-        bestStreak: 4,
-        currentStreak: 1,
+        currentStreakDays: 1,
         effectId: 'companion_momentum_level_up_strong_momentum_user-1',
-        momentumStatus: 'building_momentum',
+        longestStreakDays: 4,
+        rollingMomentumStatus: 'building_momentum',
+        totalTapIns: 9,
         type: 'companion_momentum_level_up',
+      }),
+    ).toBe(false);
+    expect(
+      shouldRetainCorrectedMetricEffect({
+        currentStreakDays: 1,
+        effectId: 'companion_achievement_unlocked_50-taps_user-1',
+        longestStreakDays: 60,
+        totalTapIns: 49,
+        type: 'companion_achievement_unlocked',
       }),
     ).toBe(false);
   });

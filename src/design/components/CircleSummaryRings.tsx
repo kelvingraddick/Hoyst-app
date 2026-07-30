@@ -140,11 +140,11 @@ export function CircleSummaryRings({
         <ContributionSummaryIcon />
       </StatBarCard>
       <StatBarCard
-        accessibilityLabel={`Momentum ${momentum}%, ${momentumLabel}.`}
+        accessibilityLabel={`14-day Momentum ${momentum}%, ${momentumLabel}.`}
         barColor={momentumVisualColor}
         chipColor={MOMENTUM_CHIP_BACKGROUND}
         chipTestID="circle-summary-momentum-disc"
-        label="Momentum"
+        label="14-Day Momentum"
         onPress={onPress}
         progress={momentum / 100}
         surfaceStyle={surfaceStyle}

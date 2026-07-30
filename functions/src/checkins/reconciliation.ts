@@ -48,12 +48,12 @@ export function isCoveredOutcomeChange({
 }
 
 const achievementThresholds = [
-  {key: '7-days-straight', threshold: 7},
-  {key: '10-day-streak', threshold: 10},
-  {key: '20-day-streak', threshold: 20},
-  {key: '30-day-streak', threshold: 30},
-  {key: '50-taps', threshold: 50},
-];
+  {key: '7-days-straight', metric: 'longestStreakDays', threshold: 7},
+  {key: '10-day-streak', metric: 'longestStreakDays', threshold: 10},
+  {key: '20-day-streak', metric: 'longestStreakDays', threshold: 20},
+  {key: '30-day-streak', metric: 'longestStreakDays', threshold: 30},
+  {key: '50-taps', metric: 'totalTapIns', threshold: 50},
+] as const;
 const momentumStatusRanks = [
   'getting_started',
   'building_momentum',
@@ -62,35 +62,41 @@ const momentumStatusRanks = [
 ];
 
 export function shouldRetainCorrectedMetricEffect({
-  bestStreak,
-  currentStreak,
+  currentStreakDays,
   effectId,
-  momentumStatus,
+  longestStreakDays,
+  rollingMomentumStatus,
+  totalTapIns,
   type,
 }: {
-  bestStreak: number;
-  currentStreak: number;
+  currentStreakDays: number;
   effectId: string;
-  momentumStatus?: string;
+  longestStreakDays: number;
+  rollingMomentumStatus?: string;
+  totalTapIns: number;
   type?: string;
 }) {
   if (type === 'companion_achievement_unlocked') {
     const achievement = achievementThresholds.find(candidate =>
       effectId.includes(candidate.key),
     );
-    return Boolean(achievement && bestStreak >= achievement.threshold);
+    const value =
+      achievement?.metric === 'totalTapIns' ? totalTapIns : longestStreakDays;
+    return Boolean(achievement && value >= achievement.threshold);
   }
 
   if (type === 'companion_streak_milestone' || type === 'streak_milestone') {
     const threshold = Number(effectId.match(/(\d+)-day-streak/)?.[1]);
-    return Number.isFinite(threshold) && currentStreak >= threshold;
+    return Number.isFinite(threshold) && currentStreakDays >= threshold;
   }
 
   if (type === 'companion_momentum_level_up') {
     const targetRank = momentumStatusRanks.findIndex(status =>
       effectId.includes(status),
     );
-    const currentRank = momentumStatusRanks.indexOf(momentumStatus ?? '');
+    const currentRank = momentumStatusRanks.indexOf(
+      rollingMomentumStatus ?? '',
+    );
     return targetRank >= 0 && currentRank >= targetRank;
   }
 

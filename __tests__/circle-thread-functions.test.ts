@@ -140,7 +140,9 @@ describe('circle thread functions', () => {
         targetName: 'Priya',
       }),
     ).toBe('Sam nudged Priya');
-    expect(getCircleThreadStreakText(6)).toBe('Circle hit a 6-day streak!');
+    expect(getCircleThreadStreakText('Kelvin', 6)).toBe(
+      'Kelvin reached a 6-day streak.',
+    );
   });
 
   it('writes a server-owned message for active members', async () => {

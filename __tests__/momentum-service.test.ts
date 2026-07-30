@@ -3,6 +3,7 @@ jest.mock('@react-native-firebase/firestore', () => jest.fn());
 import {
   buildMomentumSummaryFromHomeData,
   formatOpportunityCount,
+  getMomentumDisplayModel,
   getMomentumLabel,
   mapMomentumSummarySnapshot,
 } from '../src/features/momentum/services/momentum-service';
@@ -210,5 +211,80 @@ describe('momentum summary snapshot mapping', () => {
     } as never);
 
     expect(summary?.rollingMomentum).toBeUndefined();
+  });
+});
+
+describe('momentum display model', () => {
+  const summary = {
+    availableOpportunities: 3,
+    bestStreak: 0,
+    creditedOpportunities: 1,
+    completedOpportunities: 1,
+    currentStreak: 0,
+    label: 'Building',
+    percentage: 33,
+    periodKey: 'current',
+    skippedOpportunities: 0,
+    status: 'building_momentum' as const,
+    tapInOpportunities: 1,
+  };
+
+  it.each([
+    [0, 0],
+    [1, 33],
+    [2, 67],
+  ])(
+    'uses calibration progress for %i resolved opportunities',
+    (resolvedOpportunityCount, displayProgress) => {
+      expect(
+        getMomentumDisplayModel({
+          ...summary,
+          rollingMomentum: {
+            hasUnrecoveredMiss: false,
+            percentage: 100,
+            resolvedOpportunityCount,
+            status: 'peak_momentum',
+            windowDays: 14,
+          },
+        }),
+      ).toMatchObject({
+        displayProgress,
+        isCalibrating: true,
+        label: 'Getting Started',
+        rawRollingPercentage: 100,
+        resolvedOpportunityCount,
+        status: 'getting_started',
+      });
+    },
+  );
+
+  it('reveals the weighted score at the third resolution', () => {
+    expect(
+      getMomentumDisplayModel({
+        ...summary,
+        rollingMomentum: {
+          hasUnrecoveredMiss: false,
+          percentage: 33,
+          resolvedOpportunityCount: 3,
+          status: 'strong_momentum',
+          windowDays: 14,
+        },
+      }),
+    ).toMatchObject({
+      displayProgress: 33,
+      isCalibrating: false,
+      label: 'Strong',
+      rawRollingPercentage: 33,
+      status: 'strong_momentum',
+    });
+  });
+
+  it('does not fall back to current-period Momentum while loading', () => {
+    expect(getMomentumDisplayModel()).toMatchObject({
+      displayProgress: 0,
+      isCalibrating: true,
+      label: 'Getting Started',
+      rawRollingPercentage: 0,
+    });
   });
 });

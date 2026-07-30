@@ -16,7 +16,10 @@ import {
   calculatePersonalDailyStreak,
   getDateKey,
 } from '../functions/src/profile/streak';
-import {summarizeProfileCheckIns} from '../functions/src/profile';
+import {
+  getPersonalStreakTransition,
+  summarizeProfileCheckIns,
+} from '../functions/src/profile';
 import {
   canUseSkipGrace,
   getRollingDateKeys,
@@ -32,8 +35,9 @@ const profile: UserProfile = {
   timezone: 'America/New_York',
 };
 
-type ProfileCheckInSnapshot =
-  Parameters<typeof summarizeProfileCheckIns>[0]['checkInSnapshots'][number];
+type ProfileCheckInSnapshot = Parameters<
+  typeof summarizeProfileCheckIns
+>[0]['checkInSnapshots'][number];
 
 function profileCheckInSnapshot({
   circleId,
@@ -255,6 +259,26 @@ describe('personal daily streak calculation', () => {
     expect(
       getDateKey(new Date('2026-05-07T03:00:00.000Z'), 'America/New_York'),
     ).toBe('2026-05-06');
+  });
+});
+
+describe('personal streak transition', () => {
+  it('advances on the first covered commitment of a local date', () => {
+    expect(
+      getPersonalStreakTransition({
+        currentMetrics: {personalStreakDays: 3},
+        priorMetrics: {personalStreakDays: 2},
+      }),
+    ).toEqual({currentStreak: 3, streakDelta: 1});
+  });
+
+  it('holds on additional covered commitments on the same date', () => {
+    expect(
+      getPersonalStreakTransition({
+        currentMetrics: {personalStreakDays: 3},
+        priorMetrics: {personalStreakDays: 3},
+      }),
+    ).toEqual({currentStreak: 3, streakDelta: 0});
   });
 });
 
