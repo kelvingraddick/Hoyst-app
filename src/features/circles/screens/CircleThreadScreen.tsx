@@ -1,4 +1,4 @@
-import React, {useCallback, useEffect, useMemo, useState} from 'react';
+import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {
   Alert,
   Image,
@@ -355,6 +355,8 @@ export function CircleThreadScreen({
   const [draft, setDraft] = useState('');
   const [photoUri, setPhotoUri] = useState<string>();
   const [isSending, setIsSending] = useState(false);
+  const threadScrollRef = useRef<ScrollView>(null);
+  const hasInitiallyScrolledRef = useRef(false);
   const profile = useUserProfileStore(state => state.profile);
   const status = useSessionStore(state => state.status);
   const user = useSessionStore(state => state.user);
@@ -373,6 +375,18 @@ export function CircleThreadScreen({
     () => buildCircleThreadDaySections({items, timezone}),
     [items, timezone],
   );
+  const handleThreadContentSizeChange = useCallback(() => {
+    if (
+      items.length === 0 ||
+      hasInitiallyScrolledRef.current ||
+      !threadScrollRef.current
+    ) {
+      return;
+    }
+
+    hasInitiallyScrolledRef.current = true;
+    threadScrollRef.current.scrollToEnd({animated: false});
+  }, [items.length]);
 
   useEffect(() => {
     if (!canLoadThread || !user?.uid) {
@@ -561,6 +575,8 @@ export function CircleThreadScreen({
           contentContainerStyle={styles.threadContent}
           keyboardDismissMode="interactive"
           keyboardShouldPersistTaps="handled"
+          onContentSizeChange={handleThreadContentSizeChange}
+          ref={threadScrollRef}
           showsVerticalScrollIndicator={false}>
           {hasThreadError && items.length === 0 ? (
             <GlassPanel padding="none" style={styles.emptyCard}>

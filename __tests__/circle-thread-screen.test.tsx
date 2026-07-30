@@ -3,6 +3,7 @@ import {
   Alert,
   Image,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -254,6 +255,12 @@ function findTextNode(tree: renderer.ReactTestRenderer, text: string) {
   return tree.root.findAllByType(Text).find(node => textContent(node) === text);
 }
 
+function getThreadScrollView(tree: renderer.ReactTestRenderer) {
+  return tree.root
+    .findAllByType(ScrollView)
+    .find(node => node.props.horizontal !== true)!;
+}
+
 function getDayMarkerIds(tree: renderer.ReactTestRenderer) {
   return new Set(
     tree.root
@@ -290,7 +297,7 @@ describe('CircleThreadScreen', () => {
   });
 
   afterEach(() => {
-    alertSpy.mockRestore();
+    jest.restoreAllMocks();
     jest.clearAllMocks();
   });
 
@@ -349,6 +356,26 @@ describe('CircleThreadScreen', () => {
 
     expect(getDayMarkerIds(tree).size).toBe(2);
     expect(outputOf(tree)).toContain('TODAY');
+  });
+
+  it('scrolls a populated thread to the bottom once after layout', () => {
+    const scrollToEnd = jest
+      .spyOn(ScrollView.prototype, 'scrollToEnd')
+      .mockImplementation(() => undefined);
+    const {tree} = renderScreen();
+
+    act(() => {
+      getThreadScrollView(tree).props.onContentSizeChange(320, 1200);
+    });
+
+    expect(scrollToEnd).toHaveBeenCalledTimes(1);
+    expect(scrollToEnd).toHaveBeenCalledWith({animated: false});
+
+    act(() => {
+      getThreadScrollView(tree).props.onContentSizeChange(320, 1320);
+    });
+
+    expect(scrollToEnd).toHaveBeenCalledTimes(1);
   });
 
   it('uses compact sizing for the thread header, feed, quick chips, and composer', () => {
@@ -573,11 +600,19 @@ describe('CircleThreadScreen', () => {
   });
 
   it('shows the empty state when the thread has no items', () => {
+    const scrollToEnd = jest
+      .spyOn(ScrollView.prototype, 'scrollToEnd')
+      .mockImplementation(() => undefined);
     mockThreadItems = [];
 
     const {tree} = renderScreen();
     const output = outputOf(tree);
 
+    act(() => {
+      getThreadScrollView(tree).props.onContentSizeChange(320, 480);
+    });
+
+    expect(scrollToEnd).not.toHaveBeenCalled();
     expect(output).toContain('Start the circle chat');
     expect(output).toContain('Message the circle...');
     expect(
@@ -594,12 +629,20 @@ describe('CircleThreadScreen', () => {
   });
 
   it('shows a compact load error when the thread fails to load', () => {
+    const scrollToEnd = jest
+      .spyOn(ScrollView.prototype, 'scrollToEnd')
+      .mockImplementation(() => undefined);
     mockThreadItems = [];
     mockThreadError = new Error('permission-denied');
 
     const {tree} = renderScreen();
     const output = outputOf(tree);
 
+    act(() => {
+      getThreadScrollView(tree).props.onContentSizeChange(320, 480);
+    });
+
+    expect(scrollToEnd).not.toHaveBeenCalled();
     expect(output).toContain('Could not load circle chat');
     expect(
       StyleSheet.flatten(
