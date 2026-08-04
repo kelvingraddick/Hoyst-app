@@ -20,8 +20,13 @@ type HoystScreenProps = PropsWithChildren<{
   keyboardAvoiding?: boolean;
   keyboardDismissMode?: ScrollViewProps['keyboardDismissMode'];
   keyboardShouldPersistTaps?: ScrollViewProps['keyboardShouldPersistTaps'];
+  onContentSizeChange?: ScrollViewProps['onContentSizeChange'];
+  onLayout?: ScrollViewProps['onLayout'];
+  onScroll?: ScrollViewProps['onScroll'];
   padded?: boolean;
   scrollEnabled?: boolean;
+  scrollEventThrottle?: ScrollViewProps['scrollEventThrottle'];
+  scrollViewRef?: React.Ref<ScrollView>;
   stackStyle?: StyleProp<ViewStyle>;
   style?: ViewStyle;
 }>;
@@ -33,8 +38,13 @@ export function HoystScreen({
   keyboardAvoiding = false,
   keyboardDismissMode,
   keyboardShouldPersistTaps,
+  onContentSizeChange,
+  onLayout,
+  onScroll,
   padded = true,
   scrollEnabled = true,
+  scrollEventThrottle,
+  scrollViewRef,
   stackStyle,
   style,
 }: HoystScreenProps): React.JSX.Element {
@@ -51,7 +61,12 @@ export function HoystScreen({
       ]}
       keyboardDismissMode={keyboardDismissMode}
       keyboardShouldPersistTaps={keyboardShouldPersistTaps}
+      onContentSizeChange={onContentSizeChange}
+      onLayout={onLayout}
+      onScroll={onScroll}
+      ref={scrollViewRef}
       scrollEnabled={scrollEnabled}
+      scrollEventThrottle={scrollEventThrottle}
       showsVerticalScrollIndicator={false}>
       <View style={[styles.stack, stackStyle]}>{children}</View>
     </ScrollView>

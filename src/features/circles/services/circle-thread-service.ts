@@ -8,14 +8,10 @@ import type {
   CircleThreadActor,
   CircleThreadActivityType,
   CircleThreadItem,
-  CircleThreadPreview,
   CircleThreadTone,
 } from '../../../types/models';
 
 type PlainData = Record<string, unknown>;
-
-const threadItemLimit = 80;
-const previewItemLimit = 20;
 
 function asString(value: unknown, fallback = '') {
   return typeof value === 'string' && value.trim().length > 0
@@ -149,21 +145,6 @@ export function mapCircleThreadItemSnapshot(
   };
 }
 
-export function getCircleThreadPreviewLabel(
-  item: CircleThreadItem,
-  viewerUid?: string,
-) {
-  if (item.kind === 'activity') {
-    return item.text ?? 'New circle activity';
-  }
-
-  const isViewer = viewerUid && item.actor.uid === viewerUid;
-  const actorName = isViewer ? 'You' : item.actor.name;
-  const text = item.text ?? 'shared a photo';
-
-  return `${actorName}: ${text}`;
-}
-
 export function createCircleThreadMessageId(circleId: string) {
   return firebaseFirestore()
     .collection(collections.circles)
@@ -174,109 +155,37 @@ export function createCircleThreadMessageId(circleId: string) {
 
 export function subscribeToCircleThreadItems({
   circleId,
+  itemLimit,
   onError,
   onItems,
   uid,
 }: {
   circleId: string;
+  itemLimit: number;
   onError?: (error: Error) => void;
-  onItems: (items: CircleThreadItem[]) => void;
+  onItems: (result: {hasMore: boolean; items: CircleThreadItem[]}) => void;
   uid?: string;
 }) {
+  const safeItemLimit = Math.max(1, Math.round(itemLimit));
+
   return firebaseFirestore()
     .collection(collections.circles)
     .doc(circleId)
     .collection('feedItems')
     .orderBy('createdAt', 'desc')
-    .limit(threadItemLimit)
+    .limit(safeItemLimit + 1)
     .onSnapshot(
       snapshot => {
-        onItems(
-          snapshot.docs
+        onItems({
+          hasMore: snapshot.docs.length > safeItemLimit,
+          items: snapshot.docs
+            .slice(0, safeItemLimit)
             .map(doc => mapCircleThreadItemSnapshot(doc, uid))
-            .filter((item): item is CircleThreadItem => Boolean(item))
-            .reverse(),
-        );
+            .filter((item): item is CircleThreadItem => Boolean(item)),
+        });
       },
       error => onError?.(error),
     );
-}
-
-function buildCircleThreadPreview({
-  items,
-  readAt,
-  uid,
-}: {
-  items: CircleThreadItem[];
-  readAt?: unknown;
-  uid?: string;
-}): CircleThreadPreview {
-  const latestItem = items[0];
-  const readAtMs = asDate(readAt)?.getTime() ?? 0;
-  const unreadCount = items.filter(
-    item => item.actor.uid !== uid && item.createdAtMs > readAtMs,
-  ).length;
-
-  return {
-    ...(latestItem
-      ? {
-          latestItem,
-          latestLabel: getCircleThreadPreviewLabel(latestItem, uid),
-          latestTimestamp: latestItem.createdAtLabel,
-        }
-      : {}),
-    unreadCount,
-  };
-}
-
-export function subscribeToCircleThreadPreview({
-  circleId,
-  onError,
-  onPreview,
-  uid,
-}: {
-  circleId: string;
-  onError?: (error: Error) => void;
-  onPreview: (preview: CircleThreadPreview) => void;
-  uid: string;
-}) {
-  const circleRef = firebaseFirestore()
-    .collection(collections.circles)
-    .doc(circleId);
-  let items: CircleThreadItem[] = [];
-  let readAt: unknown;
-
-  const emit = () => {
-    onPreview(buildCircleThreadPreview({items, readAt, uid}));
-  };
-  const unsubscribeItems = circleRef
-    .collection('feedItems')
-    .orderBy('createdAt', 'desc')
-    .limit(previewItemLimit)
-    .onSnapshot(
-      snapshot => {
-        items = snapshot.docs
-          .map(doc => mapCircleThreadItemSnapshot(doc, uid))
-          .filter((item): item is CircleThreadItem => Boolean(item));
-        emit();
-      },
-      error => onError?.(error),
-    );
-  const unsubscribeRead = circleRef
-    .collection('threadReads')
-    .doc(uid)
-    .onSnapshot(
-      snapshot => {
-        readAt = snapshot.data()?.readAt;
-        emit();
-      },
-      error => onError?.(error),
-    );
-
-  return () => {
-    unsubscribeItems();
-    unsubscribeRead();
-  };
 }
 
 export async function uploadCircleThreadImage({

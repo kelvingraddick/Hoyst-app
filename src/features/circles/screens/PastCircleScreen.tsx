@@ -12,7 +12,9 @@ import {useHoystTheme} from '../../../design/theme/useHoystTheme';
 import type {RootStackParamList} from '../../../navigation/types';
 import {useSessionStore} from '../../../store/session-store';
 import {
+  subscribeToPastCircleMembershipPeriods,
   subscribeToPastCircleTapIns,
+  type PastCircleMembershipPeriod,
   type PastCircleTapIn,
 } from '../services/past-circle-service';
 
@@ -50,6 +52,9 @@ export function PastCircleScreen({navigation, route}: Props) {
   const theme = useHoystTheme();
   const uid = useSessionStore(state => state.user?.uid);
   const [tapIns, setTapIns] = useState<PastCircleTapIn[]>([]);
+  const [membershipPeriods, setMembershipPeriods] = useState<
+    PastCircleMembershipPeriod[]
+  >([]);
   const summary = route.params.summary;
 
   useEffect(() => {
@@ -66,9 +71,33 @@ export function PastCircleScreen({navigation, route}: Props) {
     });
   }, [summary.circleId, uid]);
 
-  const membershipCopy = useMemo(
-    () => `${formatDate(summary.joinedAt)} to ${formatDate(summary.leftAt)}`,
-    [summary.joinedAt, summary.leftAt],
+  useEffect(() => {
+    if (!uid) {
+      setMembershipPeriods([]);
+      return undefined;
+    }
+
+    return subscribeToPastCircleMembershipPeriods({
+      circleId: summary.circleId,
+      onError: () => undefined,
+      onPeriods: setMembershipPeriods,
+      uid,
+    });
+  }, [summary.circleId, uid]);
+
+  const visibleMembershipPeriods = useMemo(
+    () =>
+      membershipPeriods.length > 0
+        ? membershipPeriods
+        : [
+            {
+              id: 'summary',
+              joinedAt: summary.joinedAt,
+              leftAt: summary.leftAt,
+              role: 'member' as const,
+            },
+          ],
+    [membershipPeriods, summary.joinedAt, summary.leftAt],
   );
 
   return (
@@ -98,9 +127,25 @@ export function PastCircleScreen({navigation, route}: Props) {
             {summary.category}
           </HoystText>
         </View>
-        <View style={styles.membershipRow}>
-          <CalendarDays color={theme.accent} size={17} strokeWidth={2.2} />
-          <HoystText style={styles.membershipCopy}>{membershipCopy}</HoystText>
+        <View style={styles.membershipHistory}>
+          <HoystText tone="muted" variant="label">
+            Membership history
+          </HoystText>
+          {visibleMembershipPeriods.map((period, index) => (
+            <View key={period.id} style={styles.membershipRow}>
+              <CalendarDays color={theme.accent} size={17} strokeWidth={2.2} />
+              <View style={styles.membershipPeriodCopy}>
+                <HoystText style={styles.membershipCopy}>
+                  {formatDate(period.joinedAt)} to {formatDate(period.leftAt)}
+                </HoystText>
+                {visibleMembershipPeriods.length > 1 ? (
+                  <HoystText tone="muted" variant="tiny">
+                    Membership period {index + 1}
+                  </HoystText>
+                ) : null}
+              </View>
+            </View>
+          ))}
         </View>
       </GlassPanel>
 
@@ -195,11 +240,12 @@ const styles = StyleSheet.create({
   },
   heroPanel: {gap: 9},
   membershipCopy: {fontSize: 13, fontWeight: '700', lineHeight: 17},
+  membershipHistory: {gap: 8, marginTop: 4},
+  membershipPeriodCopy: {flex: 1, gap: 1},
   membershipRow: {
     alignItems: 'center',
     flexDirection: 'row',
     gap: 8,
-    marginTop: 4,
   },
   navRow: {
     alignItems: 'center',

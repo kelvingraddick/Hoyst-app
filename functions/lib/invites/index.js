@@ -5,6 +5,7 @@ const https_1 = require("firebase-functions/v2/https");
 const firestore_1 = require("firebase-admin/firestore");
 const zod_1 = require("zod");
 const firebase_1 = require("../firebase");
+const circle_lifecycle_1 = require("../shared/circle-lifecycle");
 const invite_code_1 = require("../shared/invite-code");
 const resolveInviteSchema = zod_1.z.object({
     inviteCode: zod_1.z.string().trim(),
@@ -287,6 +288,7 @@ exports.rotateCircleInvite = (0, https_1.onCall)(async (request) => {
         if (!circleSnapshot.exists || !circle || circle.circleMode === 'personal') {
             throw new https_1.HttpsError('not-found', 'Circle not found.');
         }
+        (0, circle_lifecycle_1.ensureActiveCircle)(circle, 'resetting its invite link');
         if (circle.ownerId !== uid ||
             member?.role !== 'owner' ||
             member.status !== 'active') {

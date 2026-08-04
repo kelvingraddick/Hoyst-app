@@ -1,20 +1,23 @@
-import React, {useCallback, useEffect, useMemo, useState} from 'react';
+import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {
   Alert,
   Pressable,
   Share,
   StyleSheet,
   View,
+  type LayoutChangeEvent,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
 import {
+  Archive,
   ArrowLeft,
   ChevronRight,
   Crown,
   Globe2,
   Lock,
-  MessageCircle,
   Settings2,
   Trash2,
   UserCheck,
@@ -24,15 +27,12 @@ import {
 import type {NativeStackScreenProps} from '@react-navigation/native-stack';
 
 import {CircleCompanionGrid} from '../../../design/components/CircleCompanionGrid';
-import {
-  ContributionSummaryIcon,
-  StreakSummaryIcon,
-} from '../../../design/components/CircleSummaryRings';
 import {FrostedBackdrop} from '../../../design/components/FrostedBackdrop';
 import {GlassPanel} from '../../../design/components/GlassPanel';
 import {HoystButton} from '../../../design/components/HoystButton';
 import {HoystScreen} from '../../../design/components/HoystScreen';
 import {HoystText} from '../../../design/components/HoystText';
+import {MomentumFlameIllustration} from '../../../design/components/MomentumIllustrations';
 import {
   CircleCategoryIcon,
   getCircleCategoryForegroundColor,
@@ -42,15 +42,8 @@ import {
   ScreenHeroHeader,
   HeroIconButton,
 } from '../../../design/components/ScreenHeroHeader';
-import {
-  SectionEyebrow,
-  SectionEyebrowTrailing,
-} from '../../../design/components/SectionEyebrow';
+import {SectionEyebrow} from '../../../design/components/SectionEyebrow';
 import {SectionHeader} from '../../../design/components/SectionHeader';
-import {
-  StatBarCard,
-  clampStatPercent,
-} from '../../../design/components/StatBarCard';
 import {TapInPulseButton} from '../../../design/components/TapInPulseButton';
 import {WeekProgressStrip} from '../../../design/components/WeekProgressStrip';
 import {getPulseRingStateForCircle} from '../../../design/components/pulse-ring-state';
@@ -62,12 +55,12 @@ import {useUserProfileStore} from '../../../store/profile-store';
 import {useSessionStore} from '../../../store/session-store';
 import {removeTapIn} from '../../check-in/services/check-in-service';
 import {getCircleDetail} from '../mockData';
+import {CircleThreadSection} from '../components/CircleThreadSection';
 import {
   joinCircle,
   nudgeCircleMembers,
   reviewJoinRequest,
 } from '../services/circle-service';
-import {subscribeToCircleThreadPreview} from '../services/circle-thread-service';
 import {subscribeToPublicCircle} from '../services/public-circle-service';
 import {circleProgressToWeekCells} from '../services/week-progress-adapter';
 import {
@@ -77,7 +70,6 @@ import {
 import type {
   CircleDetailModel,
   CircleMemberStatus,
-  CircleThreadPreview,
   CircleSummary,
 } from '../../../types/models';
 import type {RootStackParamList} from '../../../navigation/types';
@@ -94,26 +86,15 @@ type DetailStatusPill = {
   label: string;
   tone: HeroPillTone;
 };
-type CircleDetailArtworkKind = 'completion' | 'flame' | 'members';
-type CircleDetailArtworkAdjustment = {
-  scale: number;
-  translateX?: number;
-  translateY?: number;
-};
-
-const STAT_ARTWORK_SIZE = 26;
-const ARTWORK_ICON_ADJUSTMENTS: Record<
-  CircleDetailArtworkKind,
-  CircleDetailArtworkAdjustment
-> = {
-  completion: {scale: 1},
-  flame: {scale: 1},
-  members: {scale: 1, translateY: 1},
-};
+const THREAD_LOAD_MORE_THRESHOLD = 240;
 
 function getDetailStatusPill(
   detail: CircleDetailModel,
 ): DetailStatusPill | undefined {
+  if (detail.lifecycleStatus === 'archived') {
+    return {label: 'Archived', tone: 'neutral'};
+  }
+
   if (detail.viewerMembershipStatus === 'pending') {
     return {label: 'Pending', tone: 'purple'};
   }
@@ -171,6 +152,16 @@ function getJoinModeLabel(detail: CircleDetailModel) {
 
 function formatNudgeTargetCount(count: number) {
   return count === 1 ? '1 member to nudge' : `${count} members to nudge`;
+}
+
+function formatArchivedDate(date?: Date) {
+  return date
+    ? new Intl.DateTimeFormat('en-US', {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+      }).format(date)
+    : undefined;
 }
 
 function TopBarButton({
@@ -324,54 +315,6 @@ function getHeroStatusPillPalette(
   };
 }
 
-function CircleDetailArtworkIcon({
-  color,
-  kind,
-  size = 30,
-}: {
-  color: string;
-  kind: CircleDetailArtworkKind;
-  size?: number;
-}) {
-  const adjustment = ARTWORK_ICON_ADJUSTMENTS[kind];
-  const renderIcon = (children: React.ReactNode) => (
-    <View
-      style={[styles.artworkIconFrame, {height: size, width: size}]}
-      testID={`circle-detail-artwork-${kind}`}>
-      <View
-        style={[
-          styles.artworkIconContent,
-          {
-            transform: [
-              {translateX: adjustment.translateX ?? 0},
-              {translateY: adjustment.translateY ?? 0},
-              {scale: adjustment.scale},
-            ],
-          },
-        ]}>
-        {children}
-      </View>
-    </View>
-  );
-
-  if (kind === 'completion') {
-    return renderIcon(
-      <ContributionSummaryIcon
-        size={size}
-        testID="circle-detail-completion-icon"
-      />,
-    );
-  }
-
-  if (kind === 'flame') {
-    return renderIcon(
-      <StreakSummaryIcon size={size} testID="circle-detail-streak-icon" />,
-    );
-  }
-
-  return renderIcon(<UsersRound color={color} size={size} strokeWidth={3} />);
-}
-
 function DashboardUtilityAction({
   icon,
   label,
@@ -497,31 +440,92 @@ function getCompanionProgressSubtitle(detail: CircleDetailModel) {
   )}`;
 }
 
-function CircleStatRings({
+function clampProgressPercent(value: number) {
+  if (!Number.isFinite(value)) {
+    return 0;
+  }
+
+  return Math.max(0, Math.min(100, Math.round(value)));
+}
+
+function CircleStatsSection({
   detail,
+  progressColor,
+  progressPercent,
   weekCells,
 }: {
   detail: CircleDetailModel;
+  progressColor: string;
+  progressPercent: number;
   weekCells: React.ComponentProps<typeof WeekProgressStrip>['days'];
 }) {
   const theme = useHoystTheme();
-  const completion = clampStatPercent(detail.completionRate);
+  const progressionPercent = clampProgressPercent(progressPercent);
   const streakSource =
     detail.streakDays ?? Number.parseInt(detail.streakLabel, 10);
-  const streakValue = Number.isFinite(streakSource) ? streakSource : 0;
-  const streakProgress = Math.max(0, Math.min(1, streakValue / 7));
-  const maxSize =
-    detail.maxSize > 0 ? detail.maxSize : Math.max(detail.memberCount, 1);
-  const memberProgress = Math.max(0, Math.min(1, detail.memberCount / maxSize));
+  const streakValue = Number.isFinite(streakSource)
+    ? Math.max(0, Math.round(streakSource))
+    : 0;
+  const streakDayLabel = streakValue === 1 ? 'day' : 'days';
   const isPersonal = detail.circleMode === 'personal';
-  const statsRangeLabel =
-    detail.commitmentCadence === 'monthly' ? 'This month' : 'This week';
 
   return (
     <View style={styles.statRingsSection}>
       <View style={styles.statsTitleRow}>
         <SectionEyebrow>Stats</SectionEyebrow>
-        <SectionEyebrowTrailing>{statsRangeLabel}</SectionEyebrowTrailing>
+        <View
+          accessibilityLabel={`Streak ${streakValue} ${streakDayLabel}`}
+          style={[
+            styles.statsStreakPill,
+            {
+              backgroundColor: theme.glassSurfaceStrong,
+              borderColor: theme.glassChipBorder,
+            },
+          ]}
+          testID="circle-stats-streak-pill">
+          <MomentumFlameIllustration
+            size={16}
+            testID="circle-stats-streak-icon"
+          />
+          <HoystText
+            allowFontScaling={false}
+            style={[
+              styles.statsStreakPillLabel,
+              {color: theme.warningForeground},
+            ]}
+            testID="circle-stats-streak-label">
+            {`${streakValue} ${streakDayLabel}`}
+          </HoystText>
+        </View>
+      </View>
+      <View style={styles.statsProgressBlock} testID="circle-stats-progress">
+        <View style={styles.statsProgressLabelRow}>
+          <HoystText tone="muted" variant="caption">
+            {isPersonal ? 'Personal progress' : 'Circle progression'}
+          </HoystText>
+          <HoystText
+            style={{color: progressColor}}
+            testID="circle-stats-progress-value"
+            variant="bodyStrong">
+            {progressionPercent}%
+          </HoystText>
+        </View>
+        <View
+          style={[
+            styles.statsProgressTrack,
+            {backgroundColor: theme.surfaceMuted},
+          ]}>
+          <View
+            style={[
+              styles.statsProgressFill,
+              {
+                backgroundColor: progressColor,
+                width: `${Math.max(progressionPercent, 2)}%`,
+              },
+            ]}
+            testID="circle-stats-progress-fill"
+          />
+        </View>
       </View>
       <GlassPanel padding="compact" style={styles.statsWeekCard}>
         <WeekProgressStrip
@@ -530,62 +534,6 @@ function CircleStatRings({
           title="LAST 7 DAYS"
         />
       </GlassPanel>
-      <View style={styles.statRingsRow}>
-        {!isPersonal ? (
-          <StatBarCard
-            accessibilityLabel={`Completion ${completion}%.`}
-            barColor="#10B967"
-            chipColor="#E8F8EF"
-            chipTestID="circle-stats-completion-disc"
-            label="Completion"
-            progress={completion / 100}
-            surfaceStyle={styles.statBarCardSurface}
-            trackColor="rgba(16,185,103,0.2)"
-            value={`${completion}%`}>
-            <CircleDetailArtworkIcon
-              color={theme.successForeground}
-              kind="completion"
-              size={STAT_ARTWORK_SIZE}
-            />
-          </StatBarCard>
-        ) : null}
-        <StatBarCard
-          accessibilityLabel={`Streak ${streakValue} ${
-            streakValue === 1 ? 'day' : 'days'
-          }.`}
-          barColor="#FF8A3D"
-          chipColor="#FFE1D2"
-          chipTestID="circle-stats-streak-disc"
-          label="Streak"
-          progress={streakProgress}
-          surfaceStyle={styles.statBarCardSurface}
-          trackColor="rgba(255,138,61,0.22)"
-          value={String(streakValue)}>
-          <CircleDetailArtworkIcon
-            color={theme.warningForeground}
-            kind="flame"
-            size={STAT_ARTWORK_SIZE}
-          />
-        </StatBarCard>
-        {!isPersonal ? (
-          <StatBarCard
-            accessibilityLabel={`Members ${detail.memberCount} of ${maxSize}.`}
-            barColor="#7A55FF"
-            chipColor="#ECE6FF"
-            chipTestID="circle-stats-members-disc"
-            label="Members"
-            progress={memberProgress}
-            surfaceStyle={styles.statBarCardSurface}
-            trackColor="rgba(122,85,255,0.22)"
-            value={`${detail.memberCount}/${maxSize}`}>
-            <CircleDetailArtworkIcon
-              color={theme.accentSecondaryForeground}
-              kind="members"
-              size={STAT_ARTWORK_SIZE}
-            />
-          </StatBarCard>
-        ) : null}
-      </View>
     </View>
   );
 }
@@ -696,93 +644,6 @@ function NudgePanel({
   );
 }
 
-function CircleThreadPreviewCard({
-  onPress,
-  preview,
-}: {
-  onPress: () => void;
-  preview?: CircleThreadPreview;
-}) {
-  const theme = useHoystTheme();
-  const unreadCount = preview?.unreadCount ?? 0;
-  const hasLatest = Boolean(preview?.latestItem);
-  const title = hasLatest ? 'Circle chat' : 'Start the chat';
-  const subtitle = preview?.latestLabel ?? 'Message your companions.';
-
-  return (
-    <Pressable
-      accessibilityLabel="Open circle chat"
-      accessibilityRole="button"
-      onPress={onPress}
-      testID="circle-detail-thread-preview-button"
-      style={({pressed}) => [
-        styles.threadPreviewPressable,
-        {
-          opacity: pressed ? actionMotion.pressedOpacity : 1,
-          transform: [{scale: pressed ? actionMotion.pressedScale : 1}],
-        },
-      ]}>
-      <GlassPanel padding="none" style={styles.threadPreviewCard}>
-        <View
-          style={styles.threadPreviewFill}
-          testID="circle-detail-thread-preview-fill">
-          <View
-            testID="circle-detail-thread-preview-icon"
-            style={[
-              styles.threadPreviewIcon,
-              {
-                backgroundColor: theme.isDark
-                  ? 'rgba(47,111,237,0.22)'
-                  : 'rgba(47,111,237,0.12)',
-              },
-            ]}>
-            <MessageCircle
-              color={theme.accentTertiaryForeground}
-              size={18}
-              strokeWidth={2.3}
-            />
-          </View>
-          <View style={styles.threadPreviewCopy}>
-            <View style={styles.threadPreviewTitleRow}>
-              <HoystText style={styles.threadPreviewTitle}>{title}</HoystText>
-              {unreadCount > 0 ? (
-                <View
-                  style={[
-                    styles.threadPreviewBadge,
-                    {backgroundColor: theme.dangerForeground},
-                  ]}>
-                  <HoystText style={styles.threadPreviewBadgeText}>
-                    {Math.min(unreadCount, 9)}
-                  </HoystText>
-                </View>
-              ) : null}
-            </View>
-            <HoystText
-              numberOfLines={1}
-              style={styles.threadPreviewSubtitle}
-              tone="muted"
-              variant="caption">
-              {subtitle}
-            </HoystText>
-          </View>
-          <View style={styles.threadPreviewTrailing}>
-            {preview?.latestTimestamp ? (
-              <HoystText tone="muted" variant="tiny">
-                {preview.latestTimestamp}
-              </HoystText>
-            ) : null}
-            <ChevronRight
-              color={theme.textSubtle}
-              size={16}
-              strokeWidth={2.4}
-            />
-          </View>
-        </View>
-      </GlassPanel>
-    </Pressable>
-  );
-}
-
 export function CircleDetailScreen({
   navigation,
   route,
@@ -812,7 +673,17 @@ export function CircleDetailScreen({
   const [memberCircle, setMemberCircle] = useState<
     CircleDetailModel | undefined
   >();
-  const [threadPreview, setThreadPreview] = useState<CircleThreadPreview>();
+  const [isThreadVisible, setIsThreadVisible] = useState(false);
+  const [threadLoadMoreRequestToken, setThreadLoadMoreRequestToken] =
+    useState(0);
+  const bodyOffsetYRef = useRef<number | undefined>(undefined);
+  const threadOffsetYRef = useRef<number | undefined>(undefined);
+  const wasNearThreadEndRef = useRef(false);
+  const scrollMetricsRef = useRef({
+    contentHeight: 0,
+    offsetY: 0,
+    viewportHeight: 0,
+  });
   const profile = useUserProfileStore(state => state.profile);
   const status = useSessionStore(state => state.status);
   const user = useSessionStore(state => state.user);
@@ -826,6 +697,88 @@ export function CircleDetailScreen({
       (publicCircle ? buildPublicCircleDetail(publicCircle) : undefined) ??
       getCircleDetail(route.params.circleId),
     [memberCircle, publicCircle, route.params.circleId],
+  );
+  const canShowThread = Boolean(
+    canLoadMemberCircle &&
+      user?.uid &&
+      detail?.viewerRole &&
+      detail.viewerMembershipStatus !== 'pending' &&
+      detail.circleMode !== 'personal',
+  );
+  const updateThreadScrollState = useCallback(() => {
+    const bodyOffsetY = bodyOffsetYRef.current;
+    const threadOffsetY = threadOffsetYRef.current;
+    const {contentHeight, offsetY, viewportHeight} = scrollMetricsRef.current;
+
+    if (
+      !canShowThread ||
+      bodyOffsetY === undefined ||
+      threadOffsetY === undefined ||
+      viewportHeight <= 0
+    ) {
+      setIsThreadVisible(false);
+      wasNearThreadEndRef.current = false;
+      return;
+    }
+
+    const viewportBottom = offsetY + viewportHeight;
+    const threadTop = bodyOffsetY + threadOffsetY;
+    const nextIsThreadVisible = viewportBottom >= threadTop;
+    const isNearThreadEnd =
+      nextIsThreadVisible &&
+      contentHeight > 0 &&
+      contentHeight - viewportBottom <= THREAD_LOAD_MORE_THRESHOLD;
+
+    setIsThreadVisible(current =>
+      current === nextIsThreadVisible ? current : nextIsThreadVisible,
+    );
+
+    if (isNearThreadEnd && !wasNearThreadEndRef.current) {
+      wasNearThreadEndRef.current = true;
+      setThreadLoadMoreRequestToken(currentToken => currentToken + 1);
+    } else if (!isNearThreadEnd) {
+      wasNearThreadEndRef.current = false;
+    }
+  }, [canShowThread]);
+  const handleBodyLayout = useCallback(
+    (event: LayoutChangeEvent) => {
+      bodyOffsetYRef.current = event.nativeEvent.layout.y;
+      updateThreadScrollState();
+    },
+    [updateThreadScrollState],
+  );
+  const handleThreadLayout = useCallback(
+    (event: LayoutChangeEvent) => {
+      threadOffsetYRef.current = event.nativeEvent.layout.y;
+      updateThreadScrollState();
+    },
+    [updateThreadScrollState],
+  );
+  const handleScreenContentSizeChange = useCallback(
+    (_width: number, height: number) => {
+      scrollMetricsRef.current.contentHeight = height;
+      updateThreadScrollState();
+    },
+    [updateThreadScrollState],
+  );
+  const handleScreenLayout = useCallback(
+    (event: LayoutChangeEvent) => {
+      scrollMetricsRef.current.viewportHeight = event.nativeEvent.layout.height;
+      updateThreadScrollState();
+    },
+    [updateThreadScrollState],
+  );
+  const handleScreenScroll = useCallback(
+    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+      const {contentOffset, contentSize, layoutMeasurement} = event.nativeEvent;
+      scrollMetricsRef.current = {
+        contentHeight: contentSize.height,
+        offsetY: contentOffset.y,
+        viewportHeight: layoutMeasurement.height,
+      };
+      updateThreadScrollState();
+    },
+    [updateThreadScrollState],
   );
   const nudgeTargetMembers = useMemo(
     () =>
@@ -841,6 +794,11 @@ export function CircleDetailScreen({
     setNudged(false);
     setNudgedMemberIds(new Set());
     setNudgingMemberIds(new Set());
+    setIsThreadVisible(false);
+    setThreadLoadMoreRequestToken(0);
+    bodyOffsetYRef.current = undefined;
+    threadOffsetYRef.current = undefined;
+    wasNearThreadEndRef.current = false;
   }, [detail?.id]);
 
   useEffect(() => {
@@ -863,33 +821,6 @@ export function CircleDetailScreen({
       uid: user.uid,
     });
   }, [canLoadMemberCircle, route.params.circleId, timezone, user?.uid]);
-
-  useEffect(() => {
-    if (
-      !canLoadMemberCircle ||
-      !user?.uid ||
-      !detail?.viewerRole ||
-      detail.viewerMembershipStatus === 'pending' ||
-      detail.circleMode === 'personal'
-    ) {
-      setThreadPreview(undefined);
-      return undefined;
-    }
-
-    return subscribeToCircleThreadPreview({
-      circleId: route.params.circleId,
-      onError: () => setThreadPreview(undefined),
-      onPreview: setThreadPreview,
-      uid: user.uid,
-    });
-  }, [
-    canLoadMemberCircle,
-    detail?.viewerMembershipStatus,
-    detail?.viewerRole,
-    detail?.circleMode,
-    route.params.circleId,
-    user?.uid,
-  ]);
 
   const handleJoinCircle = useCallback(async () => {
     if (!detail) {
@@ -960,7 +891,9 @@ export function CircleDetailScreen({
   const isPendingMembership = detail.viewerMembershipStatus === 'pending';
   const isMemberCircle = Boolean(detail.viewerRole) && !isPendingMembership;
   const isPersonal = detail.circleMode === 'personal';
+  const isArchived = detail.lifecycleStatus === 'archived';
   const canInvite =
+    !isArchived &&
     Boolean(detail.inviteUrl) &&
     (detail.viewerRole === 'owner' || detail.viewerRole === 'admin');
   const detailStatusPill = getDetailStatusPill(detail);
@@ -978,6 +911,7 @@ export function CircleDetailScreen({
     ? 'Join Circle'
     : 'Request to join';
   const canRemoveTodayCheckIn =
+    !isArchived &&
     isMemberCircle &&
     detail.viewerHasTappedInToday &&
     Boolean(detail.viewerTodayStatus) &&
@@ -994,7 +928,10 @@ export function CircleDetailScreen({
     : 'Tap In';
   const tapInPulseRingState = getPulseRingStateForCircle(detail);
   const canReviewJoinRequests =
-    !isPersonal && isMemberCircle && detail.viewerRole === 'owner';
+    !isArchived &&
+    !isPersonal &&
+    isMemberCircle &&
+    detail.viewerRole === 'owner';
   const removeActionLabel =
     detail.viewerTodayStatus === 'skip' ? 'Remove Skip' : 'Remove Tap In';
   const removeProgressionCopy = canUpdateTodayQuantity
@@ -1076,10 +1013,6 @@ export function CircleDetailScreen({
           source: 'circle_detail',
         }),
     );
-  };
-
-  const openCircleThread = () => {
-    navigation.navigate('CircleThread', {circleId: detail.id});
   };
 
   const handleSendNudge = () => {
@@ -1256,22 +1189,16 @@ export function CircleDetailScreen({
     />
   ) : null;
   const companionFooterAction =
-    isMemberCircle && !isPersonal ? (
+    isMemberCircle && !isPersonal && !isArchived && canNudgeTargets ? (
       <View
         style={styles.companionActionStack}
         testID="circle-detail-companion-actions">
-        {canNudgeTargets ? (
-          <NudgePanel
-            isNudging={isNudging}
-            nudged={nudged}
-            onPress={handleSendNudge}
-            targetCopy={nudgeTargetCopy}
-            targetCount={nudgeTargetCount}
-          />
-        ) : null}
-        <CircleThreadPreviewCard
-          onPress={openCircleThread}
-          preview={threadPreview}
+        <NudgePanel
+          isNudging={isNudging}
+          nudged={nudged}
+          onPress={handleSendNudge}
+          targetCopy={nudgeTargetCopy}
+          targetCount={nudgeTargetCount}
         />
       </View>
     ) : undefined;
@@ -1280,7 +1207,14 @@ export function CircleDetailScreen({
     <HoystScreen
       background={<FrostedBackdrop topAccentColor={categoryBackdropAccent} />}
       contentContainerStyle={styles.content}
-      padded={false}>
+      keyboardAvoiding
+      keyboardDismissMode="interactive"
+      keyboardShouldPersistTaps="handled"
+      onContentSizeChange={handleScreenContentSizeChange}
+      onLayout={handleScreenLayout}
+      onScroll={handleScreenScroll}
+      padded={false}
+      scrollEventThrottle={16}>
       <View style={styles.detailStack}>
         <ScreenHeroHeader
           actions={
@@ -1388,7 +1322,7 @@ export function CircleDetailScreen({
           navTitle={isPersonal ? 'Personal Commitment' : 'Circle'}
           onBack={navigateBack}
           primaryAction={
-            isMemberCircle ? (
+            isMemberCircle && !isArchived ? (
               <TapInReferenceAction
                 label={tapInPrimaryActionLabel}
                 onPress={openTapInComposer}
@@ -1398,22 +1332,53 @@ export function CircleDetailScreen({
               />
             ) : undefined
           }
-          progress={{
-            color: categoryProgressColor,
-            label: isPersonal ? 'Personal progress' : 'Circle progression',
-            percent: circleProgressionPercent,
-          }}
           subtitle={detailStatusPill ? undefined : previewCopy}
           title={detail.title}
         />
 
-        <View style={styles.bodyStack} testID="circle-detail-body-stack">
+        <View
+          onLayout={handleBodyLayout}
+          style={styles.bodyStack}
+          testID="circle-detail-body-stack">
+          {isArchived ? (
+            <GlassPanel style={styles.archivedBanner}>
+              <View
+                style={[
+                  styles.archivedBannerIcon,
+                  {backgroundColor: theme.surfaceHigh},
+                ]}>
+                <Archive color={theme.textMuted} size={20} strokeWidth={2.2} />
+              </View>
+              <View style={styles.archivedBannerCopy}>
+                <HoystText style={styles.archivedBannerTitle}>
+                  {isPersonal ? 'Commitment archived' : 'Circle archived'}
+                </HoystText>
+                <HoystText tone="muted" variant="caption">
+                  Read-only history
+                  {formatArchivedDate(detail.archivedAt)
+                    ? ` · Archived ${formatArchivedDate(detail.archivedAt)}`
+                    : ''}
+                  . Owners can restore this from Settings.
+                </HoystText>
+              </View>
+            </GlassPanel>
+          ) : null}
+
+          <CircleStatsSection
+            detail={detail}
+            progressColor={categoryProgressColor}
+            progressPercent={circleProgressionPercent}
+            weekCells={weekCells}
+          />
+
           {!isPersonal ? (
             <CircleCompanionGrid
-              canTapInViewer={isMemberCircle && !canRemoveTodayCheckIn}
+              canTapInViewer={
+                !isArchived && isMemberCircle && !canRemoveTodayCheckIn
+              }
               footerAction={companionFooterAction}
               inviteAction={
-                canInvite
+                !isArchived && canInvite
                   ? {
                       accessibilityLabel: 'Invite companions',
                       onPress: shareInvite,
@@ -1423,11 +1388,15 @@ export function CircleDetailScreen({
               members={detail.members}
               nudgedMemberIds={nudgedMemberIds}
               nudgingMemberIds={nudgingMemberIds}
-              onNudgeMember={isMemberCircle ? handleSendMemberNudge : undefined}
+              onNudgeMember={
+                isMemberCircle && !isArchived
+                  ? handleSendMemberNudge
+                  : undefined
+              }
               onReviewPendingMember={
                 canReviewJoinRequests ? openReviewJoinRequestSheet : undefined
               }
-              onTapInViewer={openTapInComposer}
+              onTapInViewer={isArchived ? undefined : openTapInComposer}
               reviewingPendingMemberId={reviewingRequestId}
               subtitle={getCompanionProgressSubtitle(detail)}
               tapInRingState={tapInPulseRingState}
@@ -1435,7 +1404,7 @@ export function CircleDetailScreen({
             />
           ) : null}
 
-          {!isMemberCircle ? (
+          {!isArchived && !isMemberCircle ? (
             isPendingMembership ? (
               <View style={styles.publicActionStack}>
                 <HoystButton
@@ -1494,9 +1463,20 @@ export function CircleDetailScreen({
             )
           ) : null}
 
-          <CircleStatRings detail={detail} weekCells={weekCells} />
-
           {removeTapInAction}
+
+          {canShowThread && user?.uid ? (
+            <CircleThreadSection
+              circleId={detail.id}
+              isArchived={isArchived}
+              isVisible={isThreadVisible}
+              key={detail.id}
+              loadMoreRequestToken={threadLoadMoreRequestToken}
+              onLayout={handleThreadLayout}
+              timezone={timezone}
+              viewerUid={user.uid}
+            />
+          ) : null}
         </View>
       </View>
     </HoystScreen>
@@ -1504,6 +1484,16 @@ export function CircleDetailScreen({
 }
 
 const styles = StyleSheet.create({
+  archivedBanner: {alignItems: 'center', flexDirection: 'row', gap: 12},
+  archivedBannerCopy: {flex: 1, gap: 3},
+  archivedBannerIcon: {
+    alignItems: 'center',
+    borderRadius: 14,
+    height: 42,
+    justifyContent: 'center',
+    width: 42,
+  },
+  archivedBannerTitle: {fontSize: 16, fontWeight: '800', lineHeight: 20},
   content: {
     paddingBottom: 148,
   },
@@ -1575,27 +1565,44 @@ const styles = StyleSheet.create({
     flexShrink: 1,
     textAlign: 'center',
   },
-  artworkIconFrame: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'visible',
-  },
-  artworkIconContent: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   statRingsSection: {
     gap: 14,
   },
   statsWeekCard: {
     gap: 0,
   },
-  statRingsRow: {
-    flexDirection: 'row',
-    gap: 10,
+  statsProgressBlock: {
+    gap: 8,
   },
-  statBarCardSurface: {
-    minHeight: 132,
+  statsProgressFill: {
+    borderRadius: radius.pill,
+    height: 10,
+  },
+  statsProgressLabelRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  statsProgressTrack: {
+    borderRadius: radius.pill,
+    height: 10,
+    overflow: 'hidden',
+  },
+  statsStreakPill: {
+    alignItems: 'center',
+    borderRadius: 20,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: 5,
+    paddingHorizontal: 11,
+    paddingLeft: 8,
+    paddingVertical: 4,
+  },
+  statsStreakPillLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+    letterSpacing: 0,
+    lineHeight: 16,
   },
   topBar: {
     alignItems: 'center',
@@ -1744,69 +1751,6 @@ const styles = StyleSheet.create({
   },
   publicActionStack: {
     gap: 10,
-  },
-  threadPreviewBadge: {
-    alignItems: 'center',
-    borderRadius: radius.pill,
-    height: 18,
-    justifyContent: 'center',
-    minWidth: 18,
-    paddingHorizontal: 5,
-  },
-  threadPreviewBadgeText: {
-    color: '#FFFFFF',
-    fontSize: 10,
-    fontWeight: '900',
-    letterSpacing: 0,
-    lineHeight: 12,
-  },
-  threadPreviewCard: {
-    borderRadius: radius.md,
-  },
-  threadPreviewCopy: {
-    flex: 1,
-    gap: 2,
-    minWidth: 0,
-  },
-  threadPreviewFill: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: 10,
-    minHeight: 58,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-  },
-  threadPreviewIcon: {
-    alignItems: 'center',
-    borderRadius: 14,
-    height: 40,
-    justifyContent: 'center',
-    width: 40,
-  },
-  threadPreviewPressable: {
-    borderRadius: radius.md,
-  },
-  threadPreviewSubtitle: {
-    fontSize: 13,
-    fontWeight: '600',
-    letterSpacing: 0,
-    lineHeight: 17,
-  },
-  threadPreviewTitle: {
-    fontSize: 15,
-    fontWeight: '900',
-    letterSpacing: 0,
-    lineHeight: 19,
-  },
-  threadPreviewTitleRow: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: 8,
-  },
-  threadPreviewTrailing: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: 4,
   },
   statsSeeAll: {
     fontSize: 14,

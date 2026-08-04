@@ -554,6 +554,7 @@ export const completeProfile = onCall(async request => {
         commitmentFrequency,
         commitmentType,
         graceRules: starterCircleHiddenDefaults.graceRules,
+        lifecycleStatus: 'active',
         ...(inviteCode ? {inviteCode} : {}),
         joinMode,
         ...(typeof quantityConfig.maximumValue === 'number'
@@ -615,6 +616,7 @@ export const completeProfile = onCall(async request => {
           commitmentFrequency,
           commitmentType,
           joinMode,
+          lifecycleStatus: 'active',
           ...(typeof quantityConfig.maximumValue === 'number'
             ? {maximumValue: quantityConfig.maximumValue}
             : {}),

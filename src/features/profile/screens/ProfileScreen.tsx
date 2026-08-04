@@ -10,6 +10,7 @@ import {
   View,
 } from 'react-native';
 import {
+  Archive as ArchiveIcon,
   Bell,
   BellRing,
   Check,
@@ -64,6 +65,7 @@ import {
   type NotificationSettings,
 } from '../../settings/services/notification-settings-service';
 import {requestPushNotificationPermission} from '../../../lib/notifications';
+import {subscribeToArchivedCircles} from '../../circles/services/archived-circle-service';
 import {
   formatProfileStatValue,
   getProfileAvatarSource,
@@ -697,6 +699,7 @@ export function ProfileScreen({navigation}: Props): React.JSX.Element {
     useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
+  const [archivedCircleCount, setArchivedCircleCount] = useState(0);
   const rootNavigation =
     navigation.getParent<NativeStackNavigationProp<RootStackParamList>>();
   const isReady = status === 'authenticatedReady' && Boolean(profile);
@@ -705,6 +708,22 @@ export function ProfileScreen({navigation}: Props): React.JSX.Element {
     queryFn: getProfileSummary,
     queryKey: ['profileSummary', profile?.id],
   });
+  const refetchProfileSummary = profileSummaryQuery.refetch;
+  useEffect(() => {
+    if (!isReady || !user?.uid) {
+      setArchivedCircleCount(0);
+      return undefined;
+    }
+
+    return subscribeToArchivedCircles({
+      onCircles: circles => {
+        setArchivedCircleCount(circles.length);
+        refetchProfileSummary().catch(() => undefined);
+      },
+      onError: () => undefined,
+      uid: user.uid,
+    });
+  }, [isReady, refetchProfileSummary, user?.uid]);
   const openProfileAuth = () => {
     clearPendingAction();
     beginAuthFlow();
@@ -979,6 +998,26 @@ export function ProfileScreen({navigation}: Props): React.JSX.Element {
         </View>
       </View>
       <View style={styles.settingsStack}>
+        <SettingsSection title="Commitments">
+          <SettingsRow
+            detail="View history and restore items you own."
+            icon={ArchiveIcon}
+            iconTone="purple"
+            onPress={() => rootNavigation?.navigate('ArchivedCircles')}
+            title="Archived commitments & circles"
+            trailing={
+              <View style={styles.archiveRowTrailing}>
+                <SettingsValue>{String(archivedCircleCount)}</SettingsValue>
+                <ChevronRight
+                  color={theme.textSubtle}
+                  size={18}
+                  strokeWidth={2.2}
+                />
+              </View>
+            }
+          />
+        </SettingsSection>
+
         <SettingsSection title="Account">
           <SettingsRow
             detail="Update your name, bio, and timezone."
@@ -1220,6 +1259,7 @@ export function ProfileScreen({navigation}: Props): React.JSX.Element {
 }
 
 const styles = StyleSheet.create({
+  archiveRowTrailing: {alignItems: 'center', flexDirection: 'row', gap: 8},
   content: {
     paddingBottom: 168,
   },

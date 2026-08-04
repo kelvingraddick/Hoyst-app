@@ -20,6 +20,7 @@ export {
   updateTapInDetails,
 } from './checkins';
 export {
+  archiveCircle,
   convertPersonalCircle,
   createCircle,
   deleteCircle,
@@ -27,6 +28,7 @@ export {
   leaveCircle,
   nudgeCircleMembers,
   reviewJoinRequest,
+  unarchiveCircle,
   updateCircle,
 } from './circles';
 export {generateHomeGreeting} from './homeGreeting';

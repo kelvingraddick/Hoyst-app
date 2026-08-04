@@ -4,6 +4,7 @@ import type {
 } from 'firebase-admin/firestore';
 
 import {db} from '../firebase';
+import {getCircleLifecycleStatus} from '../shared/circle-lifecycle';
 import {getCircleMode} from '../shared/circle-mode';
 import {isCoveredCheckInData} from '../shared/commitments';
 import {
@@ -115,6 +116,21 @@ function getProfileTimezone(profile: DocumentData | undefined) {
     : 'UTC';
 }
 
+export function summarizeActiveCircleModes(circles: unknown[]) {
+  const activeCircles = circles.filter(
+    circle => getCircleLifecycleStatus(circle) === 'active',
+  );
+
+  return {
+    activeCircleCount: activeCircles.filter(
+      circle => getCircleMode(circle) === 'group',
+    ).length,
+    activePersonalCommitmentCount: activeCircles.filter(
+      circle => getCircleMode(circle) === 'personal',
+    ).length,
+  };
+}
+
 export async function calculatePersonalMetricsForUser({
   excludedCheckInPath,
   now = new Date(),
@@ -144,20 +160,25 @@ export async function calculatePersonalMetricsForUser({
       db.collection('circles').doc(circleId).get(),
     ),
   );
-  const activePersonalCommitmentCount = activeCircleSnapshots.filter(
+  const lifecycleActiveCircleSnapshots = activeCircleSnapshots.filter(
     snapshot =>
-      snapshot.exists && getCircleMode(snapshot.data()) === 'personal',
-  ).length;
-  const activeCircleCount = activeCircleSnapshots.filter(
-    snapshot => snapshot.exists && getCircleMode(snapshot.data()) === 'group',
-  ).length;
+      snapshot.exists && getCircleLifecycleStatus(snapshot.data()) === 'active',
+  );
+  const {activeCircleCount, activePersonalCommitmentCount} =
+    summarizeActiveCircleModes(
+      activeCircleSnapshots
+        .filter(snapshot => snapshot.exists)
+        .map(snapshot => snapshot.data()),
+    );
   const checkInsSnapshot = await db
     .collectionGroup('checkIns')
     .where('uid', '==', uid)
     .get();
   const {activeCoveredCheckInDateKeys, coveredCheckInDateKeys, totalTapIns} =
     summarizeProfileCheckIns({
-      activeCircleIds,
+      activeCircleIds: new Set(
+        lifecycleActiveCircleSnapshots.map(snapshot => snapshot.id),
+      ),
       checkInSnapshots: checkInsSnapshot.docs,
       excludedCheckInPath,
       timezone,

@@ -52,7 +52,11 @@ export function buildCircleInvitePreview(
   circleId: string,
   circle: PlainData | undefined,
 ): CircleInvitePreview | undefined {
-  if (!circle || circle.circleMode === 'personal') {
+  if (
+    !circle ||
+    circle.circleMode === 'personal' ||
+    circle.lifecycleStatus === 'archived'
+  ) {
     return undefined;
   }
 

@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.healthcheck = exports.rotateCircleInvite = exports.resolveCircleInvite = exports.invitePage = exports.toggleCircleThreadItemLike = exports.sendCircleThreadMessage = exports.markCircleThreadRead = exports.materializeMomentumOpportunities = exports.backfillMomentumOpportunities = exports.getProfileSummary = exports.generateHomeGreeting = exports.updateCircle = exports.reviewJoinRequest = exports.nudgeCircleMembers = exports.leaveCircle = exports.joinCircle = exports.deleteCircle = exports.createCircle = exports.convertPersonalCircle = exports.updateTapInDetails = exports.submitTapIn = exports.removeTapIn = exports.processTapInSideEffects = exports.deleteAccount = exports.completeProfile = exports.updateNotificationSettings = exports.sendRoutineEngagementNotifications = exports.sendMiddayTapInReminders = exports.sendFinalTapInWarnings = exports.sendEveningActivityRecaps = exports.repairPushSubscription = exports.notificationModules = exports.markInboxEventRead = exports.markInboxEventsRead = exports.emailModules = void 0;
+exports.healthcheck = exports.rotateCircleInvite = exports.resolveCircleInvite = exports.invitePage = exports.toggleCircleThreadItemLike = exports.sendCircleThreadMessage = exports.markCircleThreadRead = exports.materializeMomentumOpportunities = exports.backfillMomentumOpportunities = exports.getProfileSummary = exports.generateHomeGreeting = exports.updateCircle = exports.unarchiveCircle = exports.reviewJoinRequest = exports.nudgeCircleMembers = exports.leaveCircle = exports.joinCircle = exports.deleteCircle = exports.createCircle = exports.convertPersonalCircle = exports.archiveCircle = exports.updateTapInDetails = exports.submitTapIn = exports.removeTapIn = exports.processTapInSideEffects = exports.deleteAccount = exports.completeProfile = exports.updateNotificationSettings = exports.sendRoutineEngagementNotifications = exports.sendMiddayTapInReminders = exports.sendFinalTapInWarnings = exports.sendEveningActivityRecaps = exports.repairPushSubscription = exports.notificationModules = exports.markInboxEventRead = exports.markInboxEventsRead = exports.emailModules = void 0;
 const https_1 = require("firebase-functions/v2/https");
 var emails_1 = require("./emails");
 Object.defineProperty(exports, "emailModules", { enumerable: true, get: function () { return emails_1.emailModules; } });
@@ -23,6 +23,7 @@ Object.defineProperty(exports, "removeTapIn", { enumerable: true, get: function 
 Object.defineProperty(exports, "submitTapIn", { enumerable: true, get: function () { return checkins_1.submitTapIn; } });
 Object.defineProperty(exports, "updateTapInDetails", { enumerable: true, get: function () { return checkins_1.updateTapInDetails; } });
 var circles_1 = require("./circles");
+Object.defineProperty(exports, "archiveCircle", { enumerable: true, get: function () { return circles_1.archiveCircle; } });
 Object.defineProperty(exports, "convertPersonalCircle", { enumerable: true, get: function () { return circles_1.convertPersonalCircle; } });
 Object.defineProperty(exports, "createCircle", { enumerable: true, get: function () { return circles_1.createCircle; } });
 Object.defineProperty(exports, "deleteCircle", { enumerable: true, get: function () { return circles_1.deleteCircle; } });
@@ -30,6 +31,7 @@ Object.defineProperty(exports, "joinCircle", { enumerable: true, get: function (
 Object.defineProperty(exports, "leaveCircle", { enumerable: true, get: function () { return circles_1.leaveCircle; } });
 Object.defineProperty(exports, "nudgeCircleMembers", { enumerable: true, get: function () { return circles_1.nudgeCircleMembers; } });
 Object.defineProperty(exports, "reviewJoinRequest", { enumerable: true, get: function () { return circles_1.reviewJoinRequest; } });
+Object.defineProperty(exports, "unarchiveCircle", { enumerable: true, get: function () { return circles_1.unarchiveCircle; } });
 Object.defineProperty(exports, "updateCircle", { enumerable: true, get: function () { return circles_1.updateCircle; } });
 var homeGreeting_1 = require("./homeGreeting");
 Object.defineProperty(exports, "generateHomeGreeting", { enumerable: true, get: function () { return homeGreeting_1.generateHomeGreeting; } });

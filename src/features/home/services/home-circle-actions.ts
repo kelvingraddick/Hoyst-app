@@ -4,6 +4,7 @@ export type HomeCircleActionVariant = 'check_in' | 'nudge' | 'share' | 'view';
 
 type TapInTodayInput = Pick<
   CircleManagementCard,
+  | 'lifecycleStatus'
   | 'viewerCanUpdateTapIn'
   | 'viewerHasTappedInToday'
   | 'viewerMembershipStatus'
@@ -11,7 +12,10 @@ type TapInTodayInput = Pick<
 >;
 
 export function canTapInToday(circle: TapInTodayInput) {
-  if (circle.viewerMembershipStatus !== 'active') {
+  if (
+    circle.lifecycleStatus === 'archived' ||
+    circle.viewerMembershipStatus !== 'active'
+  ) {
     return false;
   }
 
@@ -30,6 +34,7 @@ export function getHomeCircleActionVariant(
   circle: CircleManagementCard,
 ): HomeCircleActionVariant {
   const canShareInvite = Boolean(
+    circle.lifecycleStatus !== 'archived' &&
     circle.inviteUrl &&
       (circle.viewerRole === 'owner' || circle.viewerRole === 'admin'),
   );

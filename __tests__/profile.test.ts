@@ -18,6 +18,7 @@ import {
 } from '../functions/src/profile/streak';
 import {
   getPersonalStreakTransition,
+  summarizeActiveCircleModes,
   summarizeProfileCheckIns,
 } from '../functions/src/profile';
 import {
@@ -123,6 +124,20 @@ describe('profile store', () => {
 });
 
 describe('profile display helpers', () => {
+  it('keeps archived commitments out of active Profile counts', () => {
+    expect(
+      summarizeActiveCircleModes([
+        {circleMode: 'group'},
+        {circleMode: 'personal', lifecycleStatus: 'active'},
+        {circleMode: 'group', lifecycleStatus: 'archived'},
+        {circleMode: 'personal', lifecycleStatus: 'archived'},
+      ]),
+    ).toEqual({
+      activeCircleCount: 1,
+      activePersonalCommitmentCount: 1,
+    });
+  });
+
   it('formats initials from a real profile and a generic fallback', () => {
     expect(getProfileInitials(profile)).toBe('KN');
     expect(getProfileInitials()).toBe('YO');

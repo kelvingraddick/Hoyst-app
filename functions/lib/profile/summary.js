@@ -2,8 +2,10 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.getPersonalStreakTransition = getPersonalStreakTransition;
 exports.summarizeProfileCheckIns = summarizeProfileCheckIns;
+exports.summarizeActiveCircleModes = summarizeActiveCircleModes;
 exports.calculatePersonalMetricsForUser = calculatePersonalMetricsForUser;
 const firebase_1 = require("../firebase");
+const circle_lifecycle_1 = require("../shared/circle-lifecycle");
 const circle_mode_1 = require("../shared/circle-mode");
 const commitments_1 = require("../shared/commitments");
 const streak_1 = require("./streak");
@@ -65,6 +67,13 @@ function getProfileTimezone(profile) {
         ? profile.timezone.trim()
         : 'UTC';
 }
+function summarizeActiveCircleModes(circles) {
+    const activeCircles = circles.filter(circle => (0, circle_lifecycle_1.getCircleLifecycleStatus)(circle) === 'active');
+    return {
+        activeCircleCount: activeCircles.filter(circle => (0, circle_mode_1.getCircleMode)(circle) === 'group').length,
+        activePersonalCommitmentCount: activeCircles.filter(circle => (0, circle_mode_1.getCircleMode)(circle) === 'personal').length,
+    };
+}
 async function calculatePersonalMetricsForUser({ excludedCheckInPath, now = new Date(), profile, uid, }) {
     const resolvedProfile = profile ?? (await firebase_1.db.collection('users').doc(uid).get()).data();
     const timezone = getProfileTimezone(resolvedProfile);
@@ -77,14 +86,16 @@ async function calculatePersonalMetricsForUser({ excludedCheckInPath, now = new 
         .map(getMembershipCircleId)
         .filter((circleId) => Boolean(circleId)));
     const activeCircleSnapshots = await Promise.all(Array.from(activeCircleIds).map(circleId => firebase_1.db.collection('circles').doc(circleId).get()));
-    const activePersonalCommitmentCount = activeCircleSnapshots.filter(snapshot => snapshot.exists && (0, circle_mode_1.getCircleMode)(snapshot.data()) === 'personal').length;
-    const activeCircleCount = activeCircleSnapshots.filter(snapshot => snapshot.exists && (0, circle_mode_1.getCircleMode)(snapshot.data()) === 'group').length;
+    const lifecycleActiveCircleSnapshots = activeCircleSnapshots.filter(snapshot => snapshot.exists && (0, circle_lifecycle_1.getCircleLifecycleStatus)(snapshot.data()) === 'active');
+    const { activeCircleCount, activePersonalCommitmentCount } = summarizeActiveCircleModes(activeCircleSnapshots
+        .filter(snapshot => snapshot.exists)
+        .map(snapshot => snapshot.data()));
     const checkInsSnapshot = await firebase_1.db
         .collectionGroup('checkIns')
         .where('uid', '==', uid)
         .get();
     const { activeCoveredCheckInDateKeys, coveredCheckInDateKeys, totalTapIns } = summarizeProfileCheckIns({
-        activeCircleIds,
+        activeCircleIds: new Set(lifecycleActiveCircleSnapshots.map(snapshot => snapshot.id)),
         checkInSnapshots: checkInsSnapshot.docs,
         excludedCheckInPath,
         timezone,

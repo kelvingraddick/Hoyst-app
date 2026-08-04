@@ -31,6 +31,13 @@ export type PastCircleTapIn = {
   unitLabel?: string;
 };
 
+export type PastCircleMembershipPeriod = {
+  id: string;
+  joinedAt?: Date;
+  leftAt?: Date;
+  role: 'admin' | 'member' | 'owner';
+};
+
 function asString(value: unknown, fallback = '') {
   return typeof value === 'string' && value.trim().length > 0
     ? value.trim()
@@ -176,6 +183,51 @@ export function subscribeToPastCircleTapIns({
             .map(mapPastTapIn)
             .filter((tapIn): tapIn is PastCircleTapIn => Boolean(tapIn))
             .sort((left, right) => right.dateKey.localeCompare(left.dateKey)),
+        );
+      },
+      error => onError?.(error),
+    );
+}
+
+export function subscribeToPastCircleMembershipPeriods({
+  circleId,
+  onError,
+  onPeriods,
+  uid,
+}: {
+  circleId: string;
+  onError?: (error: Error) => void;
+  onPeriods: (periods: PastCircleMembershipPeriod[]) => void;
+  uid: string;
+}) {
+  return firebaseFirestore()
+    .collection('circles')
+    .doc(circleId)
+    .collection('membershipHistory')
+    .doc(uid)
+    .collection('periods')
+    .onSnapshot(
+      snapshot => {
+        onPeriods(
+          snapshot.docs
+            .map(doc => {
+              const data = doc.data();
+
+              return {
+                id: doc.id,
+                joinedAt: asDate(data.joinedAt),
+                leftAt: asDate(data.leftAt),
+                role:
+                  data.role === 'owner' || data.role === 'admin'
+                    ? data.role
+                    : 'member',
+              } satisfies PastCircleMembershipPeriod;
+            })
+            .sort(
+              (left, right) =>
+                (left.joinedAt?.getTime() ?? 0) -
+                (right.joinedAt?.getTime() ?? 0),
+            ),
         );
       },
       error => onError?.(error),

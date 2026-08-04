@@ -47,6 +47,7 @@ import {
   isSingleTapInCommitment,
 } from '../shared/commitments';
 import {getCircleMode} from '../shared/circle-mode';
+import {ensureActiveCircle} from '../shared/circle-lifecycle';
 import {
   calculatePersonalMetricsForUser,
   getPersonalStreakTransition,
@@ -861,6 +862,7 @@ async function submitTapInHandler(request: CallableRequest) {
     }
 
     const circle = circleSnapshot.data();
+    ensureActiveCircle(circle, 'tapping in');
     const dateKey = getDateKey(circle?.timezone ?? profile.timezone ?? 'UTC');
     const checkInRef = circleRef
       .collection('days')
@@ -1120,6 +1122,7 @@ async function updateTapInDetailsHandler(request: CallableRequest) {
     }
 
     const circle = circleSnapshot.data();
+    ensureActiveCircle(circle, 'editing this Tap In');
     const dateKey = getDateKey(circle?.timezone ?? profile.timezone ?? 'UTC');
     const checkInRef = circleRef
       .collection('days')
@@ -1258,6 +1261,7 @@ export const removeTapIn = onCall(async request => {
     }
 
     const circle = circleSnapshot.data();
+    ensureActiveCircle(circle, 'removing this Tap In');
     const dateKey = getDateKey(circle?.timezone ?? profile.timezone ?? 'UTC');
     const checkInRef = circleRef
       .collection('days')

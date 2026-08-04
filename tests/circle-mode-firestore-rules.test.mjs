@@ -88,6 +88,35 @@ describe('circle mode Firestore rules', () => {
           circleMode: 'personal',
           title: 'Read every day',
         }),
+        setDoc(doc(firestore, 'circles/archived-group'), {
+          circleMode: 'group',
+          lifecycleStatus: 'archived',
+          privacy: 'public',
+          title: 'Archived group',
+        }),
+        setDoc(doc(firestore, 'circles/archived-group/members/user-1'), {
+          status: 'active',
+          uid: 'user-1',
+        }),
+        setDoc(doc(firestore, 'circles/archived-group/days/2026-08-04'), {
+          checkInCount: 1,
+        }),
+        setDoc(
+          doc(
+            firestore,
+            'circles/archived-group/days/2026-08-04/checkIns/user-1',
+          ),
+          {circleId: 'archived-group', status: 'done', uid: 'user-1'},
+        ),
+        setDoc(
+          doc(firestore, 'circles/archived-group/feedItems/activity-1'),
+          {text: 'Archived history'},
+        ),
+        setDoc(doc(firestore, 'publicCircleIndex/archived-group'), {
+          circleMode: 'group',
+          lifecycleStatus: 'archived',
+          title: 'Archived group',
+        }),
         setDoc(doc(firestore, 'circles/past-private'), {
           circleMode: 'group',
           privacy: 'private',
@@ -152,6 +181,20 @@ describe('circle mode Firestore rules', () => {
         uploadBytes(
           storageRef(
             context.storage(),
+            'circles/archived-group/check-ins/2026-08-04/user-1/proof.jpg',
+          ),
+          new Uint8Array([7, 8, 9]),
+        ),
+        uploadBytes(
+          storageRef(
+            context.storage(),
+            'circles/archived-group/messages/user-1/message-1.jpg',
+          ),
+          new Uint8Array([10, 11, 12]),
+        ),
+        uploadBytes(
+          storageRef(
+            context.storage(),
             'circles/past-private/check-ins/2026-07-01/current-1/photo.jpg',
           ),
           new Uint8Array([4, 5, 6]),
@@ -187,6 +230,72 @@ describe('circle mode Firestore rules', () => {
     );
     await assertFails(
       getDoc(doc(firestore, 'circles/personal/threadReads/user-1')),
+    );
+  });
+
+  it('hides archived public Circles from discovery but preserves member history reads', async () => {
+    const publicFirestore = testEnvironment
+      .unauthenticatedContext()
+      .firestore();
+    const memberFirestore = testEnvironment
+      .authenticatedContext('user-1')
+      .firestore();
+    const memberStorage = testEnvironment
+      .authenticatedContext('user-1')
+      .storage();
+
+    await assertFails(
+      getDoc(doc(publicFirestore, 'circles/archived-group')),
+    );
+    await assertFails(
+      getDoc(doc(publicFirestore, 'publicCircleIndex/archived-group')),
+    );
+    await assertSucceeds(
+      getDoc(doc(memberFirestore, 'circles/archived-group')),
+    );
+    await assertSucceeds(
+      getDoc(
+        doc(
+          memberFirestore,
+          'circles/archived-group/days/2026-08-04/checkIns/user-1',
+        ),
+      ),
+    );
+    await assertSucceeds(
+      getDoc(
+        doc(memberFirestore, 'circles/archived-group/feedItems/activity-1'),
+      ),
+    );
+    await assertSucceeds(
+      getBytes(
+        storageRef(
+          memberStorage,
+          'circles/archived-group/check-ins/2026-08-04/user-1/proof.jpg',
+        ),
+      ),
+    );
+  });
+
+  it('blocks new Tap In and message media writes while archived', async () => {
+    const storage = testEnvironment.authenticatedContext('user-1').storage();
+
+    await assertFails(
+      uploadBytes(
+        storageRef(
+          storage,
+          'circles/archived-group/check-ins/2026-08-05/user-1/proof.jpg',
+        ),
+        new Uint8Array([1]),
+      ),
+    );
+    await assertFails(
+      uploadBytes(
+        storageRef(
+          storage,
+          'circles/archived-group/messages/user-1/message-2.jpg',
+        ),
+        new Uint8Array([2]),
+      ),
     );
   });
 

@@ -1,6 +1,7 @@
 const mockSnapshots = new Map<string, Record<string, unknown> | undefined>();
 const mockTransactionSet = jest.fn();
 const mockTransactionGet = jest.fn();
+const mockDirectSet = jest.fn(async () => undefined);
 const mockRunTransaction = jest.fn(async callback => {
   const transaction = {
     get: mockTransactionGet,
@@ -16,6 +17,7 @@ type Ref = {
   get: () => Promise<ReturnType<typeof mockSnapshot>>;
   id: string;
   path: string;
+  set: typeof mockDirectSet;
 };
 
 function mockSnapshot(data?: Record<string, unknown>) {
@@ -32,6 +34,7 @@ function mockCreateRef(path: string): Ref {
     get: async () => mockSnapshot(mockSnapshots.get(path)),
     id: path.split('/').at(-1) ?? path,
     path,
+    set: mockDirectSet,
   };
 }
 
@@ -100,6 +103,7 @@ jest.mock(
 import {
   getCircleThreadNudgeText,
   getCircleThreadStreakText,
+  markCircleThreadRead,
   sanitizeCircleThreadText,
   sendCircleThreadMessage,
 } from '../functions/src/thread';
@@ -109,6 +113,10 @@ const invokeSendCircleThreadMessage =
     auth?: {uid: string};
     data: Record<string, unknown>;
   }) => Promise<{itemId: string}>;
+const invokeMarkCircleThreadRead = markCircleThreadRead as unknown as (request: {
+  auth?: {uid: string};
+  data: Record<string, unknown>;
+}) => Promise<{read: true}>;
 
 describe('circle thread functions', () => {
   beforeEach(() => {
@@ -193,5 +201,23 @@ describe('circle thread functions', () => {
       code: 'permission-denied',
       message: 'Join this circle first.',
     });
+  });
+
+  it('rejects archived Circle read-receipt mutations', async () => {
+    mockSnapshots.set('circles/circle-1', {
+      lifecycleStatus: 'archived',
+      title: 'Sleep 8 Hours',
+    });
+
+    await expect(
+      invokeMarkCircleThreadRead({
+        auth: {uid: 'user-1'},
+        data: {circleId: 'circle-1'},
+      }),
+    ).rejects.toMatchObject({
+      code: 'failed-precondition',
+      message: 'Restore this commitment before updating Circle thread activity.',
+    });
+    expect(mockDirectSet).not.toHaveBeenCalled();
   });
 });

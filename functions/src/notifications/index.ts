@@ -1,6 +1,7 @@
 import {
   FieldValue,
   type DocumentData,
+  type QueryDocumentSnapshot,
   type QuerySnapshot,
 } from 'firebase-admin/firestore';
 import {HttpsError, onCall} from 'firebase-functions/v2/https';
@@ -9,6 +10,10 @@ import {onSchedule} from 'firebase-functions/v2/scheduler';
 import {z} from 'zod';
 
 import {db} from '../firebase';
+import {
+  getCircleLifecycleStatus,
+  isCircleSlotAfterResumeBoundary,
+} from '../shared/circle-lifecycle';
 import {
   type CommitmentCadence,
   getCommitmentCadence,
@@ -34,10 +39,12 @@ export type NotificationPreferenceKey =
   | 'tapInReminders';
 
 export type NotificationType =
+  | 'circle_archived'
   | 'circle_at_risk'
   | 'circle_complete'
   | 'circle_discovery_suggestion'
   | 'circle_nudge_prompt'
+  | 'circle_restored'
   | 'companion_achievement_unlocked'
   | 'companion_circle_created'
   | 'companion_circle_joined'
@@ -183,6 +190,7 @@ export type CompanionFeedTarget = {
 export type CompanionFeedSourceCircle = {
   circleMode?: unknown;
   joinMode?: unknown;
+  lifecycleStatus?: unknown;
   privacy?: unknown;
 };
 
@@ -605,6 +613,10 @@ const notificationCopyCatalog: Record<
   NotificationType,
   NotificationCopyTemplate
 > = {
+  circle_archived: context => ({
+    body: `${getCircleTitle(context)} was archived. History is still available.`,
+    title: 'Circle archived',
+  }),
   circle_at_risk: context => ({
     body: `${getCircleTitle(context)} needs ${getTapInCountLabel(
       context.remainingCount,
@@ -624,6 +636,10 @@ const notificationCopyCatalog: Record<
       (context.targetCount ?? 1) === 1 ? '' : 's'
     } in ${getCircleTitle(context)}.`,
     title: 'Nudge prompt',
+  }),
+  circle_restored: context => ({
+    body: `${getCircleTitle(context)} was restored. New Tap Ins resume at the next opening.`,
+    title: 'Circle restored',
   }),
   companion_achievement_unlocked: context => ({
     body: `${getActorName(context)} unlocked ${getAchievementTitle(context)}.`,
@@ -1091,11 +1107,13 @@ export function getSameDayImmediateCoverageCircleIds({
 }
 
 export function shouldIncludeInEveningSummary({
+  archivedCircleIds = new Set<string>(),
   coveredCircleIds,
   dateKey,
   event,
   timezone,
 }: {
+  archivedCircleIds?: ReadonlySet<string>;
   coveredCircleIds: ReadonlySet<string>;
   dateKey: string;
   event: EveningSummaryCandidate;
@@ -1107,6 +1125,7 @@ export function shouldIncludeInEveningSummary({
   if (
     !type ||
     !eveningSummaryEventTypes.has(type) ||
+    (circleId ? archivedCircleIds.has(circleId) : false) ||
     getCandidatePushStatus(event) !== 'deferred' ||
     !isCandidateOnLocalDate({candidate: event, dateKey, timezone})
   ) {
@@ -1315,10 +1334,23 @@ async function getActorActiveCircleIds(actorUid: string) {
     .where('uid', '==', actorUid)
     .get();
 
-  return snapshot.docs
+  const circleIds = snapshot.docs
     .filter(doc => doc.data().status === 'active')
     .map(doc => doc.ref.parent.parent?.id)
     .filter((circleId): circleId is string => Boolean(circleId));
+  const circleSnapshots = await Promise.all(
+    Array.from(new Set(circleIds)).map(circleId =>
+      db.collection('circles').doc(circleId).get(),
+    ),
+  );
+
+  return circleSnapshots
+    .filter(
+      circleSnapshot =>
+        circleSnapshot.exists &&
+        getCircleLifecycleStatus(circleSnapshot.data()) === 'active',
+    )
+    .map(circleSnapshot => circleSnapshot.id);
 }
 
 export async function resolveCompanionFeedTargets({
@@ -1330,7 +1362,10 @@ export async function resolveCompanionFeedTargets({
   circle?: CompanionFeedSourceCircle;
   circleId: string;
 }) {
-  if (circle?.circleMode === 'personal') {
+  if (
+    circle?.circleMode === 'personal' ||
+    getCircleLifecycleStatus(circle) === 'archived'
+  ) {
     return [];
   }
 
@@ -1753,6 +1788,51 @@ export async function createInboxEvent({
   }
 
   return {created: true, eventId, pushStatus: pushResult.status};
+}
+
+export async function notifyCircleLifecycleChanged({
+  actor,
+  circleId,
+  circleTitle,
+  lifecycleRevision,
+  status,
+}: {
+  actor?: DocumentData;
+  circleId: string;
+  circleTitle: string;
+  lifecycleRevision: number;
+  status: 'archived' | 'active';
+}) {
+  const notificationActor = buildActor(actor);
+  const actorUid = notificationActor?.uid;
+  const memberUids = await getActiveCircleMemberUids(circleId);
+  const type = status === 'archived' ? 'circle_archived' : 'circle_restored';
+  const copy = resolveNotificationCopy({
+    context: {circleTitle},
+    dedupeKey: `circle_lifecycle_${circleId}_${lifecycleRevision}_${status}`,
+    type,
+  });
+
+  return Promise.all(
+    memberUids
+      .filter(uid => uid !== actorUid)
+      .map(uid =>
+        createInboxEvent({
+          actor: notificationActor,
+          body: copy.body,
+          circleId,
+          copyVariant: copy.copyVariant,
+          dedupeKey: `circle_lifecycle_${circleId}_${lifecycleRevision}_${status}_${uid}`,
+          deeplink: {circleId, screen: 'CircleDetail'},
+          preferenceKey: 'socialActivity',
+          sourceKey: `circle_lifecycle_${circleId}`,
+          sourceRevision: lifecycleRevision,
+          title: copy.title,
+          type,
+          uid,
+        }),
+      ),
+  );
 }
 
 export async function notifyOwnerJoinRequest({
@@ -2773,12 +2853,17 @@ async function sendTapInReminders(kind: 'final' | 'midday') {
 
   for (const circleSnapshot of circleSnapshots.docs) {
     const circle = circleSnapshot.data();
+    if (getCircleLifecycleStatus(circle) === 'archived') {
+      continue;
+    }
     const timezone = asString(circle.timezone, 'UTC');
     const local = getLocalDateTimeParts(now, timezone);
     const commitmentCadence = getCommitmentCadence(circle);
     const slots = getOpportunitySlots(
       normalizeCommitmentSchedule(circle, timezone),
       now,
+    ).filter(slot =>
+      isCircleSlotAfterResumeBoundary(circle, slot.availableDateKey),
     );
     const reminderSlots = getOpportunityReminderSlots({
       dateKey: local.dateKey,
@@ -2986,10 +3071,33 @@ async function sendCircleEngagementPrompts() {
 
   for (const circleSnapshot of circleSnapshots.docs) {
     const circle = circleSnapshot.data();
+    if (getCircleLifecycleStatus(circle) === 'archived') {
+      continue;
+    }
     const timezone = asString(circle.timezone, 'UTC');
     const local = getLocalDateTimeParts(now, timezone);
 
-    if (circle.circleMode === 'personal') {
+    if (
+      circle.circleMode === 'personal' ||
+      getCircleLifecycleStatus(circle) === 'archived'
+    ) {
+      continue;
+    }
+
+    const eligibleSlots = getOpportunitySlots(
+      normalizeCommitmentSchedule(circle, timezone),
+      now,
+    ).filter(slot =>
+      isCircleSlotAfterResumeBoundary(circle, slot.availableDateKey),
+    );
+
+    if (
+      !eligibleSlots.some(
+        slot =>
+          slot.availableDateKey <= local.dateKey &&
+          slot.expiresDateKey >= local.dateKey,
+      )
+    ) {
       continue;
     }
 
@@ -3266,6 +3374,46 @@ async function sendCircleDiscoverySuggestions() {
   return {sentOrSkipped: sendPromises.length};
 }
 
+async function updateDeferredInboxPushStatuses({
+  docs,
+  status,
+  summaryEventId,
+}: {
+  docs: QueryDocumentSnapshot<DocumentData>[];
+  status: 'covered_by_immediate' | 'summarized' | 'suppressed';
+  summaryEventId?: string;
+}) {
+  let batch = db.batch();
+  let pendingWrites = 0;
+
+  for (const doc of docs) {
+    batch.set(
+      doc.ref,
+      {
+        push: {
+          ...(status === 'summarized' && summaryEventId
+            ? {summaryEventId}
+            : {}),
+          status,
+          updatedAt: FieldValue.serverTimestamp(),
+        },
+      },
+      {merge: true},
+    );
+    pendingWrites += 1;
+
+    if (pendingWrites === inboxReadBatchLimit) {
+      await batch.commit();
+      batch = db.batch();
+      pendingWrites = 0;
+    }
+  }
+
+  if (pendingWrites > 0) {
+    await batch.commit();
+  }
+}
+
 async function sendEveningActivitySummaries() {
   const now = new Date();
   const userPrivateSnapshots = await db.collection('userPrivate').get();
@@ -3298,6 +3446,27 @@ async function sendEveningActivitySummaries() {
       inboxRef.orderBy('createdAt', 'desc').limit(100).get(),
     ]);
     const recentEvents = recentSnapshot.docs.map(doc => doc.data());
+    const deferredCircleIds = Array.from(
+      new Set(
+        deferredSnapshot.docs
+          .map(doc => getCandidateCircleId(doc.data()))
+          .filter((circleId): circleId is string => Boolean(circleId)),
+      ),
+    );
+    const deferredCircleSnapshots = await Promise.all(
+      deferredCircleIds.map(circleId =>
+        db.collection('circles').doc(circleId).get(),
+      ),
+    );
+    const archivedCircleIds = new Set(
+      deferredCircleSnapshots
+        .filter(
+          circleSnapshot =>
+            circleSnapshot.exists &&
+            getCircleLifecycleStatus(circleSnapshot.data()) === 'archived',
+        )
+        .map(circleSnapshot => circleSnapshot.id),
+    );
     const coveredCircleIds = getSameDayImmediateCoverageCircleIds({
       dateKey: local.dateKey,
       events: recentEvents,
@@ -3305,6 +3474,7 @@ async function sendEveningActivitySummaries() {
     });
     const includedDocs = deferredSnapshot.docs.filter(doc =>
       shouldIncludeInEveningSummary({
+        archivedCircleIds,
         coveredCircleIds,
         dateKey: local.dateKey,
         event: doc.data(),
@@ -3317,6 +3487,7 @@ async function sendEveningActivitySummaries() {
 
       return (
         circleId &&
+        !archivedCircleIds.has(circleId) &&
         coveredCircleIds.has(circleId) &&
         getCandidatePushStatus(data) === 'deferred' &&
         isCandidateOnLocalDate({
@@ -3326,6 +3497,17 @@ async function sendEveningActivitySummaries() {
         })
       );
     });
+    const archivedDocs = deferredSnapshot.docs.filter(doc => {
+      const circleId = getCandidateCircleId(doc.data());
+      return circleId ? archivedCircleIds.has(circleId) : false;
+    });
+
+    if (archivedDocs.length > 0) {
+      await updateDeferredInboxPushStatuses({
+        docs: archivedDocs,
+        status: 'suppressed',
+      });
+    }
 
     if (includedDocs.length === 0 && coveredDocs.length === 0) {
       continue;
@@ -3349,45 +3531,15 @@ async function sendEveningActivitySummaries() {
           })
         : undefined;
 
-    let batch = db.batch();
-    let pendingWrites = 0;
-    const markDoc = async (
-      doc: (typeof deferredSnapshot.docs)[number],
-      status: 'covered_by_immediate' | 'summarized',
-    ) => {
-      batch.set(
-        doc.ref,
-        {
-          push: {
-            ...(status === 'summarized' && summaryResult
-              ? {summaryEventId: summaryResult.eventId}
-              : {}),
-            status,
-            updatedAt: FieldValue.serverTimestamp(),
-          },
-        },
-        {merge: true},
-      );
-      pendingWrites += 1;
-
-      if (pendingWrites === inboxReadBatchLimit) {
-        await batch.commit();
-        batch = db.batch();
-        pendingWrites = 0;
-      }
-    };
-
-    for (const doc of includedDocs) {
-      await markDoc(doc, 'summarized');
-    }
-
-    for (const doc of coveredDocs) {
-      await markDoc(doc, 'covered_by_immediate');
-    }
-
-    if (pendingWrites > 0) {
-      await batch.commit();
-    }
+    await updateDeferredInboxPushStatuses({
+      docs: includedDocs,
+      status: 'summarized',
+      summaryEventId: summaryResult?.eventId,
+    });
+    await updateDeferredInboxPushStatuses({
+      docs: coveredDocs,
+      status: 'covered_by_immediate',
+    });
 
     await userPrivateSnapshot.ref.set(
       {

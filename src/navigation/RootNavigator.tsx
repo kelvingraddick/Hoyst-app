@@ -5,10 +5,10 @@ import {HoystScreen} from '../design/components/HoystScreen';
 import {HoystText} from '../design/components/HoystText';
 import {CreateCircleScreen} from '../features/create-circle/screens/CreateCircleScreen';
 import {CircleDetailScreen} from '../features/circles/screens/CircleDetailScreen';
-import {CircleThreadScreen} from '../features/circles/screens/CircleThreadScreen';
 import {CircleToolsScreen} from '../features/circles/screens/CircleToolsScreen';
 import {CirclesScreen} from '../features/circles/screens/CirclesScreen';
 import {PastCircleScreen} from '../features/circles/screens/PastCircleScreen';
+import {ArchivedCirclesScreen} from '../features/circles/screens/ArchivedCirclesScreen';
 import {EditCircleScreen} from '../features/circles/screens/EditCircleScreen';
 import {ConvertPersonalCircleScreen} from '../features/circles/screens/ConvertPersonalCircleScreen';
 import {EditProfileScreen} from '../features/settings/screens/EditProfileScreen';
@@ -125,6 +125,14 @@ export function RootNavigator(): React.JSX.Element {
         }}
       />
       <Stack.Screen
+        component={ArchivedCirclesScreen}
+        name="ArchivedCircles"
+        options={{
+          animation: 'slide_from_right',
+          headerShown: false,
+        }}
+      />
+      <Stack.Screen
         component={PastCircleScreen}
         name="PastCircle"
         options={{
@@ -151,14 +159,6 @@ export function RootNavigator(): React.JSX.Element {
       <Stack.Screen
         component={ConvertPersonalCircleScreen}
         name="ConvertPersonalCircle"
-        options={{
-          animation: 'slide_from_right',
-          headerShown: false,
-        }}
-      />
-      <Stack.Screen
-        component={CircleThreadScreen}
-        name="CircleThread"
         options={{
           animation: 'slide_from_right',
           headerShown: false,

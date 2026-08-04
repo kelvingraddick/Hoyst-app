@@ -140,3 +140,25 @@ export async function deleteCircle(circleId: string) {
   const result = await callable({circleId});
   return result.data as {deleted: true};
 }
+
+export async function archiveCircle(circleId: string) {
+  const callable = firebaseFunctions().httpsCallable('archiveCircle');
+  const result = await callable({circleId});
+
+  return result.data as {
+    lifecycleRevision: number;
+    status: 'archived';
+  };
+}
+
+export async function unarchiveCircle(circleId: string) {
+  const callable = firebaseFunctions().httpsCallable('unarchiveCircle');
+  const result = await callable({circleId});
+
+  return result.data as {
+    inviteCode?: string;
+    inviteUrl?: string;
+    lifecycleRevision: number;
+    status: 'active';
+  };
+}

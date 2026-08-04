@@ -43,6 +43,7 @@ function getInitials(name: string) {
 function isSuccessEvent(event: InboxEvent) {
   return (
     event.type === 'circle_complete' ||
+    event.type === 'circle_restored' ||
     event.type === 'companion_achievement_unlocked' ||
     event.type === 'companion_circle_created' ||
     event.type === 'companion_circle_joined' ||
@@ -109,6 +110,7 @@ function getInboxVisual(
   }
 
   if (
+    event.type === 'circle_archived' ||
     event.type === 'join_request' ||
     event.type === 'nudge' ||
     event.type === 'circle_nudge_prompt'
@@ -151,6 +153,12 @@ function getActionLabel(event: InboxEvent) {
   }
   if (event.type === 'circle_complete') {
     return 'Complete';
+  }
+  if (event.type === 'circle_archived') {
+    return 'Archived';
+  }
+  if (event.type === 'circle_restored') {
+    return 'Restored';
   }
   if (event.type === 'companion_achievement_unlocked') {
     return 'Unlocked';

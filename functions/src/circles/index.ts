@@ -17,6 +17,7 @@ import {db} from '../firebase';
 import {
   notifyCompanionCircleCreated,
   notifyCompanionCircleJoined,
+  notifyCircleLifecycleChanged,
   notifyJoinRequestReview,
   notifyOwnerJoinRequest,
   notifyOwnerNewJoin,
@@ -34,6 +35,10 @@ import {
 } from '../shared/commitments';
 import {ensureGroupCircle, getCircleMode} from '../shared/circle-mode';
 import {
+  ensureActiveCircle,
+  getCircleLifecycleStatus,
+} from '../shared/circle-lifecycle';
+import {
   createInviteCode,
   getCircleInviteUrl,
   requiresMatchingCircleInvite,
@@ -41,6 +46,7 @@ import {
 import {createCircleThreadActivity, getCircleThreadNudgeText} from '../thread';
 import {
   materializeCurrentCircleOpportunities,
+  neutralizeCircleOpportunitiesForArchive,
   removeMemberFromOpenCircleOpportunities,
 } from '../momentum';
 import {getLeaveCirclePlan} from './leave-plan';
@@ -131,6 +137,9 @@ const leaveCircleSchema = z.object({
 const deleteCircleSchema = z.object({
   circleId: z.string().trim().min(1),
 });
+const archiveCircleSchema = z.object({
+  circleId: z.string().trim().min(1),
+});
 const updateCircleSchema = createCircleSchema.and(
   z.object({
     circleId: z.string().trim().min(1),
@@ -179,6 +188,10 @@ function asOptionalString(value: unknown) {
   return typeof value === 'string' && value.trim().length > 0
     ? value.trim()
     : undefined;
+}
+
+function asNumber(value: unknown, fallback = 0) {
+  return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
 }
 
 function getDateKeyForTimezone(timezone: string, now = new Date()) {
@@ -617,6 +630,7 @@ export const createCircle = onCall(
           windowDays: 7,
         },
       },
+      lifecycleStatus: 'active',
       ...(inviteCode ? {inviteCode} : {}),
       joinMode,
       ...(typeof quantityConfig.maximumValue === 'number'
@@ -679,6 +693,7 @@ export const createCircle = onCall(
         commitmentFrequency,
         commitmentType,
         joinMode,
+        lifecycleStatus: 'active',
         ...(typeof quantityConfig.maximumValue === 'number'
           ? {maximumValue: quantityConfig.maximumValue}
           : {}),
@@ -776,6 +791,7 @@ export const joinCircle = onCall(
       const joinRequest = joinRequestSnapshot.data();
 
       ensureGroupCircle(circle, 'inviting or joining');
+      ensureActiveCircle(circle, 'joining this Circle');
 
       if (member?.status === 'active') {
         return {shouldNotifyOwner: false, status: 'active' as const};
@@ -1035,6 +1051,7 @@ export const reviewJoinRequest = onCall(
       const ownerMember = memberSnapshot.data();
 
       ensureGroupCircle(circle, 'reviewing join requests');
+      ensureActiveCircle(circle, 'reviewing join requests');
 
       if (
         circle?.ownerId !== uid ||
@@ -1231,6 +1248,7 @@ export const nudgeCircleMembers = onCall(
     const circle = circleSnapshot.data();
 
     ensureGroupCircle(circle, 'sending nudges');
+    ensureActiveCircle(circle, 'sending nudges');
     const timezone = asOptionalString(circle?.timezone) ?? 'UTC';
     const dateKey = getDateKeyForTimezone(timezone, now);
     const commitmentCadence = getCommitmentCadence(circle);
@@ -1407,7 +1425,7 @@ export const leaveCircle = onCall(async request => {
     if (circle?.ownerId === uid || member?.role === 'owner') {
       throw new HttpsError(
         'failed-precondition',
-        'Circle owners cannot leave their own circle yet. Delete the circle instead.',
+        'Circle owners cannot leave their own Circle. Archive it to preserve its history.',
       );
     }
 
@@ -1572,6 +1590,8 @@ export const convertPersonalCircle = onCall(async request => {
   const circle = circleSnapshot.data();
   const owner = ownerSnapshot.data();
 
+  ensureActiveCircle(circle, 'converting this commitment');
+
   if (
     circle?.ownerId !== uid ||
     owner?.role !== 'owner' ||
@@ -1688,6 +1708,7 @@ export const convertPersonalCircle = onCall(async request => {
         commitmentFrequency,
         commitmentType: latestCircle?.commitmentType ?? 'build',
         joinMode: input.joinMode,
+        lifecycleStatus: 'active',
         ...(typeof latestCircle?.maximumValue === 'number'
           ? {maximumValue: latestCircle.maximumValue}
           : {}),
@@ -1739,6 +1760,7 @@ export const updateCircle = onCall(async request => {
 
   const circle = circleSnapshot.data();
   const member = memberSnapshot.data();
+  ensureActiveCircle(circle, 'editing this commitment');
   const circleMode = getCircleMode(circle);
   const isPersonal = circleMode === 'personal';
 
@@ -1839,6 +1861,7 @@ export const updateCircle = onCall(async request => {
         commitmentFrequency,
         commitmentType,
         joinMode,
+        lifecycleStatus: 'active',
         maximumValue:
           typeof quantityConfig.maximumValue === 'number'
             ? quantityConfig.maximumValue
@@ -1871,6 +1894,366 @@ export const updateCircle = onCall(async request => {
 
   return {updated: true as const};
 });
+
+export const archiveCircle = onCall(
+  {secrets: [oneSignalRestApiKey]},
+  async request => {
+    const {profile, uid} = await requireCompletedProfile(request.auth?.uid);
+    const input = archiveCircleSchema.parse(request.data);
+    const circleRef = db.collection('circles').doc(input.circleId);
+    const ownerRef = circleRef.collection('members').doc(uid);
+    const publicIndexRef = db
+      .collection('publicCircleIndex')
+      .doc(input.circleId);
+    const transitionDate = new Date();
+    const transitionAt = Timestamp.fromDate(transitionDate);
+
+    const result = await db.runTransaction(async transaction => {
+      const pendingMembersQuery = circleRef
+        .collection('members')
+        .where('status', '==', 'pending');
+      const pendingRequestsQuery = circleRef
+        .collection('joinRequests')
+        .where('status', '==', 'pending');
+      const [
+        circleSnapshot,
+        ownerSnapshot,
+        pendingMemberSnapshots,
+        pendingRequestSnapshots,
+      ] = await Promise.all([
+        transaction.get(circleRef),
+        transaction.get(ownerRef),
+        transaction.get(pendingMembersQuery),
+        transaction.get(pendingRequestsQuery),
+      ]);
+
+      if (!circleSnapshot.exists) {
+        throw new HttpsError('not-found', 'Circle not found.');
+      }
+
+      const circle = circleSnapshot.data();
+      const owner = ownerSnapshot.data();
+
+      if (
+        circle?.ownerId !== uid ||
+        owner?.role !== 'owner' ||
+        owner?.status !== 'active'
+      ) {
+        throw new HttpsError(
+          'permission-denied',
+          'Only the owner can archive this commitment.',
+        );
+      }
+
+      if (getCircleLifecycleStatus(circle) === 'archived') {
+        return {
+          archivedAt:
+            circle?.archivedAt instanceof Timestamp
+              ? circle.archivedAt.toDate()
+              : transitionDate,
+          circleMode: getCircleMode(circle),
+          circleTitle: asOptionalString(circle?.title) ?? 'Your Circle',
+          lifecycleRevision: Math.max(1, asNumber(circle?.lifecycleRevision, 1)),
+          needsReconciliation:
+            circle?.archiveReconciliationStatus !== 'complete',
+        };
+      }
+
+      const lifecycleRevision = asNumber(circle?.lifecycleRevision, 0) + 1;
+
+      transaction.update(circleRef, {
+        archiveReconciliationStatus: 'pending',
+        archivedAt: transitionAt,
+        archivedBy: uid,
+        inviteCode: FieldValue.delete(),
+        lastLifecycleTransition: 'archive',
+        lifecycleRevision,
+        lifecycleStatus: 'archived',
+        opportunitiesResumeAfterDateKey: FieldValue.delete(),
+        unarchivedAt: FieldValue.delete(),
+        unarchivedBy: FieldValue.delete(),
+        updatedAt: transitionAt,
+      });
+      transaction.delete(publicIndexRef);
+
+      pendingMemberSnapshots.docs.forEach(snapshot =>
+        transaction.delete(snapshot.ref),
+      );
+      pendingRequestSnapshots.docs.forEach(snapshot =>
+        transaction.set(
+          snapshot.ref,
+          {
+            cancelledAt: transitionAt,
+            cancelledBy: uid,
+            cancelledReason: 'circle_archived',
+            status: 'cancelled',
+            updatedAt: transitionAt,
+          },
+          {merge: true},
+        ),
+      );
+
+      return {
+        archivedAt: transitionDate,
+        circleMode: getCircleMode(circle),
+        circleTitle: asOptionalString(circle?.title) ?? 'Your Circle',
+        lifecycleRevision,
+        needsReconciliation: true,
+      };
+    });
+
+    if (result.needsReconciliation) {
+      await neutralizeCircleOpportunitiesForArchive({
+        archivedAt: result.archivedAt,
+        circleId: input.circleId,
+      });
+      await db.runTransaction(async transaction => {
+        const latestSnapshot = await transaction.get(circleRef);
+        const latest = latestSnapshot.data();
+
+        if (
+          getCircleLifecycleStatus(latest) === 'archived' &&
+          asNumber(latest?.lifecycleRevision, 0) === result.lifecycleRevision
+        ) {
+          transaction.set(
+            circleRef,
+            {
+              archiveReconciledAt: FieldValue.serverTimestamp(),
+              archiveReconciliationStatus: 'complete',
+              updatedAt: FieldValue.serverTimestamp(),
+            },
+            {merge: true},
+          );
+        }
+      });
+    }
+
+    if (result.circleMode === 'group') {
+      await notifyCircleLifecycleChanged({
+        actor: {...profile, uid},
+        circleId: input.circleId,
+        circleTitle: result.circleTitle,
+        lifecycleRevision: result.lifecycleRevision,
+        status: 'archived',
+      }).catch(error =>
+        console.error('notify_circle_archived_failed', error),
+      );
+    }
+
+    return {
+      lifecycleRevision: result.lifecycleRevision,
+      status: 'archived' as const,
+    };
+  },
+);
+
+export const unarchiveCircle = onCall(
+  {secrets: [oneSignalRestApiKey]},
+  async request => {
+    const {profile, uid} = await requireCompletedProfile(request.auth?.uid);
+    const input = archiveCircleSchema.parse(request.data);
+    const circleRef = db.collection('circles').doc(input.circleId);
+    const ownerRef = circleRef.collection('members').doc(uid);
+    const publicIndexRef = db
+      .collection('publicCircleIndex')
+      .doc(input.circleId);
+    const transitionDate = new Date();
+    const transitionAt = Timestamp.fromDate(transitionDate);
+    const [initialCircleSnapshot, initialOwnerSnapshot] = await Promise.all([
+      circleRef.get(),
+      ownerRef.get(),
+    ]);
+
+    if (!initialCircleSnapshot.exists) {
+      throw new HttpsError('not-found', 'Circle not found.');
+    }
+
+    const initialCircle = initialCircleSnapshot.data();
+    const initialOwner = initialOwnerSnapshot.data();
+
+    if (
+      initialCircle?.ownerId !== uid ||
+      initialOwner?.role !== 'owner' ||
+      initialOwner?.status !== 'active'
+    ) {
+      throw new HttpsError(
+        'permission-denied',
+        'Only the owner can restore this commitment.',
+      );
+    }
+
+    if (
+      getCircleLifecycleStatus(initialCircle) === 'archived' &&
+      initialCircle?.archiveReconciliationStatus !== 'complete'
+    ) {
+      const archivedAt =
+        initialCircle?.archivedAt instanceof Timestamp
+          ? initialCircle.archivedAt.toDate()
+          : transitionDate;
+      await neutralizeCircleOpportunitiesForArchive({
+        archivedAt,
+        circleId: input.circleId,
+      });
+      await circleRef.set(
+        {
+          archiveReconciledAt: FieldValue.serverTimestamp(),
+          archiveReconciliationStatus: 'complete',
+          updatedAt: FieldValue.serverTimestamp(),
+        },
+        {merge: true},
+      );
+    }
+
+    const generatedInviteCode = createInviteCode();
+    const result = await db.runTransaction(async transaction => {
+      const activeMembersQuery = circleRef
+        .collection('members')
+        .where('status', '==', 'active');
+      const [circleSnapshot, ownerSnapshot, activeMemberSnapshots] =
+        await Promise.all([
+          transaction.get(circleRef),
+          transaction.get(ownerRef),
+          transaction.get(activeMembersQuery),
+        ]);
+      const circle = circleSnapshot.data();
+      const owner = ownerSnapshot.data();
+
+      if (
+        circle?.ownerId !== uid ||
+        owner?.role !== 'owner' ||
+        owner?.status !== 'active'
+      ) {
+        throw new HttpsError(
+          'permission-denied',
+          'Only the owner can restore this commitment.',
+        );
+      }
+
+      if (getCircleLifecycleStatus(circle) === 'active') {
+        if (circle?.lastLifecycleTransition === 'unarchive') {
+          return {
+            circleMode: getCircleMode(circle),
+            circleTitle: asOptionalString(circle?.title) ?? 'Your Circle',
+            inviteCode: asOptionalString(circle?.inviteCode),
+            lifecycleRevision: Math.max(
+              1,
+              asNumber(circle?.lifecycleRevision, 1),
+            ),
+          };
+        }
+
+        throw new HttpsError(
+          'failed-precondition',
+          'This commitment is not archived.',
+        );
+      }
+
+      if (circle?.archiveReconciliationStatus !== 'complete') {
+        throw new HttpsError(
+          'failed-precondition',
+          'Archive cleanup is still finishing. Try again.',
+        );
+      }
+
+      const circleMode = getCircleMode(circle);
+      const isPersonal = circleMode === 'personal';
+      const inviteCode = isPersonal ? undefined : generatedInviteCode;
+      const lifecycleRevision = asNumber(circle?.lifecycleRevision, 0) + 1;
+      const timezone = asOptionalString(circle?.timezone) ?? 'UTC';
+      const resumeAfterDateKey = getDateKeyForTimezone(
+        timezone,
+        transitionDate,
+      );
+
+      transaction.update(circleRef, {
+        archiveReconciliationStatus: FieldValue.delete(),
+        archivedAt: FieldValue.delete(),
+        archivedBy: FieldValue.delete(),
+        ...(inviteCode ? {inviteCode} : {inviteCode: FieldValue.delete()}),
+        lastArchivedAt: circle?.archivedAt ?? null,
+        lastLifecycleTransition: 'unarchive',
+        lifecycleRevision,
+        lifecycleStatus: 'active',
+        opportunitiesResumeAfterDateKey: resumeAfterDateKey,
+        unarchivedAt: transitionAt,
+        unarchivedBy: uid,
+        updatedAt: transitionAt,
+      });
+
+      if (!isPersonal && circle?.privacy === 'public') {
+        const commitmentCadence = getCommitmentCadence(circle);
+        const commitmentFrequency = getStoredCommitmentFrequency(
+          commitmentCadence,
+          circle?.commitmentFrequency,
+        );
+        transaction.set(publicIndexRef, {
+          category: circle?.category ?? 'General',
+          circleMode,
+          commitment: circle?.commitment ?? circle?.title ?? 'Commitment',
+          commitmentCadence,
+          commitmentFrequency,
+          commitmentType: circle?.commitmentType ?? 'build',
+          joinMode: circle?.joinMode ?? 'invite_only',
+          lifecycleStatus: 'active',
+          ...(typeof circle?.maximumValue === 'number'
+            ? {maximumValue: circle.maximumValue}
+            : {}),
+          ...(typeof circle?.minimumValue === 'number'
+            ? {minimumValue: circle.minimumValue}
+            : {}),
+          maxSize: circle?.maxSize ?? Math.max(activeMemberSnapshots.size, 2),
+          memberCount: activeMemberSnapshots.size,
+          members: activeMemberSnapshots.docs.map(snapshot =>
+            buildPublicPreviewFromMember(snapshot.data(), snapshot.id),
+          ),
+          stepValue: circle?.stepValue ?? 1,
+          ...(typeof circle?.targetValue === 'number'
+            ? {targetValue: circle.targetValue}
+            : {}),
+          title: circle?.title ?? 'Hoyst Circle',
+          unitLabel: circle?.unitLabel ?? 'Tap In',
+          updatedAt: transitionAt,
+        });
+      } else {
+        transaction.delete(publicIndexRef);
+      }
+
+      return {
+        circleMode,
+        circleTitle: asOptionalString(circle?.title) ?? 'Your Circle',
+        inviteCode,
+        lifecycleRevision,
+      };
+    });
+
+    await materializeCurrentCircleOpportunities(input.circleId).catch(error =>
+      console.error('materialize_unarchived_circle_failed', error),
+    );
+
+    if (result.circleMode === 'group') {
+      await notifyCircleLifecycleChanged({
+        actor: {...profile, uid},
+        circleId: input.circleId,
+        circleTitle: result.circleTitle,
+        lifecycleRevision: result.lifecycleRevision,
+        status: 'active',
+      }).catch(error =>
+        console.error('notify_circle_restored_failed', error),
+      );
+    }
+
+    return {
+      ...(result.inviteCode
+        ? {
+            inviteCode: result.inviteCode,
+            inviteUrl: getCircleInviteUrl(result.inviteCode),
+          }
+        : {}),
+      lifecycleRevision: result.lifecycleRevision,
+      status: 'active' as const,
+    };
+  },
+);
 
 export const deleteCircle = onCall(async request => {
   const {uid} = await requireCompletedProfile(request.auth?.uid);

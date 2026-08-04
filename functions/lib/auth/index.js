@@ -412,6 +412,7 @@ exports.completeProfile = (0, https_1.onCall)(async (request) => {
                 commitmentFrequency,
                 commitmentType,
                 graceRules: starterCircleHiddenDefaults.graceRules,
+                lifecycleStatus: 'active',
                 ...(inviteCode ? { inviteCode } : {}),
                 joinMode,
                 ...(typeof quantityConfig.maximumValue === 'number'
@@ -471,6 +472,7 @@ exports.completeProfile = (0, https_1.onCall)(async (request) => {
                     commitmentFrequency,
                     commitmentType,
                     joinMode,
+                    lifecycleStatus: 'active',
                     ...(typeof quantityConfig.maximumValue === 'number'
                         ? { maximumValue: quantityConfig.maximumValue }
                         : {}),

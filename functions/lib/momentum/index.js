@@ -1,19 +1,24 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.backfillMomentumOpportunities = exports.materializeMomentumOpportunities = void 0;
+exports.backfillMomentumOpportunities = exports.materializeMomentumOpportunities = exports.neutralizeCircleSlotAggregateForArchive = void 0;
 exports.removeUidFromCircleSlotAggregate = removeUidFromCircleSlotAggregate;
 exports.recalculateMomentumSummaryForUser = recalculateMomentumSummaryForUser;
 exports.recordTapInOpportunity = recordTapInOpportunity;
 exports.removeTapInOpportunity = removeTapInOpportunity;
 exports.removeMemberFromOpenCircleOpportunities = removeMemberFromOpenCircleOpportunities;
 exports.removeMemberFromAllCircleOpportunities = removeMemberFromAllCircleOpportunities;
+exports.neutralizeCircleOpportunitiesForArchive = neutralizeCircleOpportunitiesForArchive;
 exports.materializeCurrentCircleOpportunities = materializeCurrentCircleOpportunities;
 const firestore_1 = require("firebase-admin/firestore");
 const https_1 = require("firebase-functions/v2/https");
 const scheduler_1 = require("firebase-functions/v2/scheduler");
 const firebase_1 = require("../firebase");
+const circle_lifecycle_1 = require("../shared/circle-lifecycle");
 const schedule_1 = require("./schedule");
 const eligibility_1 = require("./eligibility");
+const archive_1 = require("./archive");
+var archive_2 = require("./archive");
+Object.defineProperty(exports, "neutralizeCircleSlotAggregateForArchive", { enumerable: true, get: function () { return archive_2.neutralizeCircleSlotAggregateForArchive; } });
 function asString(value, fallback = '') {
     return typeof value === 'string' && value.trim().length > 0
         ? value.trim()
@@ -105,7 +110,7 @@ function getCurrentSlots(circle, now = new Date()) {
     return (0, schedule_1.getOpportunitySlots)(schedule, now);
 }
 function getSlotForDate(circle, dateKey, existingStatuses, member) {
-    const slots = getCurrentSlots(circle);
+    const slots = getCurrentSlots(circle).filter(slot => (0, circle_lifecycle_1.isCircleSlotAfterResumeBoundary)(circle, slot.availableDateKey));
     const timezone = asString(circle?.timezone, 'UTC');
     return (0, eligibility_1.getEligibleOpenSlot)({
         dateKey,
@@ -532,6 +537,82 @@ async function removeMemberFromAllCircleOpportunities({ circleId, uid, }) {
     });
     await commitSetWrites(writes);
 }
+async function neutralizeCircleOpportunitiesForArchive({ archivedAt = new Date(), circleId, }) {
+    const circleRef = firebase_1.db.collection('circles').doc(circleId);
+    const circleSnapshot = await circleRef.get();
+    if (!circleSnapshot.exists) {
+        return { affectedUids: [] };
+    }
+    const circle = circleSnapshot.data();
+    const timezone = asString(circle?.timezone, 'UTC');
+    const archiveDateKey = (0, schedule_1.getDateKey)(timezone, archivedAt);
+    const memberSnapshots = await circleRef
+        .collection('members')
+        .where('status', '==', 'active')
+        .get();
+    const affectedUids = memberSnapshots.docs
+        .map(snapshot => asString(snapshot.data().uid, snapshot.id))
+        .filter(Boolean);
+    const opportunitySnapshots = await Promise.all(affectedUids.map(uid => firebase_1.db
+        .collection('userPrivate')
+        .doc(uid)
+        .collection('opportunities')
+        .where('circleId', '==', circleId)
+        .get()));
+    const writes = [];
+    opportunitySnapshots.forEach(snapshot => {
+        snapshot.docs.forEach(doc => {
+            const opportunity = doc.data();
+            const isUnfinished = opportunity.status === 'available' || opportunity.status === 'upcoming';
+            const expiresDateKey = asString(opportunity.expiresDateKey);
+            if (!isUnfinished || (expiresDateKey && expiresDateKey < archiveDateKey)) {
+                return;
+            }
+            writes.push({
+                data: {
+                    archivedAt: firestore_1.FieldValue.serverTimestamp(),
+                    countsTowardCircle: false,
+                    expectedForCircle: false,
+                    isCurrentPeriod: false,
+                    updatedAt: firestore_1.FieldValue.serverTimestamp(),
+                },
+                merge: true,
+                ref: doc.ref,
+            });
+        });
+    });
+    const periodSnapshots = await circleRef.collection('opportunities').get();
+    const slotSnapshotsByPeriod = await Promise.all(periodSnapshots.docs.map(periodSnapshot => periodSnapshot.ref.collection('slots').get()));
+    periodSnapshots.docs.forEach((periodSnapshot, periodIndex) => {
+        const slotSnapshots = slotSnapshotsByPeriod[periodIndex];
+        if (slotSnapshots.empty) {
+            return;
+        }
+        const aggregates = slotSnapshots.docs.map(slotSnapshot => {
+            const data = slotSnapshot.data();
+            const aggregate = (0, archive_1.neutralizeCircleSlotAggregateForArchive)(data, archiveDateKey);
+            writes.push({
+                data: { ...aggregate, updatedAt: firestore_1.FieldValue.serverTimestamp() },
+                merge: true,
+                ref: slotSnapshot.ref,
+            });
+            return aggregate;
+        });
+        writes.push({
+            data: {
+                ...summarizeCircleSlotAggregates(aggregates),
+                periodKey: asString(periodSnapshot.data().periodKey, periodSnapshot.id),
+                riskState: 'archived',
+                updatedAt: firestore_1.FieldValue.serverTimestamp(),
+            },
+            merge: true,
+            ref: periodSnapshot.ref,
+        });
+    });
+    await commitSetWrites(writes);
+    await Promise.all(affectedUids.map(uid => recalculateMomentumSummaryForUser(uid)));
+    return { affectedUids };
+}
 async function materializeCurrentCircleOpportunities(circleId, now = new Date()) {
     const circleRef = firebase_1.db.collection('circles').doc(circleId);
     const circleSnapshot = await circleRef.get();
@@ -539,8 +620,11 @@ async function materializeCurrentCircleOpportunities(circleId, now = new Date())
         return { affectedUids: [], periodKey: undefined };
     }
     const circle = circleSnapshot.data();
+    if ((0, circle_lifecycle_1.getCircleLifecycleStatus)(circle) === 'archived') {
+        return { affectedUids: [], periodKey: undefined };
+    }
     const timezone = asString(circle?.timezone, 'UTC');
-    const slots = getCurrentSlots(circle, now);
+    const slots = getCurrentSlots(circle, now).filter(slot => (0, circle_lifecycle_1.isCircleSlotAfterResumeBoundary)(circle, slot.availableDateKey));
     const periodKey = slots[0]?.periodKey;
     if (!periodKey) {
         return { affectedUids: [], periodKey: undefined };

@@ -32,7 +32,9 @@ function requiresMatchingCircleInvite(circle) {
     return circle?.privacy === 'private' || circle?.joinMode === 'invite_only';
 }
 function buildCircleInvitePreview(circleId, circle) {
-    if (!circle || circle.circleMode === 'personal') {
+    if (!circle ||
+        circle.circleMode === 'personal' ||
+        circle.lifecycleStatus === 'archived') {
         return undefined;
     }
     const title = asNonEmptyString(circle.title);

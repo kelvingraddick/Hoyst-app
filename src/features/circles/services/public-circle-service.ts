@@ -245,7 +245,10 @@ export function mapPublicCircleIndexSnapshot(
     return undefined;
   }
 
-  if (data.circleMode === 'personal') {
+  if (
+    data.circleMode === 'personal' ||
+    data.lifecycleStatus === 'archived'
+  ) {
     return undefined;
   }
 

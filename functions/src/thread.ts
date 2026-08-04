@@ -4,6 +4,7 @@ import {HttpsError, onCall} from 'firebase-functions/v2/https';
 import {z} from 'zod';
 
 import {db} from './firebase';
+import {ensureActiveCircle} from './shared/circle-lifecycle';
 import {ensureGroupCircle} from './shared/circle-mode';
 
 type ThreadActor = {
@@ -210,6 +211,7 @@ export const sendCircleThreadMessage = onCall(async request => {
     }
 
     ensureGroupCircle(circleSnapshot.data(), 'using the Circle thread');
+    ensureActiveCircle(circleSnapshot.data(), 'sending Circle messages');
     ensureActiveMember(memberSnapshot.data());
 
     if (itemSnapshot.exists) {
@@ -252,6 +254,7 @@ export const toggleCircleThreadItemLike = onCall(async request => {
     }
 
     ensureGroupCircle(circleSnapshot.data(), 'using the Circle thread');
+    ensureActiveCircle(circleSnapshot.data(), 'reacting in the Circle thread');
     ensureActiveMember(memberSnapshot.data());
 
     if (!itemSnapshot.exists) {
@@ -311,6 +314,7 @@ export const markCircleThreadRead = onCall(async request => {
   }
 
   ensureGroupCircle(circleSnapshot.data(), 'using the Circle thread');
+  ensureActiveCircle(circleSnapshot.data(), 'updating Circle thread activity');
   ensureActiveMember(memberSnapshot.data());
 
   await circleRef.collection('threadReads').doc(uid).set(

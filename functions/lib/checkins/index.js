@@ -15,6 +15,7 @@ const momentum_1 = require("../momentum");
 const notifications_1 = require("../notifications");
 const commitments_1 = require("../shared/commitments");
 const circle_mode_1 = require("../shared/circle-mode");
+const circle_lifecycle_1 = require("../shared/circle-lifecycle");
 const profile_1 = require("../profile");
 const thread_1 = require("../thread");
 const notification_plan_1 = require("./notification-plan");
@@ -599,6 +600,7 @@ async function submitTapInHandler(request) {
             throw new https_1.HttpsError('permission-denied', 'Join this circle first.');
         }
         const circle = circleSnapshot.data();
+        (0, circle_lifecycle_1.ensureActiveCircle)(circle, 'tapping in');
         const dateKey = getDateKey(circle?.timezone ?? profile.timezone ?? 'UTC');
         const checkInRef = circleRef
             .collection('days')
@@ -808,6 +810,7 @@ async function updateTapInDetailsHandler(request) {
             throw new https_1.HttpsError('not-found', 'Circle not found.');
         }
         const circle = circleSnapshot.data();
+        (0, circle_lifecycle_1.ensureActiveCircle)(circle, 'editing this Tap In');
         const dateKey = getDateKey(circle?.timezone ?? profile.timezone ?? 'UTC');
         const checkInRef = circleRef
             .collection('days')
@@ -916,6 +919,7 @@ exports.removeTapIn = (0, https_1.onCall)(async (request) => {
             throw new https_1.HttpsError('not-found', 'Circle not found.');
         }
         const circle = circleSnapshot.data();
+        (0, circle_lifecycle_1.ensureActiveCircle)(circle, 'removing this Tap In');
         const dateKey = getDateKey(circle?.timezone ?? profile.timezone ?? 'UTC');
         const checkInRef = circleRef
             .collection('days')

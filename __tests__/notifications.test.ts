@@ -551,6 +551,23 @@ describe('evening activity recap', () => {
       }),
     ).toBe(true);
   });
+
+  it('suppresses deferred activity after its Circle is archived', () => {
+    expect(
+      shouldIncludeInEveningSummary({
+        archivedCircleIds: new Set(['circle-1']),
+        coveredCircleIds: new Set(),
+        dateKey,
+        event: {
+          circleId: 'circle-1',
+          createdAt: new Date('2026-06-30T18:00:00.000Z'),
+          push: {status: 'deferred'},
+          type: 'companion_tapped_in',
+        },
+        timezone,
+      }),
+    ).toBe(false);
+  });
 });
 
 describe('notification reminder eligibility', () => {

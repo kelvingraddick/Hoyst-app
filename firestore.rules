@@ -26,9 +26,14 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/circles/$(circleId)).data.get('circleMode', 'group') == 'group';
     }
 
+    function isActiveCircle(circleId) {
+      return get(/databases/$(database)/documents/circles/$(circleId)).data.get('lifecycleStatus', 'active') == 'active';
+    }
+
     function isPublicCircle() {
       return resource.data.privacy == 'public' &&
-        resource.data.get('circleMode', 'group') == 'group';
+        resource.data.get('circleMode', 'group') == 'group' &&
+        resource.data.get('lifecycleStatus', 'active') == 'active';
     }
 
     function marksReadAtOnly() {
@@ -77,7 +82,8 @@ service cloud.firestore {
     }
 
     match /publicCircleIndex/{circleId} {
-      allow read: if resource.data.get('circleMode', 'group') == 'group';
+      allow read: if resource.data.get('circleMode', 'group') == 'group' &&
+        resource.data.get('lifecycleStatus', 'active') == 'active';
       allow write: if false;
     }
 

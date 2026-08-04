@@ -5,8 +5,15 @@ const mockStorageRef = jest.fn(() => ({
   putFile: mockPutFile,
 }));
 const mockFeedDoc = jest.fn(() => ({id: 'generated-message-id'}));
+const mockOnSnapshot = jest.fn();
+const mockLimit = jest.fn(() => ({onSnapshot: mockOnSnapshot}));
+const mockOrderBy = jest.fn(() => ({limit: mockLimit}));
+const mockFeedCollection = {
+  doc: mockFeedDoc,
+  orderBy: mockOrderBy,
+};
 const mockCircleDoc = {
-  collection: jest.fn(() => ({doc: mockFeedDoc})),
+  collection: jest.fn(() => mockFeedCollection),
 };
 const mockFirestoreCollection = jest.fn(() => ({
   doc: jest.fn(() => mockCircleDoc),
@@ -32,8 +39,8 @@ jest.mock('../src/lib/firebase/functions', () => ({
 
 import {
   createCircleThreadMessageId,
-  getCircleThreadPreviewLabel,
   mapCircleThreadItemSnapshot,
+  subscribeToCircleThreadItems,
   uploadCircleThreadImage,
 } from '../src/features/circles/services/circle-thread-service';
 
@@ -84,34 +91,6 @@ describe('circle thread service', () => {
     });
   });
 
-  it('builds viewer-aware preview labels', () => {
-    const viewerItem = mapCircleThreadItemSnapshot(
-      snapshot({
-        actor: {displayName: 'Kelvin', uid: 'user-1'},
-        createdAt: {toDate: () => new Date('2026-07-08T13:40:00.000Z')},
-        kind: 'message',
-        text: "Let's gooo",
-      }),
-      'user-1',
-    );
-    const companionItem = mapCircleThreadItemSnapshot(
-      snapshot({
-        actor: {displayName: 'Priya', uid: 'user-3'},
-        createdAt: {toDate: () => new Date('2026-07-08T13:42:00.000Z')},
-        kind: 'message',
-        mediaImageUrl: 'https://example.com/image.jpg',
-      }),
-      'user-1',
-    );
-
-    expect(
-      viewerItem && getCircleThreadPreviewLabel(viewerItem, 'user-1'),
-    ).toBe("You: Let's gooo");
-    expect(
-      companionItem && getCircleThreadPreviewLabel(companionItem, 'user-1'),
-    ).toBe('Priya: shared a photo');
-  });
-
   it('marks converted history as read-only', () => {
     const item = mapCircleThreadItemSnapshot(
       snapshot({
@@ -149,5 +128,51 @@ describe('circle thread service', () => {
       'circles/circle-1/messages/user-1/message-1.jpg',
     );
     expect(mockPutFile).toHaveBeenCalledWith('file:///tmp/photo.jpg');
+  });
+
+  it('subscribes to one extra item and returns newest-first pagination metadata', () => {
+    const unsubscribe = jest.fn();
+    const docs = Array.from({length: 21}, (_, index) =>
+      snapshot(
+        {
+          actor: {displayName: `Member ${index}`, uid: `user-${index}`},
+          createdAt: {
+            toDate: () => new Date(Date.UTC(2026, 6, 30, 12, 0, -index)),
+          },
+          kind: 'message',
+          text: `Message ${index}`,
+        },
+        `item-${index}`,
+      ),
+    );
+    const onItems = jest.fn();
+    mockOnSnapshot.mockImplementationOnce(
+      (onSnapshot: (value: unknown) => void) => {
+        onSnapshot({docs});
+        return unsubscribe;
+      },
+    );
+
+    const result = subscribeToCircleThreadItems({
+      circleId: 'circle-1',
+      itemLimit: 20,
+      onItems,
+      uid: 'user-1',
+    });
+
+    expect(mockOrderBy).toHaveBeenCalledWith('createdAt', 'desc');
+    expect(mockLimit).toHaveBeenCalledWith(21);
+    expect(onItems).toHaveBeenCalledWith({
+      hasMore: true,
+      items: expect.arrayContaining([
+        expect.objectContaining({id: 'item-0'}),
+        expect.objectContaining({id: 'item-19'}),
+      ]),
+    });
+    const emittedItems = onItems.mock.calls[0][0].items;
+    expect(emittedItems).toHaveLength(20);
+    expect(emittedItems[0].id).toBe('item-0');
+    expect(emittedItems[19].id).toBe('item-19');
+    expect(result).toBe(unsubscribe);
   });
 });

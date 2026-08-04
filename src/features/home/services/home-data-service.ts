@@ -23,6 +23,7 @@ import type {
   ViewerTodayCheckIn,
 } from '../../../types/models';
 import {canTapInToday, getHomeCircleActionVariant} from './home-circle-actions';
+import {getCircleLifecycleStatus} from '../../circles/services/circle-lifecycle';
 import {
   formatQuantityValue,
   getCommitmentType,
@@ -107,6 +108,7 @@ type PlainData = Record<string, unknown>;
 export type HomeCircleMappingInput = {
   circleData?: PlainData;
   circleId: string;
+  includeArchived?: boolean;
   memberProfilesByUid?: ReadonlyMap<string, PlainData>;
   membersData?: PlainData[];
   membershipData?: PlainData;
@@ -228,6 +230,15 @@ function asString(value: unknown, fallback = '') {
 
 function asNumber(value: unknown, fallback: number) {
   return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
+}
+
+function asDate(value: unknown) {
+  return value &&
+    typeof value === 'object' &&
+    'toDate' in value &&
+    typeof value.toDate === 'function'
+    ? value.toDate()
+    : undefined;
 }
 
 function clampTapInsPerWeek(value: number) {
@@ -1404,6 +1415,7 @@ function getNudgeTargetCount({
 export function mapHomeCircleFromData({
   circleData,
   circleId,
+  includeArchived = false,
   memberProfilesByUid,
   membersData = [],
   membershipData,
@@ -1420,6 +1432,12 @@ export function mapHomeCircleFromData({
   const membershipStatus = normalizeMembershipStatus(membershipData?.status);
 
   if (!circleData || !membershipData || !membershipStatus) {
+    return undefined;
+  }
+
+  const lifecycleStatus = getCircleLifecycleStatus(circleData);
+
+  if (lifecycleStatus === 'archived' && !includeArchived) {
     return undefined;
   }
 
@@ -1596,6 +1614,10 @@ export function mapHomeCircleFromData({
       : {}),
     graceRules,
     id: circleId,
+    lifecycleStatus,
+    ...(lifecycleStatus === 'archived' && asDate(circleData.archivedAt)
+      ? {archivedAt: asDate(circleData.archivedAt)}
+      : {}),
     inviteUrl: circleMode === 'personal' ? undefined : getInviteUrl(circleData),
     joinMode: normalizeJoinMode(circleData.joinMode),
     matchCopy: matchCopy || undefined,
@@ -2310,6 +2332,13 @@ export function subscribeToHomeData({
         return false;
       }
 
+      if (
+        state.hasLoadedCircle &&
+        getCircleLifecycleStatus(state.circleData) === 'archived'
+      ) {
+        return true;
+      }
+
       const loadedExpectedPeriodSnapshotCount = Array.from(
         state.periodCheckInExpectedDateKeys,
       ).filter(dateKey =>
@@ -2341,15 +2370,28 @@ export function subscribeToHomeData({
         .filter((circle): circle is CircleManagementCard => Boolean(circle)),
     );
 
+    const activeStates = new Map(
+      Array.from(states.entries()).filter(
+        ([, state]) =>
+          getCircleLifecycleStatus(state.circleData) !== 'archived',
+      ),
+    );
+
     onData(
       buildHomeDataFromCircles({
         circles,
-        completedDateKeys: recentCompletedDateKeys(states, recentDateKeys),
+        completedDateKeys: recentCompletedDateKeys(
+          activeStates,
+          recentDateKeys,
+        ),
         hasLoadedMemberships: true,
         hasResolvedGreetingContext: hasResolvedGreetingContext(),
         lookbackDays,
-        membershipCount: memberships.size,
-        quantityMarkers: getRecentQuantityMarkers(states, recentDateKeys),
+        membershipCount: circles.length,
+        quantityMarkers: getRecentQuantityMarkers(
+          activeStates,
+          recentDateKeys,
+        ),
         timezone,
       }),
     );
@@ -2585,6 +2627,7 @@ export function subscribeToMemberCircleDetail({
     const circle = mapHomeCircleFromData({
       circleData: state.circleData,
       circleId,
+      includeArchived: true,
       memberProfilesByUid: state.memberProfiles,
       membersData: state.membersData,
       membershipData,

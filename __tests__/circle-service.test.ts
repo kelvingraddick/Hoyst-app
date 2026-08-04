@@ -25,12 +25,14 @@ jest.mock('../src/lib/firebase/app', () => ({
 }));
 
 import {
+  archiveCircle,
   convertPersonalCircle,
   deleteCircle,
   leaveCircle,
   nudgeCircleMembers,
   reviewJoinRequest,
   updateCircle,
+  unarchiveCircle,
 } from '../src/features/circles/services/circle-service';
 
 describe('circle service', () => {
@@ -48,6 +50,34 @@ describe('circle service', () => {
 
     expect(mockHttpsCallable).toHaveBeenCalledWith('deleteCircle');
     expect(mockCallable).toHaveBeenCalledWith({circleId: 'circle-1'});
+  });
+
+  it('archives and restores a circle through lifecycle callables', async () => {
+    mockCallable
+      .mockResolvedValueOnce({
+        data: {lifecycleRevision: 1, status: 'archived'},
+      })
+      .mockResolvedValueOnce({
+        data: {
+          inviteCode: 'new-invite',
+          inviteUrl: 'https://hoyst.app/join/new-invite',
+          lifecycleRevision: 2,
+          status: 'active',
+        },
+      });
+
+    await expect(archiveCircle('circle-1')).resolves.toMatchObject({
+      status: 'archived',
+    });
+    expect(mockHttpsCallable).toHaveBeenLastCalledWith('archiveCircle');
+    expect(mockCallable).toHaveBeenLastCalledWith({circleId: 'circle-1'});
+
+    await expect(unarchiveCircle('circle-1')).resolves.toMatchObject({
+      inviteCode: 'new-invite',
+      status: 'active',
+    });
+    expect(mockHttpsCallable).toHaveBeenLastCalledWith('unarchiveCircle');
+    expect(mockCallable).toHaveBeenLastCalledWith({circleId: 'circle-1'});
   });
 
   it('converts a personal commitment with group settings', async () => {

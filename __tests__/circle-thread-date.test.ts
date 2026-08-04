@@ -18,26 +18,26 @@ describe('circle thread day sections', () => {
   it('labels calendar days in the profile timezone', () => {
     const sections = buildCircleThreadDaySections({
       items: [
-        item('older', '2026-07-26T12:00:00.000Z'),
-        item('yesterday', '2026-07-28T03:59:00.000Z'),
         item('today', '2026-07-28T04:01:00.000Z'),
+        item('yesterday', '2026-07-28T03:59:00.000Z'),
+        item('older', '2026-07-26T12:00:00.000Z'),
       ],
       now: new Date('2026-07-28T12:00:00.000Z'),
       timezone: 'America/New_York',
     });
 
     expect(sections.map(section => [section.dateKey, section.label])).toEqual([
-      ['2026-07-26', 'JUL 26, 2026'],
-      ['2026-07-27', 'YESTERDAY'],
       ['2026-07-28', 'TODAY'],
+      ['2026-07-27', 'YESTERDAY'],
+      ['2026-07-26', 'JUL 26, 2026'],
     ]);
   });
 
   it('keeps items from the same calendar day in one section', () => {
     const sections = buildCircleThreadDaySections({
       items: [
-        item('morning', '2026-07-28T00:01:00.000Z'),
         item('evening', '2026-07-28T23:59:00.000Z'),
+        item('morning', '2026-07-28T00:01:00.000Z'),
       ],
       now: new Date('2026-07-28T12:00:00.000Z'),
       timezone: 'UTC',
@@ -49,8 +49,8 @@ describe('circle thread day sections', () => {
       label: 'TODAY',
     });
     expect(sections[0].items.map(sectionItem => sectionItem.id)).toEqual([
-      'morning',
       'evening',
+      'morning',
     ]);
   });
 });

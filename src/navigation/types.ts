@@ -44,7 +44,6 @@ export type RootStackParamList = {
   EditCircle: {circleId: string};
   CircleTools: {circleId: string};
   ConvertPersonalCircle: {circleId: string};
-  CircleThread: {circleId: string};
   TapInPicker: undefined;
   CreateCircle: undefined;
   CircleDetail: {
@@ -53,6 +52,7 @@ export type RootStackParamList = {
     source?: 'notification';
   };
   PastCircle: {summary: PastCircleSummary};
+  ArchivedCircles: undefined;
   TapInComposer: {circleId: string; source: TapInSource};
   TapInComplete: {
     circleId: string;

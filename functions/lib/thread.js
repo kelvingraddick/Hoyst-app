@@ -10,6 +10,7 @@ const auth_1 = require("firebase-admin/auth");
 const https_1 = require("firebase-functions/v2/https");
 const zod_1 = require("zod");
 const firebase_1 = require("./firebase");
+const circle_lifecycle_1 = require("./shared/circle-lifecycle");
 const circle_mode_1 = require("./shared/circle-mode");
 const sendCircleThreadMessageSchema = zod_1.z.object({
     circleId: zod_1.z.string().trim().min(1),
@@ -140,6 +141,7 @@ exports.sendCircleThreadMessage = (0, https_1.onCall)(async (request) => {
             throw new https_1.HttpsError('not-found', 'Circle not found.');
         }
         (0, circle_mode_1.ensureGroupCircle)(circleSnapshot.data(), 'using the Circle thread');
+        (0, circle_lifecycle_1.ensureActiveCircle)(circleSnapshot.data(), 'sending Circle messages');
         ensureActiveMember(memberSnapshot.data());
         if (itemSnapshot.exists) {
             throw new https_1.HttpsError('already-exists', 'Message already sent.');
@@ -175,6 +177,7 @@ exports.toggleCircleThreadItemLike = (0, https_1.onCall)(async (request) => {
             throw new https_1.HttpsError('not-found', 'Circle not found.');
         }
         (0, circle_mode_1.ensureGroupCircle)(circleSnapshot.data(), 'using the Circle thread');
+        (0, circle_lifecycle_1.ensureActiveCircle)(circleSnapshot.data(), 'reacting in the Circle thread');
         ensureActiveMember(memberSnapshot.data());
         if (!itemSnapshot.exists) {
             throw new https_1.HttpsError('not-found', 'Thread item not found.');
@@ -213,6 +216,7 @@ exports.markCircleThreadRead = (0, https_1.onCall)(async (request) => {
         throw new https_1.HttpsError('not-found', 'Circle not found.');
     }
     (0, circle_mode_1.ensureGroupCircle)(circleSnapshot.data(), 'using the Circle thread');
+    (0, circle_lifecycle_1.ensureActiveCircle)(circleSnapshot.data(), 'updating Circle thread activity');
     ensureActiveMember(memberSnapshot.data());
     await circleRef.collection('threadReads').doc(uid).set({
         readAt: firestore_1.FieldValue.serverTimestamp(),

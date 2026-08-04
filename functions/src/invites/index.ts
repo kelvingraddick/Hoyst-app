@@ -3,6 +3,7 @@ import {FieldValue} from 'firebase-admin/firestore';
 import {z} from 'zod';
 
 import {db} from '../firebase';
+import {ensureActiveCircle} from '../shared/circle-lifecycle';
 import {
   buildCircleInvitePreview,
   createInviteCode,
@@ -335,6 +336,8 @@ export const rotateCircleInvite = onCall(async request => {
     if (!circleSnapshot.exists || !circle || circle.circleMode === 'personal') {
       throw new HttpsError('not-found', 'Circle not found.');
     }
+
+    ensureActiveCircle(circle, 'resetting its invite link');
 
     if (
       circle.ownerId !== uid ||

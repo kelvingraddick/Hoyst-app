@@ -10,6 +10,8 @@ import {
   View,
 } from 'react-native';
 import {
+  Archive,
+  ArchiveRestore,
   ArrowLeft,
   ChevronRight,
   LogOut,
@@ -34,7 +36,12 @@ import {useUserProfileStore} from '../../../store/profile-store';
 import {useSessionStore} from '../../../store/session-store';
 import type {CircleDetailModel} from '../../../types/models';
 import {subscribeToMemberCircleDetail} from '../../home/services/home-data-service';
-import {deleteCircle, leaveCircle} from '../services/circle-service';
+import {
+  archiveCircle,
+  deleteCircle,
+  leaveCircle,
+  unarchiveCircle,
+} from '../services/circle-service';
 import {rotateCircleInvite} from '../../circle-invites/services/invite-service';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'CircleTools'>;
@@ -348,15 +355,19 @@ export function CircleToolsScreen({
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [isDeleteConfirmVisible, setIsDeleteConfirmVisible] = useState(false);
   const [isDeletingCircle, setIsDeletingCircle] = useState(false);
+  const [isArchivingCircle, setIsArchivingCircle] = useState(false);
+  const [isRestoringCircle, setIsRestoringCircle] = useState(false);
   const [isLeavingCircle, setIsLeavingCircle] = useState(false);
   const [isResettingInvite, setIsResettingInvite] = useState(false);
   const isPendingMembership = detail?.viewerMembershipStatus === 'pending';
   const isPersonal = detail?.circleMode === 'personal';
-  const canEditCircle = detail?.viewerRole === 'owner' && !isPendingMembership;
+  const isArchived = detail?.lifecycleStatus === 'archived';
+  const isOwner = detail?.viewerRole === 'owner' && !isPendingMembership;
+  const canEditCircle = isOwner && !isArchived;
   const canLeaveCircle = Boolean(
     detail?.viewerRole && detail.viewerRole !== 'owner',
   );
-  const hasSettings = canEditCircle || canLeaveCircle;
+  const hasSettings = isOwner || canLeaveCircle;
   const leaveActionLabel = isPendingMembership
     ? 'Cancel Request'
     : 'Leave Circle';
@@ -540,6 +551,89 @@ export function CircleToolsScreen({
     );
   };
 
+  const handleArchiveCircle = async () => {
+    if (!detail || !isOwner || isArchivingCircle) {
+      return;
+    }
+
+    setIsArchivingCircle(true);
+    try {
+      await archiveCircle(detail.id);
+      exitCircleFlow();
+      Alert.alert(
+        isPersonal ? 'Commitment archived' : 'Circle archived',
+        'History is preserved. You can restore it from Settings.',
+      );
+    } catch (error) {
+      Alert.alert(
+        'Archive failed',
+        (error as {message?: string}).message ??
+          'Could not archive this commitment. Try again.',
+      );
+    } finally {
+      setIsArchivingCircle(false);
+    }
+  };
+
+  const confirmArchiveCircle = () => {
+    if (!detail || isArchivingCircle) {
+      return;
+    }
+
+    Alert.alert(
+      isPersonal ? 'Archive Commitment?' : 'Archive Circle?',
+      'Future Tap Ins and reminders will stop. History stays available, and you can restore this from Settings.',
+      [
+        {style: 'cancel', text: 'Keep Active'},
+        {
+          onPress: () => handleArchiveCircle().catch(() => undefined),
+          text: isPersonal ? 'Archive Commitment' : 'Archive Circle',
+        },
+      ],
+    );
+  };
+
+  const handleUnarchiveCircle = async () => {
+    if (!detail || !isOwner || isRestoringCircle) {
+      return;
+    }
+
+    setIsRestoringCircle(true);
+    try {
+      await unarchiveCircle(detail.id);
+      Alert.alert(
+        isPersonal ? 'Commitment restored' : 'Circle restored',
+        'New Tap Ins will begin at the next scheduled opening.',
+      );
+    } catch (error) {
+      Alert.alert(
+        'Restore failed',
+        (error as {message?: string}).message ??
+          'Could not restore this commitment. Try again.',
+      );
+    } finally {
+      setIsRestoringCircle(false);
+    }
+  };
+
+  const confirmUnarchiveCircle = () => {
+    if (!detail || isRestoringCircle) {
+      return;
+    }
+
+    Alert.alert(
+      isPersonal ? 'Unarchive Commitment?' : 'Unarchive Circle?',
+      'Tap Ins and reminders will resume at the next scheduled opening. Archived time will not create misses.',
+      [
+        {style: 'cancel', text: 'Keep Archived'},
+        {
+          onPress: () => handleUnarchiveCircle().catch(() => undefined),
+          text: isPersonal ? 'Unarchive Commitment' : 'Unarchive Circle',
+        },
+      ],
+    );
+  };
+
   return (
     <HoystScreen contentContainerStyle={styles.content}>
       <View style={styles.navBar}>
@@ -562,6 +656,23 @@ export function CircleToolsScreen({
         </GlassPanel>
       ) : hasSettings ? (
         <View style={styles.settingsStack}>
+          {isOwner && detail && isArchived ? (
+            <SettingsRow
+              detail="Resume Tap Ins and reminders at the next scheduled opening."
+              icon={ArchiveRestore}
+              iconTone="purple"
+              onPress={
+                isRestoringCircle ? undefined : confirmUnarchiveCircle
+              }
+              title={
+                isRestoringCircle
+                  ? 'Restoring...'
+                  : isPersonal
+                  ? 'Unarchive Commitment'
+                  : 'Unarchive Circle'
+              }
+            />
+          ) : null}
           {canEditCircle && detail ? (
             <>
               <SettingsRow
@@ -618,6 +729,19 @@ export function CircleToolsScreen({
                 />
               ) : null}
               <SettingsRow
+                detail="Stop future Tap Ins and reminders while keeping all history."
+                icon={Archive}
+                iconTone="purple"
+                onPress={isArchivingCircle ? undefined : confirmArchiveCircle}
+                title={
+                  isArchivingCircle
+                    ? 'Archiving...'
+                    : isPersonal
+                    ? 'Archive Commitment'
+                    : 'Archive Circle'
+                }
+              />
+              <SettingsRow
                 detail={`Permanently remove this ${
                   isPersonal ? 'Commitment' : 'circle'
                 } and its history.`}
@@ -631,12 +755,26 @@ export function CircleToolsScreen({
             </>
           ) : null}
 
+          {isOwner && detail && isArchived ? (
+            <SettingsRow
+              detail={`Permanently remove this ${
+                isPersonal ? 'Commitment' : 'circle'
+              } and its history.`}
+              icon={Trash2}
+              iconColor={theme.dangerForeground}
+              iconTone="danger"
+              onPress={openDeleteCircleConfirm}
+              title={isPersonal ? 'Delete Commitment' : 'Delete Circle'}
+              titleColor={theme.dangerForeground}
+            />
+          ) : null}
+
           {canLeaveCircle ? (
             <SettingsRow
               detail={
                 isPendingMembership
                   ? 'Cancel your pending join request.'
-                  : 'Remove your membership and Tap In history.'
+                  : 'Stop future expectations and reminders. Past Tap Ins and shared media stay in Circle history.'
               }
               icon={LogOut}
               iconColor={theme.dangerForeground}

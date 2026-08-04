@@ -6,7 +6,9 @@ import {CircleToolsScreen} from '../src/features/circles/screens/CircleToolsScre
 import type {CircleDetailModel} from '../src/types/models';
 
 const mockDeleteCircle = jest.fn();
+const mockArchiveCircle = jest.fn();
 const mockLeaveCircle = jest.fn();
+const mockUnarchiveCircle = jest.fn();
 const mockRotateCircleInvite = jest.fn();
 
 let mockMemberDetail: CircleDetailModel | undefined;
@@ -79,8 +81,10 @@ jest.mock('../src/features/home/services/home-data-service', () => ({
 }));
 
 jest.mock('../src/features/circles/services/circle-service', () => ({
+  archiveCircle: (...args: unknown[]) => mockArchiveCircle(...args),
   deleteCircle: (...args: unknown[]) => mockDeleteCircle(...args),
   leaveCircle: (...args: unknown[]) => mockLeaveCircle(...args),
+  unarchiveCircle: (...args: unknown[]) => mockUnarchiveCircle(...args),
 }));
 
 jest.mock('../src/features/circle-invites/services/invite-service', () => ({
@@ -234,7 +238,9 @@ describe('CircleToolsScreen', () => {
       user: {providerIds: [], uid: 'user-1'},
     };
     mockDeleteCircle.mockResolvedValue(undefined);
+    mockArchiveCircle.mockResolvedValue({status: 'archived'});
     mockLeaveCircle.mockResolvedValue({status: 'left'});
+    mockUnarchiveCircle.mockResolvedValue({status: 'active'});
     mockRotateCircleInvite.mockResolvedValue({
       inviteCode: 'abcdef1234567890',
       inviteUrl: 'https://hoyst.app/join/abcdef1234567890',
@@ -259,6 +265,10 @@ describe('CircleToolsScreen', () => {
       'Change the name, rules, access, timing, and capacity.',
     );
     expect(output).toContain('Delete Circle');
+    expect(output).toContain('Archive Circle');
+    expect(output.indexOf('Archive Circle')).toBeLessThan(
+      output.indexOf('Delete Circle'),
+    );
     expect(output).toContain('Permanently remove this circle and its history.');
     expect(output).not.toContain('Leave Circle');
     expect(output).not.toContain('Circle Tools');
@@ -290,6 +300,53 @@ describe('CircleToolsScreen', () => {
     expect(navigation.navigate).toHaveBeenCalledWith('EditCircle', {
       circleId: 'circle-1',
     });
+  });
+
+  it('archives an owner Circle and points restoration to Settings', async () => {
+    const {navigation, tree} = renderScreen();
+
+    pressByAccessibilityLabel(tree, 'Archive Circle');
+    expect(alertSpy).toHaveBeenCalledWith(
+      'Archive Circle?',
+      expect.stringContaining('History stays available'),
+      expect.arrayContaining([
+        expect.objectContaining({text: 'Keep Active'}),
+        expect.objectContaining({text: 'Archive Circle'}),
+      ]),
+    );
+
+    pressAlertButton('Archive Circle?', 'Archive Circle');
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(mockArchiveCircle).toHaveBeenCalledWith('circle-1');
+    expect(navigation.popToTop).toHaveBeenCalled();
+    expect(alertSpy).toHaveBeenCalledWith(
+      'Circle archived',
+      'History is preserved. You can restore it from Settings.',
+    );
+  });
+
+  it('shows read-only lifecycle actions for an archived owner Circle', async () => {
+    mockMemberDetail = detail({lifecycleStatus: 'archived'});
+    const {tree} = renderScreen();
+    const output = outputOf(tree);
+
+    expect(output).toContain('Unarchive Circle');
+    expect(output).toContain('Delete Circle');
+    expect(output).not.toContain('Edit Circle');
+    expect(output).not.toContain('Reset Invite Link');
+
+    pressByAccessibilityLabel(tree, 'Unarchive Circle');
+    pressAlertButton('Unarchive Circle?', 'Unarchive Circle');
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(mockUnarchiveCircle).toHaveBeenCalledWith('circle-1');
   });
 
   it('deletes an owner circle and exits the circle flow', async () => {
@@ -386,7 +443,9 @@ describe('CircleToolsScreen', () => {
     expect(output).toContain('Circle Settings');
     expect(output).not.toContain('MEMBERSHIP');
     expect(output).toContain('Leave Circle');
-    expect(output).toContain('Remove your membership and Tap In history.');
+    expect(output).toContain(
+      'Stop future expectations and reminders. Past Tap Ins and shared media stay in Circle history.',
+    );
     expect(output).not.toContain('Edit Circle');
     expect(output).not.toContain('Delete Circle');
 

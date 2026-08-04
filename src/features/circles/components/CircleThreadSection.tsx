@@ -1,20 +1,18 @@
-import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
+import React, {useEffect, useMemo, useRef, useState} from 'react';
 import {
+  ActivityIndicator,
   Alert,
   Image,
-  KeyboardAvoidingView,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   TextInput,
   View,
+  type LayoutChangeEvent,
 } from 'react-native';
-import {useFocusEffect} from '@react-navigation/native';
-import type {NativeStackScreenProps} from '@react-navigation/native-stack';
 import {
-  ArrowLeft,
   ArrowRight,
+  Archive,
   Bell,
   Camera,
   Check,
@@ -23,26 +21,17 @@ import {
   X,
 } from 'lucide-react-native';
 import {launchImageLibrary} from 'react-native-image-picker';
-import {SafeAreaView} from 'react-native-safe-area-context';
 
-import {
-  CircleCategoryIcon,
-  getCircleCategoryVisual,
-} from '../../../design/components/CircleCategoryIcon';
-import {FrostedBackdrop} from '../../../design/components/FrostedBackdrop';
 import {GlassPanel} from '../../../design/components/GlassPanel';
 import {HoystAvatar} from '../../../design/components/HoystAvatar';
 import {HoystText} from '../../../design/components/HoystText';
+import {SectionEyebrow} from '../../../design/components/SectionEyebrow';
 import {actionMotion} from '../../../design/tokens/actions';
 import {brandColors} from '../../../design/tokens/colors';
 import {radius} from '../../../design/tokens/radius';
 import {useHoystTheme} from '../../../design/theme/useHoystTheme';
 import {getPhotoUploadErrorMessage} from '../../../lib/firebase/storage-error';
-import type {RootStackParamList} from '../../../navigation/types';
-import {useSessionStore} from '../../../store/session-store';
-import {useUserProfileStore} from '../../../store/profile-store';
-import type {CircleDetailModel, CircleThreadItem} from '../../../types/models';
-import {subscribeToMemberCircleDetail} from '../../home/services/home-data-service';
+import type {CircleThreadItem} from '../../../types/models';
 import {
   createCircleThreadMessageId,
   markCircleThreadRead,
@@ -53,32 +42,25 @@ import {
 } from '../services/circle-thread-service';
 import {buildCircleThreadDaySections} from '../services/circle-thread-date';
 
-type Props = NativeStackScreenProps<RootStackParamList, 'CircleThread'>;
 type ThreadTone = NonNullable<CircleThreadItem['tone']>;
+
+type CircleThreadSectionProps = {
+  circleId: string;
+  isArchived: boolean;
+  isVisible: boolean;
+  loadMoreRequestToken: number;
+  onLayout?: (event: LayoutChangeEvent) => void;
+  timezone: string;
+  viewerUid: string;
+};
+
+const THREAD_PAGE_SIZE = 20;
 
 const quickMessages = [
   {id: 'nice', label: '👏 Nice', text: '👏 Nice'},
   {id: 'lets-go', label: "🙌 Let's go", text: "🙌 Let's go"},
   {id: 'you-got-this', label: '💪 You got this', text: '💪 You got this'},
 ] as const;
-
-function formatThreadSubtitle(detail?: CircleDetailModel) {
-  if (!detail) {
-    return 'Circle thread';
-  }
-
-  const memberCount = detail.memberCount ?? detail.members.length;
-  const memberLabel =
-    memberCount === 1 ? '1 companion' : `${memberCount} companions`;
-  const streakDays =
-    detail.streakDays ?? Number.parseInt(detail.streakLabel, 10);
-  const streakLabel =
-    Number.isFinite(streakDays) && streakDays > 0
-      ? `${streakDays} day streak`
-      : detail.streakLabel;
-
-  return `${memberLabel} · ${streakLabel}`;
-}
 
 function getActivityPalette(
   tone: ThreadTone,
@@ -163,10 +145,12 @@ function LikeButton({
 function ThreadMessageBubble({
   item,
   onLike,
+  readOnly,
   viewerUid,
 }: {
   item: CircleThreadItem;
   onLike: (item: CircleThreadItem) => void;
+  readOnly?: boolean;
   viewerUid?: string;
 }) {
   const theme = useHoystTheme();
@@ -226,7 +210,7 @@ function ThreadMessageBubble({
             isViewer ? styles.viewerMessageMetaRow : undefined,
           ]}>
           <LikeButton
-            disabled={isViewer}
+            disabled={isViewer || readOnly}
             item={item}
             onPress={() => onLike(item)}
           />
@@ -245,10 +229,12 @@ function ThreadMessageBubble({
 function ThreadActivityItem({
   item,
   onLike,
+  readOnly,
   viewerUid,
 }: {
   item: CircleThreadItem;
   onLike: (item: CircleThreadItem) => void;
+  readOnly?: boolean;
   viewerUid?: string;
 }) {
   const theme = useHoystTheme();
@@ -305,7 +291,7 @@ function ThreadActivityItem({
               ) : null}
             </GlassPanel>
             <LikeButton
-              disabled={isViewer || item.readOnly}
+              disabled={isViewer || item.readOnly || readOnly}
               item={item}
               onPress={() => onLike(item)}
             />
@@ -314,7 +300,7 @@ function ThreadActivityItem({
       ) : (
         <View style={styles.activityLikeRow}>
           <LikeButton
-            disabled={isViewer || item.readOnly}
+            disabled={isViewer || item.readOnly || readOnly}
             item={item}
             onPress={() => onLike(item)}
           />
@@ -327,126 +313,134 @@ function ThreadActivityItem({
 function ThreadItem({
   item,
   onLike,
+  readOnly,
   viewerUid,
 }: {
   item: CircleThreadItem;
   onLike: (item: CircleThreadItem) => void;
+  readOnly?: boolean;
   viewerUid?: string;
 }) {
   if (item.kind === 'activity') {
     return (
-      <ThreadActivityItem item={item} onLike={onLike} viewerUid={viewerUid} />
+      <ThreadActivityItem
+        item={item}
+        onLike={onLike}
+        readOnly={readOnly}
+        viewerUid={viewerUid}
+      />
     );
   }
 
   return (
-    <ThreadMessageBubble item={item} onLike={onLike} viewerUid={viewerUid} />
+    <ThreadMessageBubble
+      item={item}
+      onLike={onLike}
+      readOnly={readOnly}
+      viewerUid={viewerUid}
+    />
   );
 }
 
-export function CircleThreadScreen({
-  navigation,
-  route,
-}: Props): React.JSX.Element {
+function mergeThreadItems(
+  currentItems: CircleThreadItem[],
+  nextItems: CircleThreadItem[],
+) {
+  const nextIds = new Set(nextItems.map(item => item.id));
+
+  return [...nextItems, ...currentItems.filter(item => !nextIds.has(item.id))];
+}
+
+export function CircleThreadSection({
+  circleId,
+  isArchived,
+  isVisible,
+  loadMoreRequestToken,
+  onLayout,
+  timezone,
+  viewerUid,
+}: CircleThreadSectionProps): React.JSX.Element {
   const theme = useHoystTheme();
-  const [detail, setDetail] = useState<CircleDetailModel>();
   const [items, setItems] = useState<CircleThreadItem[]>([]);
-  const [hasThreadError, setHasThreadError] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
+  const [threadError, setThreadError] = useState<Error>();
+  const [requestedLimit, setRequestedLimit] = useState(THREAD_PAGE_SIZE);
+  const [retryKey, setRetryKey] = useState(0);
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [draft, setDraft] = useState('');
   const [photoUri, setPhotoUri] = useState<string>();
   const [isSending, setIsSending] = useState(false);
-  const threadScrollRef = useRef<ScrollView>(null);
-  const hasInitiallyScrolledRef = useRef(false);
-  const profile = useUserProfileStore(state => state.profile);
-  const status = useSessionStore(state => state.status);
-  const user = useSessionStore(state => state.user);
-  const timezone = profile?.timezone ?? 'UTC';
-  const canLoadThread = status === 'authenticatedReady' && Boolean(user?.uid);
-  const categoryVisual = detail
-    ? getCircleCategoryVisual(detail.category)
-    : undefined;
-  const backdropAccent = categoryVisual
-    ? theme.isDark
-      ? categoryVisual.accentLight
-      : categoryVisual.accentColor
-    : undefined;
-  const subtitle = useMemo(() => formatThreadSubtitle(detail), [detail]);
+  const lastHandledLoadRequestRef = useRef(0);
+  const lastMarkedItemIdRef = useRef<string | undefined>(undefined);
+  const pendingMarkedItemIdRef = useRef<string | undefined>(undefined);
   const daySections = useMemo(
     () => buildCircleThreadDaySections({items, timezone}),
     [items, timezone],
   );
-  const handleThreadContentSizeChange = useCallback(() => {
+
+  useEffect(() => {
+    return subscribeToCircleThreadItems({
+      circleId,
+      itemLimit: requestedLimit,
+      onError: error => {
+        setThreadError(error);
+        setIsInitialLoading(false);
+        setIsLoadingMore(false);
+      },
+      onItems: result => {
+        setItems(currentItems => mergeThreadItems(currentItems, result.items));
+        setHasMore(result.hasMore);
+        setThreadError(undefined);
+        setIsInitialLoading(false);
+        setIsLoadingMore(false);
+      },
+      uid: viewerUid,
+    });
+  }, [circleId, requestedLimit, retryKey, viewerUid]);
+
+  useEffect(() => {
     if (
-      items.length === 0 ||
-      hasInitiallyScrolledRef.current ||
-      !threadScrollRef.current
+      loadMoreRequestToken === 0 ||
+      loadMoreRequestToken === lastHandledLoadRequestRef.current ||
+      !hasMore ||
+      isInitialLoading ||
+      isLoadingMore
     ) {
       return;
     }
 
-    hasInitiallyScrolledRef.current = true;
-    threadScrollRef.current.scrollToEnd({animated: false});
-  }, [items.length]);
+    lastHandledLoadRequestRef.current = loadMoreRequestToken;
+    setIsLoadingMore(true);
+    setThreadError(undefined);
+    setRequestedLimit(currentLimit => currentLimit + THREAD_PAGE_SIZE);
+  }, [hasMore, isInitialLoading, isLoadingMore, loadMoreRequestToken]);
 
   useEffect(() => {
-    if (!canLoadThread || !user?.uid) {
-      setDetail(undefined);
-      return undefined;
-    }
+    const latestItemId = items[0]?.id;
 
-    return subscribeToMemberCircleDetail({
-      circleId: route.params.circleId,
-      onDetail: setDetail,
-      onError: () => setDetail(undefined),
-      timezone,
-      uid: user.uid,
-    });
-  }, [canLoadThread, route.params.circleId, timezone, user?.uid]);
-
-  useEffect(() => {
-    if (!canLoadThread || !user?.uid) {
-      setItems([]);
-      setHasThreadError(false);
-      return undefined;
-    }
-
-    return subscribeToCircleThreadItems({
-      circleId: route.params.circleId,
-      onError: () => setHasThreadError(true),
-      onItems: nextItems => {
-        setItems(nextItems);
-        setHasThreadError(false);
-      },
-      uid: user.uid,
-    });
-  }, [canLoadThread, route.params.circleId, user?.uid]);
-
-  useFocusEffect(
-    useCallback(() => {
-      if (!canLoadThread) {
-        return undefined;
-      }
-
-      markCircleThreadRead(route.params.circleId).catch(() => undefined);
-
-      return undefined;
-    }, [canLoadThread, route.params.circleId]),
-  );
-
-  useEffect(() => {
-    if (canLoadThread && items.length > 0) {
-      markCircleThreadRead(route.params.circleId).catch(() => undefined);
-    }
-  }, [canLoadThread, items.length, route.params.circleId]);
-
-  const navigateBack = () => {
-    if (navigation.canGoBack()) {
-      navigation.goBack();
+    if (
+      !isVisible ||
+      isArchived ||
+      !latestItemId ||
+      latestItemId === lastMarkedItemIdRef.current ||
+      latestItemId === pendingMarkedItemIdRef.current
+    ) {
       return;
     }
 
-    navigation.replace('CircleDetail', {circleId: route.params.circleId});
-  };
+    pendingMarkedItemIdRef.current = latestItemId;
+    markCircleThreadRead(circleId)
+      .then(() => {
+        lastMarkedItemIdRef.current = latestItemId;
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        if (pendingMarkedItemIdRef.current === latestItemId) {
+          pendingMarkedItemIdRef.current = undefined;
+        }
+      });
+  }, [circleId, isArchived, isVisible, items]);
 
   const handleChooseImage = async () => {
     const response = await launchImageLibrary({
@@ -465,25 +459,25 @@ export function CircleThreadScreen({
     const text = (overrideText ?? draft).trim();
     let isUploadingPhoto = Boolean(photoUri);
 
-    if (isSending || (!text && !photoUri) || !user?.uid) {
+    if (isSending || (!text && !photoUri)) {
       return;
     }
 
     setIsSending(true);
     try {
-      const messageId = createCircleThreadMessageId(route.params.circleId);
+      const messageId = createCircleThreadMessageId(circleId);
       const mediaImageUrl = photoUri
         ? await uploadCircleThreadImage({
-            circleId: route.params.circleId,
+            circleId,
             messageId,
-            uid: user.uid,
+            uid: viewerUid,
             uri: photoUri,
           })
         : undefined;
 
       isUploadingPhoto = false;
       await sendCircleThreadMessage({
-        circleId: route.params.circleId,
+        circleId,
         mediaImageUrl,
         messageId,
         text: text || undefined,
@@ -503,12 +497,12 @@ export function CircleThreadScreen({
   };
 
   const handleLike = (item: CircleThreadItem) => {
-    if (item.actor.uid === user?.uid) {
+    if (isArchived || item.actor.uid === viewerUid) {
       return;
     }
 
     toggleCircleThreadItemLike({
-      circleId: route.params.circleId,
+      circleId,
       itemId: item.id,
     }).catch(error => {
       Alert.alert(
@@ -517,124 +511,46 @@ export function CircleThreadScreen({
       );
     });
   };
+  const handleRetry = () => {
+    setThreadError(undefined);
+    if (items.length === 0) {
+      setIsInitialLoading(true);
+    } else {
+      setIsLoadingMore(true);
+    }
+    setRetryKey(currentKey => currentKey + 1);
+  };
   const canSendMessage = Boolean(draft.trim() || photoUri) && !isSending;
 
   return (
-    <SafeAreaView
-      style={[styles.safeArea, {backgroundColor: theme.background}]}>
-      <FrostedBackdrop topAccentColor={backdropAccent} />
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={styles.keyboard}>
+    <View
+      onLayout={onLayout}
+      style={styles.section}
+      testID="circle-thread-section">
+      <SectionEyebrow>Circle Chat</SectionEyebrow>
+
+      {isArchived ? (
         <View
-          testID="circle-thread-header"
           style={[
-            styles.header,
+            styles.archivedFooter,
             {
-              borderBottomColor: theme.border,
+              backgroundColor: theme.isDark
+                ? 'rgba(9,11,18,0.90)'
+                : 'rgba(245,246,255,0.92)',
+              borderColor: theme.border,
             },
           ]}>
-          <Pressable
-            accessibilityLabel="Go back"
-            accessibilityRole="button"
-            hitSlop={8}
-            onPress={navigateBack}
-            style={({pressed}) => [
-              styles.backButton,
-              {
-                backgroundColor: theme.surface,
-                borderColor: theme.glassBorder,
-                opacity: pressed ? actionMotion.pressedOpacity : 1,
-              },
-            ]}>
-            <ArrowLeft color={theme.text} size={21} strokeWidth={2.5} />
-          </Pressable>
-          {detail ? (
-            <CircleCategoryIcon
-              category={detail.category}
-              shape="roundedSquare"
-              size={38}
-            />
-          ) : (
-            <View
-              style={[styles.headerFallbackIcon, {borderColor: theme.border}]}>
-              <HoystText style={styles.headerFallbackText}>H</HoystText>
-            </View>
-          )}
-          <View style={styles.headerCopy}>
-            <HoystText numberOfLines={1} style={styles.headerTitle}>
-              {detail?.title ?? 'Circle'}
+          <Archive color={theme.textMuted} size={18} strokeWidth={2.2} />
+          <View style={styles.archivedFooterCopy}>
+            <HoystText style={styles.archivedFooterTitle}>
+              Archived Circle
             </HoystText>
-            <HoystText numberOfLines={1} style={styles.headerSubtitle}>
-              {subtitle}
+            <HoystText tone="muted" variant="caption">
+              This chat is read-only. Restore the Circle to send or react.
             </HoystText>
           </View>
         </View>
-
-        <ScrollView
-          contentContainerStyle={styles.threadContent}
-          keyboardDismissMode="interactive"
-          keyboardShouldPersistTaps="handled"
-          onContentSizeChange={handleThreadContentSizeChange}
-          ref={threadScrollRef}
-          showsVerticalScrollIndicator={false}>
-          {hasThreadError && items.length === 0 ? (
-            <GlassPanel padding="none" style={styles.emptyCard}>
-              <View style={styles.emptyCardContent}>
-                <HoystText
-                  style={styles.emptyCardTitle}
-                  testID="circle-thread-error-title">
-                  Could not load circle chat
-                </HoystText>
-                <HoystText
-                  style={styles.emptyCardBody}
-                  testID="circle-thread-error-body"
-                  tone="muted">
-                  Your circle is connected, but Hoyst could not load the latest
-                  thread yet.
-                </HoystText>
-              </View>
-            </GlassPanel>
-          ) : items.length > 0 ? (
-            daySections.map(section => (
-              <View key={section.dateKey} style={styles.daySection}>
-                <HoystText
-                  style={styles.dayMarker}
-                  testID={`circle-thread-day-${section.dateKey}`}
-                  tone="muted"
-                  variant="label">
-                  {section.label}
-                </HoystText>
-                {section.items.map(item => (
-                  <ThreadItem
-                    item={item}
-                    key={item.id}
-                    onLike={handleLike}
-                    viewerUid={user?.uid}
-                  />
-                ))}
-              </View>
-            ))
-          ) : (
-            <GlassPanel padding="none" style={styles.emptyCard}>
-              <View style={styles.emptyCardContent}>
-                <HoystText
-                  style={styles.emptyCardTitle}
-                  testID="circle-thread-empty-title">
-                  Start the circle chat
-                </HoystText>
-                <HoystText
-                  style={styles.emptyCardBody}
-                  testID="circle-thread-empty-body"
-                  tone="muted">
-                  Send a quick note, photo, or cheer when the group needs
-                  momentum.
-                </HoystText>
-              </View>
-            </GlassPanel>
-          )}
-        </ScrollView>
-
+      ) : (
         <View
           style={[
             styles.composerShell,
@@ -642,9 +558,10 @@ export function CircleThreadScreen({
               backgroundColor: theme.isDark
                 ? 'rgba(9,11,18,0.86)'
                 : 'rgba(245,246,255,0.86)',
-              borderTopColor: theme.border,
+              borderColor: theme.border,
             },
-          ]}>
+          ]}
+          testID="circle-thread-composer">
           <ScrollView
             horizontal
             contentContainerStyle={styles.quickMessageRow}
@@ -727,9 +644,7 @@ export function CircleThreadScreen({
                 }}
                 style={({pressed}) => [
                   styles.composerActionButton,
-                  {
-                    opacity: pressed ? actionMotion.pressedOpacity : 1,
-                  },
+                  {opacity: pressed ? actionMotion.pressedOpacity : 1},
                 ]}>
                 <View
                   testID="circle-thread-composer-camera-circle"
@@ -752,6 +667,7 @@ export function CircleThreadScreen({
                 accessibilityLabel="Send message"
                 accessibilityRole="button"
                 accessibilityState={{disabled: !canSendMessage}}
+                disabled={!canSendMessage}
                 onPress={() => {
                   handleSend().catch(() => undefined);
                 }}
@@ -777,12 +693,123 @@ export function CircleThreadScreen({
             </View>
           </View>
         </View>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+      )}
+
+      <View style={styles.threadContent} testID="circle-thread-feed">
+        {threadError && items.length === 0 ? (
+          <GlassPanel padding="none" style={styles.emptyCard}>
+            <View style={styles.emptyCardContent}>
+              <HoystText
+                style={styles.emptyCardTitle}
+                testID="circle-thread-error-title">
+                Could not load circle chat
+              </HoystText>
+              <HoystText
+                style={styles.emptyCardBody}
+                testID="circle-thread-error-body"
+                tone="muted">
+                Your circle is connected, but Hoyst could not load the latest
+                thread yet.
+              </HoystText>
+              <Pressable
+                accessibilityLabel="Retry circle chat"
+                accessibilityRole="button"
+                onPress={handleRetry}
+                style={({pressed}) => [
+                  styles.retryButton,
+                  {opacity: pressed ? actionMotion.pressedOpacity : 1},
+                ]}>
+                <HoystText style={styles.retryButtonLabel}>Try again</HoystText>
+              </Pressable>
+            </View>
+          </GlassPanel>
+        ) : isInitialLoading ? (
+          <View style={styles.loadingRow} testID="circle-thread-loading">
+            <ActivityIndicator color={theme.accentTertiaryForeground} />
+            <HoystText tone="muted" variant="caption">
+              Loading circle chat...
+            </HoystText>
+          </View>
+        ) : items.length > 0 ? (
+          daySections.map(section => (
+            <View key={section.dateKey} style={styles.daySection}>
+              <HoystText
+                style={styles.dayMarker}
+                testID={`circle-thread-day-${section.dateKey}`}
+                tone="muted"
+                variant="label">
+                {section.label}
+              </HoystText>
+              {section.items.map(item => (
+                <ThreadItem
+                  item={item}
+                  key={item.id}
+                  onLike={handleLike}
+                  readOnly={isArchived}
+                  viewerUid={viewerUid}
+                />
+              ))}
+            </View>
+          ))
+        ) : (
+          <GlassPanel padding="none" style={styles.emptyCard}>
+            <View style={styles.emptyCardContent}>
+              <HoystText
+                style={styles.emptyCardTitle}
+                testID="circle-thread-empty-title">
+                Start the circle chat
+              </HoystText>
+              <HoystText
+                style={styles.emptyCardBody}
+                testID="circle-thread-empty-body"
+                tone="muted">
+                Send a quick note, photo, or cheer when the group needs
+                momentum.
+              </HoystText>
+            </View>
+          </GlassPanel>
+        )}
+
+        {isLoadingMore ? (
+          <View style={styles.loadingRow} testID="circle-thread-loading-more">
+            <ActivityIndicator color={theme.accentTertiaryForeground} />
+            <HoystText tone="muted" variant="caption">
+              Loading older activity...
+            </HoystText>
+          </View>
+        ) : threadError && items.length > 0 ? (
+          <View style={styles.paginationError}>
+            <HoystText tone="muted" variant="caption">
+              Could not load older activity.
+            </HoystText>
+            <Pressable
+              accessibilityLabel="Retry older circle activity"
+              accessibilityRole="button"
+              onPress={handleRetry}
+              style={({pressed}) => [
+                styles.retryButton,
+                {opacity: pressed ? actionMotion.pressedOpacity : 1},
+              ]}>
+              <HoystText style={styles.retryButtonLabel}>Try again</HoystText>
+            </Pressable>
+          </View>
+        ) : null}
+      </View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  archivedFooter: {
+    alignItems: 'center',
+    borderRadius: radius.md,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: 12,
+    padding: 14,
+  },
+  archivedFooterCopy: {flex: 1, gap: 2},
+  archivedFooterTitle: {fontSize: 15, fontWeight: '800', lineHeight: 19},
   activityChip: {
     alignItems: 'center',
     borderRadius: radius.pill,
@@ -845,14 +872,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     lineHeight: 15,
   },
-  backButton: {
-    alignItems: 'center',
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    height: 40,
-    justifyContent: 'center',
-    width: 40,
-  },
   companionBubble: {
     borderWidth: 1,
   },
@@ -910,11 +929,10 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   composerShell: {
-    borderTopWidth: 1,
+    borderRadius: radius.md,
+    borderWidth: 1,
     gap: 10,
-    paddingBottom: 10,
-    paddingHorizontal: 20,
-    paddingTop: 10,
+    padding: 12,
   },
   dayMarker: {
     alignSelf: 'center',
@@ -950,51 +968,6 @@ const styles = StyleSheet.create({
     letterSpacing: 0,
     lineHeight: 20,
   },
-  header: {
-    alignItems: 'center',
-    borderBottomWidth: 1,
-    flexDirection: 'row',
-    gap: 10,
-    minHeight: 78,
-    paddingBottom: 10,
-    paddingHorizontal: 20,
-    paddingTop: 2,
-  },
-  headerCopy: {
-    flex: 1,
-    gap: 2,
-    minWidth: 0,
-  },
-  headerFallbackIcon: {
-    alignItems: 'center',
-    borderRadius: 14,
-    borderWidth: 1,
-    height: 38,
-    justifyContent: 'center',
-    width: 38,
-  },
-  headerFallbackText: {
-    fontSize: 15,
-    fontWeight: '900',
-    letterSpacing: 0,
-    lineHeight: 19,
-  },
-  headerSubtitle: {
-    color: '#9290AE',
-    fontSize: 13,
-    fontWeight: '700',
-    letterSpacing: 0,
-    lineHeight: 17,
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: '900',
-    letterSpacing: 0,
-    lineHeight: 25,
-  },
-  keyboard: {
-    flex: 1,
-  },
   likeButton: {
     alignItems: 'center',
     alignSelf: 'flex-start',
@@ -1008,6 +981,13 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '900',
     lineHeight: 15,
+  },
+  loadingRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 8,
+    justifyContent: 'center',
+    paddingVertical: 14,
   },
   messageBubble: {
     borderRadius: 18,
@@ -1052,6 +1032,11 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
     position: 'relative',
   },
+  paginationError: {
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 10,
+  },
   quickMessageChip: {
     borderRadius: radius.pill,
   },
@@ -1088,8 +1073,23 @@ const styles = StyleSheet.create({
     top: -8,
     width: 24,
   },
-  safeArea: {
-    flex: 1,
+  retryButton: {
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    borderRadius: radius.pill,
+    justifyContent: 'center',
+    minHeight: 34,
+    paddingHorizontal: 14,
+  },
+  retryButtonLabel: {
+    color: brandColors.blueVivid,
+    fontSize: 13,
+    fontWeight: '900',
+    lineHeight: 17,
+  },
+  section: {
+    gap: 14,
+    width: '100%',
   },
   sendCircle: {
     alignItems: 'center',
@@ -1100,11 +1100,8 @@ const styles = StyleSheet.create({
     width: 42,
   },
   threadContent: {
-    flexGrow: 1,
-    gap: 8,
-    paddingBottom: 20,
-    paddingHorizontal: 20,
-    paddingTop: 16,
+    gap: 12,
+    paddingBottom: 8,
   },
   timestampText: {
     color: '#B9B6CD',

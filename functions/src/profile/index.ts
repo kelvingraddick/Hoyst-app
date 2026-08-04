@@ -7,6 +7,7 @@ export type ProfileSummary = PersonalMetrics;
 export {
   calculatePersonalMetricsForUser,
   getPersonalStreakTransition,
+  summarizeActiveCircleModes,
   summarizeProfileCheckIns,
 } from './summary';
 

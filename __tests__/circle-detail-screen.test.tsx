@@ -1,26 +1,24 @@
 import React from 'react';
-import {Alert, Pressable, StyleSheet, Text} from 'react-native';
+import {Alert, Pressable, ScrollView, StyleSheet, Text} from 'react-native';
 import renderer, {act, type ReactTestInstance} from 'react-test-renderer';
 
 import {FrostedBackdrop} from '../src/design/components/FrostedBackdrop';
 import {SectionEyebrowTrailing} from '../src/design/components/SectionEyebrow';
-import {StatBarCard} from '../src/design/components/StatBarCard';
 import {TapInPulseButton} from '../src/design/components/TapInPulseButton';
 import {CircleDetailScreen} from '../src/features/circles/screens/CircleDetailScreen';
-import type {CircleDetailModel, CircleThreadPreview} from '../src/types/models';
+import type {CircleDetailModel} from '../src/types/models';
 
 const mockJoinCircle = jest.fn();
 const mockNudgeCircleMembers = jest.fn();
 const mockReviewJoinRequest = jest.fn();
 const mockRemoveTapIn = jest.fn();
-const mockSubscribeToCircleThreadPreview = jest.fn();
+const mockCircleThreadSection = jest.fn();
 const mockRequireAccount = jest.fn(
   (_pendingAction: unknown, callback: () => void) => callback(),
 );
 
 let mockMemberDetail: CircleDetailModel | undefined;
 let mockPublicDetail: CircleDetailModel | undefined;
-let mockThreadPreview: CircleThreadPreview | undefined;
 let mockSessionState: {
   status: 'authenticatedReady' | 'guest';
   user?: {providerIds: string[]; uid: string};
@@ -99,16 +97,21 @@ jest.mock('../src/features/circles/services/circle-service', () => ({
   reviewJoinRequest: (...args: unknown[]) => mockReviewJoinRequest(...args),
 }));
 
-jest.mock('../src/features/circles/services/circle-thread-service', () => ({
-  subscribeToCircleThreadPreview: (
-    input: Parameters<typeof mockSubscribeToCircleThreadPreview>[0],
-  ) => {
-    mockSubscribeToCircleThreadPreview(input);
-    if (mockThreadPreview) {
-      input.onPreview(mockThreadPreview);
-    }
-
-    return jest.fn();
+jest.mock('../src/features/circles/components/CircleThreadSection', () => ({
+  CircleThreadSection: (props: {
+    isArchived: boolean;
+    isVisible: boolean;
+    loadMoreRequestToken: number;
+    onLayout?: (event: unknown) => void;
+  }) => {
+    const MockReact = require('react');
+    const {Text: MockText, View: MockView} = require('react-native');
+    mockCircleThreadSection(props);
+    return MockReact.createElement(
+      MockView,
+      {onLayout: props.onLayout, testID: 'circle-thread-section'},
+      MockReact.createElement(MockText, null, 'Circle Chat'),
+    );
   },
 }));
 
@@ -342,21 +345,6 @@ describe('CircleDetailScreen reference redesign', () => {
     alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
     mockMemberDetail = detail();
     mockPublicDetail = undefined;
-    mockThreadPreview = {
-      latestItem: {
-        actor: {initials: 'MJ', name: 'Maya', uid: 'user-2'},
-        createdAtLabel: '8:41 AM',
-        createdAtMs: 1,
-        id: 'thread-1',
-        isLikedByViewer: false,
-        kind: 'message',
-        likeCount: 2,
-        text: 'Rough night but got it done',
-      },
-      latestLabel: 'Maya: Rough night but got it done',
-      latestTimestamp: '8:41 AM',
-      unreadCount: 2,
-    };
     mockSessionState = {
       status: 'authenticatedReady',
       user: {providerIds: [], uid: 'user-1'},
@@ -436,8 +424,7 @@ describe('CircleDetailScreen reference redesign', () => {
     );
     expect(output).toContain('Needs You');
     expect(output).toContain('Circle Companions');
-    expect(output).toContain('Circle chat');
-    expect(output).toContain('Maya: Rough night but got it done');
+    expect(output).toContain('Circle Chat');
     expect(output).toContain('1 of 4 today');
     expect(output).not.toContain('Circle Companions · 1 of 4 today');
     expect(output).not.toContain("Today's Progress");
@@ -450,10 +437,7 @@ describe('CircleDetailScreen reference redesign', () => {
     expect(output).toContain('Tap In');
     expect(output).toContain('Log your progress for today');
     expect(output.indexOf('Log your progress for today')).toBeLessThan(
-      output.indexOf('Circle progression'),
-    );
-    expect(output.indexOf('Circle progression')).toBeLessThan(
-      output.indexOf('Circle Companions'),
+      output.indexOf('Stats'),
     );
     const firstCompanionPage = textContent(
       tree.root.findByProps({testID: 'circle-companion-grid-page-0'}),
@@ -468,17 +452,20 @@ describe('CircleDetailScreen reference redesign', () => {
       firstCompanionPage.indexOf('Moss'),
     );
     expect(firstCompanionPage).not.toContain('Penny');
-    expect(output.indexOf('Circle Companions')).toBeLessThan(
-      output.indexOf('This week'),
+    expect(output.indexOf('Stats')).toBeLessThan(output.indexOf('3 days'));
+    expect(output.indexOf('3 days')).toBeLessThan(
+      output.indexOf('Circle progression'),
     );
-    expect(output.indexOf('Circle Companions')).toBeLessThan(
-      output.indexOf('Stats'),
+    expect(output.indexOf('Circle progression')).toBeLessThan(
+      output.indexOf('LAST 7 DAYS'),
     );
-    expect(output.indexOf('Stats')).toBeLessThan(output.indexOf('This week'));
-    expect(output.indexOf('This week')).toBeLessThan(
-      output.indexOf('Completion'),
+    expect(output.indexOf('LAST 7 DAYS')).toBeLessThan(
+      output.indexOf('Circle Companions'),
     );
     expect(output).toContain('LAST 7 DAYS');
+    expect(output).not.toContain('This week');
+    expect(output).not.toContain('Completion');
+    expect(output).not.toContain('Members');
     expect(output).not.toContain('Your last 7 days');
     expect(output).toContain('partial, 2 of 5 completed');
     expect(output).toContain('complete, 5 of 5 completed');
@@ -507,29 +494,15 @@ describe('CircleDetailScreen reference redesign', () => {
         return style?.marginTop === 6;
       }).length,
     ).toBeGreaterThan(0);
-    expect(tree.root.findAllByType(StatBarCard)).toHaveLength(3);
-    const completionIcons = tree.root.findAllByProps({
-      testID: 'circle-detail-completion-icon',
-    });
-    const streakIcons = tree.root.findAllByProps({
-      testID: 'circle-detail-streak-icon',
-    });
     expect(
-      completionIcons.some(
-        icon => icon.props.height === 26 && icon.props.width === 26,
-      ),
-    ).toBe(true);
+      tree.root.findByProps({testID: 'circle-stats-streak-pill'}).props
+        .accessibilityLabel,
+    ).toBe('Streak 3 days');
     expect(
-      streakIcons.some(
-        icon => icon.props.height === 26 && icon.props.width === 26,
-      ),
+      tree.root
+        .findAllByProps({testID: 'circle-stats-streak-icon'})
+        .some(icon => icon.props.size === 16 || icon.props.height === 16),
     ).toBe(true);
-    const hasArtworkSize = (testID: string, size: number) =>
-      tree.root.findAllByProps({testID}).some(node => {
-        const style = StyleSheet.flatten(node.props.style);
-        return style?.height === size && style?.width === size;
-      });
-    expect(hasArtworkSize('circle-detail-artwork-members', 26)).toBe(true);
     expect(output).not.toContain('Circle Tools');
     expect(output).not.toContain('Member Tools');
     expect(output).not.toContain('Leaderboard');
@@ -544,53 +517,38 @@ describe('CircleDetailScreen reference redesign', () => {
       .findAllByType(SectionEyebrowTrailing)
       .map(textContent);
 
-    expect(trailingLabels).toEqual(
-      expect.arrayContaining(['1 of 4 today', 'This week']),
-    );
+    expect(trailingLabels).toEqual(expect.arrayContaining(['1 of 4 today']));
+    expect(trailingLabels).not.toContain('This week');
   });
 
-  it('opens the smart circle chat preview from detail', () => {
+  it('embeds circle chat below the companion grid without navigation', () => {
     const {navigation, tree} = renderScreen();
-    const preview = tree.root.findByProps({
-      accessibilityLabel: 'Open circle chat',
-    });
-    const previewFillStyle = StyleSheet.flatten(
-      tree.root.findByProps({testID: 'circle-detail-thread-preview-fill'}).props
-        .style,
-    );
-    const previewIconStyle = StyleSheet.flatten(
-      tree.root.findByProps({testID: 'circle-detail-thread-preview-icon'}).props
-        .style,
-    );
-    const previewTitle = tree.root
-      .findAllByType(Text)
-      .find(node => textContent(node) === 'Circle chat');
+    const output = outputOf(tree);
+    const sectionProps = mockCircleThreadSection.mock.calls.at(-1)?.[0];
 
-    expect(previewFillStyle).toEqual(
+    expect(output.indexOf('Circle Companions')).toBeLessThan(
+      output.indexOf('Circle Chat'),
+    );
+    expect(
+      tree.root.findAllByProps({accessibilityLabel: 'Open circle chat'}),
+    ).toHaveLength(0);
+    expect(sectionProps).toEqual(
       expect.objectContaining({
-        minHeight: 58,
-        paddingHorizontal: 12,
-        paddingVertical: 7,
+        circleId: 'circle-1',
+        isArchived: false,
+        isVisible: false,
+        loadMoreRequestToken: 0,
+        timezone: 'UTC',
+        viewerUid: 'user-1',
       }),
     );
-    expect(previewIconStyle).toEqual(
-      expect.objectContaining({height: 40, width: 40}),
+    expect(navigation.navigate).not.toHaveBeenCalledWith(
+      'CircleThread',
+      expect.anything(),
     );
-    expect(StyleSheet.flatten(previewTitle?.props.style)).toEqual(
-      expect.objectContaining({fontSize: 15, lineHeight: 19}),
-    );
-
-    act(() => {
-      preview.props.onPress();
-    });
-
-    expect(navigation.navigate).toHaveBeenCalledWith('CircleThread', {
-      circleId: 'circle-1',
-    });
   });
 
-  it('keeps the nudge and empty chat actions matched and tightly spaced', () => {
-    mockThreadPreview = undefined;
+  it('keeps the nudge directly above the embedded chat', () => {
     mockMemberDetail = detail({
       members: [
         {
@@ -619,24 +577,78 @@ describe('CircleDetailScreen reference redesign', () => {
       tree.root.findByProps({testID: 'circle-detail-nudge-panel-frame'}).props
         .style,
     );
-    const previewFillStyle = StyleSheet.flatten(
-      tree.root.findByProps({testID: 'circle-detail-thread-preview-fill'}).props
-        .style,
-    );
 
-    expect(output).toContain('Start the chat');
-    expect(output).toContain('Message your companions.');
-    expect(output).not.toContain('Start the circle chat');
-    expect(output).not.toContain('Send the first message to your companions.');
+    expect(output.indexOf('Send a Nudge')).toBeLessThan(
+      output.indexOf('Circle Chat'),
+    );
     expect(actionStackStyle).toEqual(expect.objectContaining({gap: 10}));
     expect(nudgeFrameStyle).toEqual(expect.objectContaining({minHeight: 58}));
-    expect(previewFillStyle).toEqual(
+  });
+
+  it('marks chat visible and requests pagination from outer page scrolling', () => {
+    const {tree} = renderScreen();
+    const outerScroll = tree.root
+      .findAllByType(ScrollView)
+      .find(node => node.props.horizontal !== true);
+    const body = tree.root.findByProps({testID: 'circle-detail-body-stack'});
+    const thread = tree.root.findByProps({testID: 'circle-thread-section'});
+
+    act(() => {
+      outerScroll?.props.onLayout({nativeEvent: {layout: {height: 600}}});
+      outerScroll?.props.onContentSizeChange(390, 2000);
+      body.props.onLayout({nativeEvent: {layout: {y: 400}}});
+      thread.props.onLayout({nativeEvent: {layout: {y: 800}}});
+    });
+
+    expect(mockCircleThreadSection.mock.calls.at(-1)?.[0]).toEqual(
       expect.objectContaining({
-        minHeight: 58,
-        paddingHorizontal: 12,
-        paddingVertical: 7,
+        isVisible: false,
+        loadMoreRequestToken: 0,
       }),
     );
+
+    act(() => {
+      outerScroll?.props.onScroll({
+        nativeEvent: {
+          contentOffset: {y: 650},
+          contentSize: {height: 2000},
+          layoutMeasurement: {height: 600},
+        },
+      });
+    });
+
+    expect(mockCircleThreadSection.mock.calls.at(-1)?.[0].isVisible).toBe(true);
+    expect(
+      mockCircleThreadSection.mock.calls.at(-1)?.[0].loadMoreRequestToken,
+    ).toBe(0);
+
+    act(() => {
+      outerScroll?.props.onScroll({
+        nativeEvent: {
+          contentOffset: {y: 1200},
+          contentSize: {height: 2000},
+          layoutMeasurement: {height: 600},
+        },
+      });
+    });
+
+    expect(
+      mockCircleThreadSection.mock.calls.at(-1)?.[0].loadMoreRequestToken,
+    ).toBe(1);
+
+    act(() => {
+      outerScroll?.props.onScroll({
+        nativeEvent: {
+          contentOffset: {y: 1210},
+          contentSize: {height: 2000},
+          layoutMeasurement: {height: 600},
+        },
+      });
+    });
+
+    expect(
+      mockCircleThreadSection.mock.calls.at(-1)?.[0].loadMoreRequestToken,
+    ).toBe(1);
   });
 
   it('shows view and remove actions after today is counted', () => {
@@ -662,6 +674,9 @@ describe('CircleDetailScreen reference redesign', () => {
     expect(output).not.toContain('Circle Tools');
     expect(output.indexOf('Stats')).toBeLessThan(
       output.indexOf('Remove Tap In'),
+    );
+    expect(output.indexOf('Remove Tap In')).toBeLessThan(
+      output.indexOf('Circle Chat'),
     );
   });
 
@@ -928,11 +943,11 @@ describe('CircleDetailScreen reference redesign', () => {
     expect(StyleSheet.flatten(nudgeSubtitle?.props.style)).toEqual(
       expect.objectContaining({fontSize: 13, lineHeight: 17}),
     );
+    expect(output.indexOf('Stats')).toBeLessThan(
+      output.indexOf('Circle Companions'),
+    );
     expect(output.indexOf('Circle Companions')).toBeLessThan(
       output.indexOf('Send a Nudge'),
-    );
-    expect(output.indexOf('Send a Nudge')).toBeLessThan(
-      output.indexOf('Stats'),
     );
     expect(output).not.toContain('Send Nudge');
     expect(output).not.toContain('Invite');
@@ -990,6 +1005,8 @@ describe('CircleDetailScreen reference redesign', () => {
     expect(outputOf(tree)).toContain('Pending');
     expect(outputOf(tree)).not.toContain('Member Tools');
     expect(outputOf(tree)).not.toContain('Cancel Request');
+    expect(outputOf(tree)).not.toContain('Circle Chat');
+    expect(mockCircleThreadSection).not.toHaveBeenCalled();
   });
 
   it('renders public preview copy and join action', () => {
@@ -1009,19 +1026,53 @@ describe('CircleDetailScreen reference redesign', () => {
     expect(output).toContain('A steady crew for morning movement.');
     expect(output).toContain('Join Circle');
     expect(output).not.toContain('Needs You');
+    expect(output).not.toContain('Circle Chat');
+    expect(mockCircleThreadSection).not.toHaveBeenCalled();
   });
 
-  it('renders stats from existing progress data', () => {
+  it('renders progression and the compact streak header from existing data', () => {
     const {tree} = renderScreen();
     const output = outputOf(tree);
+    const progressValue = tree.root.findByProps({
+      testID: 'circle-stats-progress-value',
+    });
+    const progressValueStyle = StyleSheet.flatten(progressValue.props.style);
+    const progressFillStyle = StyleSheet.flatten(
+      tree.root.findByProps({testID: 'circle-stats-progress-fill'}).props.style,
+    );
 
     expect(output).toContain('Stats');
-    expect(output).toContain('Completion');
-    expect(output).toContain('60%');
-    expect(output).toContain('Streak');
-    expect(output).toContain('3');
-    expect(output).toContain('Members');
-    expect(output).toContain('5/8');
+    expect(textContent(progressValue)).toBe('60%');
+    expect(progressFillStyle).toEqual(
+      expect.objectContaining({
+        backgroundColor: progressValueStyle.color,
+        height: 10,
+        width: '60%',
+      }),
+    );
+    expect(output).toContain('3 days');
+    expect(output).not.toContain('Completion');
+    expect(output).not.toContain('Members');
+    expect(output).not.toContain('This week');
+  });
+
+  it.each([
+    [0, '0 days'],
+    [1, '1 day'],
+    [3, '3 days'],
+  ] as const)('formats a %i-day streak as %s', (streakDays, expectedLabel) => {
+    mockMemberDetail = detail({streakDays});
+
+    const {tree} = renderScreen();
+    const streakLabel = tree.root
+      .findAllByProps({testID: 'circle-stats-streak-label'})
+      .find(node => textContent(node) === expectedLabel);
+
+    expect(streakLabel).toBeTruthy();
+    expect(
+      tree.root.findByProps({testID: 'circle-stats-streak-pill'}).props
+        .accessibilityLabel,
+    ).toBe(`Streak ${expectedLabel}`);
   });
 
   it('keeps personal commitment details private and free of group surfaces', () => {
@@ -1051,12 +1102,47 @@ describe('CircleDetailScreen reference redesign', () => {
     expect(output).toContain('Personal Commitment');
     expect(output).toContain('Personal commitment');
     expect(output).toContain('Personal progress');
+    expect(output.indexOf('Stats')).toBeLessThan(output.indexOf('3 days'));
+    expect(output.indexOf('3 days')).toBeLessThan(
+      output.indexOf('Personal progress'),
+    );
+    expect(output.indexOf('Personal progress')).toBeLessThan(
+      output.indexOf('LAST 7 DAYS'),
+    );
     expect(output).not.toContain('Circle Companions');
-    expect(output).not.toContain('Circle chat');
+    expect(output).not.toContain('Circle Chat');
     expect(output).not.toContain('Completion');
     expect(output).not.toContain('Members');
-    expect(tree.root.findAllByType(StatBarCard)).toHaveLength(1);
-    expect(mockSubscribeToCircleThreadPreview).not.toHaveBeenCalled();
+    expect(output).toContain('3 days');
+    expect(
+      tree.root
+        .findAllByProps({testID: 'circle-stats-streak-label'})
+        .some(node => textContent(node) === '3 days'),
+    ).toBe(true);
+    expect(mockCircleThreadSection).not.toHaveBeenCalled();
+  });
+
+  it('renders archived Circle history without active controls', () => {
+    mockMemberDetail = detail({
+      archivedAt: new Date('2026-08-04T12:00:00Z'),
+      lifecycleStatus: 'archived',
+      viewerRole: 'owner',
+    });
+
+    const {tree} = renderScreen();
+    const output = outputOf(tree);
+
+    expect(output).toContain('Circle archived');
+    expect(output).toContain('Read-only history');
+    expect(output).toContain('Archived Aug 4, 2026');
+    expect(output).toContain('Circle Chat');
+    expect(output).not.toContain('Log your progress for today');
+    expect(output).not.toContain('Send a Nudge');
+    expect(output).not.toContain('Invite companions');
+    expect(tree.root.findAllByType(TapInPulseButton)).toHaveLength(0);
+    expect(mockCircleThreadSection.mock.calls.at(-1)?.[0].isArchived).toBe(
+      true,
+    );
   });
 
   it('opens circle settings from the header gear', () => {

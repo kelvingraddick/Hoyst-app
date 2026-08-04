@@ -2,6 +2,7 @@ import type {ImageSourcePropType} from 'react-native';
 
 export type CirclePrivacy = 'private' | 'public';
 export type CircleMode = 'personal' | 'group';
+export type CircleLifecycleStatus = 'active' | 'archived';
 export type CirclePrivacyMode = 'link_only' | 'private' | 'public';
 export type CircleJoinMode = 'open' | 'invite_only' | 'request_to_join';
 export type CircleMembershipStatus = 'active' | 'pending';
@@ -113,6 +114,8 @@ export type Opportunity = {
 export type Circle = {
   id: string;
   circleMode?: CircleMode;
+  lifecycleStatus?: CircleLifecycleStatus;
+  archivedAt?: Date;
   title: string;
   category: string;
   commitment: string;
@@ -204,18 +207,13 @@ export type CircleThreadItem = {
   tone?: CircleThreadTone;
 };
 
-export type CircleThreadPreview = {
-  latestItem?: CircleThreadItem;
-  latestLabel?: string;
-  latestTimestamp?: string;
-  unreadCount: number;
-};
-
 export type InboxEventType =
+  | 'circle_archived'
   | 'circle_at_risk'
   | 'circle_complete'
   | 'circle_discovery_suggestion'
   | 'circle_nudge_prompt'
+  | 'circle_restored'
   | 'companion_achievement_unlocked'
   | 'companion_circle_created'
   | 'companion_circle_joined'
@@ -275,6 +273,8 @@ export type ViewerTodayCheckIn = {
 export type CircleSummary = {
   id: string;
   circleMode?: CircleMode;
+  lifecycleStatus?: CircleLifecycleStatus;
+  archivedAt?: Date;
   title: string;
   category: string;
   commitment: string;

@@ -10,8 +10,8 @@ import {
 } from 'react-native';
 import renderer, {act, type ReactTestInstance} from 'react-test-renderer';
 
-import {CircleThreadScreen} from '../src/features/circles/screens/CircleThreadScreen';
-import type {CircleDetailModel, CircleThreadItem} from '../src/types/models';
+import {CircleThreadSection} from '../src/features/circles/components/CircleThreadSection';
+import type {CircleThreadItem} from '../src/types/models';
 
 const mockSubscribeToCircleThreadItems = jest.fn();
 const mockMarkCircleThreadRead = jest.fn();
@@ -21,13 +21,9 @@ const mockUploadCircleThreadImage = jest.fn();
 const mockCreateCircleThreadMessageId = jest.fn();
 const mockLaunchImageLibrary = jest.fn();
 
-let mockDetail: CircleDetailModel | undefined;
 let mockThreadError: Error | undefined;
 let mockThreadItems: CircleThreadItem[];
-let mockSessionState: {
-  status: 'authenticatedReady' | 'guest';
-  user?: {providerIds: string[]; uid: string};
-};
+let mockThreadHasMore: boolean;
 let alertSpy: jest.SpyInstance;
 
 jest.mock('@react-native-community/blur', () => {
@@ -63,39 +59,9 @@ jest.mock('react-native-image-picker', () => ({
   launchImageLibrary: (...args: unknown[]) => mockLaunchImageLibrary(...args),
 }));
 
-jest.mock('@react-navigation/native', () => ({
-  useFocusEffect: (callback: () => void | (() => void)) => {
-    const MockReact = require('react');
-    MockReact.useEffect(() => callback(), [callback]);
-  },
-}));
-
 jest.mock('../src/store/settings-store', () => ({
   useSettingsStore: (selector: (state: {appearance: 'light'}) => unknown) =>
     selector({appearance: 'light'}),
-}));
-
-jest.mock('../src/store/session-store', () => ({
-  useSessionStore: (selector: (state: typeof mockSessionState) => unknown) =>
-    selector(mockSessionState),
-}));
-
-jest.mock('../src/store/profile-store', () => ({
-  useUserProfileStore: (
-    selector: (state: {profile: {name: string; timezone: string}}) => unknown,
-  ) => selector({profile: {name: 'Kelvin', timezone: 'UTC'}}),
-}));
-
-jest.mock('../src/features/home/services/home-data-service', () => ({
-  subscribeToMemberCircleDetail: jest.fn(
-    ({onDetail}: {onDetail: (detail: CircleDetailModel) => void}) => {
-      if (mockDetail) {
-        onDetail(mockDetail);
-      }
-
-      return jest.fn();
-    },
-  ),
 }));
 
 jest.mock('../src/features/circles/services/circle-thread-service', () => ({
@@ -112,7 +78,7 @@ jest.mock('../src/features/circles/services/circle-thread-service', () => ({
     if (mockThreadError) {
       input.onError(mockThreadError);
     } else {
-      input.onItems(mockThreadItems);
+      input.onItems({hasMore: mockThreadHasMore, items: mockThreadItems});
     }
     return jest.fn();
   },
@@ -122,45 +88,10 @@ jest.mock('../src/features/circles/services/circle-thread-service', () => ({
     mockUploadCircleThreadImage(...args),
 }));
 
-function detail(overrides: Partial<CircleDetailModel> = {}): CircleDetailModel {
-  return {
-    activity: [],
-    category: 'Wellness',
-    commitment: 'Sleep 8 hours',
-    commitmentCadence: 'daily',
-    commitmentFrequency: {tapInsPerWeek: 7},
-    commitmentLabel: 'Commitment: Sleep 8 hours',
-    completionRate: 60,
-    graceRules: {skip: {allowance: 0, windowDays: 7}},
-    groupProgressDays: [],
-    id: 'circle-1',
-    joinLabel: 'Open seats',
-    joinMode: 'open',
-    maxSize: 5,
-    memberCount: 5,
-    members: [],
-    monthProgress: [],
-    privacy: 'private',
-    progressPercent: 60,
-    remainingCheckIns: 1,
-    state: 'active',
-    streakDays: 6,
-    streakLabel: '6 day streak',
-    title: 'Sleep 8 Hours',
-    timezone: 'UTC',
-    viewerHasCheckedIn: false,
-    viewerHasTappedInToday: false,
-    viewerMembershipStatus: 'active',
-    viewerRemainingTapIns: 1,
-    viewerRole: 'member',
-    ...overrides,
-  };
-}
-
 function threadItems(): CircleThreadItem[] {
   const now = Date.now();
 
-  return [
+  const items: CircleThreadItem[] = [
     {
       activityType: 'tap_in',
       actor: {initials: 'MJ', name: 'Maya', uid: 'user-2'},
@@ -209,32 +140,38 @@ function threadItems(): CircleThreadItem[] {
       tone: 'pending',
     },
   ];
+
+  return items.reverse();
 }
 
-function renderScreen() {
-  const navigation = {
-    canGoBack: jest.fn(() => true),
-    goBack: jest.fn(),
-    replace: jest.fn(),
+type SectionProps = React.ComponentProps<typeof CircleThreadSection>;
+
+function renderSection(overrides: Partial<SectionProps> = {}) {
+  let props: SectionProps = {
+    circleId: 'circle-1',
+    isArchived: false,
+    isVisible: false,
+    loadMoreRequestToken: 0,
+    onLayout: jest.fn(),
+    timezone: 'UTC',
+    viewerUid: 'user-1',
+    ...overrides,
   };
   let tree: renderer.ReactTestRenderer | undefined;
 
   act(() => {
-    tree = renderer.create(
-      <CircleThreadScreen
-        navigation={navigation as never}
-        route={
-          {
-            key: 'CircleThread',
-            name: 'CircleThread',
-            params: {circleId: 'circle-1'},
-          } as never
-        }
-      />,
-    );
+    tree = renderer.create(<CircleThreadSection {...props} />);
   });
 
-  return {navigation, tree: tree!};
+  return {
+    rerender(nextProps: Partial<SectionProps>) {
+      props = {...props, ...nextProps};
+      act(() => {
+        tree?.update(<CircleThreadSection {...props} />);
+      });
+    },
+    tree: tree!,
+  };
 }
 
 function outputOf(tree: renderer.ReactTestRenderer) {
@@ -255,12 +192,6 @@ function findTextNode(tree: renderer.ReactTestRenderer, text: string) {
   return tree.root.findAllByType(Text).find(node => textContent(node) === text);
 }
 
-function getThreadScrollView(tree: renderer.ReactTestRenderer) {
-  return tree.root
-    .findAllByType(ScrollView)
-    .find(node => node.props.horizontal !== true)!;
-}
-
 function getDayMarkerIds(tree: renderer.ReactTestRenderer) {
   return new Set(
     tree.root
@@ -273,16 +204,12 @@ function getDayMarkerIds(tree: renderer.ReactTestRenderer) {
   );
 }
 
-describe('CircleThreadScreen', () => {
+describe('CircleThreadSection', () => {
   beforeEach(() => {
     alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
-    mockDetail = detail();
     mockThreadError = undefined;
     mockThreadItems = threadItems();
-    mockSessionState = {
-      status: 'authenticatedReady',
-      user: {providerIds: [], uid: 'user-1'},
-    };
+    mockThreadHasMore = false;
     mockCreateCircleThreadMessageId.mockReturnValue('new-message-id');
     mockSendCircleThreadMessage.mockResolvedValue({itemId: 'new-message-id'});
     mockToggleCircleThreadItemLike.mockResolvedValue({
@@ -302,11 +229,10 @@ describe('CircleThreadScreen', () => {
   });
 
   it('renders mixed activity, left and right messages, images, likes, and composer chips', () => {
-    const {tree} = renderScreen();
+    const {tree} = renderSection();
     const output = outputOf(tree);
 
-    expect(output).toContain('Sleep 8 Hours');
-    expect(output).toContain('5 companions · 6 day streak');
+    expect(output).toContain('Circle Chat');
     expect(output).toContain('TODAY');
     expect(output).toContain('Maya tapped in');
     expect(output).toContain('Rough night but got it done');
@@ -342,49 +268,120 @@ describe('CircleThreadScreen', () => {
 
     expect(currentMessage).toBeTruthy();
     expect(currentMessageAncestors.length).toBeGreaterThan(0);
+    expect(
+      tree.root
+        .findAllByType(ScrollView)
+        .every(scrollView => scrollView.props.horizontal === true),
+    ).toBe(true);
+    expect(output.indexOf('Message the circle...')).toBeLessThan(
+      output.indexOf('Sam nudged Priya'),
+    );
+    expect(output.indexOf('Sam nudged Priya')).toBeLessThan(
+      output.indexOf("who's still up 👀"),
+    );
+    expect(output.indexOf("who's still up 👀")).toBeLessThan(
+      output.indexOf("Let's gooo 🔥 proud of everyone"),
+    );
   });
 
   it('renders separate date markers for activity from different days', () => {
     const now = Date.now();
-    const [olderItem, todayItem] = threadItems();
+    const [todayItem, olderItem] = threadItems();
     mockThreadItems = [
-      {...olderItem, createdAtMs: now - 3 * 24 * 60 * 60_000, id: 'older'},
       {...todayItem, createdAtMs: now, id: 'today'},
+      {...olderItem, createdAtMs: now - 3 * 24 * 60 * 60_000, id: 'older'},
     ];
 
-    const {tree} = renderScreen();
+    const {tree} = renderSection();
 
     expect(getDayMarkerIds(tree).size).toBe(2);
     expect(outputOf(tree)).toContain('TODAY');
-  });
-
-  it('scrolls a populated thread to the bottom once after layout', () => {
-    const scrollToEnd = jest
-      .spyOn(ScrollView.prototype, 'scrollToEnd')
-      .mockImplementation(() => undefined);
-    const {tree} = renderScreen();
-
-    act(() => {
-      getThreadScrollView(tree).props.onContentSizeChange(320, 1200);
-    });
-
-    expect(scrollToEnd).toHaveBeenCalledTimes(1);
-    expect(scrollToEnd).toHaveBeenCalledWith({animated: false});
-
-    act(() => {
-      getThreadScrollView(tree).props.onContentSizeChange(320, 1320);
-    });
-
-    expect(scrollToEnd).toHaveBeenCalledTimes(1);
-  });
-
-  it('uses compact sizing for the thread header, feed, quick chips, and composer', () => {
-    const {tree} = renderScreen();
-    const headerStyle = StyleSheet.flatten(
-      tree.root.findByProps({testID: 'circle-thread-header'}).props.style,
+    expect(outputOf(tree).indexOf('Sam nudged Priya')).toBeLessThan(
+      outputOf(tree).indexOf("who's still up 👀"),
     );
-    const title = findTextNode(tree, 'Sleep 8 Hours');
-    const subtitle = findTextNode(tree, '5 companions · 6 day streak');
+  });
+
+  it('marks the newest item read only after the section becomes visible', async () => {
+    const {rerender} = renderSection({isVisible: false});
+
+    expect(mockMarkCircleThreadRead).not.toHaveBeenCalled();
+
+    await act(async () => {
+      rerender({isVisible: true});
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(mockMarkCircleThreadRead).toHaveBeenCalledTimes(1);
+    expect(mockMarkCircleThreadRead).toHaveBeenCalledWith('circle-1');
+
+    const subscriptionInput = mockSubscribeToCircleThreadItems.mock.calls[0][0];
+    const latestItem: CircleThreadItem = {
+      ...threadItems()[0],
+      createdAtMs: Date.now() + 1_000,
+      id: 'new-live-item',
+      text: 'Newest live activity',
+    };
+
+    await act(async () => {
+      subscriptionInput.onItems({
+        hasMore: false,
+        items: [latestItem, ...threadItems()],
+      });
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(mockMarkCircleThreadRead).toHaveBeenCalledTimes(2);
+  });
+
+  it('loads older items once per request and preserves content through retry', () => {
+    mockThreadHasMore = true;
+    const {rerender, tree} = renderSection();
+
+    expect(mockSubscribeToCircleThreadItems).toHaveBeenCalledTimes(1);
+    expect(mockSubscribeToCircleThreadItems.mock.calls[0][0].itemLimit).toBe(
+      20,
+    );
+
+    mockThreadError = new Error('temporarily unavailable');
+    rerender({loadMoreRequestToken: 1});
+
+    expect(mockSubscribeToCircleThreadItems).toHaveBeenCalledTimes(2);
+    expect(mockSubscribeToCircleThreadItems.mock.calls[1][0].itemLimit).toBe(
+      40,
+    );
+    expect(outputOf(tree)).toContain('Maya tapped in');
+    expect(outputOf(tree)).toContain('Could not load older activity.');
+
+    rerender({loadMoreRequestToken: 1});
+    expect(mockSubscribeToCircleThreadItems).toHaveBeenCalledTimes(2);
+
+    mockThreadError = undefined;
+    act(() => {
+      tree.root
+        .findByProps({accessibilityLabel: 'Retry older circle activity'})
+        .props.onPress();
+    });
+
+    expect(mockSubscribeToCircleThreadItems).toHaveBeenCalledTimes(3);
+    expect(mockSubscribeToCircleThreadItems.mock.calls[2][0].itemLimit).toBe(
+      40,
+    );
+    expect(outputOf(tree)).not.toContain('Could not load older activity.');
+  });
+
+  it('does not request another page when all items are loaded', () => {
+    mockThreadHasMore = false;
+    const {rerender} = renderSection();
+
+    rerender({loadMoreRequestToken: 1});
+
+    expect(mockSubscribeToCircleThreadItems).toHaveBeenCalledTimes(1);
+  });
+
+  it('uses compact sizing for the feed, quick chips, and composer', () => {
+    const {tree} = renderSection();
     const activityCopy = findTextNode(tree, 'Maya tapped in');
     const messageCopy = findTextNode(tree, "Let's gooo 🔥 proud of everyone");
     const timestamp = findTextNode(tree, '8:40 AM');
@@ -405,9 +402,6 @@ describe('CircleThreadScreen', () => {
     const composerActions = tree.root.findByProps({
       testID: 'circle-thread-composer-actions',
     });
-    const backButton = tree.root.findByProps({
-      accessibilityLabel: 'Go back',
-    });
     const imageButton = tree.root.findByProps({
       accessibilityLabel: 'Add image',
     });
@@ -421,21 +415,6 @@ describe('CircleThreadScreen', () => {
       testID: 'circle-thread-composer-send-circle',
     });
 
-    expect(headerStyle).toEqual(
-      expect.objectContaining({
-        minHeight: 78,
-        paddingHorizontal: 20,
-      }),
-    );
-    expect(
-      StyleSheet.flatten(backButton.props.style({pressed: false})),
-    ).toEqual(expect.objectContaining({borderWidth: 1, height: 40, width: 40}));
-    expect(StyleSheet.flatten(title?.props.style)).toEqual(
-      expect.objectContaining({fontSize: 20, lineHeight: 25}),
-    );
-    expect(StyleSheet.flatten(subtitle?.props.style)).toEqual(
-      expect.objectContaining({fontSize: 13, lineHeight: 17}),
-    );
     expect(StyleSheet.flatten(activityCopy?.props.style)).toEqual(
       expect.objectContaining({fontSize: 13, lineHeight: 17}),
     );
@@ -524,7 +503,7 @@ describe('CircleThreadScreen', () => {
   });
 
   it('sends quick preset messages and likes companion items', async () => {
-    const {tree} = renderScreen();
+    const {tree} = renderSection();
     const quickChip = tree.root.findByProps({
       accessibilityLabel: 'Send 👏 Nice',
     });
@@ -553,7 +532,7 @@ describe('CircleThreadScreen', () => {
 
     expect(mockToggleCircleThreadItemLike).toHaveBeenCalledWith({
       circleId: 'circle-1',
-      itemId: 'activity-1',
+      itemId: 'activity-2',
     });
   });
 
@@ -566,7 +545,7 @@ describe('CircleThreadScreen', () => {
       message:
         '[storage/unauthorized] User is not authorized to perform the desired action.',
     });
-    const {tree} = renderScreen();
+    const {tree} = renderSection();
 
     await act(async () => {
       tree.root.findByProps({accessibilityLabel: 'Add image'}).props.onPress();
@@ -600,19 +579,11 @@ describe('CircleThreadScreen', () => {
   });
 
   it('shows the empty state when the thread has no items', () => {
-    const scrollToEnd = jest
-      .spyOn(ScrollView.prototype, 'scrollToEnd')
-      .mockImplementation(() => undefined);
     mockThreadItems = [];
 
-    const {tree} = renderScreen();
+    const {tree} = renderSection();
     const output = outputOf(tree);
 
-    act(() => {
-      getThreadScrollView(tree).props.onContentSizeChange(320, 480);
-    });
-
-    expect(scrollToEnd).not.toHaveBeenCalled();
     expect(output).toContain('Start the circle chat');
     expect(output).toContain('Message the circle...');
     expect(
@@ -628,21 +599,33 @@ describe('CircleThreadScreen', () => {
     ).toEqual(expect.objectContaining({fontSize: 13, lineHeight: 19}));
   });
 
+  it('keeps archived Circle history readable without thread mutations', () => {
+    const {tree} = renderSection({isArchived: true, isVisible: true});
+    const output = outputOf(tree);
+
+    expect(output).toContain('Archived Circle');
+    expect(output).toContain('This chat is read-only.');
+    expect(output).toContain('Maya tapped in');
+    expect(output).not.toContain('Message the circle...');
+    expect(output).not.toContain('Send 👏 Nice');
+    expect(mockMarkCircleThreadRead).not.toHaveBeenCalled();
+
+    const likeButton = tree.root
+      .findAllByType(Pressable)
+      .find(node => node.props.accessibilityLabel === 'Like activity');
+
+    expect(likeButton?.props.disabled).toBe(true);
+    expect(likeButton?.props.onPress).toBeUndefined();
+    expect(mockToggleCircleThreadItemLike).not.toHaveBeenCalled();
+  });
+
   it('shows a compact load error when the thread fails to load', () => {
-    const scrollToEnd = jest
-      .spyOn(ScrollView.prototype, 'scrollToEnd')
-      .mockImplementation(() => undefined);
     mockThreadItems = [];
     mockThreadError = new Error('permission-denied');
 
-    const {tree} = renderScreen();
+    const {tree} = renderSection();
     const output = outputOf(tree);
 
-    act(() => {
-      getThreadScrollView(tree).props.onContentSizeChange(320, 480);
-    });
-
-    expect(scrollToEnd).not.toHaveBeenCalled();
     expect(output).toContain('Could not load circle chat');
     expect(
       StyleSheet.flatten(

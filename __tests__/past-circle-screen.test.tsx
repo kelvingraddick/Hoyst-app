@@ -1,5 +1,5 @@
 import React from 'react';
-import {Image} from 'react-native';
+import {Image, Text} from 'react-native';
 import renderer, {act} from 'react-test-renderer';
 
 import {PastCircleScreen} from '../src/features/circles/screens/PastCircleScreen';
@@ -44,6 +44,23 @@ jest.mock('../src/store/session-store', () => ({
 }));
 
 jest.mock('../src/features/circles/services/past-circle-service', () => ({
+  subscribeToPastCircleMembershipPeriods: jest.fn(({onPeriods}) => {
+    onPeriods([
+      {
+        id: 'period-1',
+        joinedAt: new Date('2026-01-01T12:00:00Z'),
+        leftAt: new Date('2026-03-01T12:00:00Z'),
+        role: 'member',
+      },
+      {
+        id: 'period-2',
+        joinedAt: new Date('2026-04-01T12:00:00Z'),
+        leftAt: new Date('2026-07-01T12:00:00Z'),
+        role: 'member',
+      },
+    ]);
+    return jest.fn();
+  }),
   subscribeToPastCircleTapIns: jest.fn(({onTapIns}) => {
     onTapIns([
       {
@@ -98,16 +115,25 @@ describe('PastCircleScreen', () => {
     });
 
     const output = JSON.stringify(screen!.toJSON());
+    const renderedText = screen!.root
+      .findAllByType(Text)
+      .map(node => React.Children.toArray(node.props.children).join(''))
+      .join('\n');
 
     expect(output).toContain('Book Club');
     expect(output).toContain('Read 20 pages');
     expect(output).toContain('Learning');
-    expect(output).toContain('Jan 1, 2026 to Jul 1, 2026');
+    expect(output).toContain('Membership history');
+    expect(renderedText).toContain('Jan 1, 2026 to Mar 1, 2026');
+    expect(renderedText).toContain('Apr 1, 2026 to Jul 1, 2026');
+    expect(renderedText).toContain('Membership period 1');
+    expect(renderedText).toContain('Membership period 2');
     expect(output).toContain('Strong ending');
     expect(output).toContain('Skipped');
-    expect(output).not.toContain('Members');
-    expect(output).not.toContain('Invite');
-    expect(output).not.toContain('Thread');
+    const textLines = renderedText.split('\n');
+    expect(textLines).not.toContain('Members');
+    expect(textLines).not.toContain('Invite');
+    expect(textLines).not.toContain('Thread');
     expect(screen!.root.findAllByType(Image)).toHaveLength(1);
 
     act(() => {

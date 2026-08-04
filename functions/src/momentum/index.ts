@@ -10,6 +10,10 @@ import {onSchedule} from 'firebase-functions/v2/scheduler';
 
 import {db} from '../firebase';
 import {
+  getCircleLifecycleStatus,
+  isCircleSlotAfterResumeBoundary,
+} from '../shared/circle-lifecycle';
+import {
   calculateRollingMomentumSummary,
   calculateMomentumSummary,
   calculateMomentumStreaks,
@@ -23,6 +27,9 @@ import {
   type OpportunityStatus,
 } from './schedule';
 import {getEligibleOpenSlot, isMemberExpectedForSlot} from './eligibility';
+import {neutralizeCircleSlotAggregateForArchive} from './archive';
+
+export {neutralizeCircleSlotAggregateForArchive} from './archive';
 
 type RecordTapInOpportunityInput = {
   checkInId: string;
@@ -197,7 +204,9 @@ function getSlotForDate(
   existingStatuses: Map<number, unknown>,
   member?: DocumentData,
 ) {
-  const slots = getCurrentSlots(circle);
+  const slots = getCurrentSlots(circle).filter(slot =>
+    isCircleSlotAfterResumeBoundary(circle, slot.availableDateKey),
+  );
   const timezone = asString(circle?.timezone, 'UTC');
 
   return getEligibleOpenSlot({
@@ -830,6 +839,117 @@ export async function removeMemberFromAllCircleOpportunities({
   await commitSetWrites(writes);
 }
 
+export async function neutralizeCircleOpportunitiesForArchive({
+  archivedAt = new Date(),
+  circleId,
+}: {
+  archivedAt?: Date;
+  circleId: string;
+}) {
+  const circleRef = db.collection('circles').doc(circleId);
+  const circleSnapshot = await circleRef.get();
+
+  if (!circleSnapshot.exists) {
+    return {affectedUids: [] as string[]};
+  }
+
+  const circle = circleSnapshot.data();
+  const timezone = asString(circle?.timezone, 'UTC');
+  const archiveDateKey = getDateKey(timezone, archivedAt);
+  const memberSnapshots = await circleRef
+    .collection('members')
+    .where('status', '==', 'active')
+    .get();
+  const affectedUids = memberSnapshots.docs
+    .map(snapshot => asString(snapshot.data().uid, snapshot.id))
+    .filter(Boolean);
+  const opportunitySnapshots = await Promise.all(
+    affectedUids.map(uid =>
+      db
+        .collection('userPrivate')
+        .doc(uid)
+        .collection('opportunities')
+        .where('circleId', '==', circleId)
+        .get(),
+    ),
+  );
+  const writes: SetWrite[] = [];
+
+  opportunitySnapshots.forEach(snapshot => {
+    snapshot.docs.forEach(doc => {
+      const opportunity = doc.data();
+      const isUnfinished =
+        opportunity.status === 'available' || opportunity.status === 'upcoming';
+      const expiresDateKey = asString(opportunity.expiresDateKey);
+
+      if (!isUnfinished || (expiresDateKey && expiresDateKey < archiveDateKey)) {
+        return;
+      }
+
+      writes.push({
+        data: {
+          archivedAt: FieldValue.serverTimestamp(),
+          countsTowardCircle: false,
+          expectedForCircle: false,
+          isCurrentPeriod: false,
+          updatedAt: FieldValue.serverTimestamp(),
+        },
+        merge: true,
+        ref: doc.ref,
+      });
+    });
+  });
+
+  const periodSnapshots = await circleRef.collection('opportunities').get();
+  const slotSnapshotsByPeriod = await Promise.all(
+    periodSnapshots.docs.map(periodSnapshot =>
+      periodSnapshot.ref.collection('slots').get(),
+    ),
+  );
+
+  periodSnapshots.docs.forEach((periodSnapshot, periodIndex) => {
+    const slotSnapshots = slotSnapshotsByPeriod[periodIndex];
+
+    if (slotSnapshots.empty) {
+      return;
+    }
+
+    const aggregates = slotSnapshots.docs.map(slotSnapshot => {
+      const data = slotSnapshot.data();
+      const aggregate = neutralizeCircleSlotAggregateForArchive(
+        data,
+        archiveDateKey,
+      );
+
+      writes.push({
+        data: {...aggregate, updatedAt: FieldValue.serverTimestamp()},
+        merge: true,
+        ref: slotSnapshot.ref,
+      });
+
+      return aggregate;
+    });
+
+    writes.push({
+      data: {
+        ...summarizeCircleSlotAggregates(aggregates),
+        periodKey: asString(periodSnapshot.data().periodKey, periodSnapshot.id),
+        riskState: 'archived',
+        updatedAt: FieldValue.serverTimestamp(),
+      },
+      merge: true,
+      ref: periodSnapshot.ref,
+    });
+  });
+
+  await commitSetWrites(writes);
+  await Promise.all(
+    affectedUids.map(uid => recalculateMomentumSummaryForUser(uid)),
+  );
+
+  return {affectedUids};
+}
+
 export async function materializeCurrentCircleOpportunities(
   circleId: string,
   now = new Date(),
@@ -842,8 +962,13 @@ export async function materializeCurrentCircleOpportunities(
   }
 
   const circle = circleSnapshot.data();
+  if (getCircleLifecycleStatus(circle) === 'archived') {
+    return {affectedUids: [], periodKey: undefined};
+  }
   const timezone = asString(circle?.timezone, 'UTC');
-  const slots = getCurrentSlots(circle, now);
+  const slots = getCurrentSlots(circle, now).filter(slot =>
+    isCircleSlotAfterResumeBoundary(circle, slot.availableDateKey),
+  );
   const periodKey = slots[0]?.periodKey;
 
   if (!periodKey) {
