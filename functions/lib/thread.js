@@ -41,7 +41,7 @@ function sanitizeCircleThreadText(value, maxLength = 1000) {
 function buildThreadActor(actor) {
     return {
         avatarUrl: asOptionalString(actor.avatarUrl) ?? null,
-        displayName: asOptionalString(actor.displayName) ?? 'Hoyst member',
+        displayName: asOptionalString(actor.displayName) ?? 'Hoyst Member',
         handle: asOptionalString(actor.handle) ?? null,
         uid: asOptionalString(actor.uid) ?? null,
     };
@@ -87,7 +87,7 @@ function getCircleThreadNudgeText({ actorName, targetCount, targetName, }) {
     if (targetName) {
         return `${actorName} nudged ${targetName}`;
     }
-    return `${actorName} nudged ${targetCount} companions`;
+    return `${actorName} nudged ${targetCount} ${targetCount === 1 ? 'Member' : 'Members'}`;
 }
 function getCircleThreadStreakText(actorName, streakDays) {
     return `${actorName} reached a ${streakDays}-day streak.`;

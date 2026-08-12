@@ -4,7 +4,7 @@ import type {
   CirclePrivacy,
   CirclePrivacyMode,
   CircleSummary,
-  CommitmentCadence,
+  CommitmentPace,
   CommitmentFrequency,
   CommitmentType,
   CreateCircleDraft,
@@ -15,7 +15,7 @@ export type CreateCirclePayload = {
   category: string;
   circleMode: CircleMode;
   commitment: string;
-  commitmentCadence: CommitmentCadence;
+  commitmentCadence: CommitmentPace;
   commitmentFrequency: CommitmentFrequency;
   commitmentType: CommitmentType;
   graceRules: {
@@ -49,7 +49,9 @@ export const defaultMonthlyCommitmentFrequency: CommitmentFrequency = {
   opportunitiesPerPeriod: 4,
   tapInsPerWeek: 4,
 };
-export const defaultCommitmentCadence: CommitmentCadence = 'daily';
+export const defaultCommitmentPace: CommitmentPace = 'daily';
+/** @deprecated Use defaultCommitmentPace for new application logic. */
+export const defaultCommitmentCadence = defaultCommitmentPace;
 export const defaultCommitmentType: CommitmentType = 'build';
 export const defaultCommitmentUnitLabel = 'Tap In';
 export const defaultCommitmentStepValue = 1;
@@ -64,7 +66,7 @@ export function createInitialCircleDraft(timezone?: string): CreateCircleDraft {
     category: 'Fitness',
     circleMode: defaultCircleMode,
     commitment: '',
-    commitmentCadence: defaultCommitmentCadence,
+    commitmentCadence: defaultCommitmentPace,
     commitmentFrequency: defaultCommitmentFrequency,
     commitmentType: defaultCommitmentType,
     graceRules: {
@@ -146,7 +148,7 @@ export function buildCircleEditDraft(
 ): CreateCircleDraft {
   const initialDraft = createInitialCircleDraft(fallbackTimezone);
   const privacyMode = getCirclePrivacyMode(circle);
-  const commitmentCadence = normalizeCommitmentCadence(
+  const commitmentPace = normalizeCommitmentPace(
     circle.commitmentCadence,
     circle.commitmentFrequency,
   );
@@ -156,10 +158,10 @@ export function buildCircleEditDraft(
     category: circle.category,
     circleMode: normalizeCircleMode(circle.circleMode),
     commitment: circle.commitment,
-    commitmentCadence,
+    commitmentCadence: commitmentPace,
     commitmentFrequency: normalizeCommitmentFrequency(
       circle.commitmentFrequency ?? initialDraft.commitmentFrequency,
-      commitmentCadence,
+      commitmentPace,
     ),
     commitmentType: normalizeCommitmentType(circle.commitmentType),
     graceRules: {
@@ -237,13 +239,13 @@ export function normalizeOptionalQuantityValue(value: unknown) {
 
 export function normalizeCommitmentFrequency(
   frequency: CommitmentFrequency,
-  cadence: CommitmentCadence = 'weekly',
+  pace: CommitmentPace = 'weekly',
 ): CommitmentFrequency {
-  if (cadence === 'daily') {
+  if (pace === 'daily') {
     return {...defaultCommitmentFrequency};
   }
 
-  if (cadence === 'monthly') {
+  if (pace === 'monthly') {
     return {
       opportunitiesPerPeriod: Math.min(
         31,
@@ -269,12 +271,12 @@ export function normalizeCommitmentFrequency(
   };
 }
 
-export function normalizeCommitmentCadence(
-  cadence: unknown,
+export function normalizeCommitmentPace(
+  pace: unknown,
   frequency?: CommitmentFrequency,
-): CommitmentCadence {
-  if (cadence === 'daily' || cadence === 'weekly' || cadence === 'monthly') {
-    return cadence;
+): CommitmentPace {
+  if (pace === 'daily' || pace === 'weekly' || pace === 'monthly') {
+    return pace;
   }
 
   return normalizeCommitmentFrequency(
@@ -285,11 +287,14 @@ export function normalizeCommitmentCadence(
     : 'weekly';
 }
 
+/** @deprecated Use normalizeCommitmentPace after reading the legacy wire field. */
+export const normalizeCommitmentCadence = normalizeCommitmentPace;
+
 export function buildCreateCirclePayload(
   draft: CreateCircleDraft,
 ): CreateCirclePayload {
   const circleMode = normalizeCircleMode(draft.circleMode);
-  const commitmentCadence = normalizeCommitmentCadence(
+  const commitmentPace = normalizeCommitmentPace(
     draft.commitmentCadence,
     draft.commitmentFrequency,
   );
@@ -318,10 +323,10 @@ export function buildCreateCirclePayload(
     category: draft.category.trim(),
     circleMode,
     commitment: draft.commitment.trim(),
-    commitmentCadence,
+    commitmentCadence: commitmentPace,
     commitmentFrequency: normalizeCommitmentFrequency(
       draft.commitmentFrequency,
-      commitmentCadence,
+      commitmentPace,
     ),
     commitmentType,
     graceRules: {

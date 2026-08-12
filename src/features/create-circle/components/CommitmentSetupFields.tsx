@@ -38,7 +38,7 @@ import type {
   CircleJoinMode,
   CircleMode,
   CirclePrivacyMode,
-  CommitmentCadence,
+  CommitmentPace,
   CommitmentFrequency,
   CommitmentType,
 } from '../../../types/models';
@@ -78,21 +78,21 @@ export const circleModeOptions: SetupOption<CircleMode>[] = [
 
 export const commitmentTypeOptions: SetupOption<CommitmentType>[] = [
   {
-    description: 'Reach at least a target amount each Tap In day.',
+    description: 'Reach at least the Goal value for each Opportunity.',
     commitmentType: 'build',
     id: 'build',
     label: 'Build',
     tone: 'green',
   },
   {
-    description: 'Stay inside a minimum and maximum amount.',
+    description: 'Stay inside the minimum-to-maximum Goal range.',
     commitmentType: 'limit',
     id: 'limit',
     label: 'Limit',
     tone: 'orange',
   },
   {
-    description: 'Confirm you stayed clear for the Tap In day.',
+    description: 'Confirm you stayed clear for the Opportunity.',
     commitmentType: 'avoid',
     id: 'avoid',
     label: 'Avoid',
@@ -181,7 +181,7 @@ export const publicJoinOptions: SetupOption<
   },
 ];
 
-export const commitmentCadenceOptions: SetupOption<CommitmentCadence>[] = [
+export const commitmentPaceOptions: SetupOption<CommitmentPace>[] = [
   {
     description: 'Cover the Commitment once each day.',
     icon: CalendarDays,
@@ -197,7 +197,7 @@ export const commitmentCadenceOptions: SetupOption<CommitmentCadence>[] = [
     tone: 'blue',
   },
   {
-    description: 'Use a set number of opportunities across each month.',
+    description: 'Use a set number of Opportunities across each month.',
     icon: CalendarCheck,
     id: 'monthly',
     label: 'Monthly',
@@ -209,12 +209,12 @@ export function getModeAwareSetupCopy(circleMode: CircleMode) {
   const isPersonal = circleMode === 'personal';
 
   return {
-    cadenceSubject: isPersonal ? 'You Tap In' : 'Each member taps in',
+    paceSubject: isPersonal ? 'You Tap In' : 'Each Member taps in',
     categoryPrompt: isPersonal
       ? 'What kind of Commitment is this?'
       : 'What kind of Circle is this?',
     containerLabel: isPersonal ? 'Commitment' : 'Circle',
-    progressionLabel: isPersonal ? 'your Progression' : 'Circle Progression',
+    progressLabel: isPersonal ? 'your Progress' : 'Circle Progress',
     reviewType: isPersonal ? 'Personal commitment' : 'Circle',
   };
 }
@@ -479,22 +479,22 @@ export function formatSkipSummary(allowance: number, windowDays: number) {
   }`;
 }
 
-export function formatCadenceSummary(
-  cadence: CommitmentCadence,
+export function formatPaceSummary(
+  pace: CommitmentPace,
   frequency: CommitmentFrequency,
 ) {
-  if (cadence === 'daily') {
+  if (pace === 'daily') {
     return 'Daily';
   }
 
   const count =
-    cadence === 'monthly'
+    pace === 'monthly'
       ? frequency.opportunitiesPerPeriod ?? frequency.tapInsPerWeek
       : frequency.tapInsPerWeek;
   const tapInLabel = count === 1 ? 'Tap In' : 'Tap Ins';
 
-  return `${cadence === 'monthly' ? 'Monthly' : 'Weekly'} · ${count} ${tapInLabel} per ${
-    cadence === 'monthly' ? 'month' : 'week'
+  return `${pace === 'monthly' ? 'Monthly' : 'Weekly'} · ${count} ${tapInLabel} per ${
+    pace === 'monthly' ? 'month' : 'week'
   }`;
 }
 

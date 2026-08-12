@@ -76,7 +76,7 @@ export function shouldRetainCorrectedMetricEffect({
   totalTapIns: number;
   type?: string;
 }) {
-  if (type === 'companion_achievement_unlocked') {
+  if (type === legacyCircleActivityNotificationTypes.achievementUnlocked) {
     const achievement = achievementThresholds.find(candidate =>
       effectId.includes(candidate.key),
     );
@@ -85,12 +85,15 @@ export function shouldRetainCorrectedMetricEffect({
     return Boolean(achievement && value >= achievement.threshold);
   }
 
-  if (type === 'companion_streak_milestone' || type === 'streak_milestone') {
+  if (
+    type === legacyCircleActivityNotificationTypes.streakMilestone ||
+    type === 'streak_milestone'
+  ) {
     const threshold = Number(effectId.match(/(\d+)-day-streak/)?.[1]);
     return Number.isFinite(threshold) && currentStreakDays >= threshold;
   }
 
-  if (type === 'companion_momentum_level_up') {
+  if (type === legacyCircleActivityNotificationTypes.momentumLevelUp) {
     const targetRank = momentumStatusRanks.findIndex(status =>
       effectId.includes(status),
     );
@@ -102,3 +105,4 @@ export function shouldRetainCorrectedMetricEffect({
 
   return false;
 }
+import {legacyCircleActivityNotificationTypes} from '../shared/notification-compat';

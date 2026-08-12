@@ -15,8 +15,8 @@ import {z} from 'zod';
 
 import {db} from '../firebase';
 import {
-  notifyCompanionCircleCreated,
-  notifyCompanionCircleJoined,
+  notifyMemberCircleCreated,
+  notifyMemberCircleJoined,
   notifyCircleLifecycleChanged,
   notifyJoinRequestReview,
   notifyOwnerJoinRequest,
@@ -25,9 +25,9 @@ import {
   oneSignalRestApiKey,
 } from '../notifications';
 import {
-  getCommitmentCadence,
+  getCommitmentPace,
   getCommitmentType,
-  getInputCommitmentCadence,
+  getInputCommitmentPace,
   getQuantityConfig,
   getRequiredTapIns,
   getStoredCommitmentFrequency,
@@ -270,15 +270,15 @@ function getCommitmentMonthDateKeys(timezone: string, now = new Date()) {
 }
 
 function getCommitmentPeriodDateKeys(
-  cadence: ReturnType<typeof getCommitmentCadence>,
+  pace: ReturnType<typeof getCommitmentPace>,
   timezone: string,
   now = new Date(),
 ) {
-  if (cadence === 'daily') {
+  if (pace === 'daily') {
     return [getDateKeyForTimezone(timezone, now)];
   }
 
-  if (cadence === 'monthly') {
+  if (pace === 'monthly') {
     return getCommitmentMonthDateKeys(timezone, now);
   }
 
@@ -301,7 +301,7 @@ function buildPublicPreviewFromMember(member: DocumentData, uid: string) {
       asOptionalString(member.displayName) ??
       asOptionalString(member.name) ??
       asOptionalString(member.handle) ??
-      'Hoyst member',
+      'Hoyst Member',
     handle: asOptionalString(member.handle) ?? null,
     uid,
   };
@@ -380,7 +380,7 @@ function getHistoricalActivityCopy(checkIn: DocumentData, actorName: string) {
   }
 
   if (status === 'failed' || coverageStatus === 'failed') {
-    return {text: `${actorName} missed the target`, tone: 'alert' as const};
+    return {text: `${actorName} missed the Goal`, tone: 'alert' as const};
   }
 
   if (status === 'partial' || coverageStatus === 'partial') {
@@ -426,7 +426,7 @@ async function backfillPersonalCircleActivity({
     asOptionalString(owner.displayName) ??
     asOptionalString(owner.name) ??
     asOptionalString(owner.handle) ??
-    'Hoyst member';
+    'Hoyst Member';
   let lastDaySnapshot: QueryDocumentSnapshot<DocumentData> | undefined;
 
   do {
@@ -515,7 +515,7 @@ async function backfillDepartedMemberActivity({
   const actorName =
     asOptionalString(profile.displayName) ??
     asOptionalString(profile.name) ??
-    'Former member';
+    'Former Member';
   let lastDaySnapshot: QueryDocumentSnapshot<DocumentData> | undefined;
 
   do {
@@ -606,12 +606,12 @@ export const createCircle = onCall(
     const maxSize = isPersonal ? 1 : input.maxSize!;
     const privacy = isPersonal ? 'private' : input.privacy!;
     const title = isPersonal ? input.commitment : input.title!;
-    const commitmentCadence = getInputCommitmentCadence(
+    const commitmentPace = getInputCommitmentPace(
       input.commitmentCadence,
       input.commitmentFrequency,
     );
     const commitmentFrequency = getStoredCommitmentFrequency(
-      commitmentCadence,
+      commitmentPace,
       input.commitmentFrequency,
     );
     const commitmentType = getCommitmentType(input);
@@ -621,7 +621,7 @@ export const createCircle = onCall(
       circleMode,
       createdAt: now,
       commitment: input.commitment,
-      commitmentCadence,
+      commitmentCadence: commitmentPace,
       commitmentFrequency,
       commitmentType,
       graceRules: input.graceRules ?? {
@@ -689,7 +689,7 @@ export const createCircle = onCall(
         category: input.category,
         circleMode,
         commitment: input.commitment,
-        commitmentCadence,
+        commitmentCadence: commitmentPace,
         commitmentFrequency,
         commitmentType,
         joinMode,
@@ -720,7 +720,7 @@ export const createCircle = onCall(
     );
 
     if (!isPersonal) {
-      await notifyCompanionCircleCreated({
+      await notifyMemberCircleCreated({
         actor: {
           avatarUrl: profile.avatarUrl ?? null,
           displayName: profile.displayName,
@@ -732,7 +732,7 @@ export const createCircle = onCall(
         circleTitle: title,
         dateKey: getDateKeyForTimezone(circle.timezone),
       }).catch(error =>
-        console.error('notify_companion_circle_created_failed', error),
+        console.error('notify_member_circle_created_failed', error),
       );
     }
 
@@ -975,7 +975,7 @@ export const joinCircle = onCall(
     }
 
     if (result.status === 'active' && result.shouldNotifyOwner) {
-      await notifyCompanionCircleJoined({
+      await notifyMemberCircleJoined({
         actor: {
           avatarUrl: profile.avatarUrl ?? null,
           displayName: profile.displayName,
@@ -990,7 +990,7 @@ export const joinCircle = onCall(
         ),
         excludedUids: ownerId ? [ownerId] : undefined,
       }).catch(error =>
-        console.error('notify_companion_circle_joined_failed', error),
+        console.error('notify_member_circle_joined_failed', error),
       );
     }
 
@@ -1083,7 +1083,7 @@ export const reviewJoinRequest = onCall(
       if (input.approved) {
         const approvedMember = {
           avatarUrl: requesterMember?.avatarUrl ?? null,
-          displayName: requesterMember?.displayName ?? 'Hoyst member',
+          displayName: requesterMember?.displayName ?? 'Hoyst Member',
           handle: requesterMember?.handle ?? null,
           joinedAt: now,
           membershipPeriodId,
@@ -1196,11 +1196,11 @@ export const reviewJoinRequest = onCall(
         );
 
         const joinedMember = result.requesterMember ?? {};
-        await notifyCompanionCircleJoined({
+        await notifyMemberCircleJoined({
           actor: {
             avatarUrl: joinedMember.avatarUrl ?? null,
             displayName:
-              asOptionalString(joinedMember.displayName) ?? 'Hoyst member',
+              asOptionalString(joinedMember.displayName) ?? 'Hoyst Member',
             handle: asOptionalString(joinedMember.handle) ?? null,
             uid: input.requesterId,
           },
@@ -1212,7 +1212,7 @@ export const reviewJoinRequest = onCall(
           ),
           excludedUids: [ownerId],
         }).catch(error =>
-          console.error('notify_companion_approved_join_failed', error),
+          console.error('notify_member_approved_join_failed', error),
         );
       }
     }
@@ -1251,9 +1251,9 @@ export const nudgeCircleMembers = onCall(
     ensureActiveCircle(circle, 'sending nudges');
     const timezone = asOptionalString(circle?.timezone) ?? 'UTC';
     const dateKey = getDateKeyForTimezone(timezone, now);
-    const commitmentCadence = getCommitmentCadence(circle);
+    const commitmentPace = getCommitmentPace(circle);
     const periodDateKeys = getCommitmentPeriodDateKeys(
-      commitmentCadence,
+      commitmentPace,
       timezone,
       now,
     );
@@ -1283,7 +1283,7 @@ export const nudgeCircleMembers = onCall(
     });
 
     const scoringSnapshots =
-      commitmentCadence === 'daily'
+      commitmentPace === 'daily'
         ? [todayCheckInSnapshots]
         : periodCheckInSnapshots;
 
@@ -1342,7 +1342,7 @@ export const nudgeCircleMembers = onCall(
               displayName:
                 asOptionalString(singleTarget.displayName) ??
                 asOptionalString(singleTarget.name) ??
-                'Hoyst member',
+                'Hoyst Member',
               handle: asOptionalString(singleTarget.handle) ?? null,
               uid: targetUids[0],
             }
@@ -1682,9 +1682,9 @@ export const convertPersonalCircle = onCall(async request => {
     const now = FieldValue.serverTimestamp();
     const commitment =
       asOptionalString(latestCircle?.commitment) ?? input.title;
-    const commitmentCadence = getCommitmentCadence(latestCircle);
+    const commitmentPace = getCommitmentPace(latestCircle);
     const commitmentFrequency = getStoredCommitmentFrequency(
-      commitmentCadence,
+      commitmentPace,
       latestCircle?.commitmentFrequency,
     );
     transaction.update(circleRef, {
@@ -1704,7 +1704,7 @@ export const convertPersonalCircle = onCall(async request => {
         category: latestCircle?.category ?? 'General',
         circleMode: 'group',
         commitment,
-        commitmentCadence,
+        commitmentCadence: commitmentPace,
         commitmentFrequency,
         commitmentType: latestCircle?.commitmentType ?? 'build',
         joinMode: input.joinMode,
@@ -1797,17 +1797,17 @@ export const updateCircle = onCall(async request => {
   if (maxSize < memberCount) {
     throw new HttpsError(
       'failed-precondition',
-      'Max size cannot be below the current member count.',
+      'Max size cannot be below the current Member count.',
     );
   }
 
   const now = FieldValue.serverTimestamp();
-  const commitmentCadence = getInputCommitmentCadence(
+  const commitmentPace = getInputCommitmentPace(
     input.commitmentCadence,
     input.commitmentFrequency,
   );
   const commitmentFrequency = getStoredCommitmentFrequency(
-    commitmentCadence,
+    commitmentPace,
     input.commitmentFrequency,
   );
   const commitmentType = getCommitmentType(input);
@@ -1816,7 +1816,7 @@ export const updateCircle = onCall(async request => {
     category: input.category,
     circleMode,
     commitment: input.commitment,
-    commitmentCadence,
+    commitmentCadence: commitmentPace,
     commitmentFrequency,
     commitmentType,
     graceRules: input.graceRules ?? {
@@ -1857,7 +1857,7 @@ export const updateCircle = onCall(async request => {
         category: input.category,
         circleMode,
         commitment: input.commitment,
-        commitmentCadence,
+        commitmentCadence: commitmentPace,
         commitmentFrequency,
         commitmentType,
         joinMode,
@@ -2181,16 +2181,16 @@ export const unarchiveCircle = onCall(
       });
 
       if (!isPersonal && circle?.privacy === 'public') {
-        const commitmentCadence = getCommitmentCadence(circle);
+        const commitmentPace = getCommitmentPace(circle);
         const commitmentFrequency = getStoredCommitmentFrequency(
-          commitmentCadence,
+          commitmentPace,
           circle?.commitmentFrequency,
         );
         transaction.set(publicIndexRef, {
           category: circle?.category ?? 'General',
           circleMode,
           commitment: circle?.commitment ?? circle?.title ?? 'Commitment',
-          commitmentCadence,
+          commitmentCadence: commitmentPace,
           commitmentFrequency,
           commitmentType: circle?.commitmentType ?? 'build',
           joinMode: circle?.joinMode ?? 'invite_only',

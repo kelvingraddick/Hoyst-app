@@ -1,5 +1,5 @@
 import {clampOpportunitiesPerPeriod} from '../shared/commitments';
-import type {CommitmentCadence} from '../shared/commitments';
+import type {CommitmentPace} from '../shared/commitments';
 
 export type OpportunityStatus =
   | 'upcoming'
@@ -16,7 +16,7 @@ export type MomentumStatus =
   | 'peak_momentum';
 
 export type CommitmentSchedule = {
-  cadence: CommitmentCadence;
+  pace: CommitmentPace;
   opportunitiesPerPeriod: number;
   slotPolicy: 'scheduled_slots';
   timezone: string;
@@ -146,12 +146,12 @@ function getWeekStartDateKey(timezone: string, now = new Date()) {
 }
 
 function getPeriodShape(schedule: CommitmentSchedule, now = new Date()) {
-  if (schedule.cadence === 'daily') {
+  if (schedule.pace === 'daily') {
     const dateKey = getDateKey(schedule.timezone, now);
     return {dayCount: 1, periodKey: dateKey, startDateKey: dateKey};
   }
 
-  if (schedule.cadence === 'monthly') {
+  if (schedule.pace === 'monthly') {
     const local = getLocalDateParts(schedule.timezone, now);
     const startDateKey = [local.year, padDatePart(local.month), '01'].join('-');
 
@@ -186,12 +186,12 @@ export function normalizeCommitmentSchedule(
   commitment: CommitmentLike | undefined,
   fallbackTimezone = 'UTC',
 ): CommitmentSchedule {
-  const rawCadence = commitment?.commitmentCadence;
-  const cadence: CommitmentCadence =
-    rawCadence === 'daily' ||
-    rawCadence === 'weekly' ||
-    rawCadence === 'monthly'
-      ? rawCadence
+  const rawPace = commitment?.commitmentCadence;
+  const pace: CommitmentPace =
+    rawPace === 'daily' ||
+    rawPace === 'weekly' ||
+    rawPace === 'monthly'
+      ? rawPace
       : typeof commitment?.commitmentFrequency?.tapInsPerWeek === 'number' &&
         commitment.commitmentFrequency.tapInsPerWeek >= 7
       ? 'daily'
@@ -201,15 +201,15 @@ export function normalizeCommitmentSchedule(
       ? commitment.timezone.trim()
       : fallbackTimezone;
   const fallbackCount =
-    cadence === 'daily'
+    pace === 'daily'
       ? 1
-      : cadence === 'monthly'
+      : pace === 'monthly'
       ? 4
       : typeof commitment?.commitmentFrequency?.tapInsPerWeek === 'number'
       ? commitment.commitmentFrequency.tapInsPerWeek
       : 7;
   const opportunitiesPerPeriod =
-    cadence === 'daily'
+    pace === 'daily'
       ? 1
       : clampOpportunitiesPerPeriod(
           commitment?.commitmentFrequency?.opportunitiesPerPeriod ??
@@ -218,7 +218,7 @@ export function normalizeCommitmentSchedule(
         );
 
   return {
-    cadence,
+    pace,
     opportunitiesPerPeriod,
     slotPolicy: 'scheduled_slots',
     timezone,

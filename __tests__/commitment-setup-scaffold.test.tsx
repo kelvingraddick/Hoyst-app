@@ -50,7 +50,7 @@ function renderScaffold(stepKey = 'commitment') {
         primaryAction={{label: 'Continue', onPress: jest.fn()}}
         progress={{current: 1, total: 3}}
         stepKey={stepKey}
-        title="Set the Commitment rules">
+        title="Set the Goal and Pace">
         <View testID="setup-fields" />
       </CommitmentSetupScaffold>,
     );

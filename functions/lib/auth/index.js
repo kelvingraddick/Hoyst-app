@@ -399,8 +399,8 @@ exports.completeProfile = (0, https_1.onCall)(async (request) => {
             const title = isPersonal
                 ? input.starterCircle.commitment
                 : input.starterCircle.title;
-            const commitmentCadence = (0, commitments_1.getInputCommitmentCadence)(input.starterCircle.commitmentCadence, input.starterCircle.commitmentFrequency);
-            const commitmentFrequency = (0, commitments_1.getStoredCommitmentFrequency)(commitmentCadence, input.starterCircle.commitmentFrequency);
+            const commitmentPace = (0, commitments_1.getInputCommitmentPace)(input.starterCircle.commitmentCadence, input.starterCircle.commitmentFrequency);
+            const commitmentFrequency = (0, commitments_1.getStoredCommitmentFrequency)(commitmentPace, input.starterCircle.commitmentFrequency);
             const commitmentType = (0, commitments_1.getCommitmentType)(input.starterCircle);
             const quantityConfig = (0, commitments_1.getQuantityConfig)(input.starterCircle);
             const circle = {
@@ -408,7 +408,7 @@ exports.completeProfile = (0, https_1.onCall)(async (request) => {
                 circleMode,
                 createdAt: now,
                 commitment: input.starterCircle.commitment,
-                commitmentCadence,
+                commitmentCadence: commitmentPace,
                 commitmentFrequency,
                 commitmentType,
                 graceRules: starterCircleHiddenDefaults.graceRules,
@@ -468,7 +468,7 @@ exports.completeProfile = (0, https_1.onCall)(async (request) => {
                     category: input.starterCircle.category,
                     circleMode,
                     commitment: input.starterCircle.commitment,
-                    commitmentCadence,
+                    commitmentCadence: commitmentPace,
                     commitmentFrequency,
                     commitmentType,
                     joinMode,

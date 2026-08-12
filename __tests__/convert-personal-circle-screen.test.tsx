@@ -100,7 +100,7 @@ describe('ConvertPersonalCircleScreen', () => {
     const output = JSON.stringify(tree.toJSON());
 
     expect(output).toContain(
-      'All prior Tap Ins, notes, photos, and progress will become visible to future members.',
+      'All prior Tap Ins, notes, photos, and Progress will become visible to future Members.',
     );
     expect(output).toContain('Circle name');
     expect(output).toContain('Access');

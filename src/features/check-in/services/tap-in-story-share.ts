@@ -49,7 +49,7 @@ type BuildTapInStoryShareDataInput = {
 const fallbackCircleTitle = 'Hoyst Circle';
 const fallbackCommitment = "Today's Tap In";
 const fallbackNote = 'No note added. Still counted.';
-const fallbackCtaLabel = 'Build your rhythm on Hoyst';
+const fallbackCtaLabel = 'Build your Progress on Hoyst';
 const unavailableMessage =
   'Story sharing is not available in this app build yet. Rebuild the app, then try again.';
 const imageClipboardUnavailableMessage =

@@ -64,7 +64,7 @@ function circle(
 }
 
 describe('OpportunityCard', () => {
-  it('uses category color for the companion icon', () => {
+  it('uses category color for the Member icon', () => {
     let tree: renderer.ReactTestRenderer | undefined;
 
     act(() => {

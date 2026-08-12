@@ -11,7 +11,7 @@ import {z} from 'zod';
 import {db} from '../firebase';
 import {
   getCommitmentType,
-  getInputCommitmentCadence,
+  getInputCommitmentPace,
   getQuantityConfig,
   getStoredCommitmentFrequency,
   isCoveredCheckInData,
@@ -535,12 +535,12 @@ export const completeProfile = onCall(async request => {
       const title = isPersonal
         ? input.starterCircle.commitment
         : input.starterCircle.title;
-      const commitmentCadence = getInputCommitmentCadence(
+      const commitmentPace = getInputCommitmentPace(
         input.starterCircle.commitmentCadence,
         input.starterCircle.commitmentFrequency,
       );
       const commitmentFrequency = getStoredCommitmentFrequency(
-        commitmentCadence,
+        commitmentPace,
         input.starterCircle.commitmentFrequency,
       );
       const commitmentType = getCommitmentType(input.starterCircle);
@@ -550,7 +550,7 @@ export const completeProfile = onCall(async request => {
         circleMode,
         createdAt: now,
         commitment: input.starterCircle.commitment,
-        commitmentCadence,
+        commitmentCadence: commitmentPace,
         commitmentFrequency,
         commitmentType,
         graceRules: starterCircleHiddenDefaults.graceRules,
@@ -612,7 +612,7 @@ export const completeProfile = onCall(async request => {
           category: input.starterCircle.category,
           circleMode,
           commitment: input.starterCircle.commitment,
-          commitmentCadence,
+          commitmentCadence: commitmentPace,
           commitmentFrequency,
           commitmentType,
           joinMode,

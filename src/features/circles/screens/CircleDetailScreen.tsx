@@ -26,7 +26,7 @@ import {
 } from 'lucide-react-native';
 import type {NativeStackScreenProps} from '@react-navigation/native-stack';
 
-import {CircleCompanionGrid} from '../../../design/components/CircleCompanionGrid';
+import {CircleMemberGrid} from '../../../design/components/CircleMemberGrid';
 import {FrostedBackdrop} from '../../../design/components/FrostedBackdrop';
 import {GlassPanel} from '../../../design/components/GlassPanel';
 import {HoystButton} from '../../../design/components/HoystButton';
@@ -108,7 +108,7 @@ function getDetailStatusPill(
   }
 
   if (detail.viewerTodayStatus === 'failed') {
-    return {label: 'Outside range', tone: 'orange'};
+    return {label: 'Goal not met', tone: 'orange'};
   }
 
   if (detail.viewerTodayStatus === 'partial') {
@@ -151,7 +151,7 @@ function getJoinModeLabel(detail: CircleDetailModel) {
 }
 
 function formatNudgeTargetCount(count: number) {
-  return count === 1 ? '1 member to nudge' : `${count} members to nudge`;
+  return count === 1 ? '1 Member to nudge' : `${count} Members to nudge`;
 }
 
 function formatArchivedDate(date?: Date) {
@@ -415,19 +415,11 @@ function TapInReferenceAction({
   );
 }
 
-function getCompanionPeriodLabel(detail: CircleDetailModel) {
-  if (detail.commitmentCadence === 'monthly') {
-    return 'this month';
-  }
-
-  if (detail.commitmentCadence === 'weekly') {
-    return 'this week';
-  }
-
-  return 'today';
+function getMemberCycleLabel() {
+  return 'this Cycle';
 }
 
-function getCompanionProgressSubtitle(detail: CircleDetailModel) {
+function getMemberProgressSubtitle(detail: CircleDetailModel) {
   const activeMembers = detail.members.filter(
     member => member.membershipStatus !== 'pending',
   );
@@ -435,9 +427,7 @@ function getCompanionProgressSubtitle(detail: CircleDetailModel) {
     member => member.state === 'done',
   ).length;
 
-  return `${doneCount} of ${activeMembers.length} ${getCompanionPeriodLabel(
-    detail,
-  )}`;
+  return `${doneCount} of ${activeMembers.length} ${getMemberCycleLabel()}`;
 }
 
 function clampProgressPercent(value: number) {
@@ -460,7 +450,7 @@ function CircleStatsSection({
   weekCells: React.ComponentProps<typeof WeekProgressStrip>['days'];
 }) {
   const theme = useHoystTheme();
-  const progressionPercent = clampProgressPercent(progressPercent);
+  const normalizedProgressPercent = clampProgressPercent(progressPercent);
   const streakSource =
     detail.streakDays ?? Number.parseInt(detail.streakLabel, 10);
   const streakValue = Number.isFinite(streakSource)
@@ -501,13 +491,13 @@ function CircleStatsSection({
       <View style={styles.statsProgressBlock} testID="circle-stats-progress">
         <View style={styles.statsProgressLabelRow}>
           <HoystText tone="muted" variant="caption">
-            {isPersonal ? 'Personal progress' : 'Circle progression'}
+            {isPersonal ? 'Personal Progress' : 'Circle Progress'}
           </HoystText>
           <HoystText
             style={{color: progressColor}}
             testID="circle-stats-progress-value"
             variant="bodyStrong">
-            {progressionPercent}%
+            {normalizedProgressPercent}%
           </HoystText>
         </View>
         <View
@@ -520,7 +510,7 @@ function CircleStatsSection({
               styles.statsProgressFill,
               {
                 backgroundColor: progressColor,
-                width: `${Math.max(progressionPercent, 2)}%`,
+                width: `${Math.max(normalizedProgressPercent, 2)}%`,
               },
             ]}
             testID="circle-stats-progress-fill"
@@ -934,19 +924,15 @@ export function CircleDetailScreen({
     detail.viewerRole === 'owner';
   const removeActionLabel =
     detail.viewerTodayStatus === 'skip' ? 'Remove Skip' : 'Remove Tap In';
-  const removeProgressionCopy = canUpdateTodayQuantity
+  const removeProgressCopy = canUpdateTodayQuantity
     ? quantityTapInRemoveCopy
-    : detail.commitmentCadence === 'daily'
-    ? "This will undo today's Progression for this Circle."
-    : detail.commitmentCadence === 'monthly'
-    ? "This will undo this month's Progression for this Circle."
-    : "This will undo this week's Progression for this Circle.";
+    : 'This will undo Progress for this Cycle.';
   const commitmentPrefix =
     detail.commitmentCadence === 'monthly'
-      ? 'Monthly Goal'
+      ? 'Monthly Pace'
       : detail.commitmentCadence === 'weekly'
-      ? 'Weekly Task'
-      : 'Daily Task';
+      ? 'Weekly Pace'
+      : 'Daily Pace';
   const roleOrJoinLabel = isMemberCircle
     ? getRoleLabel(detail)
     : getJoinModeLabel(detail);
@@ -958,11 +944,7 @@ export function CircleDetailScreen({
       : theme.textMuted;
   const tapInSupportingText = canReviewTodayCheckIn
     ? "Review today's Tap In"
-    : detail.commitmentCadence === 'monthly'
-    ? 'Log your progress this month'
-    : detail.commitmentCadence === 'weekly'
-    ? 'Log your progress this week'
-    : 'Log your progress for today';
+    : 'Log Progress for this Cycle';
   const categoryProgressColor = getCircleCategoryForegroundColor(
     detail.category,
     theme,
@@ -977,7 +959,7 @@ export function CircleDetailScreen({
     ? getHeroStatusPillPalette(detailStatusPill.tone, theme)
     : undefined;
 
-  const circleProgressionPercent =
+  const circleProgressPercent =
     detail.progressPercent ?? detail.completionRate ?? 0;
   const weekCells =
     detail.groupProgressDays && detail.groupProgressDays.length > 0
@@ -1034,7 +1016,9 @@ export function CircleDetailScreen({
         Alert.alert(
           'Nudge sent',
           result.nudged > 0
-            ? `${result.nudged} member${result.nudged === 1 ? '' : 's'} nudged.`
+            ? `${result.nudged} ${
+                result.nudged === 1 ? 'Member' : 'Members'
+              } nudged.`
             : 'Everyone is covered right now.',
         );
       })
@@ -1105,7 +1089,7 @@ export function CircleDetailScreen({
   };
 
   const confirmRemoveTodayCheckIn = () => {
-    Alert.alert('Remove today?', removeProgressionCopy, [
+    Alert.alert('Remove today?', removeProgressCopy, [
       {style: 'cancel', text: 'Keep'},
       {
         onPress: () => {
@@ -1188,11 +1172,11 @@ export function CircleDetailScreen({
       supportingText="Undo today"
     />
   ) : null;
-  const companionFooterAction =
+  const memberFooterAction =
     isMemberCircle && !isPersonal && !isArchived && canNudgeTargets ? (
       <View
-        style={styles.companionActionStack}
-        testID="circle-detail-companion-actions">
+        style={styles.memberActionStack}
+        testID="circle-detail-member-actions">
         <NudgePanel
           isNudging={isNudging}
           nudged={nudged}
@@ -1367,20 +1351,20 @@ export function CircleDetailScreen({
           <CircleStatsSection
             detail={detail}
             progressColor={categoryProgressColor}
-            progressPercent={circleProgressionPercent}
+            progressPercent={circleProgressPercent}
             weekCells={weekCells}
           />
 
           {!isPersonal ? (
-            <CircleCompanionGrid
+            <CircleMemberGrid
               canTapInViewer={
                 !isArchived && isMemberCircle && !canRemoveTodayCheckIn
               }
-              footerAction={companionFooterAction}
+              footerAction={memberFooterAction}
               inviteAction={
                 !isArchived && canInvite
                   ? {
-                      accessibilityLabel: 'Invite companions',
+                      accessibilityLabel: 'Invite Members',
                       onPress: shareInvite,
                     }
                   : undefined
@@ -1398,7 +1382,7 @@ export function CircleDetailScreen({
               }
               onTapInViewer={isArchived ? undefined : openTapInComposer}
               reviewingPendingMemberId={reviewingRequestId}
-              subtitle={getCompanionProgressSubtitle(detail)}
+              subtitle={getMemberProgressSubtitle(detail)}
               tapInRingState={tapInPulseRingState}
               viewerUid={user?.uid}
             />
@@ -1503,7 +1487,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 8,
   },
-  companionActionStack: {
+  memberActionStack: {
     gap: 10,
   },
   heroPill: {

@@ -13,6 +13,7 @@ const remove_1 = require("./remove");
 const reconciliation_1 = require("./reconciliation");
 const momentum_1 = require("../momentum");
 const notifications_1 = require("../notifications");
+const notification_compat_1 = require("../shared/notification-compat");
 const commitments_1 = require("../shared/commitments");
 const circle_mode_1 = require("../shared/circle-mode");
 const circle_lifecycle_1 = require("../shared/circle-lifecycle");
@@ -143,9 +144,9 @@ async function reconcileCorrectedMetricEffects({ circleId, dateKey, uid, }) {
         (0, profile_1.calculatePersonalMetricsForUser)({ uid }),
     ]);
     const metricInboxSnapshots = sourceInboxSnapshots.docs.filter(snapshot => [
-        'companion_achievement_unlocked',
-        'companion_momentum_level_up',
-        'companion_streak_milestone',
+        notification_compat_1.legacyCircleActivityNotificationTypes.achievementUnlocked,
+        notification_compat_1.legacyCircleActivityNotificationTypes.momentumLevelUp,
+        notification_compat_1.legacyCircleActivityNotificationTypes.streakMilestone,
     ].includes(snapshot.data().type));
     const retainedInboxSnapshots = metricInboxSnapshots.filter(snapshot => (0, reconciliation_1.shouldRetainCorrectedMetricEffect)({
         currentStreakDays: metrics.personalStreakDays,
@@ -331,11 +332,11 @@ function getCommitmentMonthDateKeys(timezone, now = new Date()) {
         String(index + 1).padStart(2, '0'),
     ].join('-'));
 }
-function getCommitmentPeriodDateKeys(cadence, timezone, now = new Date()) {
-    if (cadence === 'daily') {
+function getCommitmentPeriodDateKeys(pace, timezone, now = new Date()) {
+    if (pace === 'daily') {
         return [getDateKeyForDate(timezone, now)];
     }
-    if (cadence === 'monthly') {
+    if (pace === 'monthly') {
         return getCommitmentMonthDateKeys(timezone, now);
     }
     return getCommitmentWeekDateKeys(timezone, now);
@@ -394,9 +395,9 @@ async function processTapInSideEffectsForCheckIn({ checkIn, circleId, dateKey, s
     const circle = circleSnapshot.data();
     const isPersonal = (0, circle_mode_1.getCircleMode)(circle) === 'personal';
     const timezone = asCleanString(circle?.timezone) ?? 'UTC';
-    const commitmentCadence = (0, commitments_1.getCommitmentCadence)(circle);
+    const commitmentPace = (0, commitments_1.getCommitmentPace)(circle);
     const requiredTapIns = (0, commitments_1.getRequiredTapIns)(circle);
-    const periodDateKeys = getCommitmentPeriodDateKeys(commitmentCadence, timezone);
+    const periodDateKeys = getCommitmentPeriodDateKeys(commitmentPace, timezone);
     const periodCheckInSnapshots = await Promise.all(periodDateKeys.map(periodDateKey => circleRef
         .collection('days')
         .doc(periodDateKey)
@@ -405,10 +406,10 @@ async function processTapInSideEffectsForCheckIn({ checkIn, circleId, dateKey, s
     const coveredCounts = new Map();
     const todaySnapshotIndex = periodDateKeys.indexOf(dateKey);
     const todayCheckInSnapshot = periodCheckInSnapshots[todaySnapshotIndex >= 0 ? todaySnapshotIndex : 0];
-    const scoringSnapshots = commitmentCadence === 'daily' && todayCheckInSnapshot
+    const scoringSnapshots = commitmentPace === 'daily' && todayCheckInSnapshot
         ? [todayCheckInSnapshot]
         : periodCheckInSnapshots;
-    const periodKey = commitmentCadence === 'daily' ? dateKey : periodDateKeys[0] ?? dateKey;
+    const periodKey = commitmentPace === 'daily' ? dateKey : periodDateKeys[0] ?? dateKey;
     const [canonicalPeriodSnapshot, canonicalSlotSnapshots] = await Promise.all([
         circleRef.collection('opportunities').doc(periodKey).get(),
         circleRef
@@ -462,9 +463,9 @@ async function processTapInSideEffectsForCheckIn({ checkIn, circleId, dateKey, s
         handle: asCleanString(checkIn.handle) ?? null,
         uid,
     };
-    const companionTargets = isPersonal
+    const memberTargets = isPersonal
         ? []
-        : await (0, notifications_1.resolveCompanionFeedTargets)({
+        : await (0, notifications_1.resolveCircleActivityTargets)({
             actorUid: uid,
             circle,
             circleId,
@@ -490,7 +491,7 @@ async function processTapInSideEffectsForCheckIn({ checkIn, circleId, dateKey, s
             tone: 'success',
             type: 'tap_in',
         }).catch(error => console.error('create_thread_tap_in_activity_failed', error));
-        await Promise.all(companionTargets.map(target => (0, notifications_1.notifyCompanionTappedIn)({
+        await Promise.all(memberTargets.map(target => (0, notifications_1.notifyMemberTappedIn)({
             actor,
             circleId,
             circleTitle,
@@ -499,10 +500,10 @@ async function processTapInSideEffectsForCheckIn({ checkIn, circleId, dateKey, s
             targetUid: target.uid,
             sourceKey,
             sourceRevision: coverageRevision,
-        }))).catch(error => console.error('notify_companion_tapped_in_failed', error));
+        }))).catch(error => console.error('notify_member_tapped_in_failed', error));
     }
     if (status === 'skip' && !isPersonal) {
-        await (0, notifications_1.notifyCompanionSkipped)({
+        await (0, notifications_1.notifyMemberSkipped)({
             actor,
             circle,
             circleId,
@@ -510,17 +511,17 @@ async function processTapInSideEffectsForCheckIn({ checkIn, circleId, dateKey, s
             dateKey,
             sourceKey,
             sourceRevision: coverageRevision,
-        }).catch(error => console.error('notify_companion_skipped_failed', error));
+        }).catch(error => console.error('notify_member_skipped_failed', error));
     }
     if (momentumSummary) {
-        const milestoneEvents = (0, notifications_1.getCompanionMilestoneEvents)({
+        const milestoneEvents = (0, notifications_1.getMemberMilestoneEvents)({
             metrics,
             priorMetrics,
             priorSummary: priorMomentumSummary,
             summary: momentumSummary,
         });
         milestoneKeys = milestoneEvents.map(event => event.key);
-        const streakMilestones = milestoneEvents.filter(event => event.type === 'companion_streak_milestone');
+        const streakMilestones = milestoneEvents.filter(event => event.type === notification_compat_1.legacyCircleActivityNotificationTypes.streakMilestone);
         if (!isPersonal) {
             circleActivityIds.push(...streakMilestones.map(event => `streak_${dateKey}_${uid}_${event.key}`));
             await Promise.all(streakMilestones.map(event => (0, thread_1.createCircleThreadActivity)({
@@ -533,7 +534,7 @@ async function processTapInSideEffectsForCheckIn({ checkIn, circleId, dateKey, s
                 type: 'streak_milestone',
             }))).catch(error => console.error('create_thread_streak_activity_failed', error));
         }
-        await (0, notifications_1.notifyCompanionMilestones)({
+        await (0, notifications_1.notifyMemberMilestones)({
             actor,
             circle,
             circleId,
@@ -542,14 +543,14 @@ async function processTapInSideEffectsForCheckIn({ checkIn, circleId, dateKey, s
             sourceKey,
             sourceRevision: coverageRevision,
             targetUid: uid,
-        }).catch(error => console.error('notify_companion_milestones_failed', error));
+        }).catch(error => console.error('notify_member_milestones_failed', error));
     }
     if (!isPersonal && circleCompleteTargetUids.length > 0) {
         await Promise.all(circleCompleteTargetUids.map(targetUid => (0, notifications_1.notifyCircleComplete)({
             actorUid: uid,
             circleId,
             circleTitle,
-            commitmentCadence,
+            commitmentPace,
             periodKey,
             sourceKey,
             sourceRevision: coverageRevision,

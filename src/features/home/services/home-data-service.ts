@@ -15,7 +15,7 @@ import type {
   CircleSummary,
   CheckInStatus,
   CheckInCoverageStatus,
-  CommitmentCadence,
+  CommitmentPace,
   CommitmentFrequency,
   GraceRule,
   MemberRole,
@@ -247,16 +247,16 @@ function clampTapInsPerWeek(value: number) {
 
 function normalizeCommitmentFrequency(
   value: unknown,
-  cadence: CommitmentCadence = 'weekly',
+  pace: CommitmentPace = 'weekly',
 ): CommitmentFrequency {
-  if (cadence === 'daily') {
+  if (pace === 'daily') {
     return {tapInsPerWeek: 7};
   }
 
   const data = value && typeof value === 'object' ? (value as PlainData) : {};
   const tapInsPerWeek = clampTapInsPerWeek(asNumber(data.tapInsPerWeek, 7));
 
-  if (cadence === 'monthly') {
+  if (pace === 'monthly') {
     return {
       opportunitiesPerPeriod: Math.min(
         31,
@@ -271,10 +271,10 @@ function normalizeCommitmentFrequency(
   };
 }
 
-function normalizeCommitmentCadence(
+function normalizeCommitmentPace(
   value: unknown,
   frequencyValue: unknown,
-): CommitmentCadence {
+): CommitmentPace {
   if (value === 'daily' || value === 'weekly' || value === 'monthly') {
     return value;
   }
@@ -285,12 +285,8 @@ function normalizeCommitmentCadence(
     : 'weekly';
 }
 
-function getCommitmentPeriodLabel(cadence: CommitmentCadence) {
-  return cadence === 'daily'
-    ? 'Today'
-    : cadence === 'monthly'
-    ? 'Month'
-    : 'Week';
+function getCurrentCycleLabel(_pace: CommitmentPace) {
+  return 'this Cycle';
 }
 
 function getCleanFirstName(value?: string) {
@@ -501,7 +497,7 @@ function getInitials(name: string) {
 function getMemberLabel(memberData: PlainData) {
   return asString(
     memberData.displayName,
-    asString(memberData.name, asString(memberData.handle, 'Hoyst member')),
+    asString(memberData.name, asString(memberData.handle, 'Hoyst Member')),
   );
 }
 
@@ -655,15 +651,15 @@ function getCommitmentMonthDateKeys(timezone: string, now = new Date()) {
 }
 
 function getCommitmentPeriodDateKeys(
-  cadence: CommitmentCadence,
+  pace: CommitmentPace,
   timezone: string,
   now = new Date(),
 ) {
-  if (cadence === 'daily') {
+  if (pace === 'daily') {
     return [getDateKey(now, timezone)];
   }
 
-  if (cadence === 'monthly') {
+  if (pace === 'monthly') {
     return getCommitmentMonthDateKeys(timezone, now);
   }
 
@@ -671,15 +667,15 @@ function getCommitmentPeriodDateKeys(
 }
 
 function getCommitmentPeriodKey(
-  cadence: CommitmentCadence,
+  pace: CommitmentPace,
   timezone: string,
   now = new Date(),
 ) {
   const firstDateKey =
-    getCommitmentPeriodDateKeys(cadence, timezone, now)[0] ??
+    getCommitmentPeriodDateKeys(pace, timezone, now)[0] ??
     getDateKey(now, timezone);
 
-  return cadence === 'monthly' ? firstDateKey.slice(0, 7) : firstDateKey;
+  return pace === 'monthly' ? firstDateKey.slice(0, 7) : firstDateKey;
 }
 
 function getRollingGraceDateKeys(
@@ -1464,26 +1460,26 @@ export function mapHomeCircleFromData({
     new Map<string, ReadonlyMap<string, CheckInStatus>>([
       ['today', coveredCheckIns],
     ]);
-  const commitmentCadence = normalizeCommitmentCadence(
+  const commitmentPace = normalizeCommitmentPace(
     circleData.commitmentCadence,
     circleData.commitmentFrequency,
   );
   const commitmentFrequency = normalizeCommitmentFrequency(
     circleData.commitmentFrequency,
-    commitmentCadence,
+    commitmentPace,
   );
   const commitmentSource = getCommitmentSource(circleData);
   const commitmentType = getCommitmentType(commitmentSource);
   const quantityConfig = getQuantityConfig(commitmentSource);
   const tapInsPerWeek = commitmentFrequency.tapInsPerWeek;
   const requiredTapIns =
-    commitmentCadence === 'daily'
+    commitmentPace === 'daily'
       ? 1
-      : commitmentCadence === 'monthly'
+      : commitmentPace === 'monthly'
       ? commitmentFrequency.opportunitiesPerPeriod ?? tapInsPerWeek
       : tapInsPerWeek;
   const scoringStatuses =
-    commitmentCadence === 'daily'
+    commitmentPace === 'daily'
       ? new Map<string, ReadonlyMap<string, CheckInStatus>>([
           ['today', coveredCheckIns],
         ])
@@ -1591,8 +1587,8 @@ export function mapHomeCircleFromData({
   const matchCopy = isPending
     ? 'Pending approval before Tap In unlocks.'
     : asString(circleData.matchCopy);
-  const periodLabel = getCommitmentPeriodLabel(commitmentCadence);
-  const progressLabel = `${periodLabel} · ${progressPercent}%`;
+  const cycleLabel = getCurrentCycleLabel(commitmentPace);
+  const progressLabel = `${cycleLabel} · ${progressPercent}%`;
   const graceRules = normalizeGraceRules(circleData.graceRules);
   const viewerAvailableSkips = getViewerAvailableSkips({
     graceRule: graceRules.skip,
@@ -1605,7 +1601,7 @@ export function mapHomeCircleFromData({
     category: asString(circleData.category, 'General'),
     circleMode,
     completionRate: progressPercent,
-    commitmentCadence,
+    commitmentCadence: commitmentPace,
     commitment,
     commitmentFrequency,
     commitmentType,
@@ -1913,12 +1909,12 @@ function syncCircleOpportunityListener({
     return;
   }
 
-  const cadence = normalizeCommitmentCadence(
+  const pace = normalizeCommitmentPace(
     state.circleData.commitmentCadence,
     state.circleData.commitmentFrequency,
   );
   const timezone = asString(state.circleData.timezone, 'UTC');
-  const periodKey = getCommitmentPeriodKey(cadence, timezone);
+  const periodKey = getCommitmentPeriodKey(pace, timezone);
 
   if (state.circleOpportunityKey === periodKey) {
     return;
@@ -2098,7 +2094,7 @@ function clearSkipGraceCheckInListeners(state: CircleSubscriptionState) {
 }
 
 function syncPeriodCheckInListeners({
-  cadence,
+  pace,
   circleRef,
   onError,
   onUpdate,
@@ -2106,7 +2102,7 @@ function syncPeriodCheckInListeners({
   timezone,
   uid,
 }: {
-  cadence: CommitmentCadence;
+  pace: CommitmentPace;
   circleRef: FirebaseFirestoreTypes.DocumentReference;
   onError: (error: Error) => void;
   onUpdate: () => void;
@@ -2114,9 +2110,9 @@ function syncPeriodCheckInListeners({
   timezone: string;
   uid: string;
 }) {
-  const periodDateKeys = getCommitmentPeriodDateKeys(cadence, timezone);
+  const periodDateKeys = getCommitmentPeriodDateKeys(pace, timezone);
   const todayDateKey = getDateKey(new Date(), timezone);
-  const periodCheckInKey = `${timezone}:${cadence}:${periodDateKeys.join('|')}`;
+  const periodCheckInKey = `${timezone}:${pace}:${periodDateKeys.join('|')}`;
 
   if (state.periodCheckInKey === periodCheckInKey) {
     return;
@@ -2458,7 +2454,7 @@ export function subscribeToHomeData({
               state,
             });
             syncPeriodCheckInListeners({
-              cadence: normalizeCommitmentCadence(
+              pace: normalizeCommitmentPace(
                 state.circleData?.commitmentCadence,
                 state.circleData?.commitmentFrequency,
               ),
@@ -2500,7 +2496,7 @@ export function subscribeToHomeData({
 
       if (state.circleData) {
         syncPeriodCheckInListeners({
-          cadence: normalizeCommitmentCadence(
+          pace: normalizeCommitmentPace(
             state.circleData.commitmentCadence,
             state.circleData.commitmentFrequency,
           ),
@@ -2706,7 +2702,7 @@ export function subscribeToMemberCircleDetail({
         state,
       });
       syncPeriodCheckInListeners({
-        cadence: normalizeCommitmentCadence(
+        pace: normalizeCommitmentPace(
           state.circleData.commitmentCadence,
           state.circleData.commitmentFrequency,
         ),
@@ -2763,7 +2759,7 @@ export function subscribeToMemberCircleDetail({
         state,
       });
       syncPeriodCheckInListeners({
-        cadence: normalizeCommitmentCadence(
+        pace: normalizeCommitmentPace(
           state.circleData?.commitmentCadence,
           state.circleData?.commitmentFrequency,
         ),
@@ -2843,22 +2839,22 @@ export function buildPublicCircleDetail(
 ): CircleDetailModel {
   const progressPercent =
     summary.progressPercent ?? summary.completionRate ?? 0;
-  const commitmentCadence = normalizeCommitmentCadence(
+  const commitmentPace = normalizeCommitmentPace(
     summary.commitmentCadence,
     summary.commitmentFrequency,
   );
   const progressLabel =
     summary.progressLabel ??
-    `${getCommitmentPeriodLabel(commitmentCadence)} · ${progressPercent}%`;
+    `${getCurrentCycleLabel(commitmentPace)} · ${progressPercent}%`;
 
   return {
     ...summary,
     activity: [],
     completionRate: summary.completionRate ?? progressPercent,
-    commitmentCadence,
+    commitmentCadence: commitmentPace,
     commitmentFrequency: normalizeCommitmentFrequency(
       summary.commitmentFrequency ?? {tapInsPerWeek: 7},
-      commitmentCadence,
+      commitmentPace,
     ),
     commitmentLabel: `Commitment: ${summary.commitment}`,
     completionLabel: summary.completionLabel ?? progressLabel,

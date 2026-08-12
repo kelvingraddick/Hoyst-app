@@ -4,7 +4,7 @@ import {firebaseFirestore} from '../../../lib/firebase/firestore';
 import type {HomeData} from '../../home/services/home-data-service';
 import type {
   CircleManagementCard,
-  CommitmentCadence,
+  CommitmentPace,
   MomentumStatus,
   MomentumSummary,
   RollingMomentumSummary,
@@ -50,10 +50,10 @@ function getDaysInMonth(dateKey: string) {
   ).getUTCDate();
 }
 
-function getElapsedPeriodOffset(cadence: CommitmentCadence, dateKey: string) {
+function getElapsedPeriodOffset(pace: CommitmentPace, dateKey: string) {
   const date = parseDateKey(dateKey);
 
-  if (cadence === 'monthly') {
+  if (pace === 'monthly') {
     return date.getUTCDate() - 1;
   }
 
@@ -73,7 +73,7 @@ function getSlotOffsets(dayCount: number, opportunitiesPerPeriod: number) {
   );
 }
 
-function getCircleCadence(circle: CircleManagementCard): CommitmentCadence {
+function getCirclePace(circle: CircleManagementCard): CommitmentPace {
   if (
     circle.commitmentCadence === 'daily' ||
     circle.commitmentCadence === 'weekly' ||
@@ -89,13 +89,13 @@ function getCircleCadence(circle: CircleManagementCard): CommitmentCadence {
 
 function getCircleOpportunityCount(
   circle: CircleManagementCard,
-  cadence = getCircleCadence(circle),
+  pace = getCirclePace(circle),
 ) {
-  if (cadence === 'daily') {
+  if (pace === 'daily') {
     return 1;
   }
 
-  if (cadence === 'monthly') {
+  if (pace === 'monthly') {
     return clampNumber(
       circle.commitmentFrequency?.opportunitiesPerPeriod ??
         circle.commitmentFrequency?.tapInsPerWeek,
@@ -111,18 +111,18 @@ function getAvailableScheduledOpportunityCount(
   circle: CircleManagementCard,
   todayDateKey: string,
 ) {
-  const cadence = getCircleCadence(circle);
+  const pace = getCirclePace(circle);
 
-  if (cadence === 'daily') {
+  if (pace === 'daily') {
     return 1;
   }
 
-  const dayCount = cadence === 'monthly' ? getDaysInMonth(todayDateKey) : 7;
-  const elapsedOffset = getElapsedPeriodOffset(cadence, todayDateKey);
+  const dayCount = pace === 'monthly' ? getDaysInMonth(todayDateKey) : 7;
+  const elapsedOffset = getElapsedPeriodOffset(pace, todayDateKey);
 
   return getSlotOffsets(
     dayCount,
-    getCircleOpportunityCount(circle, cadence),
+    getCircleOpportunityCount(circle, pace),
   ).filter(offset => offset <= elapsedOffset).length;
 }
 
@@ -225,7 +225,7 @@ export function getMomentumDisplayModel(
 export function formatOpportunityCount(summary: MomentumSummary) {
   const available = summary.availableOpportunities;
   const credited = summary.creditedOpportunities;
-  const noun = available === 1 ? 'opportunity' : 'opportunities';
+  const noun = available === 1 ? 'Opportunity' : 'Opportunities';
 
   return `${credited} of ${available} ${noun} covered`;
 }

@@ -31,7 +31,7 @@ import {updateCircle} from '../services/circle-service';
 import {CommitmentSetupScaffold} from '../../create-circle/components/CommitmentSetupScaffold';
 import {
   categoryOptions as setupCategoryOptions,
-  commitmentCadenceOptions as setupCommitmentCadenceOptions,
+  commitmentPaceOptions as setupCommitmentPaceOptions,
   commitmentTypeOptions as setupCommitmentTypeOptions,
   formatAccessSummary,
   formatJoinMode,
@@ -46,7 +46,7 @@ import type {
   CircleDetailModel,
   CircleJoinMode,
   CirclePrivacyMode,
-  CommitmentCadence,
+  CommitmentPace,
   CommitmentType,
   CreateCircleDraft,
 } from '../../../types/models';
@@ -118,7 +118,7 @@ export function EditCircleScreen({
     detail &&
     draft.circleMode !== 'personal' &&
     isCircleMaxSizeBelowMemberCount(draft.maxSize, detail.memberCount)
-      ? `Max size cannot be below ${detail.memberCount} current members.`
+      ? `Max size cannot be below ${detail.memberCount} current Members.`
       : undefined;
   const titleLength = draft?.title.trim().length ?? 0;
   const commitmentLength = draft?.commitment.trim().length ?? 0;
@@ -263,16 +263,16 @@ export function EditCircleScreen({
     );
   };
 
-  const selectCommitmentCadence = (commitmentCadence: CommitmentCadence) => {
+  const selectCommitmentPace = (commitmentPace: CommitmentPace) => {
     setDraft(current =>
       current
         ? {
             ...current,
-            commitmentCadence,
+            commitmentCadence: commitmentPace,
             commitmentFrequency:
-              commitmentCadence === 'daily'
+              commitmentPace === 'daily'
                 ? {tapInsPerWeek: 7}
-                : commitmentCadence === 'monthly'
+                : commitmentPace === 'monthly'
                 ? defaultMonthlyCommitmentFrequency
                 : current.commitmentFrequency.tapInsPerWeek >= 7
                 ? defaultWeeklyCommitmentFrequency
@@ -361,7 +361,7 @@ export function EditCircleScreen({
     <CommitmentSetupScaffold
       body={
         isPersonal
-          ? 'Update the Commitment rules, rhythm, timing, and skips.'
+          ? 'Update the Commitment Goal, Pace, timing, and Skips.'
           : 'Update the Circle name, rules, access, timing, and capacity.'
       }
       eyebrow="Owner settings"
@@ -462,7 +462,7 @@ export function EditCircleScreen({
             value={formatAccessSummary(draft.privacyMode, draft.joinMode)}
           />
           <SetupNumericStepper
-            label="Maximum members"
+            label="Maximum Members"
             max={100}
             min={2}
             onChange={value => setField('maxSize', clampCircleMaxSize(value))}
@@ -533,18 +533,18 @@ export function EditCircleScreen({
             <View style={styles.sectionHeader}>
               <HoystText variant="bodyStrong">
                 {draft.commitmentType === 'limit'
-                  ? 'Tap In range'
-                  : 'Tap In target'}
+                  ? 'Goal range'
+                  : 'Goal value'}
               </HoystText>
               <HoystChip
-                label={draft.commitmentType === 'limit' ? 'Range' : 'Target'}
+                label={draft.commitmentType === 'limit' ? 'Limit' : 'Goal'}
                 tone={draft.commitmentType === 'limit' ? 'orange' : 'green'}
               />
             </View>
             {draft.commitmentType === 'build' ? (
               <View style={styles.fieldBlock}>
                 <HoystText tone="muted" variant="label">
-                  Target amount
+                  Goal value
                 </HoystText>
                 <HoystInput
                   keyboardType="number-pad"
@@ -596,14 +596,14 @@ export function EditCircleScreen({
           <HoystText tone="muted">
             {isPersonal
               ? 'Avoid Commitments stay binary. Tap In once to confirm you stayed clear.'
-              : 'Avoid Circles stay binary. Each member taps in once to confirm they stayed clear.'}
+              : 'Avoid Circles stay binary. Each Member taps in once to confirm they stayed clear.'}
           </HoystText>
         )}
       </GlassPanel>
 
       <GlassPanel>
         <View style={styles.sectionHeader}>
-          <HoystText variant="title">Rhythm and timing</HoystText>
+          <HoystText variant="title">Pace and timing</HoystText>
           <HoystChip
             label={
               draft.commitmentCadence === 'daily'
@@ -619,8 +619,8 @@ export function EditCircleScreen({
           />
         </View>
         <SetupOptionList
-          onSelect={selectCommitmentCadence}
-          options={setupCommitmentCadenceOptions}
+          onSelect={selectCommitmentPace}
+          options={setupCommitmentPaceOptions}
           selected={draft.commitmentCadence}
         />
         {draft.commitmentCadence === 'weekly' ? (
@@ -637,7 +637,7 @@ export function EditCircleScreen({
             <HoystText tone="muted">
               {isPersonal
                 ? 'You Tap In this many days from Monday to Sunday in this Commitment timezone.'
-                : 'Each member taps in this many days from Monday to Sunday in the Circle timezone.'}
+                : 'Each Member taps in this many days from Monday to Sunday in the Circle timezone.'}
             </HoystText>
           </>
         ) : draft.commitmentCadence === 'monthly' ? (
@@ -658,14 +658,14 @@ export function EditCircleScreen({
               }
             />
             <HoystText tone="muted">
-              Monthly opportunities are spaced across the selected timezone.
+              Monthly Opportunities are spaced across the selected timezone.
             </HoystText>
           </>
         ) : (
           <HoystText tone="muted">
             {isPersonal
-              ? 'This Commitment needs one Tap In or skip each day.'
-              : 'Daily circles need one Tap In or skip from each member every day.'}
+              ? 'This Commitment needs one Tap In or Skip each day.'
+              : 'Daily Circles need one Tap In or Skip from each Member every day.'}
           </HoystText>
         )}
         <TimezonePicker
@@ -707,12 +707,12 @@ export function EditCircleScreen({
           ]}>
           <View style={styles.optionCopy}>
             <HoystText variant="bodyStrong">
-              Optional skips protect Progression
+              Optional Skips protect Progress
             </HoystText>
             <HoystText tone="muted">
               {isPersonal
-                ? 'Skips count as covered for your Progression.'
-                : 'Skips count as covered for Circle Progression.'}
+                ? 'Skips count as covered for your Progress.'
+                : 'Skips count as covered for Circle Progress.'}
             </HoystText>
           </View>
           <HoystChip

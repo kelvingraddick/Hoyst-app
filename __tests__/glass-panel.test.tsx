@@ -3,27 +3,8 @@ import {StyleSheet, Text} from 'react-native';
 import renderer, {act} from 'react-test-renderer';
 
 import {GlassPanel} from '../src/design/components/GlassPanel';
-import {glass} from '../src/design/tokens/glass';
 
 let mockAppearance: 'dark' | 'light';
-
-jest.mock('@react-native-community/blur', () => {
-  const MockReact = require('react');
-  const {View} = require('react-native');
-
-  return {
-    BlurView: ({children, ...props}: {children?: React.ReactNode}) =>
-      MockReact.createElement(View, props, children),
-  };
-});
-
-jest.mock('react-native-linear-gradient', () => {
-  const MockReact = require('react');
-  const {View} = require('react-native');
-
-  return ({children, ...props}: {children?: React.ReactNode}) =>
-    MockReact.createElement(View, props, children);
-});
 
 jest.mock('../src/store/settings-store', () => ({
   useSettingsStore: (
@@ -52,66 +33,72 @@ describe('GlassPanel', () => {
     mockAppearance = 'light';
   });
 
-  it('matches the tab bar dark-mode highlight treatment', () => {
+  it('uses the opaque cool-slate surface in dark mode', () => {
     mockAppearance = 'dark';
     const tree = renderGlassPanel();
-    const gradient = tree.root.findByProps({
-      testID: 'glass-panel-highlight-gradient',
-    });
-    const topSheenStyle = StyleSheet.flatten(
-      tree.root.findByProps({testID: 'glass-panel-top-sheen'}).props.style,
+    const surfaceStyle = StyleSheet.flatten(
+      tree.root.findByProps({testID: 'solid-panel-surface'}).props.style,
     );
 
-    expect(gradient.props.colors).toEqual(glass.darkHighlightGradientColors);
-    expect(gradient.props.start).toEqual({x: 0.5, y: 0});
-    expect(gradient.props.end).toEqual({x: 0.5, y: 1});
-    expect(topSheenStyle).toMatchObject({
-      backgroundColor: 'rgba(255,255,255,0.18)',
-      borderRadius: 999,
-      height: glass.darkHighlightSheenHeight,
-      left: glass.darkCardHighlightSheenInset,
-      right: glass.darkCardHighlightSheenInset,
-      top: glass.darkHighlightSheenTop,
+    expect(surfaceStyle).toMatchObject({
+      backgroundColor: '#222638',
+      borderColor: 'rgba(255,255,255,0.10)',
+      borderRadius: 24,
+      borderWidth: 1,
+      shadowColor: 'rgba(0,0,0,0.46)',
     });
   });
 
-  it('widens dark top highlights to each glass variant radius start', () => {
-    mockAppearance = 'dark';
-
+  it('keeps every panel variant opaque in both themes', () => {
     (
       [
-        {inset: glass.darkCardHighlightSheenInset, variant: 'card'},
-        {inset: glass.darkPanelHighlightSheenInset, variant: 'panel'},
-        {inset: glass.darkNavHighlightSheenInset, variant: 'nav'},
+        {
+          appearance: 'dark',
+          backgroundColor: '#222638',
+          borderColor: 'rgba(255,255,255,0.10)',
+        },
+        {
+          appearance: 'light',
+          backgroundColor: '#FFFFFF',
+          borderColor: 'rgba(16,24,40,0.08)',
+        },
       ] as const
-    ).forEach(({inset, variant}) => {
-      const tree = renderGlassPanel({variant});
-      const topSheenStyle = StyleSheet.flatten(
-        tree.root.findByProps({testID: 'glass-panel-top-sheen'}).props.style,
-      );
+    ).forEach(({appearance, backgroundColor, borderColor}) => {
+      mockAppearance = appearance;
 
-      expect(topSheenStyle.left).toBe(inset);
-      expect(topSheenStyle.right).toBe(inset);
+      (
+        [
+          {borderRadius: 24, variant: 'card'},
+          {borderRadius: 28, variant: 'panel'},
+          {borderRadius: 32, variant: 'nav'},
+        ] as const
+      ).forEach(({borderRadius, variant}) => {
+        const tree = renderGlassPanel({variant});
+        const surfaceStyle = StyleSheet.flatten(
+          tree.root.findByProps({testID: 'solid-panel-surface'}).props.style,
+        );
+
+        expect(surfaceStyle).toMatchObject({
+          backgroundColor,
+          borderColor,
+          borderRadius,
+        });
+      });
     });
   });
 
-  it('keeps the existing light-mode top highlight', () => {
-    mockAppearance = 'light';
+  it('renders no blur, tint, or illumination layers', () => {
     const tree = renderGlassPanel();
-    const topSheenStyle = StyleSheet.flatten(
-      tree.root.findByProps({testID: 'glass-panel-top-sheen'}).props.style,
-    );
 
+    expect(tree.root.findAll(node => node.props.blurAmount)).toHaveLength(0);
+    expect(tree.root.findAllByProps({testID: 'glass-panel-blur'})).toHaveLength(
+      0,
+    );
+    expect(tree.root.findAllByProps({testID: 'glass-panel-tint'})).toHaveLength(
+      0,
+    );
     expect(
       tree.root.findAllByProps({testID: 'glass-panel-highlight-gradient'}),
     ).toHaveLength(0);
-    expect(topSheenStyle).toMatchObject({
-      backgroundColor: 'rgba(255,255,255,0.9)',
-      borderRadius: 999,
-      height: glass.highlightHeight,
-      left: 16,
-      right: 16,
-      top: 0.5,
-    });
   });
 });

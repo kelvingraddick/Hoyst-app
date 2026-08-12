@@ -89,7 +89,11 @@ function ArchivedCircleCard({
             {circle.commitment}
           </HoystText>
           <HoystText tone="muted" variant="tiny">
-            {isPersonal ? 'Personal commitment' : `${circle.memberCount} members`}
+            {isPersonal
+              ? 'Personal commitment'
+              : `${circle.memberCount} ${
+                  circle.memberCount === 1 ? 'Member' : 'Members'
+                }`}
             {' · '}
             {formatArchivedDate(circle.archivedAt)}
           </HoystText>
@@ -188,7 +192,7 @@ export function ArchivedCirclesScreen({navigation}: Props) {
     const isPersonal = circle.circleMode === 'personal';
     Alert.alert(
       isPersonal ? 'Unarchive Commitment?' : 'Unarchive Circle?',
-      'Tap Ins and reminders will resume at the next scheduled opening. Time spent archived will not create missed opportunities.',
+      'Tap Ins and reminders will resume at the next scheduled opening. Time spent archived will not create missed Opportunities.',
       [
         {style: 'cancel', text: 'Keep Archived'},
         {

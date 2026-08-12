@@ -21,19 +21,19 @@ import {NudgeActionButton} from './NudgeActionButton';
 import {SectionEyebrow, SectionEyebrowTrailing} from './SectionEyebrow';
 import type {PulseRingState} from './pulse-ring-state';
 
-type CompanionInviteAction = {
+type MemberInviteAction = {
   accessibilityLabel: string;
   onPress: () => void;
 };
 
-type CompanionSlot =
+type MemberSlot =
   | {kind: 'member'; member: CircleMemberStatus}
-  | {kind: 'invite'; inviteAction: CompanionInviteAction};
+  | {kind: 'invite'; inviteAction: MemberInviteAction};
 
-type CircleCompanionGridProps = {
+type CircleMemberGridProps = {
   canTapInViewer?: boolean;
   footerAction?: React.ReactNode;
-  inviteAction?: CompanionInviteAction;
+  inviteAction?: MemberInviteAction;
   members: CircleMemberStatus[];
   nudgedMemberIds?: ReadonlySet<string>;
   nudgingMemberIds?: ReadonlySet<string>;
@@ -124,15 +124,15 @@ function getMemberProgressConfig(
   };
 }
 
-function buildCompanionSlots(
+function buildMemberSlots(
   members: CircleMemberStatus[],
-  inviteAction?: CompanionInviteAction,
-): CompanionSlot[] {
+  inviteAction?: MemberInviteAction,
+): MemberSlot[] {
   if (!inviteAction) {
     return members.map(member => ({kind: 'member', member}));
   }
 
-  const inviteSlot: CompanionSlot = {kind: 'invite', inviteAction};
+  const inviteSlot: MemberSlot = {kind: 'invite', inviteAction};
 
   if (members.length >= 4) {
     return [
@@ -148,8 +148,8 @@ function buildCompanionSlots(
   ];
 }
 
-function chunkSlots(slots: CompanionSlot[]) {
-  const pages: CompanionSlot[][] = [];
+function chunkSlots(slots: MemberSlot[]) {
+  const pages: MemberSlot[][] = [];
 
   for (let index = 0; index < slots.length; index += 4) {
     pages.push(slots.slice(index, index + 4));
@@ -196,7 +196,7 @@ function StatusBadge({member}: {member: CircleMemberStatus}) {
   );
 }
 
-function CompanionAvatar({member}: {member: CircleMemberStatus}) {
+function MemberAvatar({member}: {member: CircleMemberStatus}) {
   const theme = useHoystTheme();
   const progress = getMemberProgressConfig(member, theme);
 
@@ -320,7 +320,7 @@ function MemberReviewButton({
   );
 }
 
-function CompanionMemberCard({
+function MemberCard({
   canTapInViewer,
   cardWidth,
   member,
@@ -369,15 +369,15 @@ function CompanionMemberCard({
         accessible
         accessibilityLabel={`${displayName}, ${statusLabel}`}
         style={styles.memberCardInner}
-        testID={`circle-companion-card-${member.id}`}>
-        <CompanionAvatar member={member} />
+        testID={`circle-member-card-${member.id}`}>
+        <MemberAvatar member={member} />
         <View style={styles.memberCopy}>
           <HoystText
             adjustsFontSizeToFit
             minimumFontScale={0.82}
             numberOfLines={1}
             style={styles.memberName}
-            testID={`circle-companion-member-name-${member.id}`}>
+            testID={`circle-member-name-${member.id}`}>
             {displayName}
           </HoystText>
           <HoystText
@@ -420,7 +420,7 @@ function InviteCard({
   inviteAction,
 }: {
   cardWidth: number;
-  inviteAction: CompanionInviteAction;
+  inviteAction: MemberInviteAction;
 }) {
   const theme = useHoystTheme();
 
@@ -452,7 +452,7 @@ function InviteCard({
         ]}>
         <View
           style={styles.inviteCardInner}
-          testID="circle-companion-invite-card">
+          testID="circle-member-invite-card">
           <View
             style={[
               styles.inviteIconRing,
@@ -528,7 +528,7 @@ function SlotCard({
   onReviewPendingMember?: (member: CircleMemberStatus) => void;
   onTapInViewer?: () => void;
   reviewingPendingMemberId?: string;
-  slot: CompanionSlot;
+  slot: MemberSlot;
   viewerUid?: string;
 }) {
   if (slot.kind === 'invite') {
@@ -538,7 +538,7 @@ function SlotCard({
   }
 
   return (
-    <CompanionMemberCard
+    <MemberCard
       canTapInViewer={canTapInViewer}
       cardWidth={cardWidth}
       member={slot.member}
@@ -553,7 +553,7 @@ function SlotCard({
   );
 }
 
-export function CircleCompanionGrid({
+export function CircleMemberGrid({
   canTapInViewer = false,
   footerAction,
   inviteAction,
@@ -565,12 +565,12 @@ export function CircleCompanionGrid({
   onTapInViewer,
   reviewingPendingMemberId,
   subtitle,
-  title = 'Circle Companions',
+  title = 'Circle Members',
   viewerUid,
-}: CircleCompanionGridProps): React.JSX.Element {
+}: CircleMemberGridProps): React.JSX.Element {
   const {width} = useWindowDimensions();
   const slots = React.useMemo(
-    () => buildCompanionSlots(members, inviteAction),
+    () => buildMemberSlots(members, inviteAction),
     [inviteAction, members],
   );
   const pages = React.useMemo(() => chunkSlots(slots), [slots]);
@@ -593,13 +593,13 @@ export function CircleCompanionGrid({
             horizontal
             showsHorizontalScrollIndicator={false}
             style={styles.scroller}
-            testID="circle-companion-grid-scroll"
+            testID="circle-member-grid-scroll"
             contentContainerStyle={styles.scrollerContent}>
             {pages.map((page, pageIndex) => (
               <View
                 key={`page-${pageIndex}`}
                 style={[styles.page, {width: pageWidth}]}
-                testID={`circle-companion-grid-page-${pageIndex}`}>
+                testID={`circle-member-grid-page-${pageIndex}`}>
                 {page.map(slot => (
                   <SlotCard
                     canTapInViewer={canTapInViewer}
@@ -625,7 +625,7 @@ export function CircleCompanionGrid({
         ) : (
           <View
             style={[styles.page, styles.staticPage, {width: pageWidth}]}
-            testID="circle-companion-grid-page-0">
+            testID="circle-member-grid-page-0">
             {slots.map(slot => (
               <SlotCard
                 canTapInViewer={canTapInViewer}
@@ -647,7 +647,7 @@ export function CircleCompanionGrid({
         )
       ) : (
         <HoystText tone="muted">
-          Companions will appear here once people join this Circle.
+          Members will appear here once people join this Circle.
         </HoystText>
       )}
       {footerAction ? (

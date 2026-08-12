@@ -298,7 +298,9 @@ function ThreadActivityItem({
           </View>
         </View>
       ) : (
-        <View style={styles.activityLikeRow}>
+        <View
+          style={styles.activityLikeRow}
+          testID={`circle-thread-activity-like-row-${item.id}`}>
           <LikeButton
             disabled={isViewer || item.readOnly || readOnly}
             item={item}
@@ -832,7 +834,7 @@ const styles = StyleSheet.create({
     lineHeight: 17,
   },
   activityLikeRow: {
-    paddingLeft: 56,
+    alignSelf: 'flex-start',
   },
   activityProofCard: {
     borderRadius: 18,

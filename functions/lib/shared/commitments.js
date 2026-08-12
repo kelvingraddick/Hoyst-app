@@ -1,5 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.getInputCommitmentCadence = exports.getCommitmentCadence = void 0;
 exports.clampOpportunitiesPerPeriod = clampOpportunitiesPerPeriod;
 exports.getCommitmentType = getCommitmentType;
 exports.getQuantityConfig = getQuantityConfig;
@@ -8,10 +9,10 @@ exports.getCoverageStatusForTapIn = getCoverageStatusForTapIn;
 exports.getCheckInStatusForCoverage = getCheckInStatusForCoverage;
 exports.isCoveredCheckInData = isCoveredCheckInData;
 exports.getTapInsPerWeek = getTapInsPerWeek;
-exports.getCommitmentCadence = getCommitmentCadence;
+exports.getCommitmentPace = getCommitmentPace;
 exports.getRequiredTapIns = getRequiredTapIns;
 exports.getStoredCommitmentFrequency = getStoredCommitmentFrequency;
-exports.getInputCommitmentCadence = getInputCommitmentCadence;
+exports.getInputCommitmentPace = getInputCommitmentPace;
 function clampOpportunitiesPerPeriod(value, fallback) {
     return typeof value === 'number' && Number.isFinite(value)
         ? Math.min(31, Math.max(1, Math.round(value)))
@@ -118,7 +119,7 @@ function getTapInsPerWeek(circle) {
         ? Math.min(7, Math.max(1, Math.round(value)))
         : 7;
 }
-function getCommitmentCadence(circle) {
+function getCommitmentPace(circle) {
     const value = circle?.commitmentCadence;
     if (value === 'daily' || value === 'weekly' || value === 'monthly') {
         return value;
@@ -126,21 +127,21 @@ function getCommitmentCadence(circle) {
     return getTapInsPerWeek(circle) >= 7 ? 'daily' : 'weekly';
 }
 function getRequiredTapIns(circle) {
-    const cadence = getCommitmentCadence(circle);
-    if (cadence === 'daily') {
+    const pace = getCommitmentPace(circle);
+    if (pace === 'daily') {
         return 1;
     }
-    if (cadence === 'monthly') {
+    if (pace === 'monthly') {
         return clampOpportunitiesPerPeriod(circle?.commitmentFrequency?.opportunitiesPerPeriod, getTapInsPerWeek(circle));
     }
     return getTapInsPerWeek(circle);
 }
-function getStoredCommitmentFrequency(cadence, frequency) {
-    if (cadence === 'daily') {
+function getStoredCommitmentFrequency(pace, frequency) {
+    if (pace === 'daily') {
         return { tapInsPerWeek: 7 };
     }
     const value = frequency?.tapInsPerWeek;
-    const opportunitiesPerPeriod = cadence === 'monthly'
+    const opportunitiesPerPeriod = pace === 'monthly'
         ? clampOpportunitiesPerPeriod(frequency
             ?.opportunitiesPerPeriod, typeof value === 'number' && Number.isFinite(value)
             ? Math.min(7, Math.max(1, Math.round(value)))
@@ -153,11 +154,15 @@ function getStoredCommitmentFrequency(cadence, frequency) {
             : 7,
     };
 }
-function getInputCommitmentCadence(cadence, frequency) {
-    if (cadence === 'daily' || cadence === 'weekly' || cadence === 'monthly') {
-        return cadence;
+function getInputCommitmentPace(pace, frequency) {
+    if (pace === 'daily' || pace === 'weekly' || pace === 'monthly') {
+        return pace;
     }
     return getTapInsPerWeek({ commitmentFrequency: frequency }) >= 7
         ? 'daily'
         : 'weekly';
 }
+/** @deprecated Use getCommitmentPace after reading the legacy wire field. */
+exports.getCommitmentCadence = getCommitmentPace;
+/** @deprecated Use getInputCommitmentPace for legacy callable input. */
+exports.getInputCommitmentCadence = getInputCommitmentPace;

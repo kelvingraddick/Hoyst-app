@@ -72,6 +72,10 @@ import {useSessionStore} from '../../../store/session-store';
 import {CircleActionCard} from '../../circles/components/CircleActionCard';
 import {nudgeCircleMembers} from '../../circles/services/circle-service';
 import {
+  isCircleActivityEvent,
+  legacyCircleActivityEventTypes,
+} from '../../inbox/circle-activity-compat';
+import {
   getMomentumDisplayModel,
   subscribeToMomentumSummary,
 } from '../../momentum/services/momentum-service';
@@ -104,56 +108,32 @@ function getInitials(name: string) {
     .join('');
 }
 
-const companionFeedEventTypes: ReadonlySet<InboxEvent['type']> = new Set([
-  'circle_complete',
-  'companion_achievement_unlocked',
-  'companion_circle_created',
-  'companion_circle_joined',
-  'companion_momentum_level_up',
-  'companion_skipped',
-  'companion_streak_milestone',
-  'companion_tapped_in',
-  'member_joined',
-  'nudge',
-]);
-
-function isCompanionFeedEvent(event: InboxEvent, viewerUid?: string) {
-  if (event.actor?.uid && event.actor.uid === viewerUid) {
-    return false;
-  }
-
-  return (
-    event.feedCategory === 'companion' ||
-    companionFeedEventTypes.has(event.type)
-  );
-}
-
-function getCompanionFeedActionLabel(event: InboxEvent) {
+function getCircleActivityActionLabel(event: InboxEvent) {
   if (event.type === 'circle_complete') {
     return 'Complete';
   }
-  if (event.type === 'companion_achievement_unlocked') {
+  if (event.type === legacyCircleActivityEventTypes.achievementUnlocked) {
     return 'Unlocked';
   }
-  if (event.type === 'companion_circle_created') {
+  if (event.type === legacyCircleActivityEventTypes.circleCreated) {
     return 'Created';
   }
   if (
-    event.type === 'companion_circle_joined' ||
+    event.type === legacyCircleActivityEventTypes.circleJoined ||
     event.type === 'member_joined'
   ) {
     return 'Joined';
   }
-  if (event.type === 'companion_momentum_level_up') {
+  if (event.type === legacyCircleActivityEventTypes.momentumLevelUp) {
     return 'Level up';
   }
-  if (event.type === 'companion_skipped') {
+  if (event.type === legacyCircleActivityEventTypes.skipped) {
     return 'Skip';
   }
-  if (event.type === 'companion_streak_milestone') {
+  if (event.type === legacyCircleActivityEventTypes.streakMilestone) {
     return 'Streak';
   }
-  if (event.type === 'companion_tapped_in') {
+  if (event.type === legacyCircleActivityEventTypes.tappedIn) {
     return 'Tapped in';
   }
   if (event.type === 'nudge') {
@@ -163,12 +143,15 @@ function getCompanionFeedActionLabel(event: InboxEvent) {
   return 'Update';
 }
 
-function getCompanionFeedTone(event: InboxEvent) {
-  if (event.type === 'companion_skipped') {
+function getCircleActivityTone(event: InboxEvent) {
+  if (event.type === legacyCircleActivityEventTypes.skipped) {
     return 'alert' as const;
   }
 
-  if (event.type === 'nudge' || event.type === 'companion_circle_created') {
+  if (
+    event.type === 'nudge' ||
+    event.type === legacyCircleActivityEventTypes.circleCreated
+  ) {
     return 'pending' as const;
   }
 
@@ -195,12 +178,12 @@ function mapInboxEventToActivity(event: InboxEvent): CircleActivityItem {
     actorAvatarUrl: event.actor?.avatarUrl,
     actorInitials: getInitials(actorName) || 'HO',
     actorName,
-    actionLabel: getCompanionFeedActionLabel(event),
+    actionLabel: getCircleActivityActionLabel(event),
     id: event.id,
     mediaImageUrl: event.mediaImageUrl,
     message: getEventMessage(event),
     timestamp: event.createdAtLabel,
-    tone: getCompanionFeedTone(event),
+    tone: getCircleActivityTone(event),
   };
 }
 
@@ -509,16 +492,16 @@ export function HomeScreen(): React.JSX.Element {
     isLoadingHomeData,
     membershipCount: homeData.membershipCount,
   });
-  const companionFeedEvents = useMemo(
+  const circleActivityEvents = useMemo(
     () =>
       events
-        .filter(event => isCompanionFeedEvent(event, user?.uid))
+        .filter(event => isCircleActivityEvent(event, user?.uid))
         .slice(0, 6),
     [events, user?.uid],
   );
-  const companionUpdates = useMemo(
-    () => companionFeedEvents.map(mapInboxEventToActivity),
-    [companionFeedEvents],
+  const circleActivityUpdates = useMemo(
+    () => circleActivityEvents.map(mapInboxEventToActivity),
+    [circleActivityEvents],
   );
   const homeCardLiftStyle = [
     styles.homeCardLift,
@@ -760,7 +743,9 @@ export function HomeScreen(): React.JSX.Element {
         Alert.alert(
           'Nudge sent',
           result.nudged > 0
-            ? `${result.nudged} member${result.nudged === 1 ? '' : 's'} nudged.`
+            ? `${result.nudged} ${
+                result.nudged === 1 ? 'Member' : 'Members'
+              } nudged.`
             : 'Everyone is covered right now.',
         );
       })
@@ -950,12 +935,12 @@ export function HomeScreen(): React.JSX.Element {
                 description={
                   isIncompleteProfile
                     ? 'Finish your handle and profile before circles and Tap Ins unlock.'
-                    : 'Get started to save Progression, join Circles, and build your Tap In streak.'
+                    : 'Get started to save Progress, join Circles, and build your Tap In streak.'
                 }
                 title={
                   isIncompleteProfile
                     ? 'Complete your profile'
-                    : 'Start making Progression'
+                    : 'Start making Progress'
                 }
               />
               <View style={styles.emptyActions}>
@@ -1067,7 +1052,7 @@ export function HomeScreen(): React.JSX.Element {
           {isLoadingHomeData ? (
             <GlassPanel style={styles.emptyPanel}>
               <SectionHeader
-                description="Pulling your live Circle Progression from Hoyst."
+                description="Pulling your live Circle Progress from Hoyst."
                 title="Loading your circles"
               />
             </GlassPanel>
@@ -1095,12 +1080,12 @@ export function HomeScreen(): React.JSX.Element {
 
           {isAuthenticatedHome ? (
             <View style={styles.circleSectionGroup}>
-              <SectionEyebrow>COMPANION FEED</SectionEyebrow>
-              {companionUpdates.length > 0 ? (
-                companionUpdates.map((item, index) => (
+              <SectionEyebrow>CIRCLE ACTIVITY</SectionEyebrow>
+              {circleActivityUpdates.length > 0 ? (
+                circleActivityUpdates.map((item, index) => (
                   <Pressable
                     key={item.id}
-                    onPress={() => openEvent(companionFeedEvents[index])}>
+                    onPress={() => openEvent(circleActivityEvents[index])}>
                     <ActivityFeedCard
                       density="compact"
                       item={item}
@@ -1112,7 +1097,7 @@ export function HomeScreen(): React.JSX.Element {
                 <GlassPanel>
                   <SectionHeader
                     description="Tap Ins, skips, joins, nudges, and milestones will appear here."
-                    title="No companion feed yet"
+                    title="No Circle activity yet"
                   />
                 </GlassPanel>
               )}

@@ -69,11 +69,11 @@ function getWeekStartDateKey(timezone, now = new Date()) {
     return formatDateKey(localDate);
 }
 function getPeriodShape(schedule, now = new Date()) {
-    if (schedule.cadence === 'daily') {
+    if (schedule.pace === 'daily') {
         const dateKey = getDateKey(schedule.timezone, now);
         return { dayCount: 1, periodKey: dateKey, startDateKey: dateKey };
     }
-    if (schedule.cadence === 'monthly') {
+    if (schedule.pace === 'monthly') {
         const local = getLocalDateParts(schedule.timezone, now);
         const startDateKey = [local.year, padDatePart(local.month), '01'].join('-');
         return {
@@ -94,11 +94,11 @@ function getSlotOffsets(dayCount, opportunitiesPerPeriod) {
     return Array.from({ length: count }, (_, index) => Math.min(dayCount - 1, Math.floor((index * dayCount) / count)));
 }
 function normalizeCommitmentSchedule(commitment, fallbackTimezone = 'UTC') {
-    const rawCadence = commitment?.commitmentCadence;
-    const cadence = rawCadence === 'daily' ||
-        rawCadence === 'weekly' ||
-        rawCadence === 'monthly'
-        ? rawCadence
+    const rawPace = commitment?.commitmentCadence;
+    const pace = rawPace === 'daily' ||
+        rawPace === 'weekly' ||
+        rawPace === 'monthly'
+        ? rawPace
         : typeof commitment?.commitmentFrequency?.tapInsPerWeek === 'number' &&
             commitment.commitmentFrequency.tapInsPerWeek >= 7
             ? 'daily'
@@ -106,19 +106,19 @@ function normalizeCommitmentSchedule(commitment, fallbackTimezone = 'UTC') {
     const timezone = typeof commitment?.timezone === 'string' && commitment.timezone.trim()
         ? commitment.timezone.trim()
         : fallbackTimezone;
-    const fallbackCount = cadence === 'daily'
+    const fallbackCount = pace === 'daily'
         ? 1
-        : cadence === 'monthly'
+        : pace === 'monthly'
             ? 4
             : typeof commitment?.commitmentFrequency?.tapInsPerWeek === 'number'
                 ? commitment.commitmentFrequency.tapInsPerWeek
                 : 7;
-    const opportunitiesPerPeriod = cadence === 'daily'
+    const opportunitiesPerPeriod = pace === 'daily'
         ? 1
         : (0, commitments_1.clampOpportunitiesPerPeriod)(commitment?.commitmentFrequency?.opportunitiesPerPeriod ??
             commitment?.commitmentFrequency?.tapInsPerWeek, fallbackCount);
     return {
-        cadence,
+        pace,
         opportunitiesPerPeriod,
         slotPolicy: 'scheduled_slots',
         timezone,

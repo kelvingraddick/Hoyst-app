@@ -300,8 +300,8 @@ export function TodayCircleCard({
   ).length;
   const shownUpLabel =
     shownUpCount === 1
-      ? '1 companion already showed up'
-      : `${shownUpCount} companions already showed up`;
+      ? '1 Member already showed up'
+      : `${shownUpCount} Members already showed up`;
   const actionVariant = getTodayCircleCardActionVariant(card);
   const actionLabel = getActionLabel({
     actionVariant,
@@ -589,8 +589,8 @@ export function TodayCircleCard({
         : [
             listPrimaryMeta,
             !isPersonal && shownUpCount > 0
-              ? `${shownUpCount} companion${
-                  shownUpCount === 1 ? '' : 's'
+              ? `${shownUpCount} ${
+                  shownUpCount === 1 ? 'Member' : 'Members'
                 } showed up`
               : undefined,
             `${clampedCompletionRate}%`,

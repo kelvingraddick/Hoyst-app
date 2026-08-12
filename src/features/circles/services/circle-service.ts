@@ -5,7 +5,7 @@ import type {
   CircleJoinMode,
   CircleMode,
   CirclePrivacy,
-  CommitmentCadence,
+  CommitmentPace,
   CommitmentFrequency,
   CommitmentType,
   GraceRule,
@@ -15,7 +15,7 @@ export type CreateCircleInput = {
   category: string;
   circleMode?: CircleMode;
   commitment: string;
-  commitmentCadence: CommitmentCadence;
+  commitmentCadence: CommitmentPace;
   commitmentFrequency: CommitmentFrequency;
   commitmentType: CommitmentType;
   graceRules: {

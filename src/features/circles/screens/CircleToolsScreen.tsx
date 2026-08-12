@@ -286,7 +286,7 @@ function DeleteCircleConfirmModal({
               <HoystText tone="muted">
                 {isPersonal
                   ? 'This permanently deletes the personal Commitment and its Tap In history.'
-                  : 'This permanently deletes the circle, members, requests, and Tap In history.'}
+                  : 'This permanently deletes the Circle, Members, requests, and Tap In history.'}
               </HoystText>
               <HoystText variant="bodyStrong">{circleTitle}</HoystText>
               <HoystText tone="muted" variant="caption">
@@ -537,7 +537,7 @@ export function CircleToolsScreen({
 
     Alert.alert(
       'Reset invite link?',
-      'The current link will stop working immediately. Existing members are not affected.',
+      'The current link will stop working immediately. Existing Members are not affected.',
       [
         {style: 'cancel', text: 'Keep Current Link'},
         {
@@ -678,7 +678,7 @@ export function CircleToolsScreen({
               <SettingsRow
                 detail={
                   isPersonal
-                    ? 'Change the Commitment, rules, rhythm, timing, and skips.'
+                    ? 'Change the Commitment Goal, Pace, timing, and Skips.'
                     : 'Change the name, rules, access, timing, and capacity.'
                 }
                 icon={Pencil}

@@ -230,7 +230,7 @@ function PhotoOverlayStory({
             value={formatNumber(story.periodTapInCount)}
           />
           <OverlayStat
-            label="COMPANIONS"
+            label="MEMBERS"
             value={formatNumber(story.memberCount)}
           />
         </View>
@@ -265,7 +265,7 @@ function DesignedPostStory({story}: {story: TapInStoryShareData}) {
             value={formatNumber(story.periodTapInCount)}
           />
           <StoryStat
-            label="COMPANIONS"
+            label="MEMBERS"
             tone={brandColors.purpleBright}
             value={formatNumber(story.memberCount)}
           />
@@ -314,7 +314,7 @@ function TransparentStatsStory({
             </HoystText>
           </View>
           <View style={styles.transparentStat}>
-            <HoystText style={styles.transparentLabel}>COMPANIONS</HoystText>
+            <HoystText style={styles.transparentLabel}>MEMBERS</HoystText>
             <HoystText style={styles.transparentStatValue}>
               {formatNumber(story.memberCount)}
             </HoystText>

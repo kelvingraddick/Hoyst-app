@@ -58,7 +58,7 @@ describe('momentum summary fallback', () => {
         status: 'strong_momentum',
         tapInOpportunities: 1,
       }),
-    ).toBe('2 of 4 opportunities covered');
+    ).toBe('2 of 4 Opportunities covered');
   });
 
   it('counts partial weekly Tap Ins as completed scheduled opportunities', () => {

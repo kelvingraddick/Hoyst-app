@@ -8,7 +8,6 @@ import {
   frostedBackdropLightBlobs,
   getFrostedBackdropBlobs,
 } from '../src/design/components/FrostedBackdrop';
-import {glass} from '../src/design/tokens/glass';
 import {gradients} from '../src/design/tokens/gradients';
 
 jest.mock('../src/store/settings-store', () => ({
@@ -119,25 +118,15 @@ describe('Hoyst design tokens', () => {
     expect(gradients.primaryRing).toHaveLength(6);
   });
 
-  it('keeps dark glass tokens light enough for translucent Home sections', () => {
-    const theme = getHoystThemeColors('dark');
+  it('defines opaque panel fills for both appearance modes', () => {
+    const darkTheme = getHoystThemeColors('dark');
+    const lightTheme = getHoystThemeColors('light');
 
-    expect(theme.glassSurface).toBe('rgba(18,20,34,0.38)');
-    expect(theme.glassSurfaceStrong).toBe('rgba(28,30,46,0.64)');
-    expect(theme.glassBorder).toBe('rgba(255,255,255,0.20)');
-    expect(theme.glassHighlight).toBe('rgba(255,255,255,0.18)');
-    expect(theme.glassChipBorder).toBe('rgba(255,255,255,0.18)');
-    expect(glass.darkHighlightGradientColors).toEqual([
-      'rgba(255, 255, 255, 0.12)',
-      'rgba(255, 255, 255, 0.04)',
-      'rgba(255, 255, 255, 0.02)',
-    ]);
-    expect(glass.darkHighlightSheenHeight).toBe(2);
-    expect(glass.darkCardHighlightSheenInset).toBe(24);
-    expect(glass.darkPanelHighlightSheenInset).toBe(28);
-    expect(glass.darkNavHighlightSheenInset).toBe(32);
-    expect(glass.darkTabBarHighlightSheenInset).toBe(28);
-    expect(glass.darkHighlightSheenTop).toBe(1);
+    expect(darkTheme.panelSurface).toBe('#222638');
+    expect(lightTheme.panelSurface).toBe('#FFFFFF');
+    expect(darkTheme.glassSurfaceStrong).toBe('rgba(28,30,46,0.64)');
+    expect(darkTheme.glassBorder).toBe('rgba(255,255,255,0.20)');
+    expect(darkTheme.glassChipBorder).toBe('rgba(255,255,255,0.18)');
   });
 
   it('keeps light-mode foreground tokens readable on app surfaces', () => {
@@ -148,6 +137,7 @@ describe('Hoyst design tokens', () => {
       theme.surfaceSoft,
       theme.surfaceHigh,
       theme.surfaceStrong,
+      theme.panelSurface,
     ];
     const foregroundTokens = [
       theme.textMuted,

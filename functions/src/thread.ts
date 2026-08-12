@@ -62,7 +62,7 @@ export function sanitizeCircleThreadText(value: unknown, maxLength = 1000) {
 function buildThreadActor(actor: ThreadActor) {
   return {
     avatarUrl: asOptionalString(actor.avatarUrl) ?? null,
-    displayName: asOptionalString(actor.displayName) ?? 'Hoyst member',
+    displayName: asOptionalString(actor.displayName) ?? 'Hoyst Member',
     handle: asOptionalString(actor.handle) ?? null,
     uid: asOptionalString(actor.uid) ?? null,
   };
@@ -125,7 +125,9 @@ export function getCircleThreadNudgeText({
     return `${actorName} nudged ${targetName}`;
   }
 
-  return `${actorName} nudged ${targetCount} companions`;
+  return `${actorName} nudged ${targetCount} ${
+    targetCount === 1 ? 'Member' : 'Members'
+  }`;
 }
 
 export function getCircleThreadStreakText(

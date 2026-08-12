@@ -361,7 +361,7 @@ describe('CircleDetailScreen reference redesign', () => {
     jest.clearAllMocks();
   });
 
-  it('renders reference identity and companion progress for an active member', () => {
+  it('renders reference identity and Member Progress for an active Member', () => {
     const {tree} = renderScreen();
     const output = outputOf(tree);
 
@@ -408,7 +408,7 @@ describe('CircleDetailScreen reference redesign', () => {
     expect(StyleSheet.flatten(membersMeta?.props.style)).toEqual(
       expect.objectContaining({fontWeight: '500'}),
     );
-    expect(output).toContain('Daily Task');
+    expect(output).toContain('Daily Pace');
     expect(output).toContain('Move for 30 minutes');
     expect(output.indexOf('Morning Movers')).toBeLessThan(
       output.indexOf('Move for 30 minutes'),
@@ -417,16 +417,16 @@ describe('CircleDetailScreen reference redesign', () => {
       output.indexOf('FITNESS'),
     );
     expect(output.indexOf('FITNESS')).toBeLessThan(
-      output.indexOf('Daily Task'),
+      output.indexOf('Daily Pace'),
     );
-    expect(output.indexOf('Daily Task')).toBeLessThan(
+    expect(output.indexOf('Daily Pace')).toBeLessThan(
       output.indexOf('Needs You'),
     );
     expect(output).toContain('Needs You');
-    expect(output).toContain('Circle Companions');
+    expect(output).toContain('Circle Members');
     expect(output).toContain('Circle Chat');
-    expect(output).toContain('1 of 4 today');
-    expect(output).not.toContain('Circle Companions · 1 of 4 today');
+    expect(output).toContain('1 of 4 this Cycle');
+    expect(output).not.toContain('Circle Members · 1 of 4 this Cycle');
     expect(output).not.toContain("Today's Progress");
     expect(output).toContain('Needs Tap In');
     expect(output).toContain('Done');
@@ -435,37 +435,37 @@ describe('CircleDetailScreen reference redesign', () => {
     expect(output).toContain('Pending');
     expect(output).not.toContain('Review');
     expect(output).toContain('Tap In');
-    expect(output).toContain('Log your progress for today');
-    expect(output.indexOf('Log your progress for today')).toBeLessThan(
+    expect(output).toContain('Log Progress for this Cycle');
+    expect(output.indexOf('Log Progress for this Cycle')).toBeLessThan(
       output.indexOf('Stats'),
     );
-    const firstCompanionPage = textContent(
-      tree.root.findByProps({testID: 'circle-companion-grid-page-0'}),
+    const firstMemberPage = textContent(
+      tree.root.findByProps({testID: 'circle-member-grid-page-0'}),
     );
-    expect(firstCompanionPage.indexOf('Kelvin')).toBeLessThan(
-      firstCompanionPage.indexOf('Ari'),
+    expect(firstMemberPage.indexOf('Kelvin')).toBeLessThan(
+      firstMemberPage.indexOf('Ari'),
     );
-    expect(firstCompanionPage.indexOf('Ari')).toBeLessThan(
-      firstCompanionPage.indexOf('Sky'),
+    expect(firstMemberPage.indexOf('Ari')).toBeLessThan(
+      firstMemberPage.indexOf('Sky'),
     );
-    expect(firstCompanionPage.indexOf('Sky')).toBeLessThan(
-      firstCompanionPage.indexOf('Moss'),
+    expect(firstMemberPage.indexOf('Sky')).toBeLessThan(
+      firstMemberPage.indexOf('Moss'),
     );
-    expect(firstCompanionPage).not.toContain('Penny');
+    expect(firstMemberPage).not.toContain('Penny');
     expect(output.indexOf('Stats')).toBeLessThan(output.indexOf('3 days'));
     expect(output.indexOf('3 days')).toBeLessThan(
-      output.indexOf('Circle progression'),
+      output.indexOf('Circle Progress'),
     );
-    expect(output.indexOf('Circle progression')).toBeLessThan(
+    expect(output.indexOf('Circle Progress')).toBeLessThan(
       output.indexOf('LAST 7 DAYS'),
     );
     expect(output.indexOf('LAST 7 DAYS')).toBeLessThan(
-      output.indexOf('Circle Companions'),
+      output.indexOf('Circle Members'),
     );
     expect(output).toContain('LAST 7 DAYS');
     expect(output).not.toContain('This week');
     expect(output).not.toContain('Completion');
-    expect(output).not.toContain('Members');
+    expect(output).toContain('Circle Members');
     expect(output).not.toContain('Your last 7 days');
     expect(output).toContain('partial, 2 of 5 completed');
     expect(output).toContain('complete, 5 of 5 completed');
@@ -507,7 +507,7 @@ describe('CircleDetailScreen reference redesign', () => {
     expect(output).not.toContain('Member Tools');
     expect(output).not.toContain('Leaderboard');
     expect(output).not.toContain('Goals');
-    expect(output).not.toContain('Invite companions');
+    expect(output).not.toContain('Invite Members');
     expect(
       StyleSheet.flatten(
         tree.root.findByProps({testID: 'circle-detail-body-stack'}).props.style,
@@ -517,16 +517,18 @@ describe('CircleDetailScreen reference redesign', () => {
       .findAllByType(SectionEyebrowTrailing)
       .map(textContent);
 
-    expect(trailingLabels).toEqual(expect.arrayContaining(['1 of 4 today']));
+    expect(trailingLabels).toEqual(
+      expect.arrayContaining(['1 of 4 this Cycle']),
+    );
     expect(trailingLabels).not.toContain('This week');
   });
 
-  it('embeds circle chat below the companion grid without navigation', () => {
+  it('embeds Circle chat below the Member grid without navigation', () => {
     const {navigation, tree} = renderScreen();
     const output = outputOf(tree);
     const sectionProps = mockCircleThreadSection.mock.calls.at(-1)?.[0];
 
-    expect(output.indexOf('Circle Companions')).toBeLessThan(
+    expect(output.indexOf('Circle Members')).toBeLessThan(
       output.indexOf('Circle Chat'),
     );
     expect(
@@ -570,7 +572,7 @@ describe('CircleDetailScreen reference redesign', () => {
     const {tree} = renderScreen();
     const output = outputOf(tree);
     const actionStackStyle = StyleSheet.flatten(
-      tree.root.findByProps({testID: 'circle-detail-companion-actions'}).props
+      tree.root.findByProps({testID: 'circle-detail-member-actions'}).props
         .style,
     );
     const nudgeFrameStyle = StyleSheet.flatten(
@@ -760,10 +762,10 @@ describe('CircleDetailScreen reference redesign', () => {
     const output = outputOf(tree);
 
     expect(output).not.toContain('Circle Tools');
-    expect(output).toContain('Circle Companions');
-    expect(output).toContain('0 of 0 this week');
-    expect(output).toContain('Invite companions');
-    expect(output).not.toContain('Circle Companions · 0 of 0 this week');
+    expect(output).toContain('Circle Members');
+    expect(output).toContain('0 of 0 this Cycle');
+    expect(output).toContain('Invite Members');
+    expect(output).not.toContain('Circle Members · 0 of 0 this Cycle');
     expect(output).not.toContain('Leaderboard');
     expect(output).not.toContain('Goals');
     expect(output).toContain('Review');
@@ -771,7 +773,7 @@ describe('CircleDetailScreen reference redesign', () => {
     expect(output).not.toContain('Delete Circle');
   });
 
-  it('opens the pending request review sheet from the companion card', () => {
+  it('opens the pending request review sheet from the Member card', () => {
     mockMemberDetail = detail({
       members: [
         {
@@ -805,7 +807,7 @@ describe('CircleDetailScreen reference redesign', () => {
     );
   });
 
-  it('approves a pending request from the companion card sheet', async () => {
+  it('approves a pending request from the Member card sheet', async () => {
     mockMemberDetail = detail({
       members: [
         {
@@ -839,7 +841,7 @@ describe('CircleDetailScreen reference redesign', () => {
     });
   });
 
-  it('denies a pending request from the companion card sheet', async () => {
+  it('denies a pending request from the Member card sheet', async () => {
     mockMemberDetail = detail({
       members: [
         {
@@ -897,11 +899,11 @@ describe('CircleDetailScreen reference redesign', () => {
     const output = outputOf(tree);
 
     expect(output).toContain('Send a Nudge');
-    expect(output).toContain('1 member to nudge');
+    expect(output).toContain('1 Member to nudge');
     expect(output).toContain('rgba(122,85,255,0.11)');
     expect(output).toContain('rgba(122,85,255,0.12)');
     const nudgeButton = tree.root.findByProps({
-      accessibilityLabel: 'Send a Nudge. 1 member to nudge',
+      accessibilityLabel: 'Send a Nudge. 1 Member to nudge',
     });
     const nudgeFrameStyle = StyleSheet.flatten(
       tree.root.findByProps({testID: 'circle-detail-nudge-panel-frame'}).props
@@ -918,7 +920,7 @@ describe('CircleDetailScreen reference redesign', () => {
       .find(node => textContent(node) === 'Send a Nudge');
     const nudgeSubtitle = tree.root
       .findAllByType(Text)
-      .find(node => textContent(node) === '1 member to nudge');
+      .find(node => textContent(node) === '1 Member to nudge');
 
     expect(
       StyleSheet.flatten(nudgeButton.props.style({pressed: false})),
@@ -944,16 +946,16 @@ describe('CircleDetailScreen reference redesign', () => {
       expect.objectContaining({fontSize: 13, lineHeight: 17}),
     );
     expect(output.indexOf('Stats')).toBeLessThan(
-      output.indexOf('Circle Companions'),
+      output.indexOf('Circle Members'),
     );
-    expect(output.indexOf('Circle Companions')).toBeLessThan(
+    expect(output.indexOf('Circle Members')).toBeLessThan(
       output.indexOf('Send a Nudge'),
     );
     expect(output).not.toContain('Send Nudge');
     expect(output).not.toContain('Invite');
   });
 
-  it('targets a single companion from the member card nudge action', async () => {
+  it('targets a single Member from the Member card nudge action', async () => {
     mockMemberDetail = detail({
       members: [
         {
@@ -976,7 +978,7 @@ describe('CircleDetailScreen reference redesign', () => {
     const nudgeButtons = tree.root.findAll(
       node =>
         node.type === Pressable &&
-        node.props.accessibilityLabel === 'Nudge 1 member',
+        node.props.accessibilityLabel === 'Nudge 1 Member',
     );
 
     expect(nudgeButtons).toHaveLength(1);
@@ -1030,7 +1032,7 @@ describe('CircleDetailScreen reference redesign', () => {
     expect(mockCircleThreadSection).not.toHaveBeenCalled();
   });
 
-  it('renders progression and the compact streak header from existing data', () => {
+  it('renders Progress and the compact streak header from existing data', () => {
     const {tree} = renderScreen();
     const output = outputOf(tree);
     const progressValue = tree.root.findByProps({
@@ -1052,7 +1054,7 @@ describe('CircleDetailScreen reference redesign', () => {
     );
     expect(output).toContain('3 days');
     expect(output).not.toContain('Completion');
-    expect(output).not.toContain('Members');
+    expect(output).toContain('Circle Members');
     expect(output).not.toContain('This week');
   });
 
@@ -1101,15 +1103,15 @@ describe('CircleDetailScreen reference redesign', () => {
 
     expect(output).toContain('Personal Commitment');
     expect(output).toContain('Personal commitment');
-    expect(output).toContain('Personal progress');
+    expect(output).toContain('Personal Progress');
     expect(output.indexOf('Stats')).toBeLessThan(output.indexOf('3 days'));
     expect(output.indexOf('3 days')).toBeLessThan(
-      output.indexOf('Personal progress'),
+      output.indexOf('Personal Progress'),
     );
-    expect(output.indexOf('Personal progress')).toBeLessThan(
+    expect(output.indexOf('Personal Progress')).toBeLessThan(
       output.indexOf('LAST 7 DAYS'),
     );
-    expect(output).not.toContain('Circle Companions');
+    expect(output).not.toContain('Circle Members');
     expect(output).not.toContain('Circle Chat');
     expect(output).not.toContain('Completion');
     expect(output).not.toContain('Members');
@@ -1138,7 +1140,7 @@ describe('CircleDetailScreen reference redesign', () => {
     expect(output).toContain('Circle Chat');
     expect(output).not.toContain('Log your progress for today');
     expect(output).not.toContain('Send a Nudge');
-    expect(output).not.toContain('Invite companions');
+    expect(output).not.toContain('Invite Members');
     expect(tree.root.findAllByType(TapInPulseButton)).toHaveLength(0);
     expect(mockCircleThreadSection.mock.calls.at(-1)?.[0].isArchived).toBe(
       true,
@@ -1155,7 +1157,7 @@ describe('CircleDetailScreen reference redesign', () => {
       tree.root.findAllByProps({accessibilityLabel: 'Open Inbox'}),
     ).toHaveLength(0);
     expect(
-      tree.root.findAllByProps({accessibilityLabel: 'Invite members'}),
+      tree.root.findAllByProps({accessibilityLabel: 'Invite Members'}),
     ).toHaveLength(0);
 
     act(() => {

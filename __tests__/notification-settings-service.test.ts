@@ -128,6 +128,36 @@ describe('notification settings service listeners', () => {
     ]);
   });
 
+  it('normalizes historical companion copy into Member language', () => {
+    const onEvents = jest.fn();
+
+    subscribeToInboxEvents({onEvents, uid: 'user-1'});
+
+    const handleSnapshot = mockInboxOnSnapshot.mock.calls[0][0];
+    handleSnapshot({
+      docs: [
+        {
+          data: () => ({
+            body: 'A companion tapped in with two companions.',
+            feedCategory: 'companion',
+            title: 'A companion tapped in',
+            type: 'companion_tapped_in',
+          }),
+          id: 'event-legacy',
+        },
+      ],
+    });
+
+    expect(onEvents).toHaveBeenCalledWith([
+      expect.objectContaining({
+        body: 'A Member tapped in with two Members.',
+        feedCategory: 'companion',
+        title: 'A Member tapped in',
+        type: 'companion_tapped_in',
+      }),
+    ]);
+  });
+
   it('returns an empty inbox and reports an error when Firestore sends no query snapshot', () => {
     const onError = jest.fn();
     const onEvents = jest.fn();

@@ -351,7 +351,8 @@ function FeaturedCircleCard({
             numberOfLines={2}
             style={styles.featuredDescription}
             testID="explore-featured-description">
-            {circle.commitment}. {circle.memberCount} people tapped in today.
+            {circle.commitment}. {circle.memberCount}{' '}
+            {circle.memberCount === 1 ? 'Member' : 'Members'} tapped in today.
           </HoystText>
         </View>
 
@@ -361,7 +362,7 @@ function FeaturedCircleCard({
             style={styles.featuredStat}
             testID="explore-featured-stat"
             variant="button">
-            {circle.memberCount}/{circle.maxSize} members
+            {circle.memberCount}/{circle.maxSize} Members
           </HoystText>
         </View>
 
@@ -487,7 +488,9 @@ function ExploreActivityCallout({
             style={[styles.calloutDetail, {color}]}
             testID={`explore-activity-callout-detail-${tone}-${circle.id}`}>
             {isWarm
-              ? `${circle.memberCount} members tapped in today`
+              ? `${circle.memberCount} ${
+                  circle.memberCount === 1 ? 'Member' : 'Members'
+                } tapped in today`
               : `2 min ago · keeping a ${circle.streakLabel}`}
           </HoystText>
         </View>
@@ -566,7 +569,7 @@ function ExploreCircleCard({
             {index === 0
               ? `${
                   circle.members[0]?.name ?? 'Someone'
-                } + 1 companion you know are inside`
+                } + 1 Member you know is inside`
               : `Matches your ${circle.category} focus`}
           </HoystText>
         </View>

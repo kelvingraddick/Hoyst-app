@@ -1,4 +1,6 @@
-export type CommitmentCadence = 'daily' | 'weekly' | 'monthly';
+export type CommitmentPace = 'daily' | 'weekly' | 'monthly';
+/** @deprecated Retained for the legacy `commitmentCadence` wire contract. */
+export type CommitmentCadence = CommitmentPace;
 export type CommitmentType = 'build' | 'limit' | 'avoid';
 export type CheckInStatus = 'done' | 'skip' | 'partial' | 'failed';
 export type CheckInCoverageStatus =
@@ -195,9 +197,9 @@ export function getTapInsPerWeek(circle: CommitmentInput | undefined) {
     : 7;
 }
 
-export function getCommitmentCadence(
+export function getCommitmentPace(
   circle: CommitmentInput | undefined,
-): CommitmentCadence {
+): CommitmentPace {
   const value = circle?.commitmentCadence;
 
   if (value === 'daily' || value === 'weekly' || value === 'monthly') {
@@ -208,13 +210,13 @@ export function getCommitmentCadence(
 }
 
 export function getRequiredTapIns(circle: CommitmentInput | undefined) {
-  const cadence = getCommitmentCadence(circle);
+  const pace = getCommitmentPace(circle);
 
-  if (cadence === 'daily') {
+  if (pace === 'daily') {
     return 1;
   }
 
-  if (cadence === 'monthly') {
+  if (pace === 'monthly') {
     return clampOpportunitiesPerPeriod(
       circle?.commitmentFrequency?.opportunitiesPerPeriod,
       getTapInsPerWeek(circle),
@@ -225,16 +227,16 @@ export function getRequiredTapIns(circle: CommitmentInput | undefined) {
 }
 
 export function getStoredCommitmentFrequency(
-  cadence: CommitmentCadence,
+  pace: CommitmentPace,
   frequency: {tapInsPerWeek?: unknown} | undefined,
 ) {
-  if (cadence === 'daily') {
+  if (pace === 'daily') {
     return {tapInsPerWeek: 7};
   }
 
   const value = frequency?.tapInsPerWeek;
   const opportunitiesPerPeriod =
-    cadence === 'monthly'
+    pace === 'monthly'
       ? clampOpportunitiesPerPeriod(
           (frequency as {opportunitiesPerPeriod?: unknown} | undefined)
             ?.opportunitiesPerPeriod,
@@ -253,15 +255,21 @@ export function getStoredCommitmentFrequency(
   };
 }
 
-export function getInputCommitmentCadence(
-  cadence: unknown,
+export function getInputCommitmentPace(
+  pace: unknown,
   frequency: {tapInsPerWeek?: unknown} | undefined,
-): CommitmentCadence {
-  if (cadence === 'daily' || cadence === 'weekly' || cadence === 'monthly') {
-    return cadence;
+): CommitmentPace {
+  if (pace === 'daily' || pace === 'weekly' || pace === 'monthly') {
+    return pace;
   }
 
   return getTapInsPerWeek({commitmentFrequency: frequency}) >= 7
     ? 'daily'
     : 'weekly';
 }
+
+/** @deprecated Use getCommitmentPace after reading the legacy wire field. */
+export const getCommitmentCadence = getCommitmentPace;
+
+/** @deprecated Use getInputCommitmentPace for legacy callable input. */
+export const getInputCommitmentCadence = getInputCommitmentPace;

@@ -92,7 +92,7 @@ export const focusAreaOptions: OnboardingOption<OnboardingFocusArea>[] = [
     accent: 'purple',
     description: 'Sleep, mindfulness, food, therapy, or self-care routines.',
     id: 'wellness',
-    label: 'Wellness rhythm',
+    label: 'Wellness and self-care',
   },
   {
     accent: 'orange',

@@ -12,9 +12,9 @@ const onboardingStepCopy: Record<
   OnboardingStepCopy
 > = {
   auth: {
-    body: 'Create an account when you are ready to join, Tap In, or keep your rhythm across devices.',
+    body: 'Create an account when you are ready to join, Tap In, or keep your Progress across devices.',
     prompt: 'Pick the sign-in path that feels easiest.',
-    title: 'Save your rhythm',
+    title: 'Save your Progress',
   },
   coach: {
     body: "Let's help you create an account and a Commitment that fits how you want accountability to work.",
@@ -38,23 +38,23 @@ const onboardingStepCopy: Record<
     title: 'Choose a category',
   },
   circleRules: {
-    body: 'Choose what counts for a Tap In and how often it is due.',
-    prompt: 'Set the Commitment rules',
-    title: 'Rules and rhythm',
+    body: 'Choose the Goal for a Tap In and the Pace at which it is due.',
+    prompt: 'Set the Goal and Pace',
+    title: 'Goal and Pace',
   },
   circleGrace: {
-    body: 'Choose how many skips can protect Circle Progression.',
+    body: 'Choose how many Skips can protect Circle Progress.',
     prompt: 'How should skips work?',
     title: 'Set the skip allowance',
   },
   circlePrivacy: {
-    body: 'Choose who can discover it and how new members enter.',
+    body: 'Choose who can discover it and how new Members enter.',
     prompt: 'Who can find and join it?',
     title: 'Set the doors',
   },
   circleCapacity: {
     body: 'Choose how many people can participate in this Circle.',
-    prompt: 'How many members can join?',
+    prompt: 'How many Members can join?',
     title: 'Set the capacity',
   },
   circleTimezone: {
@@ -68,9 +68,9 @@ const onboardingStepCopy: Record<
     title: 'Review your setup',
   },
   notifications: {
-    body: 'Hoyst can nudge you before Progression slips and warn you when today is almost closed.',
+    body: 'Hoyst can nudge you before Progress slips and warn you when an Opportunity is almost closed.',
     prompt: 'Keep your first Circle moving with timely reminders.',
-    title: 'Protect your Progression',
+    title: 'Protect your Progress',
   },
   circleTitle: {
     body: 'Give the circle a name people can recognize and rally around.',
@@ -94,15 +94,15 @@ export function getOnboardingStepCopy(
 
   if (isInvite && currentStep === 'notifications') {
     return {
-      body: 'Hoyst can remind you before this Circle’s Tap In window closes.',
-      prompt: 'Stay in rhythm with your Circle',
-      title: 'Protect your Progression',
+      body: 'Hoyst can remind you before this Circle’s Opportunity closes.',
+      prompt: 'Keep Pace with your Circle',
+      title: 'Protect your Progress',
     };
   }
 
   if (isInvite && currentStep === 'auth') {
     return {
-      body: 'Create an account so Hoyst can add you to the invited Circle and keep your Progression across devices.',
+      body: 'Create an account so Hoyst can add you to the invited Circle and keep your Progress across devices.',
       prompt: 'Choose how you want to continue',
       title: 'Join your Circle',
     };
@@ -110,7 +110,7 @@ export function getOnboardingStepCopy(
 
   if (isInvite && currentStep === 'finishProfile') {
     return {
-      body: 'Add the profile details your Circle companions will see. Handles are locked once saved.',
+      body: 'Add the profile details your Circle Members will see. Handles are locked once saved.',
       prompt: 'Finish your profile to join',
       title: 'Last step',
     };
@@ -123,10 +123,10 @@ export function getOnboardingStepCopy(
   if (currentStep === 'circleRules') {
     return {
       ...copy,
-      body: `Choose what counts for a Tap In and how often it is due. ${
+      body: `Choose the Goal for a Tap In and the Pace at which it is due. ${
         isPersonal
-          ? 'You Tap In on the rhythm you choose.'
-          : 'Each member taps in on the same rhythm.'
+          ? 'You Tap In at the Pace you choose.'
+          : 'Each Member taps in at the same Pace.'
       }`,
     };
   }
@@ -134,7 +134,7 @@ export function getOnboardingStepCopy(
   if (currentStep === 'circleGrace') {
     return {
       ...copy,
-      body: `Choose how many skips can protect ${modeCopy.progressionLabel}.`,
+      body: `Choose how many Skips can protect ${modeCopy.progressLabel}.`,
     };
   }
 
@@ -160,7 +160,7 @@ export function getOnboardingStepCopy(
       ...copy,
       prompt: isPersonal
         ? 'Keep this Commitment moving with timely reminders.'
-        : 'Keep your Circle moving with Circle and companion updates.',
+        : 'Keep your Circle moving with timely Circle activity updates.',
     };
   }
 

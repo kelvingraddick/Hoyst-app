@@ -191,7 +191,7 @@ function buildOpportunityPayload({ checkInId, circle, circleId, dateKey, profile
         status === 'expired';
     return {
         availableDateKey: slot.availableDateKey,
-        cadence: (0, schedule_1.normalizeCommitmentSchedule)(circle).cadence,
+        cadence: (0, schedule_1.normalizeCommitmentSchedule)(circle).pace,
         circleId,
         commitment: asString(circle?.commitment),
         countsTowardCircle: true,
@@ -256,7 +256,7 @@ async function recordTapInOpportunity({ checkInId, circle, circleId, dateKey, me
         if (hasSatisfiedEligibleOpportunity) {
             return;
         }
-        throw new https_1.HttpsError('failed-precondition', 'No opportunity is open for this commitment yet.');
+        throw new https_1.HttpsError('failed-precondition', 'No Opportunity is open for this Commitment yet.');
     }
     const opportunityRef = userPrivateRef
         .collection('opportunities')

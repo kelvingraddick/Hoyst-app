@@ -1,7 +1,6 @@
 import React, {useEffect, useRef, useState} from 'react';
-import {Animated, Platform, Pressable, StyleSheet, View} from 'react-native';
+import {Animated, Pressable, StyleSheet, View} from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
-import {BlurView} from '@react-native-community/blur';
 import {Bell} from 'lucide-react-native';
 
 import type {HomeHeroCopy} from '../../features/home/services/home-hero-copy';
@@ -25,23 +24,17 @@ const MOMENTUM_STAGE_ICON_BACKGROUND = '#FFF3DF';
 export const homeHeroPalettes = {
   light: {
     background: brandColors.backgroundLight,
-    bubble: 'rgba(255,255,255,0.6)',
     bubbleText: '#16181D',
     bubbleSubtle: '#5B5B86',
     subline: brandColors.blueVivid,
     track: 'rgba(124,111,240,0.18)',
-    tailDot: 'rgba(255,255,255,0.6)',
-    tailDotBorder: 'rgba(255,255,255,0)',
   },
   dark: {
     background: brandColors.backgroundDark,
-    bubble: 'rgba(26,27,44,0.6)',
     bubbleText: '#E8ECF5',
     bubbleSubtle: '#9292B4',
     subline: brandColors.blue,
     track: 'rgba(124,111,240,0.24)',
-    tailDot: 'rgba(74,77,116,0.78)',
-    tailDotBorder: 'rgba(255,255,255,0.20)',
   },
 } as const;
 
@@ -61,23 +54,6 @@ type HomeHeroHeaderProps = {
   onMomentumPress: () => void;
   onNotificationPress: () => void;
 };
-
-function FrostedFill({radius}: {radius: number}) {
-  const theme = useHoystTheme();
-
-  if (Platform.OS !== 'ios') {
-    return null;
-  }
-
-  return (
-    <BlurView
-      blurAmount={18}
-      blurType={theme.isDark ? 'dark' : 'light'}
-      reducedTransparencyFallbackColor={theme.glassSurfaceStrong}
-      style={[StyleSheet.absoluteFill, {borderRadius: radius}]}
-    />
-  );
-}
 
 function BubbleText({text}: {text: string}) {
   const palette = useHoystTheme().isDark
@@ -151,14 +127,13 @@ function HoyPlaceholder(): React.JSX.Element {
       style={[
         styles.hoyPlaceholder,
         {
-          backgroundColor: theme.glassSurfaceStrong,
-          borderColor: theme.glassBorder,
-          shadowColor: theme.glassShadow,
+          backgroundColor: theme.panelSurface,
+          borderColor: theme.border,
+          shadowColor: theme.shadow,
         },
       ]}
-      testID="home-hero-hoy-placeholder">
-      <FrostedFill radius={HOY_SIZE / 2} />
-    </View>
+      testID="home-hero-hoy-placeholder"
+    />
   );
 }
 
@@ -208,18 +183,18 @@ export function HomeHeroHeader({
             style={[
               styles.bubbleSurface,
               {
-                shadowColor: theme.glassShadow,
+                shadowColor: theme.shadow,
               },
             ]}>
             <View
               style={[
                 styles.bubble,
                 {
-                  backgroundColor: palette.bubble,
-                  borderColor: theme.glassBorder,
+                  backgroundColor: theme.panelSurface,
+                  borderColor: theme.border,
                 },
-              ]}>
-              <FrostedFill radius={18} />
+              ]}
+              testID="home-hero-bubble-fill">
               {bubbleText ? (
                 <BubbleText text={bubbleText} />
               ) : (
@@ -249,9 +224,9 @@ export function HomeHeroHeader({
               style={[
                 styles.tailDotLarge,
                 {
-                  backgroundColor: palette.tailDot,
-                  borderColor: palette.tailDotBorder,
-                  shadowColor: theme.glassShadow,
+                  backgroundColor: theme.panelSurface,
+                  borderColor: theme.border,
+                  shadowColor: theme.shadow,
                 },
               ]}
             />
@@ -260,9 +235,9 @@ export function HomeHeroHeader({
               style={[
                 styles.tailDotSmall,
                 {
-                  backgroundColor: palette.tailDot,
-                  borderColor: palette.tailDotBorder,
-                  shadowColor: theme.glassShadow,
+                  backgroundColor: theme.panelSurface,
+                  borderColor: theme.border,
+                  shadowColor: theme.shadow,
                 },
               ]}
             />
@@ -460,7 +435,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     elevation: 3,
     height: HOY_SIZE,
-    opacity: 0.78,
     overflow: 'hidden',
     shadowOffset: {height: 3, width: 0},
     shadowOpacity: 0.18,

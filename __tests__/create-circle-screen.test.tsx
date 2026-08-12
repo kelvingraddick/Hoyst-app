@@ -151,9 +151,9 @@ describe('CreateCircleScreen unified flow', () => {
 
     pressContinue(tree);
     let output = JSON.stringify(tree.toJSON());
-    expect(output).toContain('Set the Commitment rules');
+    expect(output).toContain('Set the Goal and Pace');
     expect(output).toContain('You Tap In');
-    expect(output).not.toContain('Each member taps in');
+    expect(output).not.toContain('Each Member taps in');
     expect(
       tree.root
         .findAllByType(CommitmentTypeIcon)
@@ -162,8 +162,8 @@ describe('CreateCircleScreen unified flow', () => {
 
     pressContinue(tree);
     output = JSON.stringify(tree.toJSON());
-    expect(output).toContain('your Progression');
-    expect(output).not.toContain('Circle Progression');
+    expect(output).toContain('your Progress');
+    expect(output).not.toContain('Circle Progress');
 
     pressContinue(tree);
     output = JSON.stringify(tree.toJSON());
@@ -173,7 +173,7 @@ describe('CreateCircleScreen unified flow', () => {
     output = JSON.stringify(tree.toJSON());
     expect(output).toContain('Review your setup');
     expect(output).toContain('Personal commitment');
-    expect(output).not.toContain('members');
+    expect(output).not.toContain('Members');
     expect(tree.root.findByType(CommitmentTypePill).props.commitmentType).toBe(
       'build',
     );
@@ -195,18 +195,18 @@ describe('CreateCircleScreen unified flow', () => {
     pressContinue(tree);
     expectStep('What kind of Circle is this?');
     pressContinue(tree);
-    expectStep('What should this circle be called?');
+    expectStep('What should this Circle be called?');
     act(() => {
       tree.root.findByType(HoystInput).props.onChangeText('Readers Together');
     });
     pressContinue(tree);
-    expectStep('Set the Commitment rules');
+    expectStep('Set the Goal and Pace');
     pressContinue(tree);
-    expectStep('Set the skip allowance');
+    expectStep('Set the Skip allowance');
     pressContinue(tree);
     expectStep('Who can find and join it?');
     pressContinue(tree);
-    expectStep('How many members can join?');
+    expectStep('How many Members can join?');
     pressContinue(tree);
     expectStep('Choose the Circle timezone');
     pressContinue(tree);

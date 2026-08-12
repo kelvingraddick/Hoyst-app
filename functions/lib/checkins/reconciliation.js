@@ -39,19 +39,21 @@ const momentumStatusRanks = [
     'peak_momentum',
 ];
 function shouldRetainCorrectedMetricEffect({ currentStreakDays, effectId, longestStreakDays, rollingMomentumStatus, totalTapIns, type, }) {
-    if (type === 'companion_achievement_unlocked') {
+    if (type === notification_compat_1.legacyCircleActivityNotificationTypes.achievementUnlocked) {
         const achievement = achievementThresholds.find(candidate => effectId.includes(candidate.key));
         const value = achievement?.metric === 'totalTapIns' ? totalTapIns : longestStreakDays;
         return Boolean(achievement && value >= achievement.threshold);
     }
-    if (type === 'companion_streak_milestone' || type === 'streak_milestone') {
+    if (type === notification_compat_1.legacyCircleActivityNotificationTypes.streakMilestone ||
+        type === 'streak_milestone') {
         const threshold = Number(effectId.match(/(\d+)-day-streak/)?.[1]);
         return Number.isFinite(threshold) && currentStreakDays >= threshold;
     }
-    if (type === 'companion_momentum_level_up') {
+    if (type === notification_compat_1.legacyCircleActivityNotificationTypes.momentumLevelUp) {
         const targetRank = momentumStatusRanks.findIndex(status => effectId.includes(status));
         const currentRank = momentumStatusRanks.indexOf(rollingMomentumStatus ?? '');
         return targetRank >= 0 && currentRank >= targetRank;
     }
     return false;
 }
+const notification_compat_1 = require("../shared/notification-compat");

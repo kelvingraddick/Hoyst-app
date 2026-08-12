@@ -824,7 +824,7 @@ describe('TapInComposerScreen', () => {
 
     expect(alertSpy).toHaveBeenCalledWith(
       'Remove today?',
-      "Removing this will delete today's saved quantity and reopen this Tap In.",
+      "Removing this will delete today's saved quantity and reopen this Opportunity.",
       expect.arrayContaining([
         expect.objectContaining({text: 'Keep'}),
         expect.objectContaining({style: 'destructive', text: 'Remove'}),

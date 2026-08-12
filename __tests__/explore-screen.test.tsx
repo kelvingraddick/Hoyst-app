@@ -202,6 +202,14 @@ describe('ExploreScreen', () => {
     expect(searchInputTextStyle.lineHeight).toBe(20);
   });
 
+  it('uses singular Member grammar for the social match', () => {
+    const {screen} = renderScreenWithNavigation();
+
+    expect(renderOutput(screen)).toContain(
+      'Ava + 1 Member you know is inside',
+    );
+  });
+
   it('matches Home-aligned featured card sizing for pills, stats, and CTAs', () => {
     const {screen} = renderScreenWithNavigation();
     const categoryPillStyle = StyleSheet.flatten(
@@ -297,7 +305,7 @@ describe('ExploreScreen', () => {
     expect(categoryPillStyle.minHeight).toBe(30);
     expect(activePillStyle.minWidth).toBe(104);
     expect(activePillStyle.marginLeft).toBe('auto');
-    expect(statText).toBe('6/10 members');
+    expect(statText).toBe('6/10 Members');
     expect(statText).not.toContain('seats');
     expect(featuredCardStyle.overflow).toBe('hidden');
     expect(featuredCardContentStyle.paddingTop).toBe(16);

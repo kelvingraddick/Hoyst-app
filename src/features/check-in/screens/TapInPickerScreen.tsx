@@ -102,7 +102,9 @@ function getShownUpCount(circle: CircleManagementCard) {
 function getShownUpLabel(circle: CircleManagementCard) {
   const shownUpCount = getShownUpCount(circle);
 
-  return shownUpCount === 1 ? '1 showed up' : `${shownUpCount} showed up`;
+  return shownUpCount === 1
+    ? '1 Member tapped in'
+    : `${shownUpCount} Members tapped in`;
 }
 
 function getProgressTone(
@@ -357,7 +359,7 @@ function PriorityTapCard({
               numberOfLines={1}
               style={styles.priorityStat}
               variant="button">
-              {circle.memberCount}/{circle.maxSize} members
+              {circle.memberCount}/{circle.maxSize} Members
             </HoystText>
             <View style={styles.priorityDot} />
             <HoystText
@@ -445,7 +447,7 @@ function DueTapCard({
           <View style={styles.managementItem}>
             <UsersRound color={theme.textSubtle} size={15} strokeWidth={2.1} />
             <HoystText style={styles.cardMetaText} tone="muted">
-              {circle.memberCount}/{circle.maxSize} members
+              {circle.memberCount}/{circle.maxSize} Members
             </HoystText>
           </View>
         ) : null}
@@ -648,7 +650,9 @@ export function TapInPickerScreen({navigation}: Props): React.JSX.Element {
         Alert.alert(
           'Nudge sent',
           result.nudged > 0
-            ? `${result.nudged} member${result.nudged === 1 ? '' : 's'} nudged.`
+            ? `${result.nudged} ${
+                result.nudged === 1 ? 'Member' : 'Members'
+              } nudged.`
             : 'Everyone is covered right now.',
         );
       })

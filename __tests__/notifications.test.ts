@@ -79,8 +79,8 @@ import {
   canShareCircleOutsideMembers,
   createInboxEvent,
   formatNotificationCircleTitle,
-  getCompanionFeedTargetsFromMemberships,
-  getCompanionMilestoneEvents,
+  getCircleActivityTargetsFromMemberships,
+  getMemberMilestoneEvents,
   getCircleAtRiskNotificationBody,
   getDiscoveryInactivityEligibility,
   getJoinRequestNotificationDedupeKey,
@@ -177,7 +177,7 @@ describe('notification copy', () => {
   });
 });
 
-describe('companion feed targeting', () => {
+describe('Circle activity targeting', () => {
   it('keeps private or invite-only circle updates inside the source circle', () => {
     expect(canShareCircleOutsideMembers({privacy: 'private'})).toBe(false);
     expect(
@@ -188,7 +188,7 @@ describe('companion feed targeting', () => {
     ).toBe(false);
 
     expect(
-      getCompanionFeedTargetsFromMemberships({
+      getCircleActivityTargetsFromMemberships({
         actorUid: 'actor-1',
         sharedMemberUids: ['outside-1', 'source-2'],
         sourceCircle: {privacy: 'private'},
@@ -197,7 +197,7 @@ describe('companion feed targeting', () => {
     ).toEqual([{canViewMedia: true, uid: 'source-2'}]);
   });
 
-  it('allows shared companions to see public non-invite circle updates', () => {
+  it('allows shared Members to see public non-invite Circle updates', () => {
     expect(
       canShareCircleOutsideMembers({
         joinMode: 'request_to_join',
@@ -206,7 +206,7 @@ describe('companion feed targeting', () => {
     ).toBe(true);
 
     expect(
-      getCompanionFeedTargetsFromMemberships({
+      getCircleActivityTargetsFromMemberships({
         actorUid: 'actor-1',
         sharedMemberUids: ['outside-1', 'source-2', 'actor-1'],
         sourceCircle: {joinMode: 'open', privacy: 'public'},
@@ -219,10 +219,10 @@ describe('companion feed targeting', () => {
   });
 });
 
-describe('companion milestone detection', () => {
+describe('Member milestone detection', () => {
   it('detects achievements, substantial streaks, and momentum upgrades', () => {
     expect(
-      getCompanionMilestoneEvents({
+      getMemberMilestoneEvents({
         metrics: {
           longestStreakDays: 10,
           personalStreakDays: 7,
@@ -277,7 +277,7 @@ describe('companion milestone detection', () => {
 
   it('uses completed Tap Ins for 50 Taps and suppresses initial level reveal', () => {
     expect(
-      getCompanionMilestoneEvents({
+      getMemberMilestoneEvents({
         metrics: {
           longestStreakDays: 12,
           personalStreakDays: 3,
@@ -401,7 +401,7 @@ describe('daily circle nudge selection', () => {
     ).toBe('circle-a');
   });
 
-  it('suppresses every companion nudge while the user owes a Tap In elsewhere', () => {
+  it('suppresses every Member nudge while the user owes a Tap In elsewhere', () => {
     expect(
       selectGloballyEligibleCircleNudge({
         candidates: [candidate],
@@ -924,7 +924,7 @@ describe('notification reminder eligibility', () => {
   it('includes period and slot identity in multi-day reminder dedupe keys', () => {
     expect(
       getReminderEligibility({
-        cadence: 'weekly',
+        pace: 'weekly',
         circleId: 'circle-1',
         dateKey: '2026-07-02',
         kind: 'midday',
@@ -1072,22 +1072,22 @@ describe('notification reminder eligibility', () => {
   });
 });
 
-describe('circle at-risk notification copy', () => {
-  it('labels daily and weekly risk periods clearly', () => {
+describe('Circle at-risk notification copy', () => {
+  it('labels the current Cycle consistently', () => {
     expect(
       getCircleAtRiskNotificationBody({
         circleTitle: 'Hydration Circle',
-        commitmentCadence: 'daily',
+        commitmentPace: 'daily',
         remainingCount: 1,
       }),
-    ).toBe('"Hydration Circle" needs 1 more Tap In today.');
+    ).toBe('"Hydration Circle" needs 1 more Tap In this Cycle.');
     expect(
       getCircleAtRiskNotificationBody({
         circleTitle: 'Maker Mornings',
-        commitmentCadence: 'weekly',
+        commitmentPace: 'weekly',
         remainingCount: 2,
       }),
-    ).toBe('"Maker Mornings" needs 2 more Tap Ins this week.');
+    ).toBe('"Maker Mornings" needs 2 more Tap Ins this Cycle.');
   });
 });
 

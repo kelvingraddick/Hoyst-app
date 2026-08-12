@@ -4,7 +4,12 @@ import firestore from '@react-native-firebase/firestore';
 import {firebaseAuth} from '../../../lib/firebase/auth';
 import {firebaseFirestore} from '../../../lib/firebase/firestore';
 import {firebaseFunctions} from '../../../lib/firebase/functions';
-import type {InboxEvent, InboxEventType} from '../../../types/models';
+import {
+  legacyCircleActivityFeedCategory,
+  type InboxEvent,
+  type InboxEventType,
+} from '../../../types/models';
+import {normalizeLegacyMemberCopy} from '../../inbox/circle-activity-compat';
 
 export type NotificationSettings = {
   discovery: boolean;
@@ -140,15 +145,18 @@ function mapInboxEventSnapshot(
           },
         }
       : {}),
-    body,
+    body: normalizeLegacyMemberCopy(body, type),
     circleId: asOptionalString(data.circleId),
     createdAtLabel: getTimestampLabel(data.createdAt),
     deeplink,
-    feedCategory: data.feedCategory === 'companion' ? 'companion' : undefined,
+    feedCategory:
+      data.feedCategory === legacyCircleActivityFeedCategory
+        ? legacyCircleActivityFeedCategory
+        : undefined,
     id: snapshot.id,
     isRead: Boolean(data.readAt),
     mediaImageUrl: asOptionalString(data.mediaImageUrl),
-    title,
+    title: normalizeLegacyMemberCopy(title, type),
     type,
   };
 }

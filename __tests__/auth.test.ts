@@ -807,23 +807,23 @@ describe('onboarding store', () => {
       'You Tap In',
     );
     expect(getOnboardingStepCopy('circleRules', false).body).toContain(
-      'Each member taps in',
+      'Each Member taps in',
     );
     expect(getOnboardingStepCopy('circleGrace', true).body).toContain(
-      'your Progression',
+      'your Progress',
     );
     expect(getOnboardingStepCopy('circleGrace', false).body).toContain(
-      'Circle Progression',
+      'Circle Progress',
     );
     expect(getOnboardingStepCopy('circleTimezone', true)).toMatchObject({
       body: expect.stringContaining('this Commitment'),
       prompt: 'Which timezone should this Commitment use?',
     });
     expect(getOnboardingStepCopy('notifications', true).prompt).not.toContain(
-      'companion',
+      'Member',
     );
     expect(getOnboardingStepCopy('notifications', false).prompt).toContain(
-      'Circle and companion updates',
+      'Circle activity updates',
     );
   });
 

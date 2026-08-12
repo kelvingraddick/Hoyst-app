@@ -358,7 +358,7 @@ export function MomentumScreen(): React.JSX.Element {
               tone="muted">
               {momentumDisplay.isCalibrating
                 ? `Complete 3 opportunities to set your Momentum level. ${momentumDisplay.resolvedOpportunityCount} of ${momentumDisplay.requiredResolvedOpportunityCount} resolved.`
-                : 'Your last 14 days. Recent progress counts more.'}
+                : 'Your last 14 days. Recent Progress counts more.'}
             </HoystText>
           </View>
           <View style={styles.momentumTrendWrap}>

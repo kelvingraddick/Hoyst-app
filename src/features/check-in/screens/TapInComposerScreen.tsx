@@ -220,7 +220,7 @@ export function TapInComposerScreen({
       event.preventDefault();
       Alert.alert(
         hasDirtyQuantity
-          ? 'Discard progress changes?'
+          ? 'Discard Progress changes?'
           : hasSelectedPhoto
           ? 'Discard selected photo?'
           : 'Discard detail changes?',
@@ -305,8 +305,8 @@ export function TapInComposerScreen({
       ? 'Saved'
       : commitmentType === 'limit'
       ? quantityCoverageStatus === 'covered'
-        ? 'Within range'
-        : 'Outside range'
+        ? 'Within Goal range'
+        : 'Outside Goal range'
       : quantityCoverageStatus === 'covered'
       ? 'Goal covered'
       : 'Ready to save';
@@ -395,14 +395,12 @@ export function TapInComposerScreen({
   const viewerTodayPhotoUrl = viewerTodayCheckIn?.photoUrl;
   const removeActionLabel =
     detail.viewerTodayStatus === 'skip' ? 'Remove Skip' : 'Remove Tap In';
-  const removeProgressionCopy =
+  const removeProgressCopy =
     isQuantityTapIn && hasRemovableTodayCheckIn
-      ? "Removing this will delete today's saved quantity and reopen this Tap In."
+      ? "Removing this will delete today's saved quantity and reopen this Opportunity."
       : isViewingLoggedTapIn
-      ? "Removing this will reopen today's Tap In and lower this Circle's Progression."
-      : detail.commitmentCadence === 'daily'
-      ? "This will undo today's Progression for this Circle."
-      : "This will undo this week's Progression for this Circle.";
+      ? "Removing this will reopen today's Opportunity and lower this Circle's Progress."
+      : 'This will undo Progress for this Cycle.';
   const quantityStep = Math.max(1, Math.round(quantityConfig.stepValue ?? 1));
 
   const stepQuantity = (direction: -1 | 1) => {
@@ -583,7 +581,7 @@ export function TapInComposerScreen({
   };
 
   const confirmRemoveTapIn = () => {
-    Alert.alert('Remove today?', removeProgressionCopy, [
+    Alert.alert('Remove today?', removeProgressCopy, [
       {style: 'cancel', text: 'Keep'},
       {
         onPress: () => handleRemoveTapIn().catch(() => undefined),

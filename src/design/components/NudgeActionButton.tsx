@@ -69,7 +69,7 @@ const sizeSpecs = {
 } as const;
 
 function getMemberCopy(targetCount: number) {
-  return targetCount === 1 ? '1 member' : `${targetCount} members`;
+  return targetCount === 1 ? '1 Member' : `${targetCount} Members`;
 }
 
 function getAccessibilityLabel({

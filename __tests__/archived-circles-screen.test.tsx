@@ -95,7 +95,7 @@ describe('ArchivedCirclesScreen', () => {
     expect(output).toContain('Read 20 pages');
     expect(output).toContain('Unarchive Commitment');
     expect(output).toContain('Morning Movers');
-    expect(output).toContain('4 members');
+    expect(output).toContain('4 Members');
     expect(output).not.toContain('Unarchive Circle');
 
     act(() => {

@@ -28,7 +28,7 @@ import {
 import type {
   CircleJoinMode,
   CirclePrivacyMode,
-  CommitmentCadence,
+  CommitmentPace,
   CommitmentType,
   CreateCircleDraft,
 } from '../../../types/models';
@@ -38,10 +38,10 @@ import {
   categoryOptions,
   circleModeOptions,
   CommitmentTypeRuleSummary,
-  commitmentCadenceOptions,
+  commitmentPaceOptions,
   commitmentTypeOptions,
   formatAccessSummary,
-  formatCadenceSummary,
+  formatPaceSummary,
   formatJoinMode,
   formatSkipSummary,
   formatTimezoneSummary,
@@ -102,19 +102,19 @@ const stepCopy: Record<WizardStep, {body: string; title: string}> = {
     title: 'What is your Commitment?',
   },
   commitmentFrequency: {
-    body: 'Choose what counts for a Tap In and how often it is due.',
-    title: 'Set the Commitment rules',
+    body: 'Choose the Goal for a Tap In and the Pace at which it is due.',
+    title: 'Set the Goal and Pace',
   },
   grace: {
-    body: 'Choose how many skips can protect Circle Progression.',
-    title: 'Set the skip allowance',
+    body: 'Choose how many skips can protect Circle Progress.',
+    title: 'Set the Skip allowance',
   },
   maxSize: {
     body: 'Smaller circles feel tighter. Larger circles create more social proof.',
-    title: 'How many members can join?',
+    title: 'How many Members can join?',
   },
   privacy: {
-    body: 'Choose who can discover it and how new members enter.',
+    body: 'Choose who can discover it and how new Members enter.',
     title: 'Who can find and join it?',
   },
   review: {
@@ -126,8 +126,8 @@ const stepCopy: Record<WizardStep, {body: string; title: string}> = {
     title: 'Choose the Circle timezone',
   },
   title: {
-    body: 'Give the group a name members can recognize and rally around.',
-    title: 'What should this circle be called?',
+    body: 'Give the group a name Members can recognize and rally around.',
+    title: 'What should this Circle be called?',
   },
 };
 
@@ -163,8 +163,8 @@ export function CreateCircleScreen({navigation}: Props): React.JSX.Element {
 
     if (currentStep === 'grace') {
       return {
-        body: `Choose how many skips can protect ${modeCopy.progressionLabel}.`,
-        title: 'Set the skip allowance',
+        body: `Choose how many skips can protect ${modeCopy.progressLabel}.`,
+        title: 'Set the Skip allowance',
       };
     }
 
@@ -311,14 +311,14 @@ export function CreateCircleScreen({navigation}: Props): React.JSX.Element {
     }));
   };
 
-  const selectCommitmentCadence = (commitmentCadence: CommitmentCadence) => {
+  const selectCommitmentPace = (commitmentPace: CommitmentPace) => {
     setDraft(current => ({
       ...current,
-      commitmentCadence,
+      commitmentCadence: commitmentPace,
       commitmentFrequency:
-        commitmentCadence === 'daily'
+        commitmentPace === 'daily'
           ? {tapInsPerWeek: 7}
-          : commitmentCadence === 'monthly'
+          : commitmentPace === 'monthly'
           ? defaultMonthlyCommitmentFrequency
           : current.commitmentFrequency.tapInsPerWeek >= 7
           ? defaultWeeklyCommitmentFrequency
@@ -453,18 +453,18 @@ export function CreateCircleScreen({navigation}: Props): React.JSX.Element {
               <View style={styles.sectionHeader}>
                 <HoystText variant="bodyStrong">
                   {draft.commitmentType === 'limit'
-                    ? 'Tap In range'
-                    : 'Tap In target'}
+                    ? 'Goal range'
+                    : 'Goal value'}
                 </HoystText>
                 <HoystChip
-                  label={draft.commitmentType === 'limit' ? 'Range' : 'Target'}
+                  label={draft.commitmentType === 'limit' ? 'Limit' : 'Goal'}
                   tone={draft.commitmentType === 'limit' ? 'orange' : 'green'}
                 />
               </View>
               {draft.commitmentType === 'build' ? (
                 <View style={styles.fieldBlock}>
                   <HoystText tone="muted" variant="label">
-                    Target amount
+                    Goal value
                   </HoystText>
                   <HoystInput
                     keyboardType="number-pad"
@@ -518,12 +518,12 @@ export function CreateCircleScreen({navigation}: Props): React.JSX.Element {
             <HoystText tone="muted">
               {isPersonal
                 ? 'Avoid Commitments stay binary. Tap In once to confirm you stayed clear.'
-                : 'Avoid Circles stay binary. Each member taps in once to confirm they stayed clear.'}
+                : 'Avoid Circles stay binary. Each Member taps in once to confirm they stayed clear.'}
             </HoystText>
           )}
           <SetupOptionList
-            onSelect={selectCommitmentCadence}
-            options={commitmentCadenceOptions}
+            onSelect={selectCommitmentPace}
+            options={commitmentPaceOptions}
             selected={draft.commitmentCadence}
           />
           {draft.commitmentCadence === 'weekly' ? (
@@ -540,7 +540,7 @@ export function CreateCircleScreen({navigation}: Props): React.JSX.Element {
               <HoystText tone="muted">
                 {isPersonal
                   ? 'You Tap In this many days from Monday to Sunday in this Commitment timezone.'
-                  : 'Each member taps in this many days from Monday to Sunday in the Circle timezone.'}
+                  : 'Each Member taps in this many days from Monday to Sunday in the Circle timezone.'}
               </HoystText>
             </>
           ) : draft.commitmentCadence === 'monthly' ? (
@@ -561,15 +561,15 @@ export function CreateCircleScreen({navigation}: Props): React.JSX.Element {
                 }
               />
               <HoystText tone="muted">
-                Hoyst spreads these opportunities across the month so upcoming
-                slots do not count against Momentum early.
+                Hoyst spreads these Opportunities across the month so upcoming
+                Opportunities do not count against Momentum early.
               </HoystText>
             </>
           ) : (
             <HoystText tone="muted">
               {isPersonal
-                ? 'You Tap In or skip once each day. Your Progression resets at midnight in this Commitment timezone.'
-                : 'Each member taps in or skips once each day. Circle Progression resets at midnight in the Circle timezone.'}
+                ? 'You Tap In or Skip once each day. Your Progress resets at midnight in this Commitment timezone.'
+                : 'Each Member taps in or Skips once each day. Circle Progress resets at midnight in the Circle timezone.'}
             </HoystText>
           )}
         </View>
@@ -597,12 +597,12 @@ export function CreateCircleScreen({navigation}: Props): React.JSX.Element {
             ]}>
             <View style={styles.optionCopy}>
               <HoystText variant="bodyStrong">
-                Optional skips protect Progression
+                Optional Skips protect Progress
               </HoystText>
               <HoystText tone="muted">
                 {isPersonal
-                  ? 'Skips count as covered for your Progression.'
-                  : 'Skips count as covered for Circle Progression.'}
+                  ? 'Skips count as covered for your Progress.'
+                  : 'Skips count as covered for Circle Progress.'}
               </HoystText>
             </View>
             <HoystChip
@@ -665,7 +665,7 @@ export function CreateCircleScreen({navigation}: Props): React.JSX.Element {
       return (
         <View style={styles.stack}>
           <SetupNumericStepper
-            label="Maximum members"
+            label="Maximum Members"
             max={100}
             min={2}
             onChange={value => setField('maxSize', clampCircleMaxSize(value))}
@@ -732,8 +732,8 @@ export function CreateCircleScreen({navigation}: Props): React.JSX.Element {
           value={<CommitmentTypeRuleSummary {...draft} />}
         />
         <SetupSummaryRow
-          label="Rhythm"
-          value={formatCadenceSummary(
+          label="Pace"
+          value={formatPaceSummary(
             draft.commitmentCadence,
             draft.commitmentFrequency,
           )}
@@ -757,7 +757,7 @@ export function CreateCircleScreen({navigation}: Props): React.JSX.Element {
             />
             <SetupSummaryRow
               label="Max size"
-              value={`${draft.maxSize} members`}
+              value={`${draft.maxSize} Members`}
             />
           </>
         ) : null}

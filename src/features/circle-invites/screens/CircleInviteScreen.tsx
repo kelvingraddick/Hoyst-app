@@ -254,7 +254,7 @@ export function CircleInviteScreen({
                   strokeWidth={2.3}
                 />
               }
-              label={`${preview.memberCount} of ${preview.maxSize} members`}
+              label={`${preview.memberCount} of ${preview.maxSize} Members`}
             />
             <InfoPill
               icon={
@@ -268,7 +268,7 @@ export function CircleInviteScreen({
             />
           </View>
           <HoystText tone="muted" variant="caption">
-            Members follow the same Commitment and Tap In rhythm. Full Circle
+            Members follow the same Commitment Goal and Pace. Full Circle
             activity unlocks after you join.
           </HoystText>
         </GlassPanel>

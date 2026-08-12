@@ -48,15 +48,14 @@ export function getHoystThemeColors(
     backgroundElevated: isDark ? '#10131F' : '#FFFFFF',
     surface: isDark ? 'rgba(18,20,30,0.88)' : 'rgba(255,255,255,0.92)',
     surfaceStrong: isDark ? '#151827' : '#FFFFFF',
-    // Frosted glass system (v4). Translucent surfaces with a bright top-edge
-    // highlight, sitting over the FrostedBackdrop color blobs. Used by
-    // GlassPanel app-wide; tune here to retune every glass surface.
-    glassSurface: isDark ? 'rgba(18,20,34,0.38)' : 'rgba(255,255,255,0.55)',
+    // Opaque app-wide panel fill. The FrostedBackdrop remains visible around
+    // panels without showing through their content surfaces.
+    panelSurface: isDark ? '#222638' : '#FFFFFF',
+    // Translucent supporting controls that are not part of the panel system.
     glassSurfaceStrong: isDark
       ? 'rgba(28,30,46,0.64)'
       : 'rgba(255,255,255,0.72)',
     glassBorder: isDark ? 'rgba(255,255,255,0.20)' : 'rgba(255,255,255,0.65)',
-    glassHighlight: isDark ? 'rgba(255,255,255,0.18)' : 'rgba(255,255,255,0.9)',
     glassShadow: isDark ? 'rgba(0,0,0,0.5)' : 'rgba(60,50,120,0.14)',
     glassChipBorder: isDark ? 'rgba(255,255,255,0.18)' : 'rgba(255,255,255,0.6)',
     surfaceMuted: isDark ? '#222638' : '#EEF1F7',

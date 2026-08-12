@@ -207,11 +207,11 @@ function getCommitmentMonthDateKeys(timezone, now = new Date()) {
         String(index + 1).padStart(2, '0'),
     ].join('-'));
 }
-function getCommitmentPeriodDateKeys(cadence, timezone, now = new Date()) {
-    if (cadence === 'daily') {
+function getCommitmentPeriodDateKeys(pace, timezone, now = new Date()) {
+    if (pace === 'daily') {
         return [getDateKeyForTimezone(timezone, now)];
     }
-    if (cadence === 'monthly') {
+    if (pace === 'monthly') {
         return getCommitmentMonthDateKeys(timezone, now);
     }
     return getCommitmentWeekDateKeys(timezone, now);
@@ -230,7 +230,7 @@ function buildPublicPreviewFromMember(member, uid) {
         displayName: asOptionalString(member.displayName) ??
             asOptionalString(member.name) ??
             asOptionalString(member.handle) ??
-            'Hoyst member',
+            'Hoyst Member',
         handle: asOptionalString(member.handle) ?? null,
         uid,
     };
@@ -289,7 +289,7 @@ function getHistoricalActivityCopy(checkIn, actorName) {
         return { text: `${actorName} used a skip`, tone: 'pending' };
     }
     if (status === 'failed' || coverageStatus === 'failed') {
-        return { text: `${actorName} missed the target`, tone: 'alert' };
+        return { text: `${actorName} missed the Goal`, tone: 'alert' };
     }
     if (status === 'partial' || coverageStatus === 'partial') {
         return {
@@ -316,7 +316,7 @@ async function backfillPersonalCircleActivity({ circleId, owner, uid, }) {
     const actorName = asOptionalString(owner.displayName) ??
         asOptionalString(owner.name) ??
         asOptionalString(owner.handle) ??
-        'Hoyst member';
+        'Hoyst Member';
     let lastDaySnapshot;
     do {
         let query = circleRef
@@ -379,7 +379,7 @@ async function backfillDepartedMemberActivity({ circleId, uid, }) {
     const profile = profileSnapshot.data() ?? {};
     const actorName = asOptionalString(profile.displayName) ??
         asOptionalString(profile.name) ??
-        'Former member';
+        'Former Member';
     let lastDaySnapshot;
     do {
         let query = circleRef
@@ -452,8 +452,8 @@ exports.createCircle = (0, https_1.onCall)({ secrets: [notifications_1.oneSignal
     const maxSize = isPersonal ? 1 : input.maxSize;
     const privacy = isPersonal ? 'private' : input.privacy;
     const title = isPersonal ? input.commitment : input.title;
-    const commitmentCadence = (0, commitments_1.getInputCommitmentCadence)(input.commitmentCadence, input.commitmentFrequency);
-    const commitmentFrequency = (0, commitments_1.getStoredCommitmentFrequency)(commitmentCadence, input.commitmentFrequency);
+    const commitmentPace = (0, commitments_1.getInputCommitmentPace)(input.commitmentCadence, input.commitmentFrequency);
+    const commitmentFrequency = (0, commitments_1.getStoredCommitmentFrequency)(commitmentPace, input.commitmentFrequency);
     const commitmentType = (0, commitments_1.getCommitmentType)(input);
     const quantityConfig = (0, commitments_1.getQuantityConfig)(input);
     const circle = {
@@ -461,7 +461,7 @@ exports.createCircle = (0, https_1.onCall)({ secrets: [notifications_1.oneSignal
         circleMode,
         createdAt: now,
         commitment: input.commitment,
-        commitmentCadence,
+        commitmentCadence: commitmentPace,
         commitmentFrequency,
         commitmentType,
         graceRules: input.graceRules ?? {
@@ -527,7 +527,7 @@ exports.createCircle = (0, https_1.onCall)({ secrets: [notifications_1.oneSignal
             category: input.category,
             circleMode,
             commitment: input.commitment,
-            commitmentCadence,
+            commitmentCadence: commitmentPace,
             commitmentFrequency,
             commitmentType,
             joinMode,
@@ -553,7 +553,7 @@ exports.createCircle = (0, https_1.onCall)({ secrets: [notifications_1.oneSignal
     await batch.commit();
     await (0, momentum_1.materializeCurrentCircleOpportunities)(circleRef.id).catch(error => console.error('materialize_created_circle_opportunities_failed', error));
     if (!isPersonal) {
-        await (0, notifications_1.notifyCompanionCircleCreated)({
+        await (0, notifications_1.notifyMemberCircleCreated)({
             actor: {
                 avatarUrl: profile.avatarUrl ?? null,
                 displayName: profile.displayName,
@@ -564,7 +564,7 @@ exports.createCircle = (0, https_1.onCall)({ secrets: [notifications_1.oneSignal
             circleId: circleRef.id,
             circleTitle: title,
             dateKey: getDateKeyForTimezone(circle.timezone),
-        }).catch(error => console.error('notify_companion_circle_created_failed', error));
+        }).catch(error => console.error('notify_member_circle_created_failed', error));
     }
     return {
         circleId: circleRef.id,
@@ -739,7 +739,7 @@ exports.joinCircle = (0, https_1.onCall)({ secrets: [notifications_1.oneSignalRe
         }).catch(error => console.error('notify_owner_new_join_failed', error));
     }
     if (result.status === 'active' && result.shouldNotifyOwner) {
-        await (0, notifications_1.notifyCompanionCircleJoined)({
+        await (0, notifications_1.notifyMemberCircleJoined)({
             actor: {
                 avatarUrl: profile.avatarUrl ?? null,
                 displayName: profile.displayName,
@@ -751,7 +751,7 @@ exports.joinCircle = (0, https_1.onCall)({ secrets: [notifications_1.oneSignalRe
             circleTitle,
             dateKey: getDateKeyForTimezone(asOptionalString(circle?.timezone) ?? profile.timezone ?? 'UTC'),
             excludedUids: ownerId ? [ownerId] : undefined,
-        }).catch(error => console.error('notify_companion_circle_joined_failed', error));
+        }).catch(error => console.error('notify_member_circle_joined_failed', error));
     }
     return { status: result.status };
 });
@@ -814,7 +814,7 @@ exports.reviewJoinRequest = (0, https_1.onCall)({ secrets: [notifications_1.oneS
         if (input.approved) {
             const approvedMember = {
                 avatarUrl: requesterMember?.avatarUrl ?? null,
-                displayName: requesterMember?.displayName ?? 'Hoyst member',
+                displayName: requesterMember?.displayName ?? 'Hoyst Member',
                 handle: requesterMember?.handle ?? null,
                 joinedAt: now,
                 membershipPeriodId,
@@ -896,10 +896,10 @@ exports.reviewJoinRequest = (0, https_1.onCall)({ secrets: [notifications_1.oneS
                 ownerId,
             }).catch(error => console.error('notify_owner_approved_join_failed', error));
             const joinedMember = result.requesterMember ?? {};
-            await (0, notifications_1.notifyCompanionCircleJoined)({
+            await (0, notifications_1.notifyMemberCircleJoined)({
                 actor: {
                     avatarUrl: joinedMember.avatarUrl ?? null,
-                    displayName: asOptionalString(joinedMember.displayName) ?? 'Hoyst member',
+                    displayName: asOptionalString(joinedMember.displayName) ?? 'Hoyst Member',
                     handle: asOptionalString(joinedMember.handle) ?? null,
                     uid: input.requesterId,
                 },
@@ -908,7 +908,7 @@ exports.reviewJoinRequest = (0, https_1.onCall)({ secrets: [notifications_1.oneS
                 circleTitle: result.circleTitle,
                 dateKey: getDateKeyForTimezone(asOptionalString(circle?.timezone) ?? profile.timezone ?? 'UTC'),
                 excludedUids: [ownerId],
-            }).catch(error => console.error('notify_companion_approved_join_failed', error));
+            }).catch(error => console.error('notify_member_approved_join_failed', error));
         }
     }
     return { status: result.status };
@@ -935,8 +935,8 @@ exports.nudgeCircleMembers = (0, https_1.onCall)({ secrets: [notifications_1.one
     (0, circle_lifecycle_1.ensureActiveCircle)(circle, 'sending nudges');
     const timezone = asOptionalString(circle?.timezone) ?? 'UTC';
     const dateKey = getDateKeyForTimezone(timezone, now);
-    const commitmentCadence = (0, commitments_1.getCommitmentCadence)(circle);
-    const periodDateKeys = getCommitmentPeriodDateKeys(commitmentCadence, timezone, now);
+    const commitmentPace = (0, commitments_1.getCommitmentPace)(circle);
+    const periodDateKeys = getCommitmentPeriodDateKeys(commitmentPace, timezone, now);
     const requiredTapIns = (0, commitments_1.getRequiredTapIns)(circle);
     const [activeMemberSnapshots, todayCheckInSnapshots, ...periodCheckInSnapshots] = await Promise.all([
         circleRef.collection('members').where('status', '==', 'active').get(),
@@ -954,7 +954,7 @@ exports.nudgeCircleMembers = (0, https_1.onCall)({ secrets: [notifications_1.one
             todayCoveredUids.add(asOptionalString(doc.data().uid) ?? doc.id);
         }
     });
-    const scoringSnapshots = commitmentCadence === 'daily'
+    const scoringSnapshots = commitmentPace === 'daily'
         ? [todayCheckInSnapshots]
         : periodCheckInSnapshots;
     scoringSnapshots.forEach(snapshot => {
@@ -1000,7 +1000,7 @@ exports.nudgeCircleMembers = (0, https_1.onCall)({ secrets: [notifications_1.one
                 avatarUrl: singleTarget.avatarUrl ?? null,
                 displayName: asOptionalString(singleTarget.displayName) ??
                     asOptionalString(singleTarget.name) ??
-                    'Hoyst member',
+                    'Hoyst Member',
                 handle: asOptionalString(singleTarget.handle) ?? null,
                 uid: targetUids[0],
             }
@@ -1237,8 +1237,8 @@ exports.convertPersonalCircle = (0, https_1.onCall)(async (request) => {
         }
         const now = firestore_1.FieldValue.serverTimestamp();
         const commitment = asOptionalString(latestCircle?.commitment) ?? input.title;
-        const commitmentCadence = (0, commitments_1.getCommitmentCadence)(latestCircle);
-        const commitmentFrequency = (0, commitments_1.getStoredCommitmentFrequency)(commitmentCadence, latestCircle?.commitmentFrequency);
+        const commitmentPace = (0, commitments_1.getCommitmentPace)(latestCircle);
+        const commitmentFrequency = (0, commitments_1.getStoredCommitmentFrequency)(commitmentPace, latestCircle?.commitmentFrequency);
         transaction.update(circleRef, {
             circleMode: 'group',
             convertedAt: now,
@@ -1255,7 +1255,7 @@ exports.convertPersonalCircle = (0, https_1.onCall)(async (request) => {
                 category: latestCircle?.category ?? 'General',
                 circleMode: 'group',
                 commitment,
-                commitmentCadence,
+                commitmentCadence: commitmentPace,
                 commitmentFrequency,
                 commitmentType: latestCircle?.commitmentType ?? 'build',
                 joinMode: input.joinMode,
@@ -1326,18 +1326,18 @@ exports.updateCircle = (0, https_1.onCall)(async (request) => {
     const joinMode = isPersonal ? 'invite_only' : input.joinMode;
     const privacy = isPersonal ? 'private' : input.privacy;
     if (maxSize < memberCount) {
-        throw new https_1.HttpsError('failed-precondition', 'Max size cannot be below the current member count.');
+        throw new https_1.HttpsError('failed-precondition', 'Max size cannot be below the current Member count.');
     }
     const now = firestore_1.FieldValue.serverTimestamp();
-    const commitmentCadence = (0, commitments_1.getInputCommitmentCadence)(input.commitmentCadence, input.commitmentFrequency);
-    const commitmentFrequency = (0, commitments_1.getStoredCommitmentFrequency)(commitmentCadence, input.commitmentFrequency);
+    const commitmentPace = (0, commitments_1.getInputCommitmentPace)(input.commitmentCadence, input.commitmentFrequency);
+    const commitmentFrequency = (0, commitments_1.getStoredCommitmentFrequency)(commitmentPace, input.commitmentFrequency);
     const commitmentType = (0, commitments_1.getCommitmentType)(input);
     const quantityConfig = (0, commitments_1.getQuantityConfig)(input);
     const circleUpdate = {
         category: input.category,
         circleMode,
         commitment: input.commitment,
-        commitmentCadence,
+        commitmentCadence: commitmentPace,
         commitmentFrequency,
         commitmentType,
         graceRules: input.graceRules ?? {
@@ -1371,7 +1371,7 @@ exports.updateCircle = (0, https_1.onCall)(async (request) => {
             category: input.category,
             circleMode,
             commitment: input.commitment,
-            commitmentCadence,
+            commitmentCadence: commitmentPace,
             commitmentFrequency,
             commitmentType,
             joinMode,
@@ -1598,13 +1598,13 @@ exports.unarchiveCircle = (0, https_1.onCall)({ secrets: [notifications_1.oneSig
             updatedAt: transitionAt,
         });
         if (!isPersonal && circle?.privacy === 'public') {
-            const commitmentCadence = (0, commitments_1.getCommitmentCadence)(circle);
-            const commitmentFrequency = (0, commitments_1.getStoredCommitmentFrequency)(commitmentCadence, circle?.commitmentFrequency);
+            const commitmentPace = (0, commitments_1.getCommitmentPace)(circle);
+            const commitmentFrequency = (0, commitments_1.getStoredCommitmentFrequency)(commitmentPace, circle?.commitmentFrequency);
             transaction.set(publicIndexRef, {
                 category: circle?.category ?? 'General',
                 circleMode,
                 commitment: circle?.commitment ?? circle?.title ?? 'Commitment',
-                commitmentCadence,
+                commitmentCadence: commitmentPace,
                 commitmentFrequency,
                 commitmentType: circle?.commitmentType ?? 'build',
                 joinMode: circle?.joinMode ?? 'invite_only',

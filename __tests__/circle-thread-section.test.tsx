@@ -251,6 +251,17 @@ describe('CircleThreadSection', () => {
     expect(
       tree.root.findByProps({testID: 'circle-thread-message-image'}),
     ).toBeTruthy();
+    const activityLikeRow = tree.root.findByProps({
+      testID: 'circle-thread-activity-like-row-activity-2',
+    });
+    const activityLikeRowStyle = StyleSheet.flatten(
+      activityLikeRow.props.style,
+    );
+
+    expect(activityLikeRowStyle).toEqual(
+      expect.objectContaining({alignSelf: 'flex-start'}),
+    );
+    expect(activityLikeRowStyle.paddingLeft).toBeUndefined();
     expect(
       tree.root
         .findAllByType(Image)
@@ -502,7 +513,7 @@ describe('CircleThreadSection', () => {
     expect(sendButton.props.accessibilityState).toEqual({disabled: true});
   });
 
-  it('sends quick preset messages and likes companion items', async () => {
+  it('sends quick preset messages and likes Member items', async () => {
     const {tree} = renderSection();
     const quickChip = tree.root.findByProps({
       accessibilityLabel: 'Send 👏 Nice',

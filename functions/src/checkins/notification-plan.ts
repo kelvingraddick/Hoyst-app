@@ -1,4 +1,4 @@
-export function getCompanionTapInNotificationTargets({
+export function getMemberTapInNotificationTargets({
   actorUid,
   activeMemberUids,
 }: {

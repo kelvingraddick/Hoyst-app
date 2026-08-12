@@ -149,7 +149,7 @@ describe('Tap In story sharing', () => {
 
     expect(story.hasInviteUrl).toBe(false);
     expect(story.inviteUrl).toBeUndefined();
-    expect(story.ctaLabel).toBe('Build your rhythm on Hoyst');
+    expect(story.ctaLabel).toBe('Build your Progress on Hoyst');
     expect(story.note).toBe('No note added. Still counted.');
     expect(story.shareMessage).toBe(
       'I tapped in with Morning Movers on Hoyst.',

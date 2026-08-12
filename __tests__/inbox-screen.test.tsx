@@ -114,12 +114,12 @@ function eventForType(type: InboxEventType): InboxEvent {
         : type === 'tap_in_midday_reminder'
         ? 'Workout Circle is halfway through today.'
         : type === 'circle_discovery_suggestion'
-        ? 'A new circle matches your rhythm.'
+        ? 'A new Circle matches your Commitment.'
         : 'Workout Circle is not far off.',
     id: type,
     title:
       type === 'companion_tapped_in'
-        ? 'A companion tapped in'
+        ? 'A Member tapped in'
         : type === 'tap_in_midday_reminder'
         ? 'Midday reminder'
         : type === 'circle_discovery_suggestion'
@@ -205,7 +205,7 @@ describe('InboxScreen', () => {
     expect(output).not.toContain('Clark Digital Clark Digital');
   });
 
-  it('labels new companion feed event types', () => {
+  it('labels legacy Circle activity event types', () => {
     mockInboxEvents = [
       eventForType('companion_circle_created'),
       eventForType('companion_skipped'),

@@ -105,10 +105,10 @@ export function mapCircleThreadItemSnapshot(
   const text = asOptionalString(data.text);
   const note = asOptionalString(data.note);
   const mediaImageUrl = asOptionalString(data.mediaImageUrl);
-  const actor = normalizeActor(data.actor, 'Hoyst member');
+  const actor = normalizeActor(data.actor, 'Hoyst Member');
   const targetActor =
     data.targetActor && typeof data.targetActor === 'object'
-      ? normalizeActor(data.targetActor, 'Hoyst member')
+      ? normalizeActor(data.targetActor, 'Hoyst Member')
       : undefined;
   const likedBy =
     data.likedBy && typeof data.likedBy === 'object'

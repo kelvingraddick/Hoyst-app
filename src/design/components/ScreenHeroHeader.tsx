@@ -77,7 +77,7 @@ type ScreenHeroHeaderProps = {
 };
 
 // Shared detail-screen hero: a frosted top bar above an open identity area with
-// a category glyph, title, supporting content, progression, and primary action.
+// a category glyph, title, supporting content, Progress, and primary action.
 export function ScreenHeroHeader({
   actions,
   backAccessibilityLabel = 'Go back',

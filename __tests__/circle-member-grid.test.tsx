@@ -2,7 +2,7 @@ import React from 'react';
 import {Pressable, StyleSheet} from 'react-native';
 import renderer, {act, type ReactTestInstance} from 'react-test-renderer';
 
-import {CircleCompanionGrid} from '../src/design/components/CircleCompanionGrid';
+import {CircleMemberGrid} from '../src/design/components/CircleMemberGrid';
 import {GradientRing} from '../src/design/components/GradientRing';
 import {LayeredAvatar} from '../src/design/components/LayeredAvatar';
 import type {CircleMemberStatus} from '../src/types/models';
@@ -56,13 +56,13 @@ function member(
 
 function renderGrid(
   members: CircleMemberStatus[],
-  options: Partial<React.ComponentProps<typeof CircleCompanionGrid>> = {},
+  options: Partial<React.ComponentProps<typeof CircleMemberGrid>> = {},
 ) {
   let tree: renderer.ReactTestRenderer | undefined;
 
   act(() => {
     tree = renderer.create(
-      <CircleCompanionGrid
+      <CircleMemberGrid
         members={members}
         subtitle="1 of 3 today"
         {...options}
@@ -87,14 +87,14 @@ function textContent(node: ReactTestInstance): string {
     .join('');
 }
 
-describe('CircleCompanionGrid', () => {
-  it('renders an empty companion state', () => {
+describe('CircleMemberGrid', () => {
+  it('renders an empty Member state', () => {
     const tree = renderGrid([]);
     const output = outputOf(tree);
 
-    expect(output).toContain('Circle Companions');
-    expect(output).toContain('Companions will appear here');
-    expect(output).not.toContain('circle-companion-grid-scroll');
+    expect(output).toContain('Circle Members');
+    expect(output).toContain('Members will appear here');
+    expect(output).not.toContain('circle-member-grid-scroll');
   });
 
   it('renders four members in row-major order without horizontal scroll', () => {
@@ -105,14 +105,14 @@ describe('CircleCompanionGrid', () => {
       member('user-4', 'Dia', 'missed'),
     ]);
     const pageText = textContent(
-      tree.root.findByProps({testID: 'circle-companion-grid-page-0'}),
+      tree.root.findByProps({testID: 'circle-member-grid-page-0'}),
     );
 
     expect(pageText.indexOf('Ada')).toBeLessThan(pageText.indexOf('Ben'));
     expect(pageText.indexOf('Ben')).toBeLessThan(pageText.indexOf('Cam'));
     expect(pageText.indexOf('Cam')).toBeLessThan(pageText.indexOf('Dia'));
     expect(
-      tree.root.findAllByProps({testID: 'circle-companion-grid-scroll'}),
+      tree.root.findAllByProps({testID: 'circle-member-grid-scroll'}),
     ).toHaveLength(0);
   });
 
@@ -121,13 +121,13 @@ describe('CircleCompanionGrid', () => {
       [member('user-1', 'Ada', 'pending'), member('user-2', 'Ben', 'done')],
       {
         inviteAction: {
-          accessibilityLabel: 'Invite companions',
+          accessibilityLabel: 'Invite Members',
           onPress: jest.fn(),
         },
       },
     );
     const pageText = textContent(
-      tree.root.findByProps({testID: 'circle-companion-grid-page-0'}),
+      tree.root.findByProps({testID: 'circle-member-grid-page-0'}),
     );
 
     expect(pageText.indexOf('Ada')).toBeLessThan(pageText.indexOf('Ben'));
@@ -137,7 +137,7 @@ describe('CircleCompanionGrid', () => {
   it('uses orange needed rings and a neutral translucent invite card', () => {
     const tree = renderGrid([member('user-1', 'Ada', 'pending')], {
       inviteAction: {
-        accessibilityLabel: 'Invite companions',
+        accessibilityLabel: 'Invite Members',
         onPress: jest.fn(),
       },
     });
@@ -145,7 +145,7 @@ describe('CircleCompanionGrid', () => {
     const firstRing = tree.root.findAllByType(GradientRing)[0];
     const firstAvatar = tree.root.findAllByType(LayeredAvatar)[0];
     const invitePressable = tree.root.findByProps({
-      accessibilityLabel: 'Invite companions',
+      accessibilityLabel: 'Invite Members',
     });
     const inviteStyle = StyleSheet.flatten(
       invitePressable.props.style({pressed: false}),
@@ -174,16 +174,16 @@ describe('CircleCompanionGrid', () => {
       ],
       {
         inviteAction: {
-          accessibilityLabel: 'Invite companions',
+          accessibilityLabel: 'Invite Members',
           onPress: jest.fn(),
         },
       },
     );
     const firstPageText = textContent(
-      tree.root.findByProps({testID: 'circle-companion-grid-page-0'}),
+      tree.root.findByProps({testID: 'circle-member-grid-page-0'}),
     );
     const secondPageText = textContent(
-      tree.root.findByProps({testID: 'circle-companion-grid-page-1'}),
+      tree.root.findByProps({testID: 'circle-member-grid-page-1'}),
     );
 
     expect(firstPageText).toContain('Ada');
@@ -194,7 +194,7 @@ describe('CircleCompanionGrid', () => {
     expect(secondPageText).toContain('Dia');
     expect(secondPageText).toContain('Eli');
     expect(
-      tree.root.findByProps({testID: 'circle-companion-grid-scroll'}),
+      tree.root.findByProps({testID: 'circle-member-grid-scroll'}),
     ).toBeTruthy();
   });
 
@@ -221,7 +221,7 @@ describe('CircleCompanionGrid', () => {
     expect(output).toContain('Pending');
 
     const nudgeButton = tree.root.findByProps({
-      accessibilityLabel: 'Nudge 1 member',
+      accessibilityLabel: 'Nudge 1 Member',
     });
     act(() => {
       nudgeButton.props.onPress();
@@ -312,7 +312,7 @@ describe('CircleCompanionGrid', () => {
       },
     );
     const nameLabel = tree.root.findByProps({
-      testID: 'circle-companion-member-name-viewer-uid',
+      testID: 'circle-member-name-viewer-uid',
     });
     const nameStyle = StyleSheet.flatten(nameLabel.props.style);
 

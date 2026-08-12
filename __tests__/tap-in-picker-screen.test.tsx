@@ -314,6 +314,7 @@ describe('TapInPickerScreen', () => {
     expect(output).toContain('1 COVERED');
     expect(output).toContain('DO THIS FIRST');
     expect(output).toContain('Building Hoyst');
+    expect(output).toContain('1 Member tapped in');
     expect(output).toContain('TAP TODAY');
     expect(output).not.toContain('2 due');
     expect(output).toContain('Sleep 8 Hours');
@@ -357,7 +358,7 @@ describe('TapInPickerScreen', () => {
     });
   });
 
-  it('shows personal commitments without member or companion metadata', () => {
+  it('shows personal commitments without Member or Circle activity metadata', () => {
     mockHomeData = homeData([
       circle({
         circleMode: 'personal',
@@ -383,7 +384,7 @@ describe('TapInPickerScreen', () => {
     expect(output).toContain('Read every day');
     expect(output).toContain('Personal');
     expect(output).toContain('Private personal commitment');
-    expect(output).not.toContain('1/1 members');
+    expect(output).not.toContain('1/1 Members');
   });
 
   it('opens the composer from a remaining Tap Today card', () => {

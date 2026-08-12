@@ -267,7 +267,7 @@ describe('home data mapping', () => {
       commitmentFrequency: {tapInsPerWeek: 4},
       id: 'weekly-remaining',
       nudgeTargetCount: 0,
-      progressLabel: 'Week · 50%',
+      progressLabel: 'this Cycle · 50%',
       progressPercent: 50,
       remainingCheckIns: 2,
       title: 'Weekly Remaining',
@@ -292,7 +292,7 @@ describe('home data mapping', () => {
       commitmentCadence: 'weekly',
       commitmentFrequency: {tapInsPerWeek: 4},
       id: 'complete-weekly',
-      progressLabel: 'Week · 100%',
+      progressLabel: 'this Cycle · 100%',
       progressPercent: 100,
       remainingCheckIns: 0,
       state: 'done',
@@ -481,7 +481,7 @@ describe('home data mapping', () => {
       commitmentCadence: 'weekly',
       id: 'circle-1',
       nudgeTargetCount: 1,
-      progressLabel: 'Week · 50%',
+      progressLabel: 'this Cycle · 50%',
       progressPercent: 50,
       remainingCheckIns: 1,
       state: 'active',
@@ -576,7 +576,7 @@ describe('home data mapping', () => {
           windowDays: 7,
         },
       },
-      progressLabel: 'Week · 100%',
+      progressLabel: 'this Cycle · 100%',
       progressPercent: 100,
       remainingCheckIns: 0,
       state: 'done',
@@ -740,7 +740,7 @@ describe('home data mapping', () => {
     expect(card).toMatchObject({
       commitmentCadence: 'daily',
       nudgeTargetCount: 1,
-      progressLabel: 'Today · 50%',
+      progressLabel: 'this Cycle · 50%',
       progressPercent: 50,
       remainingCheckIns: 1,
       state: 'active',
@@ -782,7 +782,7 @@ describe('home data mapping', () => {
 
     expect(card).toMatchObject({
       commitmentCadence: 'weekly',
-      progressLabel: 'Week · 50%',
+      progressLabel: 'this Cycle · 50%',
       progressPercent: 50,
       remainingCheckIns: 1,
       state: 'active',
@@ -835,7 +835,7 @@ describe('home data mapping', () => {
 
     expect(card).toMatchObject({
       commitmentCadence: 'weekly',
-      progressLabel: 'Week · 38%',
+      progressLabel: 'this Cycle · 38%',
       progressPercent: 38,
       nudgeTargetCount: 1,
       remainingCheckIns: 5,
@@ -882,7 +882,7 @@ describe('home data mapping', () => {
 
     expect(card).toMatchObject({
       nudgeTargetCount: 0,
-      progressLabel: 'Week · 25%',
+      progressLabel: 'this Cycle · 25%',
       progressPercent: 25,
       remainingCheckIns: 3,
       streakLabel: 'Tapped today',

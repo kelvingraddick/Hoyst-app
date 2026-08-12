@@ -69,7 +69,7 @@ import {
 } from '../services/onboarding-options';
 import {getOnboardingStepCopy} from '../services/onboarding-copy';
 import type {
-  CommitmentCadence,
+  CommitmentPace,
   CommitmentType,
   CreateCircleDraft,
 } from '../../../types/models';
@@ -80,17 +80,17 @@ import {
   defaultCommitmentTargetValue,
   defaultMonthlyCommitmentFrequency,
   defaultWeeklyCommitmentFrequency,
-  normalizeCommitmentCadence,
+  normalizeCommitmentPace,
   normalizeCommitmentFrequency,
   normalizeSkipGraceRule,
 } from '../../create-circle/services/create-circle-draft';
 import {
   categoryOptions as setupCategoryOptions,
   circleModeOptions as setupCircleModeOptions,
-  commitmentCadenceOptions as setupCommitmentCadenceOptions,
+  commitmentPaceOptions as setupCommitmentPaceOptions,
   commitmentTypeOptions as setupCommitmentTypeOptions,
   formatAccessSummary,
-  formatCadenceSummary,
+  formatPaceSummary,
   formatCommitmentRulesSummary,
   formatSkipSummary,
   formatTimezoneSummary,
@@ -140,7 +140,7 @@ const stepIcons: Record<Exclude<OnboardingStep, 'welcome'>, LucideIcon> = {
   notifications: BellRing,
 };
 
-const commitmentCadenceIcons: Record<CommitmentCadence, LucideIcon> = {
+const commitmentPaceIcons: Record<CommitmentPace, LucideIcon> = {
   daily: CalendarDays,
   monthly: CalendarCheck,
   weekly: CalendarRange,
@@ -165,17 +165,17 @@ function getErrorMessage(error: unknown) {
     : 'Authentication failed. Try again.';
 }
 
-function getStarterCircleCadenceLabel(draft: CreateCircleDraft) {
-  const commitmentCadence = normalizeCommitmentCadence(
+function getStarterCirclePaceLabel(draft: CreateCircleDraft) {
+  const commitmentPace = normalizeCommitmentPace(
     draft.commitmentCadence,
     draft.commitmentFrequency,
   );
   const commitmentFrequency = normalizeCommitmentFrequency(
     draft.commitmentFrequency,
-    commitmentCadence,
+    commitmentPace,
   );
 
-  return formatCadenceSummary(commitmentCadence, commitmentFrequency);
+  return formatPaceSummary(commitmentPace, commitmentFrequency);
 }
 
 function useAccentColor(accent: OnboardingOption<string>['accent']) {
@@ -500,18 +500,16 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
     typeof starterCircleDraft.commitment === 'string'
       ? starterCircleDraft.commitment
       : '';
-  const starterCircleCommitmentCadence = normalizeCommitmentCadence(
+  const starterCircleCommitmentPace = normalizeCommitmentPace(
     starterCircleDraft.commitmentCadence,
     starterCircleDraft.commitmentFrequency,
   );
   const starterCircleCommitmentFrequency = normalizeCommitmentFrequency(
     starterCircleDraft.commitmentFrequency,
-    starterCircleCommitmentCadence,
+    starterCircleCommitmentPace,
   );
-  const starterCircleCadenceLabel =
-    getStarterCircleCadenceLabel(starterCircleDraft);
-  const StarterCircleCadenceIcon =
-    commitmentCadenceIcons[starterCircleCommitmentCadence];
+  const starterCirclePaceLabel = getStarterCirclePaceLabel(starterCircleDraft);
+  const StarterCirclePaceIcon = commitmentPaceIcons[starterCircleCommitmentPace];
   const canContinue =
     currentStep === 'circleCategory'
       ? starterCircleDraft.category.trim().length > 0
@@ -876,13 +874,13 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
     });
   };
 
-  const selectStarterCircleCadence = (commitmentCadence: CommitmentCadence) => {
-    setStarterCircleField('commitmentCadence', commitmentCadence);
+  const selectStarterCirclePace = (commitmentPace: CommitmentPace) => {
+    setStarterCircleField('commitmentCadence', commitmentPace);
     setStarterCircleField(
       'commitmentFrequency',
-      commitmentCadence === 'daily'
+      commitmentPace === 'daily'
         ? {tapInsPerWeek: 7}
-        : commitmentCadence === 'monthly'
+        : commitmentPace === 'monthly'
         ? defaultMonthlyCommitmentFrequency
         : starterCircleCommitmentFrequency.tapInsPerWeek >= 7
         ? defaultWeeklyCommitmentFrequency
@@ -987,7 +985,7 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
               Consistency feels lighter with the right support.
             </HoystText>
             <HoystText style={styles.heroText} tone="muted">
-              Shape your rhythm, explore public circles, and create an account
+              Set a Pace, explore public Circles, and create an account
               only when you are ready to join or Tap In.
             </HoystText>
           </View>
@@ -1008,7 +1006,7 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
             <HoystText tone="muted">{invitePreview.commitment}</HoystText>
             <HoystText tone="muted" variant="caption">
               {invitePreview.cadenceLabel} · {invitePreview.memberCount} of{' '}
-              {invitePreview.maxSize} members
+              {invitePreview.maxSize} Members
             </HoystText>
           </GlassPanel>
         ) : null}
@@ -1137,7 +1135,7 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
                     {starterCircleCommitment.trim()}
                   </HoystText>
                 ) : null}
-                <HoystText tone="muted">{starterCircleCadenceLabel}</HoystText>
+                <HoystText tone="muted">{starterCirclePaceLabel}</HoystText>
               </View>
             ) : null}
             {circleSetupError ? (
@@ -1229,13 +1227,13 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
               <GlassPanel style={styles.rulePanel}>
                 <HoystText variant="bodyStrong">
                   {starterCircleDraft.commitmentType === 'limit'
-                    ? 'Tap In range'
-                    : 'Tap In target'}
+                    ? 'Goal range'
+                    : 'Goal value'}
                 </HoystText>
                 {starterCircleDraft.commitmentType === 'build' ? (
                   <View style={styles.fieldBlock}>
                     <HoystText tone="muted" variant="label">
-                      Target amount
+                      Goal value
                     </HoystText>
                     <HoystInput
                       keyboardType="number-pad"
@@ -1295,15 +1293,15 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
               <HoystText tone="muted">
                 {isPersonal
                   ? 'Avoid Commitments stay binary. Tap In once to confirm you stayed clear.'
-                  : 'Avoid Circles stay binary. Each member taps in once to confirm they stayed clear.'}
+                  : 'Avoid Circles stay binary. Each Member taps in once to confirm they stayed clear.'}
               </HoystText>
             )}
             <SetupOptionList
-              onSelect={selectStarterCircleCadence}
-              options={setupCommitmentCadenceOptions}
-              selected={starterCircleCommitmentCadence}
+              onSelect={selectStarterCirclePace}
+              options={setupCommitmentPaceOptions}
+              selected={starterCircleCommitmentPace}
             />
-            {starterCircleCommitmentCadence === 'weekly' ? (
+            {starterCircleCommitmentPace === 'weekly' ? (
               <>
                 <SetupNumericStepper
                   label="Tap Ins per week"
@@ -1315,10 +1313,10 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
                 <HoystText tone="muted">
                   {isPersonal
                     ? 'You Tap In this many days from Monday to Sunday in this Commitment timezone.'
-                    : 'Each member taps in this many days from Monday to Sunday in the Circle timezone.'}
+                    : 'Each Member taps in this many days from Monday to Sunday in the Circle timezone.'}
                 </HoystText>
               </>
-            ) : starterCircleCommitmentCadence === 'monthly' ? (
+            ) : starterCircleCommitmentPace === 'monthly' ? (
               <>
                 <SetupNumericStepper
                   label="Tap Ins per month"
@@ -1331,15 +1329,15 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
                   }
                 />
                 <HoystText tone="muted">
-                  Hoyst spaces these opportunities across the month so future
-                  slots stay upcoming.
+                  Hoyst spaces these Opportunities across the month so future
+                  Opportunities stay upcoming.
                 </HoystText>
               </>
             ) : (
               <HoystText tone="muted">
                 {isPersonal
-                  ? 'You Tap In or skip once each day. Your Progression resets at midnight in this Commitment timezone.'
-                  : 'Each member taps in or skips once each day. Circle Progression resets at midnight in the Circle timezone.'}
+                  ? 'You Tap In or Skip once each day. Your Progress resets at midnight in this Commitment timezone.'
+                  : 'Each Member taps in or Skips once each day. Circle Progress resets at midnight in the Circle timezone.'}
               </HoystText>
             )}
           </View>
@@ -1370,12 +1368,12 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
               ]}>
               <View style={styles.optionCopy}>
                 <HoystText variant="bodyStrong">
-                  Optional skips protect Progression
+                  Optional Skips protect Progress
                 </HoystText>
                 <HoystText tone="muted">
                   {isPersonal
-                    ? 'Skips count as covered for your Progression.'
-                    : 'Skips count as covered for Circle Progression.'}
+                    ? 'Skips count as covered for your Progress.'
+                    : 'Skips count as covered for Circle Progress.'}
                 </HoystText>
               </View>
               <HoystText variant="bodyStrong">
@@ -1424,7 +1422,7 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
         {currentStep === 'circleCapacity' ? (
           <View style={styles.stack}>
             <SetupNumericStepper
-              label="Maximum members"
+              label="Maximum Members"
               max={100}
               min={2}
               onChange={value => setStarterCircleField('maxSize', value)}
@@ -1512,15 +1510,15 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
             />
             <PreviewRow
               accent={
-                starterCircleCommitmentCadence === 'daily'
+                starterCircleCommitmentPace === 'daily'
                   ? 'green'
-                  : starterCircleCommitmentCadence === 'monthly'
+                  : starterCircleCommitmentPace === 'monthly'
                   ? 'orange'
                   : 'blue'
               }
-              detail={starterCircleCadenceLabel}
-              icon={StarterCircleCadenceIcon}
-              label="Rhythm"
+              detail={starterCirclePaceLabel}
+              icon={StarterCirclePaceIcon}
+              label="Pace"
             />
             <PreviewRow
               accent="orange"
@@ -1544,7 +1542,7 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
                 />
                 <PreviewRow
                   accent="blue"
-                  detail={`${starterCircleDraft.maxSize} members`}
+                  detail={`${starterCircleDraft.maxSize} Members`}
                   icon={UsersRound}
                   label="Capacity"
                 />
@@ -1575,16 +1573,16 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
             {isPersonal ? (
               <PreviewRow
                 accent="purple"
-                detail="Commitment reminders and Progression updates stay focused on you."
+                detail="Commitment reminders and Progress updates stay focused on you."
                 icon={Shield}
                 label="Commitment updates"
               />
             ) : (
               <PreviewRow
                 accent="purple"
-                detail="Urgent Circle alerts right away, companion activity in an evening recap."
+                detail="Urgent Circle alerts right away, Circle activity in an evening recap."
                 icon={Shield}
-                label="Circle and companion updates"
+                label="Circle activity"
               />
             )}
           </View>

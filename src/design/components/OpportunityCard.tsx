@@ -86,7 +86,8 @@ export function OpportunityCard({
             <View style={styles.metaRow}>
               <UsersRound color={categoryColor} size={16} strokeWidth={2.2} />
               <HoystText tone="muted" variant="caption">
-                {card.memberCount} companions
+                {card.memberCount}{' '}
+                {card.memberCount === 1 ? 'Member' : 'Members'}
               </HoystText>
               <View
                 style={[styles.dot, {backgroundColor: theme.borderStrong}]}

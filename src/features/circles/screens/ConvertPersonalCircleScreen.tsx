@@ -263,7 +263,7 @@ export function ConvertPersonalCircleScreen({
       <GlassPanel style={styles.stack}>
         <HoystText variant="title">Capacity</HoystText>
         <SetupNumericStepper
-          label="Maximum members"
+          label="Maximum Members"
           max={100}
           min={2}
           onChange={setMaxSize}
@@ -275,8 +275,8 @@ export function ConvertPersonalCircleScreen({
         style={[styles.notice, {borderColor: `${theme.warningForeground}66`}]}>
         <Info color={theme.warningForeground} size={20} strokeWidth={2.3} />
         <HoystText style={styles.noticeCopy} tone="muted">
-          All prior Tap Ins, notes, photos, and progress will become visible to
-          future members.
+          All prior Tap Ins, notes, photos, and Progress will become visible to
+          future Members.
         </HoystText>
       </GlassPanel>
 

@@ -7,7 +7,7 @@ import {
   buildCreateCirclePayload,
   createInitialCircleDraft,
   getPrivacyChoiceFields,
-  normalizeCommitmentCadence,
+  normalizeCommitmentPace,
   normalizeCommitmentFrequency,
   normalizeSkipGraceRule,
 } from '../../create-circle/services/create-circle-draft';
@@ -53,7 +53,7 @@ export function applyStarterCircleHiddenDefaults(
       ),
     },
   };
-  const commitmentCadence = normalizeCommitmentCadence(
+  const commitmentPace = normalizeCommitmentPace(
     normalizedDraft.commitmentCadence,
     normalizedDraft.commitmentFrequency,
   );
@@ -64,10 +64,10 @@ export function applyStarterCircleHiddenDefaults(
 
   return {
     ...normalizedDraft,
-    commitmentCadence,
+    commitmentCadence: commitmentPace,
     commitmentFrequency: normalizeCommitmentFrequency(
       normalizedDraft.commitmentFrequency,
-      commitmentCadence,
+      commitmentPace,
     ),
     timezone: normalizedDraft.timezone.trim() || fallbackTimezone,
   };

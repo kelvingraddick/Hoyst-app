@@ -1,8 +1,8 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getCompanionTapInNotificationTargets = getCompanionTapInNotificationTargets;
+exports.getMemberTapInNotificationTargets = getMemberTapInNotificationTargets;
 exports.getCircleCompleteNotificationTargets = getCircleCompleteNotificationTargets;
-function getCompanionTapInNotificationTargets({ actorUid, activeMemberUids, }) {
+function getMemberTapInNotificationTargets({ actorUid, activeMemberUids, }) {
     return activeMemberUids.filter(uid => uid && uid !== actorUid);
 }
 function getCircleCompleteNotificationTargets({ activeMemberUids, remainingTapIns, }) {

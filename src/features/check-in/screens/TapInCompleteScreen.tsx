@@ -135,7 +135,7 @@ function getQuantityOutcomeCopy({
   if (coverageStatus === 'failed') {
     return {
       headerTitle: 'Tap In Saved',
-      lead: 'Outside range',
+      lead: 'Outside Goal range',
       trailing: undefined,
     };
   }
@@ -150,7 +150,7 @@ function getQuantityOutcomeCopy({
 
   return {
     headerTitle: 'Tap In Complete',
-    lead: commitmentType === 'limit' ? 'Within range' : 'Goal covered',
+    lead: commitmentType === 'limit' ? 'Within Goal range' : 'Goal covered',
     trailing: undefined,
   };
 }
@@ -174,7 +174,7 @@ function getQuantityContextCopy({
 
   if (commitmentType === 'limit' && typeof cleanMaximum === 'number') {
     if (typeof cleanMinimum === 'number') {
-      return `Range ${formatQuantityValue(
+      return `Goal range ${formatQuantityValue(
         cleanMinimum,
       )} to ${formatQuantityLabel(cleanMaximum, unitLabel)}`;
     }
@@ -791,7 +791,7 @@ export function TapInCompleteScreen({
     : quantityCoverageStatus === 'failed'
     ? 'No note added. Your Tap In was saved.'
     : quantityCoverageStatus === 'partial'
-    ? 'No note added. Your progress was saved.'
+    ? 'No note added. Your Progress was saved.'
     : 'No note added. Your Tap In still counts.';
   const haloAnimatedStyle = {
     opacity: haloProgress.interpolate({

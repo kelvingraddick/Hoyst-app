@@ -175,7 +175,7 @@ describe('CircleInviteScreen', () => {
 
     expect(output).toContain('Morning Movers');
     expect(output).toContain('Move for 30 minutes');
-    expect(output).toContain('3 of 8 members');
+    expect(output).toContain('3 of 8 Members');
     expect(output).toContain('Create Account to Join');
     expect(output).toContain('I Already Have an Account');
   });

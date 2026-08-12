@@ -5,7 +5,7 @@ import {collections} from '../../../types/firestore';
 import type {
   CircleMemberState,
   CircleMemberStatus,
-  CommitmentCadence,
+  CommitmentPace,
   ExploreCircle,
 } from '../../../types/models';
 
@@ -25,10 +25,10 @@ function clampTapInsPerWeek(value: number) {
   return Math.min(7, Math.max(1, Math.round(value)));
 }
 
-function normalizeCommitmentCadence(
+function normalizeCommitmentPace(
   value: unknown,
   tapInsPerWeek: number,
-): CommitmentCadence {
+): CommitmentPace {
   if (value === 'daily' || value === 'weekly' || value === 'monthly') {
     return value;
   }
@@ -82,7 +82,7 @@ function mapPublicMemberPreview(
   const id = asString(data.uid, asString(data.id, `member-${index}`));
   const name = asString(
     data.displayName,
-    asString(data.name, asString(data.handle, 'Hoyst member')),
+    asString(data.name, asString(data.handle, 'Hoyst Member')),
   );
   const avatarUrl = asString(
     data.avatarUrl,
@@ -269,15 +269,15 @@ export function mapPublicCircleIndexSnapshot(
       ),
     ),
   );
-  const commitmentCadence = normalizeCommitmentCadence(
+  const commitmentPace = normalizeCommitmentPace(
     data.commitmentCadence,
     tapInsPerWeek,
   );
   const completionRate = asNumber(data.completionRate, 0);
   const periodLabel =
-    commitmentCadence === 'daily'
+    commitmentPace === 'daily'
       ? 'Today'
-      : commitmentCadence === 'monthly'
+      : commitmentPace === 'monthly'
       ? 'Month'
       : 'Week';
   const progressLabel = asString(
@@ -307,9 +307,9 @@ export function mapPublicCircleIndexSnapshot(
     completionLabel: progressLabel,
     completionRate,
     commitment,
-    commitmentCadence,
+    commitmentCadence: commitmentPace,
     commitmentFrequency: {
-      ...(commitmentCadence === 'monthly' ? {opportunitiesPerPeriod} : {}),
+      ...(commitmentPace === 'monthly' ? {opportunitiesPerPeriod} : {}),
       tapInsPerWeek,
     },
     id: snapshot.id,

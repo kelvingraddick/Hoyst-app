@@ -250,7 +250,9 @@ export function CirclesScreen({navigation}: Props): React.JSX.Element {
         Alert.alert(
           'Nudge sent',
           result.nudged > 0
-            ? `${result.nudged} member${result.nudged === 1 ? '' : 's'} nudged.`
+            ? `${result.nudged} ${
+                result.nudged === 1 ? 'Member' : 'Members'
+              } nudged.`
             : 'Everyone is covered right now.',
         );
       })

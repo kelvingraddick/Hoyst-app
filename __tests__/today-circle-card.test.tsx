@@ -305,7 +305,7 @@ describe('TodayCircleCard', () => {
     expect(output).toContain('WELLNESS');
     expect(output).toContain('29% complete today');
     expect(output).not.toContain('Needs You');
-    expect(output).not.toContain('1 companion already showed up');
+    expect(output).not.toContain('1 Member already showed up');
     expect(iconBackplateStyle.borderRadius).toBe(11);
     expect(iconBackplateStyle.borderRadius).not.toBe(18);
     expect(descriptionStyle.fontWeight).toBe('600');

@@ -181,12 +181,12 @@ describe('EditCircleScreen refresh', () => {
     expect(output).toContain('Edit Commitment');
     expect(output).toContain('Basics');
     expect(output).toContain('Commitment rules');
-    expect(output).toContain('Rhythm and timing');
+    expect(output).toContain('Pace and timing');
     expect(output).toContain('Skips');
-    expect(output).toContain('your Progression');
+    expect(output).toContain('your Progress');
     expect(output).not.toContain('Access and capacity');
-    expect(output).not.toContain('Circle Progression');
-    expect(output).not.toContain('members');
+    expect(output).not.toContain('Circle Progress');
+    expect(output).not.toContain('Members');
     expect(
       tree.root
         .findAllByType(CommitmentTypeIcon)
@@ -210,7 +210,7 @@ describe('EditCircleScreen refresh', () => {
     const decrease = () =>
       act(() =>
         tree.root
-          .findByProps({accessibilityLabel: 'Decrease Maximum members'})
+          .findByProps({accessibilityLabel: 'Decrease Maximum Members'})
           .props.onPress(),
       );
     decrease();
@@ -219,7 +219,7 @@ describe('EditCircleScreen refresh', () => {
     decrease();
     output = JSON.stringify(tree.toJSON());
 
-    expect(output).toContain('Max size cannot be below 5 current members.');
+    expect(output).toContain('Max size cannot be below 5 current Members.');
   });
 
   it('allows an untouched edit form to close without a warning', () => {

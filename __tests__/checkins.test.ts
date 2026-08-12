@@ -8,7 +8,7 @@ import {
 } from '../functions/src/checkins/reconciliation';
 import {
   getCircleCompleteNotificationTargets,
-  getCompanionTapInNotificationTargets,
+  getMemberTapInNotificationTargets,
 } from '../functions/src/checkins/notification-plan';
 import {
   getCheckInStatusForCoverage,
@@ -17,9 +17,9 @@ import {
 } from '../functions/src/shared/commitments';
 
 describe('Tap In notification targeting', () => {
-  it('notifies every other active member for companion Tap Ins', () => {
+  it('notifies every other active Member for Member Tap Ins', () => {
     expect(
-      getCompanionTapInNotificationTargets({
+      getMemberTapInNotificationTargets({
         activeMemberUids: ['user-1', 'user-2', 'user-3'],
         actorUid: 'user-1',
       }),

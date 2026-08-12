@@ -36,7 +36,7 @@ function publicCircle(overrides: Partial<ExploreCircle>): ExploreCircle {
     maxSize: 8,
     memberCount: 4,
     members: [],
-    streakLabel: 'Daily rhythm',
+    streakLabel: 'Daily Pace',
     title: 'Morning Movers',
     ...overrides,
   };

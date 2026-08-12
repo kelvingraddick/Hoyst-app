@@ -86,7 +86,7 @@ const RADIAL_RADIUS = 92;
 
 type RadialLayout = 'default' | 'single-member-invite';
 
-type CompanionInviteAction = {
+type MemberInviteAction = {
   accessibilityLabel: string;
   onPress: () => void;
 };
@@ -98,7 +98,7 @@ function ProgressStatusBadge({member}: {member: CircleMemberStatus}) {
     return (
       <View
         style={[
-          styles.companionStatusBadge,
+          styles.memberStatusBadge,
           {
             backgroundColor: theme.successForeground,
             borderColor: theme.surfaceStrong,
@@ -121,8 +121,8 @@ function ProgressStatusBadge({member}: {member: CircleMemberStatus}) {
   return (
     <View
       style={[
-        styles.companionStatusBadge,
-        styles.companionStatusBadgeOpen,
+        styles.memberStatusBadge,
+        styles.memberStatusBadgeOpen,
         {
           backgroundColor: theme.surfaceStrong,
           borderColor: color,
@@ -173,7 +173,7 @@ function getRadialSlotStyle(
   };
 }
 
-function CompanionAvatarSlot({member}: {member: CircleMemberStatus}) {
+function MemberAvatarSlot({member}: {member: CircleMemberStatus}) {
   const theme = useHoystTheme();
   const label = getMemberStatusLabel(member);
   const progress = getMemberProgressConfig(member, theme);
@@ -190,7 +190,7 @@ function CompanionAvatarSlot({member}: {member: CircleMemberStatus}) {
         strokeWidth={5.5}
         trackColor={progress.trackColor}
       />
-      <View style={styles.companionAvatarWrap}>
+      <View style={styles.memberAvatarWrap}>
         <LayeredAvatar
           imageSource={member.avatarImage}
           imageUrl={member.avatarUrl}
@@ -204,12 +204,12 @@ function CompanionAvatarSlot({member}: {member: CircleMemberStatus}) {
   );
 }
 
-function CompanionOverflowSlot({count}: {count: number}) {
+function MemberOverflowSlot({count}: {count: number}) {
   const theme = useHoystTheme();
 
   return (
     <View
-      accessibilityLabel={`${count} more companions`}
+      accessibilityLabel={`${count} more Members`}
       accessible
       style={[
         styles.overflowAvatarFrame,
@@ -218,16 +218,16 @@ function CompanionOverflowSlot({count}: {count: number}) {
           borderColor: theme.borderStrong,
         },
       ]}
-      testID="companion-overflow-slot">
+      testID="member-overflow-slot">
       <HoystText style={styles.overflowText}>{`+${count}`}</HoystText>
     </View>
   );
 }
 
-function CompanionInviteSlot({
+function MemberInviteSlot({
   inviteAction,
 }: {
-  inviteAction: CompanionInviteAction;
+  inviteAction: MemberInviteAction;
 }): React.JSX.Element {
   const theme = useHoystTheme();
 
@@ -244,9 +244,9 @@ function CompanionInviteSlot({
           transform: [{scale: pressed ? actionMotion.pressedScale : 1}],
         },
       ]}
-      testID="companion-invite-slot">
+      testID="member-invite-slot">
       <View
-        testID="companion-invite-frame"
+        testID="member-invite-frame"
         style={[
           styles.inviteAvatarFrame,
           {
@@ -274,7 +274,7 @@ function CompanionInviteSlot({
             styles.inviteAvatarLabel,
             {color: theme.textSubtle},
           ]}
-          testID="companion-invite-label"
+          testID="member-invite-label"
           variant="navLabel">
           Invite
         </HoystText>
@@ -283,18 +283,18 @@ function CompanionInviteSlot({
   );
 }
 
-// Radial companion cluster used on Circle Detail. It keeps member status rings
+// Radial Member cluster used on Circle Detail. It keeps Member status rings
 // visible while making the section feel like a real group instead of a list.
-export function CompanionRingRow({
+export function CircleMemberRingRow({
   footerAction,
   inviteAction,
   maxVisible = 6,
   members,
   subtitle,
-  title = 'Circle Companions',
+  title = 'Circle Members',
 }: {
   footerAction?: React.ReactNode;
-  inviteAction?: CompanionInviteAction;
+  inviteAction?: MemberInviteAction;
   maxVisible?: number;
   members: CircleMemberStatus[];
   subtitle: string;
@@ -303,12 +303,12 @@ export function CompanionRingRow({
   const theme = useHoystTheme();
   const safeMaxVisible = Math.max(1, maxVisible);
   const inviteSlotCount = inviteAction ? 1 : 0;
-  const maxCompanionSlots = Math.max(1, safeMaxVisible - inviteSlotCount);
-  const needsOverflow = members.length > maxCompanionSlots;
+  const maxMemberSlots = Math.max(1, safeMaxVisible - inviteSlotCount);
+  const needsOverflow = members.length > maxMemberSlots;
   const visibleMemberCount =
     needsOverflow
-      ? Math.max(1, maxCompanionSlots - 1)
-      : Math.min(members.length, maxCompanionSlots);
+      ? Math.max(1, maxMemberSlots - 1)
+      : Math.min(members.length, maxMemberSlots);
   const visibleMembers = members.slice(0, visibleMemberCount);
   const overflowCount = Math.max(0, members.length - visibleMembers.length);
   const totalSlots =
@@ -323,16 +323,18 @@ export function CompanionRingRow({
   let radialSlotIndex = 0;
 
   return (
-    <View style={styles.companionSection}>
+    <View style={styles.memberSection}>
       <View style={styles.progressSectionHeader}>
         <SectionEyebrow>{title}</SectionEyebrow>
         <SectionEyebrowTrailing>{subtitle}</SectionEyebrowTrailing>
       </View>
       {members.length > 0 || inviteAction ? (
-        <View style={styles.companionCluster}>
+        <View style={styles.memberCluster}>
           <View style={styles.radialStage}>
             <View
-              accessibilityLabel={`${members.length} companions, ${doneCount} done`}
+              accessibilityLabel={`${members.length} ${
+                members.length === 1 ? 'Member' : 'Members'
+              }, ${doneCount} done`}
               accessible
               style={[
                 styles.centerSummary,
@@ -348,7 +350,7 @@ export function CompanionRingRow({
                 style={styles.centerLabel}
                 tone="muted"
                 variant="caption">
-                {members.length === 1 ? 'Companion' : 'Companions'}
+                {members.length === 1 ? 'Member' : 'Members'}
               </HoystText>
               <HoystText
                 numberOfLines={1}
@@ -361,12 +363,12 @@ export function CompanionRingRow({
             {visibleMembers.map(member => (
               <View
                 key={member.id}
-                testID={`companion-member-slot-${member.id}`}
+                testID={`member-slot-${member.id}`}
                 style={[
                   styles.radialSlot,
                   getRadialSlotStyle(radialSlotIndex++, totalSlots, radialLayout),
                 ]}>
-                <CompanionAvatarSlot member={member} />
+                <MemberAvatarSlot member={member} />
               </View>
             ))}
             {overflowCount > 0 ? (
@@ -375,21 +377,21 @@ export function CompanionRingRow({
                   styles.radialSlot,
                   getRadialSlotStyle(radialSlotIndex++, totalSlots, radialLayout),
                 ]}>
-                <CompanionOverflowSlot count={overflowCount} />
+                <MemberOverflowSlot count={overflowCount} />
               </View>
             ) : null}
             {inviteAction ? (
               <View
-                testID="companion-invite-radial-slot"
+                testID="member-invite-radial-slot"
                 style={[
                   styles.radialSlot,
                   getRadialSlotStyle(radialSlotIndex++, totalSlots, radialLayout),
                 ]}>
-                <CompanionInviteSlot inviteAction={inviteAction} />
+                <MemberInviteSlot inviteAction={inviteAction} />
               </View>
             ) : null}
           </View>
-          <View style={styles.companionLegend}>
+          <View style={styles.memberLegend}>
             {visibleMembers.map(member => {
               const label = getMemberStatusLabel(member);
               const progress = getMemberProgressConfig(member, theme);
@@ -398,7 +400,7 @@ export function CompanionRingRow({
                 <View
                   key={`${member.id}-legend`}
                   style={[
-                    styles.companionLegendItem,
+                    styles.memberLegendItem,
                     {
                       backgroundColor: theme.surfaceSoft,
                       borderColor: theme.border,
@@ -406,14 +408,14 @@ export function CompanionRingRow({
                   ]}>
                   <HoystText
                     numberOfLines={1}
-                    style={styles.companionName}
+                    style={styles.memberName}
                     variant="caption">
                     {member.name}
                   </HoystText>
                   <HoystText
                     numberOfLines={1}
                     style={[
-                      styles.companionStatus,
+                      styles.memberStatus,
                       {color: progress.ringColor},
                     ]}
                     variant="tiny">
@@ -425,7 +427,7 @@ export function CompanionRingRow({
             {overflowCount > 0 ? (
               <View
                 style={[
-                  styles.companionLegendItem,
+                  styles.memberLegendItem,
                   {
                     backgroundColor: theme.surfaceSoft,
                     borderColor: theme.border,
@@ -443,7 +445,7 @@ export function CompanionRingRow({
         </View>
       ) : (
         <HoystText tone="muted">
-          Companions will appear here once people join this Circle.
+          Members will appear here once people join this Circle.
         </HoystText>
       )}
       {footerAction ? (
@@ -454,11 +456,11 @@ export function CompanionRingRow({
 }
 
 const styles = StyleSheet.create({
-  companionSection: {
+  memberSection: {
     alignItems: 'stretch',
     gap: 14,
   },
-  companionCluster: {
+  memberCluster: {
     alignItems: 'center',
     gap: 14,
   },
@@ -472,7 +474,7 @@ const styles = StyleSheet.create({
     flexShrink: 1,
     textAlign: 'right',
   },
-  companionStatusBadge: {
+  memberStatusBadge: {
     alignItems: 'center',
     borderRadius: radius.pill,
     borderWidth: 2.5,
@@ -483,7 +485,7 @@ const styles = StyleSheet.create({
     right: 3,
     width: 22,
   },
-  companionStatusBadgeOpen: {
+  memberStatusBadgeOpen: {
     borderWidth: 2.5,
   },
   radialStage: {
@@ -506,7 +508,7 @@ const styles = StyleSheet.create({
     position: 'relative',
     width: AVATAR_SLOT_SIZE,
   },
-  companionAvatarWrap: {
+  memberAvatarWrap: {
     alignItems: 'center',
     bottom: 0,
     justifyContent: 'center',
@@ -588,14 +590,14 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 16,
   },
-  companionLegend: {
+  memberLegend: {
     alignSelf: 'stretch',
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
     justifyContent: 'center',
   },
-  companionLegendItem: {
+  memberLegendItem: {
     alignItems: 'center',
     borderRadius: radius.md,
     borderWidth: 1,
@@ -604,11 +606,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 7,
   },
-  companionName: {
+  memberName: {
     maxWidth: 108,
     textAlign: 'center',
   },
-  companionStatus: {
+  memberStatus: {
     fontWeight: '800',
   },
   footerAction: {

@@ -43,7 +43,7 @@ function getOutcome(tapIn: PastCircleTapIn) {
     return {label: 'Progress logged', tone: 'warning' as const};
   }
   if (tapIn.status === 'failed') {
-    return {label: 'Outside target', tone: 'danger' as const};
+    return {label: 'Goal not met', tone: 'danger' as const};
   }
   return {label: 'Covered', tone: 'success' as const};
 }

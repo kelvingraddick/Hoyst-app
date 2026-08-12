@@ -1049,7 +1049,7 @@ export function ProfileScreen({navigation}: Props): React.JSX.Element {
 
         <SettingsSection title="Notifications">
           <SettingsRow
-            detail="Nudge before your Commitment window closes."
+            detail="Nudge before your Opportunity closes."
             icon={Bell}
             iconTone="orange"
             title="Tap In reminders"
@@ -1067,7 +1067,7 @@ export function ProfileScreen({navigation}: Props): React.JSX.Element {
             detail="Evening recaps for Tap Ins, completions, joins, and milestones."
             icon={UsersRound}
             iconTone="green"
-            title="Companion activity"
+            title="Circle activity"
             trailing={
               <SettingsSwitch
                 onValueChange={value =>
@@ -1079,7 +1079,7 @@ export function ProfileScreen({navigation}: Props): React.JSX.Element {
             trailingKind="switch"
           />
           <SettingsRow
-            detail="One daily prompt to help companions before a Commitment window closes."
+            detail="One daily prompt to help Members before an Opportunity closes."
             icon={Shield}
             iconTone="orange"
             title="Nudge reminders"
@@ -1094,7 +1094,7 @@ export function ProfileScreen({navigation}: Props): React.JSX.Element {
             trailingKind="switch"
           />
           <SettingsRow
-            detail="Notifications when a companion nudges you."
+            detail="Notifications when a Member nudges you."
             icon={BellRing}
             iconTone="purple"
             title="Nudges"

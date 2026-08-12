@@ -129,7 +129,7 @@ function renderPage({
     : undefined;
   const joinLabel = preview ? escapeHtml(getJoinLabel(preview)) : undefined;
   const memberLabel = preview
-    ? `${preview.memberCount} of ${preview.maxSize} members`
+    ? `${preview.memberCount} of ${preview.maxSize} Members`
     : undefined;
   const actionMarkup =
     statusCode === 200 && openAppUrl

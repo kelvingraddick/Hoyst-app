@@ -294,7 +294,7 @@ describe('TapInCompleteScreen', () => {
     expect(output).toContain('Keep building');
     expect(output).toContain('3 pages logged');
     expect(output).toContain('Goal 5 pages');
-    expect(output).toContain('No note added. Your progress was saved.');
+    expect(output).toContain('No note added. Your Progress was saved.');
     expect(output).toContain('Share Story');
     expect(tree.root.findByType(CommitmentTypePill).props.commitmentType).toBe(
       'build',
@@ -315,9 +315,9 @@ describe('TapInCompleteScreen', () => {
     const output = JSON.stringify(tree.toJSON());
 
     expect(output).toContain('Tap In Saved');
-    expect(output).toContain('Outside range');
+    expect(output).toContain('Outside Goal range');
     expect(output).toContain('8 servings logged');
-    expect(output).toContain('Range 2 to 6 servings');
+    expect(output).toContain('Goal range 2 to 6 servings');
     expect(output).toContain('No note added. Your Tap In was saved.');
     expect(output).toContain('Share Story');
     expect(tree.root.findByType(CommitmentTypePill).props.commitmentType).toBe(

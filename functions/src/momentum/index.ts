@@ -331,7 +331,7 @@ function buildOpportunityPayload({
 
   return {
     availableDateKey: slot.availableDateKey,
-    cadence: normalizeCommitmentSchedule(circle).cadence,
+    cadence: normalizeCommitmentSchedule(circle).pace,
     circleId,
     commitment: asString(circle?.commitment),
     countsTowardCircle: true,
@@ -425,7 +425,7 @@ export async function recordTapInOpportunity({
 
     throw new HttpsError(
       'failed-precondition',
-      'No opportunity is open for this commitment yet.',
+      'No Opportunity is open for this Commitment yet.',
     );
   }
 

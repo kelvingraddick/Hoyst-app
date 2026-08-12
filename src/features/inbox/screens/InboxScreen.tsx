@@ -14,7 +14,10 @@ import {useHoystTheme} from '../../../design/theme/useHoystTheme';
 import {clearDeliveredNotifications} from '../../../lib/notifications';
 import type {RootStackParamList} from '../../../navigation/types';
 import {useSessionStore} from '../../../store/session-store';
-import type {InboxEvent} from '../../../types/models';
+import {
+  legacyCircleActivityEventTypes,
+  type InboxEvent,
+} from '../../../types/models';
 import {
   markAllInboxEventsRead,
   markInboxEventRead,
@@ -44,12 +47,12 @@ function isSuccessEvent(event: InboxEvent) {
   return (
     event.type === 'circle_complete' ||
     event.type === 'circle_restored' ||
-    event.type === 'companion_achievement_unlocked' ||
-    event.type === 'companion_circle_created' ||
-    event.type === 'companion_circle_joined' ||
-    event.type === 'companion_momentum_level_up' ||
-    event.type === 'companion_streak_milestone' ||
-    event.type === 'companion_tapped_in' ||
+    event.type === legacyCircleActivityEventTypes.achievementUnlocked ||
+    event.type === legacyCircleActivityEventTypes.circleCreated ||
+    event.type === legacyCircleActivityEventTypes.circleJoined ||
+    event.type === legacyCircleActivityEventTypes.momentumLevelUp ||
+    event.type === legacyCircleActivityEventTypes.streakMilestone ||
+    event.type === legacyCircleActivityEventTypes.tappedIn ||
     event.type === 'join_approved' ||
     event.type === 'member_joined'
   );
@@ -58,7 +61,7 @@ function isSuccessEvent(event: InboxEvent) {
 function isAlertEvent(event: InboxEvent) {
   if (
     event.type === 'circle_at_risk' ||
-    event.type === 'companion_skipped' ||
+    event.type === legacyCircleActivityEventTypes.skipped ||
     event.type === 'member_due_prompt' ||
     event.type === 'tap_in_final_warning' ||
     event.type === 'join_declined'
@@ -160,25 +163,25 @@ function getActionLabel(event: InboxEvent) {
   if (event.type === 'circle_restored') {
     return 'Restored';
   }
-  if (event.type === 'companion_achievement_unlocked') {
+  if (event.type === legacyCircleActivityEventTypes.achievementUnlocked) {
     return 'Unlocked';
   }
-  if (event.type === 'companion_circle_created') {
+  if (event.type === legacyCircleActivityEventTypes.circleCreated) {
     return 'Created';
   }
-  if (event.type === 'companion_circle_joined') {
+  if (event.type === legacyCircleActivityEventTypes.circleJoined) {
     return 'Joined';
   }
-  if (event.type === 'companion_momentum_level_up') {
+  if (event.type === legacyCircleActivityEventTypes.momentumLevelUp) {
     return 'Level up';
   }
-  if (event.type === 'companion_skipped') {
+  if (event.type === legacyCircleActivityEventTypes.skipped) {
     return 'Skip';
   }
-  if (event.type === 'companion_streak_milestone') {
+  if (event.type === legacyCircleActivityEventTypes.streakMilestone) {
     return 'Streak';
   }
-  if (event.type === 'companion_tapped_in') {
+  if (event.type === legacyCircleActivityEventTypes.tappedIn) {
     return 'Tapped in';
   }
   if (event.type === 'circle_discovery_suggestion') {

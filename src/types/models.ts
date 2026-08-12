@@ -18,7 +18,12 @@ export type CircleMemberState = 'done' | 'pending' | 'missed' | 'skipped';
 export type CircleActivityTone = 'success' | 'pending' | 'alert';
 export type ProgressDayState = 'done' | 'missed' | 'today' | 'future';
 export type CircleJoinLabel = 'Open seats' | 'Request to join';
-export type CommitmentCadence = 'daily' | 'weekly' | 'monthly';
+export type CommitmentPace = 'daily' | 'weekly' | 'monthly';
+/**
+ * @deprecated Firebase documents and callable payloads still use the
+ * `commitmentCadence` wire key. Use CommitmentPace for application logic.
+ */
+export type CommitmentCadence = CommitmentPace;
 export type CommitmentType = 'build' | 'limit' | 'avoid';
 export type OpportunityStatus =
   | 'upcoming'
@@ -71,7 +76,7 @@ export type CommitmentQuantityConfig = {
 };
 
 export type CommitmentSchedule = {
-  cadence: CommitmentCadence;
+  cadence: CommitmentPace;
   opportunitiesPerPeriod: number;
   slotPolicy: 'scheduled_slots';
   timezone: string;
@@ -94,7 +99,7 @@ export type MomentumSummary = {
 
 export type Opportunity = {
   availableDateKey: string;
-  cadence: CommitmentCadence;
+  cadence: CommitmentPace;
   circleId: string;
   completedAt?: unknown;
   completionDateKey?: string;
@@ -120,7 +125,7 @@ export type Circle = {
   category: string;
   commitment: string;
   commitmentType?: CommitmentType;
-  commitmentCadence: CommitmentCadence;
+  commitmentCadence: CommitmentPace;
   commitmentFrequency: CommitmentFrequency;
   maximumValue?: number;
   minimumValue?: number;
@@ -207,6 +212,22 @@ export type CircleThreadItem = {
   tone?: CircleThreadTone;
 };
 
+/** Legacy Firebase wire values retained for old clients and stored inbox data. */
+export const legacyCircleActivityEventTypes = {
+  achievementUnlocked: 'companion_achievement_unlocked',
+  circleCreated: 'companion_circle_created',
+  circleJoined: 'companion_circle_joined',
+  momentumLevelUp: 'companion_momentum_level_up',
+  skipped: 'companion_skipped',
+  streakMilestone: 'companion_streak_milestone',
+  tappedIn: 'companion_tapped_in',
+} as const;
+
+export const legacyCircleActivityFeedCategory = 'companion' as const;
+
+export type LegacyCircleActivityEventType =
+  (typeof legacyCircleActivityEventTypes)[keyof typeof legacyCircleActivityEventTypes];
+
 export type InboxEventType =
   | 'circle_archived'
   | 'circle_at_risk'
@@ -214,13 +235,7 @@ export type InboxEventType =
   | 'circle_discovery_suggestion'
   | 'circle_nudge_prompt'
   | 'circle_restored'
-  | 'companion_achievement_unlocked'
-  | 'companion_circle_created'
-  | 'companion_circle_joined'
-  | 'companion_momentum_level_up'
-  | 'companion_skipped'
-  | 'companion_streak_milestone'
-  | 'companion_tapped_in'
+  | LegacyCircleActivityEventType
   | 'evening_summary'
   | 'join_approved'
   | 'join_declined'
@@ -248,7 +263,7 @@ export type InboxEvent = {
   circleId?: string;
   createdAtLabel: string;
   deeplink: InboxDeeplink;
-  feedCategory?: 'companion';
+  feedCategory?: typeof legacyCircleActivityFeedCategory;
   id: string;
   isRead: boolean;
   mediaImageUrl?: string;
@@ -279,7 +294,7 @@ export type CircleSummary = {
   category: string;
   commitment: string;
   commitmentType?: CommitmentType;
-  commitmentCadence?: CommitmentCadence;
+  commitmentCadence?: CommitmentPace;
   commitmentFrequency?: CommitmentFrequency;
   currentValue?: number;
   maximumValue?: number;
@@ -365,7 +380,7 @@ export type CreateCircleDraft = {
   category: string;
   circleMode: CircleMode;
   commitmentType: CommitmentType;
-  commitmentCadence: CommitmentCadence;
+  commitmentCadence: CommitmentPace;
   graceRules: {
     skip: GraceRule;
   };

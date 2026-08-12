@@ -380,7 +380,7 @@ describe('CircleToolsScreen', () => {
     pressByAccessibilityLabel(tree, 'Reset Invite Link');
     expect(alertSpy).toHaveBeenCalledWith(
       'Reset invite link?',
-      'The current link will stop working immediately. Existing members are not affected.',
+      'The current link will stop working immediately. Existing Members are not affected.',
       expect.arrayContaining([
         expect.objectContaining({text: 'Keep Current Link'}),
         expect.objectContaining({
@@ -423,7 +423,7 @@ describe('CircleToolsScreen', () => {
     expect(output).toContain('Commitment Settings');
     expect(output).toContain('Edit Commitment');
     expect(output).toContain(
-      'Change the Commitment, rules, rhythm, timing, and skips.',
+      'Change the Commitment Goal, Pace, timing, and Skips.',
     );
     expect(output).toContain('Invite someone');
     expect(output).toContain('Delete Commitment');

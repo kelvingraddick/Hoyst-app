@@ -20,7 +20,7 @@ describe('Momentum opportunity scheduling', () => {
     });
 
     expect(schedule).toEqual({
-      cadence: 'monthly',
+      pace: 'monthly',
       opportunitiesPerPeriod: 4,
       slotPolicy: 'scheduled_slots',
       timezone: 'America/New_York',
@@ -30,7 +30,7 @@ describe('Momentum opportunity scheduling', () => {
   it('spreads weekly opportunities instead of making the full quota available at period start', () => {
     const slots = getOpportunitySlots(
       {
-        cadence: 'weekly',
+        pace: 'weekly',
         opportunitiesPerPeriod: 4,
         slotPolicy: 'scheduled_slots',
         timezone: 'America/New_York',
