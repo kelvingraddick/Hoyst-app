@@ -89,6 +89,8 @@ export type CreateNotificationInput = {
   mediaImageUrl?: string | null;
   preferenceKey: NotificationPreferenceKey;
   pushData?: Record<string, string>;
+  routineDelivery?: boolean;
+  routineNow?: Date;
   routineTimezone?: string;
   sourceKey?: string;
   sourceRevision?: number;
@@ -953,7 +955,12 @@ export type RoutineDeliveryState = {
   routineDateKey?: unknown;
   routineLastSentAt?: unknown;
   routineSentCount?: unknown;
+  routineWindowKey?: unknown;
 };
+
+export function getRoutineWindowKey(now = new Date()) {
+  return now.toISOString().slice(0, 13);
+}
 
 export function getRoutineNotificationEligibility({
   deliveryState,
@@ -978,6 +985,11 @@ export function getRoutineNotificationEligibility({
     Number.isFinite(deliveryState.routineSentCount)
       ? deliveryState.routineSentCount
       : 0;
+  const routineWindowKey = getRoutineWindowKey(now);
+
+  if (deliveryState?.routineWindowKey === routineWindowKey) {
+    return {eligible: false, reason: 'routine-window'};
+  }
 
   if (
     routineLastSentAt &&
@@ -1618,6 +1630,8 @@ export async function createInboxEvent({
   mediaImageUrl,
   preferenceKey,
   pushData,
+  routineDelivery = false,
+  routineNow = new Date(),
   routineTimezone = 'UTC',
   sourceKey,
   sourceRevision,
@@ -1635,31 +1649,12 @@ export async function createInboxEvent({
     .doc(eventId);
   const userPrivateSnapshot = await db.collection('userPrivate').doc(uid).get();
   const userPrivate = userPrivateSnapshot.data();
-  const enabled = isPreferenceEnabled(
+  const isRoutineDelivery = routineDelivery || deliveryPriority === 'routine';
+  let enabled = isPreferenceEnabled(
     userPrivate?.notificationSettings as Record<string, unknown> | undefined,
     preferenceKey,
   );
-  const pushStatus = enabled
-    ? deliveryPriority === 'deferred' || deliveryPriority === 'suppressed'
-      ? deliveryPriority
-      : 'pending'
-    : 'disabled';
-
-  if (enabled && deliveryPriority === 'routine') {
-    const routineEligibility = getRoutineNotificationEligibility({
-      deliveryState: userPrivate?.notificationDelivery as
-        | RoutineDeliveryState
-        | undefined,
-      type,
-      timezone: routineTimezone,
-    });
-
-    if (!routineEligibility.eligible) {
-      return {created: false, eventId, pushStatus: 'throttled'};
-    }
-  }
-
-  const eventPayload = {
+  const buildEventPayload = (preferenceEnabled: boolean) => ({
     actor: actor ?? null,
     body,
     circleId: circleId ?? null,
@@ -1670,53 +1665,95 @@ export async function createInboxEvent({
     mediaImageUrl: mediaImageUrl ?? null,
     preferenceKey,
     push: {
-      status: pushStatus,
+      status: preferenceEnabled
+        ? deliveryPriority === 'deferred' || deliveryPriority === 'suppressed'
+          ? deliveryPriority
+          : 'pending'
+        : 'disabled',
     },
     readAt: null,
     sourceKey: sourceKey ?? null,
     sourceRevision: sourceRevision ?? null,
     title,
     type,
-  };
+  });
 
   try {
-    if (dailyDeliveryDateKey && dailyDeliveryStateKey) {
-      const created = await db.runTransaction(async transaction => {
-        const [latestUserPrivateSnapshot, existingSnapshot] =
-          await Promise.all([
-            transaction.get(userPrivateSnapshot.ref),
-            transaction.get(eventRef),
-          ]);
-        const latestDeliveryState =
-          (latestUserPrivateSnapshot.data()?.notificationDelivery ?? {}) as
-            | RoutineDeliveryState
-            | undefined;
+    if (isRoutineDelivery || (dailyDeliveryDateKey && dailyDeliveryStateKey)) {
+      const reservation = await db.runTransaction(async transaction => {
+        const [latestUserPrivateSnapshot, existingSnapshot] = await Promise.all(
+          [transaction.get(userPrivateSnapshot.ref), transaction.get(eventRef)],
+        );
+        const latestUserPrivate = latestUserPrivateSnapshot.data();
+        const latestDeliveryState = (latestUserPrivate?.notificationDelivery ??
+          {}) as RoutineDeliveryState | undefined;
+        const latestEnabled = isPreferenceEnabled(
+          latestUserPrivate?.notificationSettings as
+            | Record<string, unknown>
+            | undefined,
+          preferenceKey,
+        );
 
-        if (
-          existingSnapshot.exists ||
-          latestDeliveryState?.[dailyDeliveryStateKey] === dailyDeliveryDateKey
-        ) {
-          return false;
+        if (existingSnapshot.exists) {
+          return {created: false, reason: 'dedupe'} as const;
         }
 
-        transaction.create(eventRef, eventPayload);
-        transaction.set(
-          latestUserPrivateSnapshot.ref,
-          {
-            notificationDelivery: {
-              [dailyDeliveryStateKey]: dailyDeliveryDateKey,
-            },
-          },
-          {merge: true},
-        );
-        return true;
+        if (latestEnabled && isRoutineDelivery) {
+          const routineEligibility = getRoutineNotificationEligibility({
+            deliveryState: latestDeliveryState,
+            now: routineNow,
+            type,
+            timezone: routineTimezone,
+          });
+
+          if (!routineEligibility.eligible) {
+            return {created: false, reason: 'routine'} as const;
+          }
+        }
+
+        if (
+          dailyDeliveryDateKey &&
+          dailyDeliveryStateKey &&
+          latestDeliveryState?.[dailyDeliveryStateKey] === dailyDeliveryDateKey
+        ) {
+          return {created: false, reason: 'dedupe'} as const;
+        }
+
+        const deliveryUpdates: Record<string, unknown> = {};
+
+        if (latestEnabled && isRoutineDelivery) {
+          deliveryUpdates.routineWindowKey = getRoutineWindowKey(routineNow);
+        }
+
+        if (dailyDeliveryDateKey && dailyDeliveryStateKey) {
+          deliveryUpdates[dailyDeliveryStateKey] = dailyDeliveryDateKey;
+        }
+
+        transaction.create(eventRef, buildEventPayload(latestEnabled));
+
+        if (Object.keys(deliveryUpdates).length > 0) {
+          transaction.set(
+            latestUserPrivateSnapshot.ref,
+            {notificationDelivery: deliveryUpdates},
+            {merge: true},
+          );
+        }
+
+        return {created: true, enabled: latestEnabled} as const;
       });
 
-      if (!created) {
-        return {created: false, eventId, pushStatus: 'skipped'};
+      if (!reservation.created) {
+        return {
+          created: false,
+          eventId,
+          pushStatus:
+            reservation.reason === 'routine' ? 'throttled' : 'skipped',
+        };
       }
+
+      enabled = reservation.enabled;
     } else {
-      await eventRef.create(eventPayload);
+      await eventRef.create(buildEventPayload(enabled));
     }
   } catch (error) {
     const code =
@@ -1777,8 +1814,9 @@ export async function createInboxEvent({
     {merge: true},
   );
 
-  if (deliveryPriority === 'routine' && pushResult.status === 'sent') {
+  if (isRoutineDelivery && pushResult.status === 'sent') {
     await recordRoutineNotificationDelivery({
+      now: routineNow,
       type,
       uid,
       timezone: routineTimezone,
@@ -2512,6 +2550,7 @@ export async function notifyCircleNudgePrompt({
   circleTitle,
   dateKey,
   periodKey,
+  routineNow,
   targetCount,
   targetUid,
   timezone,
@@ -2520,6 +2559,7 @@ export async function notifyCircleNudgePrompt({
   circleTitle: string;
   dateKey: string;
   periodKey: string;
+  routineNow?: Date;
   targetCount: number;
   targetUid: string;
   timezone: string;
@@ -2545,6 +2585,7 @@ export async function notifyCircleNudgePrompt({
     deeplink: {circleId, screen: 'CircleDetail'},
     deliveryPriority: 'routine',
     preferenceKey: 'nudgePrompts',
+    routineNow,
     routineTimezone: timezone,
     title: copy.title,
     type: 'circle_nudge_prompt',
@@ -2557,6 +2598,7 @@ export async function notifyCircleDiscoverySuggestion({
   circleId,
   circleTitle,
   dateKey,
+  routineNow,
   targetUid,
   timezone,
 }: {
@@ -2564,6 +2606,7 @@ export async function notifyCircleDiscoverySuggestion({
   circleId: string;
   circleTitle: string;
   dateKey: string;
+  routineNow?: Date;
   targetUid: string;
   timezone: string;
 }) {
@@ -2587,6 +2630,8 @@ export async function notifyCircleDiscoverySuggestion({
     deeplink: {circleId, screen: 'CircleDetail'},
     deliveryPriority: 'deferred',
     preferenceKey: 'discovery',
+    routineDelivery: true,
+    routineNow,
     routineTimezone: timezone,
     title: copy.title,
     type: 'circle_discovery_suggestion',
@@ -2595,6 +2640,7 @@ export async function notifyCircleDiscoverySuggestion({
 
   if (result.pushStatus === 'deferred') {
     await recordRoutineNotificationDelivery({
+      now: routineNow,
       type: 'circle_discovery_suggestion',
       uid: targetUid,
       timezone,
@@ -2996,6 +3042,7 @@ async function sendTapInReminders(kind: 'final' | 'midday') {
         deliveryPriority: kind === 'midday' ? 'routine' : 'immediate',
         preferenceKey: 'tapInReminders',
         pushData: notification.pushData,
+        routineNow: now,
         routineTimezone: group.timezone,
         title: notification.title,
         type: notification.type,
@@ -3033,6 +3080,24 @@ export type CircleNudgePromptCandidate = {
   timezone: string;
 };
 
+export function getOutstandingTapInUids({
+  coveredCounts,
+  members,
+  requiredTapIns,
+}: {
+  coveredCounts: ReadonlyMap<string, number>;
+  members: Array<{status?: unknown; uid: string}>;
+  requiredTapIns: number;
+}) {
+  return members
+    .filter(
+      member =>
+        member.status === 'active' &&
+        (coveredCounts.get(member.uid) ?? 0) < requiredTapIns,
+    )
+    .map(member => member.uid);
+}
+
 export function compareCircleNudgePromptCandidates(
   left: CircleNudgePromptCandidate,
   right: CircleNudgePromptCandidate,
@@ -3062,12 +3127,24 @@ export function selectHighestPriorityCircleNudge(
   return [...candidates].sort(compareCircleNudgePromptCandidates)[0];
 }
 
+export function selectGloballyEligibleCircleNudge({
+  candidates,
+  hasOutstandingTapIns,
+}: {
+  candidates: CircleNudgePromptCandidate[];
+  hasOutstandingTapIns: boolean;
+}) {
+  return hasOutstandingTapIns
+    ? undefined
+    : selectHighestPriorityCircleNudge(candidates);
+}
+
 async function sendCircleEngagementPrompts() {
   const targetHour = 18;
   const now = new Date();
   const circleSnapshots = await db.collection('circles').get();
   const candidatesByUid = new Map<string, CircleNudgePromptCandidate[]>();
-  const sendPromises: Promise<unknown>[] = [];
+  const outstandingTapInUids = new Set<string>();
 
   for (const circleSnapshot of circleSnapshots.docs) {
     const circle = circleSnapshot.data();
@@ -3076,13 +3153,6 @@ async function sendCircleEngagementPrompts() {
     }
     const timezone = asString(circle.timezone, 'UTC');
     const local = getLocalDateTimeParts(now, timezone);
-
-    if (
-      circle.circleMode === 'personal' ||
-      getCircleLifecycleStatus(circle) === 'archived'
-    ) {
-      continue;
-    }
 
     const eligibleSlots = getOpportunitySlots(
       normalizeCommitmentSchedule(circle, timezone),
@@ -3141,14 +3211,19 @@ async function sendCircleEngagementPrompts() {
       .filter((member): member is DocumentData & {uid: string} =>
         Boolean(member.uid),
       );
-    const behindMembers = members.filter(
-      member => (coveredCounts.get(member.uid) ?? 0) < requiredTapIns,
+    const behindUidSet = new Set(
+      getOutstandingTapInUids({coveredCounts, members, requiredTapIns}),
+    );
+    const behindMembers = members.filter(member =>
+      behindUidSet.has(member.uid),
     );
     const engagedMembers = members.filter(
-      member => (coveredCounts.get(member.uid) ?? 0) >= requiredTapIns,
+      member => !behindUidSet.has(member.uid),
     );
 
-    if (behindMembers.length === 0) {
+    behindMembers.forEach(member => outstandingTapInUids.add(member.uid));
+
+    if (behindMembers.length === 0 || circle.circleMode === 'personal') {
       continue;
     }
 
@@ -3160,21 +3235,6 @@ async function sendCircleEngagementPrompts() {
     });
     const deadlineDateKey =
       periodDateKeys[periodDateKeys.length - 1] ?? local.dateKey;
-
-    if (local.hour === targetHour) {
-      behindMembers.forEach(member => {
-        sendPromises.push(
-          notifyMemberDuePrompt({
-            circleId: circleSnapshot.id,
-            circleTitle,
-            commitmentCadence,
-            periodKey,
-            targetUid: member.uid,
-            timezone,
-          }),
-        );
-      });
-    }
 
     engagedMembers.forEach(member => {
       const candidates = candidatesByUid.get(member.uid) ?? [];
@@ -3192,57 +3252,58 @@ async function sendCircleEngagementPrompts() {
     });
   }
 
-  sendPromises.push(
-    ...Array.from(candidatesByUid.entries()).map(
-      async ([uid, candidates]) => {
-        const [userPrivateSnapshot, userSnapshot] = await Promise.all([
-          db.collection('userPrivate').doc(uid).get(),
-          db.collection('users').doc(uid).get(),
-        ]);
-        const fallbackTimezone = candidates[0]?.timezone ?? 'UTC';
-        const timezone = asString(
-          userPrivateSnapshot.data()?.timezone,
-          asString(userSnapshot.data()?.timezone, fallbackTimezone),
-        );
-        const local = getLocalDateTimeParts(now, timezone);
+  const sendPromises = Array.from(candidatesByUid.entries()).map(
+    async ([uid, candidates]) => {
+      const [userPrivateSnapshot, userSnapshot] = await Promise.all([
+        db.collection('userPrivate').doc(uid).get(),
+        db.collection('users').doc(uid).get(),
+      ]);
+      const fallbackTimezone = candidates[0]?.timezone ?? 'UTC';
+      const timezone = asString(
+        userPrivateSnapshot.data()?.timezone,
+        asString(userSnapshot.data()?.timezone, fallbackTimezone),
+      );
+      const local = getLocalDateTimeParts(now, timezone);
 
-        if (local.hour !== targetHour) {
-          return undefined;
-        }
+      if (local.hour !== targetHour) {
+        return undefined;
+      }
 
-        const unsentCandidates = (
-          await Promise.all(
-            candidates.map(async candidate => {
-              const dedupeKey = `circle_nudge_prompt_${candidate.circleId}_${candidate.periodKey}_${uid}`;
-              const existingSnapshot = await userPrivateSnapshot.ref
-                .collection('inbox')
-                .doc(sanitizeEventId(dedupeKey))
-                .get();
+      const unsentCandidates = (
+        await Promise.all(
+          candidates.map(async candidate => {
+            const dedupeKey = `circle_nudge_prompt_${candidate.circleId}_${candidate.periodKey}_${uid}`;
+            const existingSnapshot = await userPrivateSnapshot.ref
+              .collection('inbox')
+              .doc(sanitizeEventId(dedupeKey))
+              .get();
 
-              return existingSnapshot.exists ? undefined : candidate;
-            }),
-          )
-        ).filter(
-          (candidate): candidate is CircleNudgePromptCandidate =>
-            Boolean(candidate),
-        );
-        const selected = selectHighestPriorityCircleNudge(unsentCandidates);
+            return existingSnapshot.exists ? undefined : candidate;
+          }),
+        )
+      ).filter((candidate): candidate is CircleNudgePromptCandidate =>
+        Boolean(candidate),
+      );
+      const selected = selectGloballyEligibleCircleNudge({
+        candidates: unsentCandidates,
+        hasOutstandingTapIns: outstandingTapInUids.has(uid),
+      });
 
-        if (!selected) {
-          return undefined;
-        }
+      if (!selected) {
+        return undefined;
+      }
 
-        return notifyCircleNudgePrompt({
-          circleId: selected.circleId,
-          circleTitle: selected.circleTitle,
-          dateKey: local.dateKey,
-          periodKey: selected.periodKey,
-          targetCount: selected.behindCount,
-          targetUid: selected.targetUid,
-          timezone,
-        });
-      },
-    ),
+      return notifyCircleNudgePrompt({
+        circleId: selected.circleId,
+        circleTitle: selected.circleTitle,
+        dateKey: local.dateKey,
+        periodKey: selected.periodKey,
+        routineNow: now,
+        targetCount: selected.behindCount,
+        targetUid: selected.targetUid,
+        timezone,
+      });
+    },
   );
 
   const results = await Promise.all(sendPromises);
@@ -3364,6 +3425,7 @@ async function sendCircleDiscoverySuggestions() {
         circleId: circle.circleId,
         circleTitle: circle.title,
         dateKey: getLocalDateTimeParts(now, 'UTC').dateKey,
+        routineNow: now,
         targetUid: uid,
         timezone: 'UTC',
       }),

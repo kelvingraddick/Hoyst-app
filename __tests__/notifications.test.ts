@@ -2,6 +2,7 @@ jest.mock('../functions/src/firebase', () => ({
   db: {
     batch: jest.fn(),
     collection: jest.fn(),
+    runTransaction: jest.fn(),
   },
 }));
 
@@ -70,11 +71,13 @@ jest.mock(
   {virtual: true},
 );
 
+import {db} from '../functions/src/firebase';
 import {
   buildEveningSummaryCopy,
   buildOneSignalPushPayload,
   buildTapInReminderNotification,
   canShareCircleOutsideMembers,
+  createInboxEvent,
   formatNotificationCircleTitle,
   getCompanionFeedTargetsFromMemberships,
   getCompanionMilestoneEvents,
@@ -84,12 +87,15 @@ import {
   getNudgeNotificationDedupeKey,
   getNotificationPreferenceEnabled,
   getOpportunityReminderSlots,
+  getOutstandingTapInUids,
   getReminderEligibility,
   getRoutineNotificationEligibility,
+  getRoutineWindowKey,
   getSameDayImmediateCoverageCircleIds,
   markInboxEventsRead,
   repairPushSubscription,
   resolveNotificationCopy,
+  selectGloballyEligibleCircleNudge,
   selectHighestPriorityCircleNudge,
   shouldIncludeInEveningSummary,
 } from '../functions/src/notifications';
@@ -394,6 +400,39 @@ describe('daily circle nudge selection', () => {
       ])?.circleId,
     ).toBe('circle-a');
   });
+
+  it('suppresses every companion nudge while the user owes a Tap In elsewhere', () => {
+    expect(
+      selectGloballyEligibleCircleNudge({
+        candidates: [candidate],
+        hasOutstandingTapIns: true,
+      }),
+    ).toBeUndefined();
+    expect(
+      selectGloballyEligibleCircleNudge({
+        candidates: [candidate],
+        hasOutstandingTapIns: false,
+      })?.circleId,
+    ).toBe('circle-b');
+  });
+
+  it('counts only active members with uncovered current-period obligations', () => {
+    expect(
+      getOutstandingTapInUids({
+        coveredCounts: new Map([
+          ['covered-by-tap-in', 2],
+          ['covered-by-skip', 2],
+        ]),
+        members: [
+          {status: 'active', uid: 'still-behind'},
+          {status: 'active', uid: 'covered-by-tap-in'},
+          {status: 'active', uid: 'covered-by-skip'},
+          {status: 'inactive', uid: 'inactive-member'},
+        ],
+        requiredTapIns: 2,
+      }),
+    ).toEqual(['still-behind']);
+  });
 });
 
 describe('routine notification cadence', () => {
@@ -423,6 +462,181 @@ describe('routine notification cadence', () => {
         type: 'circle_nudge_prompt',
       }),
     ).toMatchObject({eligible: false, reason: 'routine-daily-limit'});
+  });
+
+  it('blocks a second routine event in the same UTC scheduler window', () => {
+    expect(getRoutineWindowKey(now)).toBe('2026-05-29T18');
+    expect(
+      getRoutineNotificationEligibility({
+        deliveryState: {routineWindowKey: getRoutineWindowKey(now)},
+        now,
+        timezone: 'America/New_York',
+        type: 'circle_discovery_suggestion',
+      }),
+    ).toMatchObject({eligible: false, reason: 'routine-window'});
+  });
+
+  it('atomically creates and pushes only one routine event per user window', async () => {
+    const collectionMock = db.collection as unknown as jest.Mock;
+    const runTransactionMock = db.runTransaction as unknown as jest.Mock;
+    const originalFetch = global.fetch;
+    const originalOneSignalAppId = process.env.ONESIGNAL_APP_ID;
+    const originalOneSignalRestApiKey = process.env.ONESIGNAL_REST_API_KEY;
+    const deliveryState: Record<string, unknown> = {};
+    const createdEventIds = new Set<string>();
+    const eventRefs = new Map<
+      string,
+      {id: string; set: jest.Mock<Promise<void>, [unknown, unknown]>}
+    >();
+    const getEventRef = (eventId: string) => {
+      const existing = eventRefs.get(eventId);
+
+      if (existing) {
+        return existing;
+      }
+
+      const ref = {
+        id: eventId,
+        set: jest.fn().mockResolvedValue(undefined),
+      };
+      eventRefs.set(eventId, ref);
+      return ref;
+    };
+    const inboxCollectionRef = {doc: jest.fn(getEventRef)};
+    const userPrivateRef = {
+      collection: jest.fn(() => inboxCollectionRef),
+      get: jest.fn(async () => ({
+        data: () => ({
+          notificationDelivery: {...deliveryState},
+          notificationSettings: {
+            discovery: true,
+            nudgePrompts: true,
+          },
+        }),
+        ref: undefined as unknown,
+      })),
+      set: jest.fn(
+        async (payload: {notificationDelivery?: Record<string, unknown>}) => {
+          if (payload.notificationDelivery) {
+            Object.assign(deliveryState, payload.notificationDelivery);
+          }
+        },
+      ),
+    };
+    const getUserPrivateSnapshot = () => ({
+      data: () => ({
+        notificationDelivery: {...deliveryState},
+        notificationSettings: {
+          discovery: true,
+          nudgePrompts: true,
+        },
+      }),
+      ref: userPrivateRef,
+    });
+    userPrivateRef.get.mockImplementation(async () => getUserPrivateSnapshot());
+    const userPrivateCollectionRef = {
+      doc: jest.fn(() => userPrivateRef),
+    };
+    let transactionTail: Promise<unknown> = Promise.resolve();
+
+    collectionMock.mockImplementation((name: string) => {
+      if (name === 'userPrivate') {
+        return userPrivateCollectionRef;
+      }
+
+      throw new Error(`Unexpected collection: ${name}`);
+    });
+    runTransactionMock.mockImplementation(
+      (callback: (transaction: unknown) => Promise<unknown>) => {
+        const run = transactionTail.then(() =>
+          callback({
+            create: jest.fn((eventRef: {id: string}) => {
+              createdEventIds.add(eventRef.id);
+            }),
+            get: jest.fn(async (ref: {id?: string}) =>
+              ref === userPrivateRef
+                ? getUserPrivateSnapshot()
+                : {exists: createdEventIds.has(ref.id ?? '')},
+            ),
+            set: jest.fn(
+              (
+                ref: unknown,
+                payload: {notificationDelivery?: Record<string, unknown>},
+              ) => {
+                if (ref === userPrivateRef && payload.notificationDelivery) {
+                  Object.assign(deliveryState, payload.notificationDelivery);
+                }
+              },
+            ),
+          }),
+        );
+        transactionTail = run.then(
+          () => undefined,
+          () => undefined,
+        );
+        return run;
+      },
+    );
+    process.env.ONESIGNAL_APP_ID = 'app-1';
+    process.env.ONESIGNAL_REST_API_KEY = 'rest-key';
+    global.fetch = jest.fn().mockResolvedValue({
+      json: async () => ({id: 'push-1'}),
+      ok: true,
+      statusText: '',
+    });
+
+    try {
+      const input = {
+        body: 'Routine update',
+        circleId: 'circle-1',
+        deeplink: {circleId: 'circle-1', screen: 'CircleDetail'} as const,
+        deliveryPriority: 'routine' as const,
+        preferenceKey: 'nudgePrompts' as const,
+        routineNow: now,
+        routineTimezone: 'UTC',
+        title: 'Routine update',
+        uid: 'user-1',
+      };
+      const results = await Promise.all([
+        createInboxEvent({
+          ...input,
+          dailyDeliveryDateKey: '2026-05-29',
+          dailyDeliveryStateKey: 'nudgePromptDateKey',
+          dedupeKey: 'routine-event-a',
+          type: 'circle_nudge_prompt',
+        }),
+        createInboxEvent({
+          ...input,
+          dedupeKey: 'routine-event-b',
+          type: 'tap_in_midday_reminder',
+        }),
+      ]);
+
+      expect(results.filter(result => result.created)).toHaveLength(1);
+      expect(results.filter(result => !result.created)).toEqual([
+        expect.objectContaining({pushStatus: 'throttled'}),
+      ]);
+      expect(createdEventIds.size).toBe(1);
+      expect(deliveryState.nudgePromptDateKey).toBe('2026-05-29');
+      expect(deliveryState.routineWindowKey).toBe('2026-05-29T18');
+      expect(global.fetch).toHaveBeenCalledTimes(1);
+    } finally {
+      collectionMock.mockReset();
+      runTransactionMock.mockReset();
+      global.fetch = originalFetch;
+
+      if (originalOneSignalAppId === undefined) {
+        delete process.env.ONESIGNAL_APP_ID;
+      } else {
+        process.env.ONESIGNAL_APP_ID = originalOneSignalAppId;
+      }
+
+      if (originalOneSignalRestApiKey === undefined) {
+        delete process.env.ONESIGNAL_REST_API_KEY;
+      } else {
+        process.env.ONESIGNAL_REST_API_KEY = originalOneSignalRestApiKey;
+      }
+    }
   });
 
   it('spaces discovery pushes weekly', () => {
@@ -680,6 +894,31 @@ describe('notification reminder eligibility', () => {
       title: 'Final Tap In warning',
       type: 'tap_in_final_warning',
     });
+  });
+
+  it('keeps three due circles to one noon reminder and one final warning', () => {
+    const reminders = [
+      {circleId: 'circle-1', circleTitle: 'Circle One'},
+      {circleId: 'circle-2', circleTitle: 'Circle Two'},
+      {circleId: 'circle-3', circleTitle: 'Circle Three'},
+    ];
+    const plans = (['midday', 'final'] as const).map(kind =>
+      buildTapInReminderNotification({
+        dateKey: '2026-08-12',
+        kind,
+        reminders,
+        uid: 'user-1',
+      }),
+    );
+
+    expect(plans).toHaveLength(2);
+    expect(plans.map(plan => plan?.type)).toEqual([
+      'tap_in_midday_reminder',
+      'tap_in_final_warning',
+    ]);
+    expect(plans.every(plan => plan?.deeplink.screen === 'TapInPicker')).toBe(
+      true,
+    );
   });
 
   it('includes period and slot identity in multi-day reminder dedupe keys', () => {
