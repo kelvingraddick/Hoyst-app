@@ -3,6 +3,7 @@ import {NativeModules, TurboModuleRegistry, type View} from 'react-native';
 import type {ShareSingleOptions, Social} from 'react-native-share';
 
 import type {CheckInStatus, CircleDetailModel} from '../../../types/models';
+import type {ProfileSummary} from '../../profile/services/profile-summary-service';
 
 export type TapInStoryShareStatus = Exclude<CheckInStatus, 'rest'> | undefined;
 export type TapInStoryTemplateId =
@@ -18,12 +19,12 @@ export type TapInStoryShareData = {
   inviteUrl?: string;
   memberCount: number;
   note: string;
-  periodTapInCount: number;
   photoUri?: string;
   progressLabel: string;
   shareMessage: string;
   streakDays: number;
   streakLabel: string;
+  totalTapIns: number;
 };
 
 type TapInStoryShareDetail = Pick<CircleDetailModel, 'commitment' | 'title'> &
@@ -44,6 +45,7 @@ type BuildTapInStoryShareDataInput = {
   detail?: TapInStoryShareDetail;
   note?: string;
   photoUri?: string;
+  profileSummary?: Pick<ProfileSummary, 'personalStreakDays' | 'totalTapIns'>;
 };
 
 const fallbackCircleTitle = 'Hoyst Circle';
@@ -132,6 +134,7 @@ export function buildTapInStoryShareData({
   detail,
   note,
   photoUri,
+  profileSummary,
 }: BuildTapInStoryShareDataInput): TapInStoryShareData {
   const circleTitle = cleanText(detail?.title, fallbackCircleTitle);
   const commitment = cleanText(detail?.commitment, fallbackCommitment);
@@ -141,13 +144,19 @@ export function buildTapInStoryShareData({
     (typeof detail?.completionRate === 'number'
       ? `${detail.completionRate}% tapped in`
       : 'Tapped in today');
+  const streakDays = cleanCount(
+    profileSummary?.personalStreakDays ?? detail?.streakDays,
+  );
   const streakLabel =
-    typeof detail?.streakDays === 'number' && detail.streakDays > 0
-      ? `${detail.streakDays}d streak`
+    streakDays > 0
+      ? `${streakDays}d streak`
+      : profileSummary
+      ? 'Momentum saved'
       : cleanText(detail?.streakLabel, 'Momentum saved');
-  const streakDays = cleanCount(detail?.streakDays);
   const memberCount = cleanCount(detail?.memberCount);
-  const periodTapInCount = cleanCount(detail?.periodTapInCount);
+  const totalTapIns = cleanCount(
+    profileSummary?.totalTapIns ?? detail?.periodTapInCount,
+  );
   const inviteUrl = detail?.inviteUrl?.trim() || undefined;
   const ctaLabel = inviteUrl ? 'Join this Circle on Hoyst' : fallbackCtaLabel;
   const shareMessage = inviteUrl
@@ -162,12 +171,12 @@ export function buildTapInStoryShareData({
     inviteUrl,
     memberCount,
     note: cleanNote,
-    periodTapInCount,
     photoUri,
     progressLabel,
     shareMessage,
     streakDays,
     streakLabel,
+    totalTapIns,
   };
 }
 

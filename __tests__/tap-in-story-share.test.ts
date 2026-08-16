@@ -105,14 +105,36 @@ describe('Tap In story sharing', () => {
       inviteUrl: 'https://hoyst.app/invite/circle-1',
       memberCount: 7,
       note: 'Finished the set before breakfast.',
-      periodTapInCount: 23,
       photoUri: 'file:///tmp/proof.jpg',
       progressLabel: 'Today · 82%',
       shareMessage:
         'I tapped in with Morning Movers on Hoyst. Join us: https://hoyst.app/invite/circle-1',
       streakDays: 6,
       streakLabel: '6d streak',
+      totalTapIns: 23,
     });
+  });
+
+  it('uses canonical personal stats instead of circle-period fallbacks', () => {
+    const story = buildTapInStoryShareData({
+      detail,
+      profileSummary: {
+        personalStreakDays: 9,
+        totalTapIns: 41,
+      },
+    });
+
+    expect(story.streakDays).toBe(9);
+    expect(story.streakLabel).toBe('9d streak');
+    expect(story.totalTapIns).toBe(41);
+    expect(story.memberCount).toBe(7);
+
+    expect(
+      buildTapInStoryShareData({
+        detail,
+        profileSummary: {personalStreakDays: 0, totalTapIns: 0},
+      }).streakLabel,
+    ).toBe('Momentum saved');
   });
 
   it('returns story templates based on whether a Tap In photo exists', () => {

@@ -361,7 +361,7 @@ describe('TapInCompleteScreen', () => {
       photoUri: undefined,
       progressLabel: 'Week · 50%',
       source: 'home',
-      streakDays: 4,
+      streakDays: 6,
       streakLabel: '4d streak',
     });
   });

@@ -32,6 +32,10 @@ import {useHoystTheme} from '../../../design/theme/useHoystTheme';
 import {env} from '../../../config/env';
 import type {RootStackParamList} from '../../../navigation/types';
 import {
+  getProfileSummary,
+  type ProfileSummary,
+} from '../../profile/services/profile-summary-service';
+import {
   TapInStoryTemplateCard,
   tapInStoryShareCardSize,
 } from '../components/TapInStoryShareCard';
@@ -215,6 +219,9 @@ export function TapInStoryShareScreen({
   const [busyDestination, setBusyDestination] = useState<ShareDestination>();
   const [carouselBlockHeight, setCarouselBlockHeight] = useState(0);
   const [isPhotoSettled, setIsPhotoSettled] = useState(!route.params.photoUri);
+  const [hasResolvedProfileSummary, setHasResolvedProfileSummary] =
+    useState(false);
+  const [profileSummary, setProfileSummary] = useState<ProfileSummary>();
   const safeTopPadding = Math.max(insets.top, MIN_TOP_SAFE_PADDING) + 6;
   const safeBottomPadding = Math.max(insets.bottom, 14) + 12;
   const carouselWidth = Math.max(1, width - SCREEN_HORIZONTAL_PADDING * 2);
@@ -253,6 +260,7 @@ export function TapInStoryShareScreen({
         },
         note: route.params.note,
         photoUri: route.params.photoUri,
+        profileSummary,
       }),
     [
       route.params.circleTitle,
@@ -265,6 +273,7 @@ export function TapInStoryShareScreen({
       route.params.progressLabel,
       route.params.streakDays,
       route.params.streakLabel,
+      profileSummary,
     ],
   );
   const templates = useMemo(
@@ -275,7 +284,9 @@ export function TapInStoryShareScreen({
     templates[Math.min(activeIndex, templates.length - 1)] ?? 'designedPost';
   const requiresPhotoSettled =
     activeTemplate === 'photoOverlay' && Boolean(storyData.photoUri);
-  const canCapture = !requiresPhotoSettled || isPhotoSettled;
+  const canCapture =
+    hasResolvedProfileSummary &&
+    (!requiresPhotoSettled || isPhotoSettled);
   const isBusy = Boolean(busyDestination);
   const activeDotStyle = useMemo(
     () => ({backgroundColor: theme.text}),
@@ -290,6 +301,28 @@ export function TapInStoryShareScreen({
       setActiveIndex(templates.length - 1);
     }
   }, [activeIndex, templates.length]);
+
+  useEffect(() => {
+    let isActive = true;
+
+    setHasResolvedProfileSummary(false);
+    getProfileSummary()
+      .then(summary => {
+        if (isActive) {
+          setProfileSummary(summary);
+        }
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        if (isActive) {
+          setHasResolvedProfileSummary(true);
+        }
+      });
+
+    return () => {
+      isActive = false;
+    };
+  }, []);
 
   useEffect(() => {
     setIsPhotoSettled(!storyData.photoUri || activeTemplate !== 'photoOverlay');

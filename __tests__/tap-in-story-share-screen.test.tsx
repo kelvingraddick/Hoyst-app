@@ -12,6 +12,7 @@ const mockReleaseCapture = jest.fn();
 const mockShareOpen = jest.fn();
 const mockShareSingle = jest.fn();
 const mockCopyImage = jest.fn();
+const mockGetProfileSummary = jest.fn();
 
 jest.mock('react-native-config', () => ({
   __esModule: true,
@@ -43,6 +44,10 @@ jest.mock('react-native-share', () => ({
       SNAPCHAT: 'snapchat',
     },
   },
+}));
+
+jest.mock('../src/features/profile/services/profile-summary-service', () => ({
+  getProfileSummary: () => mockGetProfileSummary(),
 }));
 
 jest.mock('react-native-safe-area-context', () => {
@@ -128,10 +133,19 @@ describe('TapInStoryShareScreen', () => {
     mockShareOpen.mockReset();
     mockShareSingle.mockReset();
     mockCopyImage.mockReset();
+    mockGetProfileSummary.mockReset();
     mockCaptureRef.mockResolvedValue('file:///tmp/hoyst-story.png');
     mockShareOpen.mockResolvedValue({message: 'shared', success: true});
     mockShareSingle.mockResolvedValue({message: 'shared', success: true});
     mockCopyImage.mockResolvedValue(true);
+    mockGetProfileSummary.mockResolvedValue({
+      activeCircleCount: 2,
+      activePersonalCommitmentCount: 1,
+      hasTappedInToday: true,
+      longestStreakDays: 12,
+      personalStreakDays: 9,
+      totalTapIns: 41,
+    });
     NativeModules.HoystClipboardImage = {
       copyImage: (...args: unknown[]) => mockCopyImage(...args),
     };
@@ -161,6 +175,25 @@ describe('TapInStoryShareScreen', () => {
       'designedPost',
       'transparentStats',
     ]);
+  });
+
+  it('renders refreshed personal stats with the circle member count', async () => {
+    const tree = await renderStoryShareScreen({
+      memberCount: 4,
+      periodTapInCount: 1,
+      streakDays: 0,
+    });
+
+    const story = tree.root.findAllByType(TapInStoryTemplateCard)[0].props.story;
+
+    expect(mockGetProfileSummary).toHaveBeenCalledTimes(1);
+    expect(story).toEqual(
+      expect.objectContaining({
+        memberCount: 4,
+        streakDays: 9,
+        totalTapIns: 41,
+      }),
+    );
   });
 
   it('includes the photo overlay option when a Tap In photo exists', async () => {

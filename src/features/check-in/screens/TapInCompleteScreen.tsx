@@ -584,7 +584,10 @@ export function TapInCompleteScreen({
         displayDetail?.periodTapInCount ?? route.params.periodTapInCount,
       progressLabel: displayDetail?.progressLabel ?? route.params.progressLabel,
       source: route.params.source,
-      streakDays: displayDetail?.streakDays ?? route.params.streakDays,
+      streakDays:
+        route.params.completionMomentum?.currentStreak ??
+        displayDetail?.streakDays ??
+        route.params.streakDays,
       streakLabel: displayDetail?.streakLabel ?? route.params.streakLabel,
       note: savedDetails.note,
       photoUri: visiblePhotoUri,
@@ -595,6 +598,7 @@ export function TapInCompleteScreen({
     route.params.circleId,
     route.params.circleTitle,
     route.params.commitment,
+    route.params.completionMomentum?.currentStreak,
     route.params.inviteUrl,
     route.params.memberCount,
     route.params.periodTapInCount,

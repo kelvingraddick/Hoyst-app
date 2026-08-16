@@ -227,7 +227,7 @@ function PhotoOverlayStory({
           <OverlayStat label="STREAK" value={formatNumber(story.streakDays)} />
           <OverlayStat
             label="TAP INS"
-            value={formatNumber(story.periodTapInCount)}
+            value={formatNumber(story.totalTapIns)}
           />
           <OverlayStat
             label="MEMBERS"
@@ -262,7 +262,7 @@ function DesignedPostStory({story}: {story: TapInStoryShareData}) {
           <StoryStat
             label="TAP INS"
             tone={brandColors.blueVivid}
-            value={formatNumber(story.periodTapInCount)}
+            value={formatNumber(story.totalTapIns)}
           />
           <StoryStat
             label="MEMBERS"
@@ -310,7 +310,7 @@ function TransparentStatsStory({
           <View style={styles.transparentStat}>
             <HoystText style={styles.transparentLabel}>TAP INS</HoystText>
             <HoystText style={styles.transparentStatValue}>
-              {formatNumber(story.periodTapInCount)}
+              {formatNumber(story.totalTapIns)}
             </HoystText>
           </View>
           <View style={styles.transparentStat}>
