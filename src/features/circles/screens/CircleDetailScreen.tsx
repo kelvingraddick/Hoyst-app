@@ -71,6 +71,7 @@ import type {
   CircleDetailModel,
   CircleMemberStatus,
   CircleSummary,
+  CircleThreadItem,
 } from '../../../types/models';
 import type {RootStackParamList} from '../../../navigation/types';
 
@@ -997,6 +998,23 @@ export function CircleDetailScreen({
     );
   };
 
+  const shareFeedTapIn = (item: CircleThreadItem) => {
+    navigation.navigate('TapInStoryShare', {
+      circleId: detail.id,
+      circleTitle: detail.title,
+      commitment: detail.commitment,
+      inviteUrl: detail.inviteUrl,
+      memberCount: detail.memberCount,
+      note: item.note,
+      periodTapInCount: detail.periodTapInCount,
+      photoUri: item.mediaImageUrl,
+      progressLabel: detail.progressLabel,
+      source: 'circle_detail',
+      streakDays: detail.streakDays,
+      streakLabel: detail.streakLabel,
+    });
+  };
+
   const handleSendNudge = () => {
     if (isNudging) {
       return;
@@ -1457,6 +1475,7 @@ export function CircleDetailScreen({
               key={detail.id}
               loadMoreRequestToken={threadLoadMoreRequestToken}
               onLayout={handleThreadLayout}
+              onShareTapIn={shareFeedTapIn}
               timezone={timezone}
               viewerUid={user.uid}
             />

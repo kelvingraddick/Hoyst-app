@@ -232,7 +232,7 @@ describe('CircleThreadSection', () => {
     const {tree} = renderSection();
     const output = outputOf(tree);
 
-    expect(output).toContain('Circle Chat');
+    expect(output).toContain('Circle Feed');
     expect(output).toContain('TODAY');
     expect(output).toContain('Maya tapped in');
     expect(output).toContain('Rough night but got it done');
@@ -310,6 +310,64 @@ describe('CircleThreadSection', () => {
     expect(outputOf(tree).indexOf('Sam nudged Priya')).toBeLessThan(
       outputOf(tree).indexOf("who's still up 👀"),
     );
+  });
+
+  it("shares only the viewer's completed Tap Ins, including in archived feeds", () => {
+    const onShareTapIn = jest.fn();
+    const completedTapIn: CircleThreadItem = {
+      activityType: 'tap_in',
+      actor: {initials: 'KM', name: 'Kelvin', uid: 'user-1'},
+      createdAtLabel: '8:40 AM',
+      createdAtMs: Date.now() - 3 * 60_000,
+      id: 'completed-tap-in',
+      isLikedByViewer: false,
+      kind: 'activity',
+      likeCount: 0,
+      mediaImageUrl: 'https://example.com/owned-proof.jpg',
+      note: 'Finished before work.',
+      text: 'Kelvin tapped in',
+      tone: 'success',
+    };
+
+    mockThreadItems = [
+      completedTapIn,
+      {
+        ...completedTapIn,
+        actor: {initials: 'MJ', name: 'Maya', uid: 'user-2'},
+        id: 'other-member-tap-in',
+      },
+      {
+        ...completedTapIn,
+        id: 'partial-tap-in',
+        text: 'Kelvin logged partial progress',
+        tone: 'pending',
+      },
+      {
+        ...completedTapIn,
+        id: 'failed-tap-in',
+        text: 'Kelvin missed the Goal',
+        tone: 'alert',
+      },
+      {
+        ...completedTapIn,
+        id: 'skip-tap-in',
+        text: 'Kelvin used a skip',
+        tone: 'pending',
+      },
+    ];
+
+    const {tree} = renderSection({isArchived: true, onShareTapIn});
+    const shareButtons = tree.root
+      .findAllByType(Pressable)
+      .filter(button => button.props.accessibilityLabel === 'Share Tap In');
+
+    expect(shareButtons).toHaveLength(1);
+
+    act(() => {
+      shareButtons[0].props.onPress();
+    });
+
+    expect(onShareTapIn).toHaveBeenCalledWith(completedTapIn);
   });
 
   it('marks the newest item read only after the section becomes visible', async () => {
@@ -595,7 +653,7 @@ describe('CircleThreadSection', () => {
     const {tree} = renderSection();
     const output = outputOf(tree);
 
-    expect(output).toContain('Start the circle chat');
+    expect(output).toContain('Start the Circle Feed');
     expect(output).toContain('Message the circle...');
     expect(
       StyleSheet.flatten(
@@ -615,7 +673,7 @@ describe('CircleThreadSection', () => {
     const output = outputOf(tree);
 
     expect(output).toContain('Archived Circle');
-    expect(output).toContain('This chat is read-only.');
+    expect(output).toContain('This feed is read-only.');
     expect(output).toContain('Maya tapped in');
     expect(output).not.toContain('Message the circle...');
     expect(output).not.toContain('Send 👏 Nice');
@@ -637,7 +695,7 @@ describe('CircleThreadSection', () => {
     const {tree} = renderSection();
     const output = outputOf(tree);
 
-    expect(output).toContain('Could not load circle chat');
+    expect(output).toContain('Could not load Circle Feed');
     expect(
       StyleSheet.flatten(
         tree.root.findByProps({testID: 'circle-thread-error-title'}).props

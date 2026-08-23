@@ -6,7 +6,7 @@ import {FrostedBackdrop} from '../src/design/components/FrostedBackdrop';
 import {SectionEyebrowTrailing} from '../src/design/components/SectionEyebrow';
 import {TapInPulseButton} from '../src/design/components/TapInPulseButton';
 import {CircleDetailScreen} from '../src/features/circles/screens/CircleDetailScreen';
-import type {CircleDetailModel} from '../src/types/models';
+import type {CircleDetailModel, CircleThreadItem} from '../src/types/models';
 
 const mockJoinCircle = jest.fn();
 const mockNudgeCircleMembers = jest.fn();
@@ -103,6 +103,7 @@ jest.mock('../src/features/circles/components/CircleThreadSection', () => ({
     isVisible: boolean;
     loadMoreRequestToken: number;
     onLayout?: (event: unknown) => void;
+    onShareTapIn?: (item: CircleThreadItem) => void;
   }) => {
     const MockReact = require('react');
     const {Text: MockText, View: MockView} = require('react-native');
@@ -110,7 +111,7 @@ jest.mock('../src/features/circles/components/CircleThreadSection', () => ({
     return MockReact.createElement(
       MockView,
       {onLayout: props.onLayout, testID: 'circle-thread-section'},
-      MockReact.createElement(MockText, null, 'Circle Chat'),
+      MockReact.createElement(MockText, null, 'Circle Feed'),
     );
   },
 }));
@@ -424,7 +425,7 @@ describe('CircleDetailScreen reference redesign', () => {
     );
     expect(output).toContain('Needs You');
     expect(output).toContain('Circle Members');
-    expect(output).toContain('Circle Chat');
+    expect(output).toContain('Circle Feed');
     expect(output).toContain('1 of 4 this Cycle');
     expect(output).not.toContain('Circle Members · 1 of 4 this Cycle');
     expect(output).not.toContain("Today's Progress");
@@ -523,16 +524,16 @@ describe('CircleDetailScreen reference redesign', () => {
     expect(trailingLabels).not.toContain('This week');
   });
 
-  it('embeds Circle chat below the Member grid without navigation', () => {
+  it('embeds Circle Feed below the Member grid without navigation', () => {
     const {navigation, tree} = renderScreen();
     const output = outputOf(tree);
     const sectionProps = mockCircleThreadSection.mock.calls.at(-1)?.[0];
 
     expect(output.indexOf('Circle Members')).toBeLessThan(
-      output.indexOf('Circle Chat'),
+      output.indexOf('Circle Feed'),
     );
     expect(
-      tree.root.findAllByProps({accessibilityLabel: 'Open circle chat'}),
+      tree.root.findAllByProps({accessibilityLabel: 'Open Circle Feed'}),
     ).toHaveLength(0);
     expect(sectionProps).toEqual(
       expect.objectContaining({
@@ -547,6 +548,46 @@ describe('CircleDetailScreen reference redesign', () => {
     expect(navigation.navigate).not.toHaveBeenCalledWith(
       'CircleThread',
       expect.anything(),
+    );
+  });
+
+  it('opens story sharing from the selected Circle Feed Tap In record', () => {
+    const {navigation} = renderScreen();
+    const sectionProps = mockCircleThreadSection.mock.calls.at(-1)?.[0];
+    const item: CircleThreadItem = {
+      activityType: 'tap_in',
+      actor: {initials: 'KM', name: 'Kelvin', uid: 'user-1'},
+      createdAtLabel: '8:40 AM',
+      createdAtMs: Date.now(),
+      id: 'tap-in-1',
+      isLikedByViewer: false,
+      kind: 'activity',
+      likeCount: 0,
+      mediaImageUrl: 'https://example.com/proof.jpg',
+      note: 'Finished before work.',
+      text: 'Kelvin tapped in',
+      tone: 'success',
+    };
+
+    act(() => {
+      sectionProps?.onShareTapIn?.(item);
+    });
+
+    expect(navigation.navigate).toHaveBeenCalledWith(
+      'TapInStoryShare',
+      expect.objectContaining({
+        circleId: 'circle-1',
+        circleTitle: 'Morning Movers',
+        commitment: 'Move for 30 minutes',
+        inviteUrl: 'https://hoyst.app/join/circle-1',
+        memberCount: 5,
+        note: 'Finished before work.',
+        photoUri: 'https://example.com/proof.jpg',
+        progressLabel: 'Today 60%',
+        source: 'circle_detail',
+        streakDays: 3,
+        streakLabel: '3d streak',
+      }),
     );
   });
 
@@ -581,7 +622,7 @@ describe('CircleDetailScreen reference redesign', () => {
     );
 
     expect(output.indexOf('Send a Nudge')).toBeLessThan(
-      output.indexOf('Circle Chat'),
+      output.indexOf('Circle Feed'),
     );
     expect(actionStackStyle).toEqual(expect.objectContaining({gap: 10}));
     expect(nudgeFrameStyle).toEqual(expect.objectContaining({minHeight: 58}));
@@ -678,7 +719,7 @@ describe('CircleDetailScreen reference redesign', () => {
       output.indexOf('Remove Tap In'),
     );
     expect(output.indexOf('Remove Tap In')).toBeLessThan(
-      output.indexOf('Circle Chat'),
+      output.indexOf('Circle Feed'),
     );
   });
 
@@ -1007,7 +1048,7 @@ describe('CircleDetailScreen reference redesign', () => {
     expect(outputOf(tree)).toContain('Pending');
     expect(outputOf(tree)).not.toContain('Member Tools');
     expect(outputOf(tree)).not.toContain('Cancel Request');
-    expect(outputOf(tree)).not.toContain('Circle Chat');
+    expect(outputOf(tree)).not.toContain('Circle Feed');
     expect(mockCircleThreadSection).not.toHaveBeenCalled();
   });
 
@@ -1028,7 +1069,7 @@ describe('CircleDetailScreen reference redesign', () => {
     expect(output).toContain('A steady crew for morning movement.');
     expect(output).toContain('Join Circle');
     expect(output).not.toContain('Needs You');
-    expect(output).not.toContain('Circle Chat');
+    expect(output).not.toContain('Circle Feed');
     expect(mockCircleThreadSection).not.toHaveBeenCalled();
   });
 
@@ -1112,7 +1153,7 @@ describe('CircleDetailScreen reference redesign', () => {
       output.indexOf('LAST 7 DAYS'),
     );
     expect(output).not.toContain('Circle Members');
-    expect(output).not.toContain('Circle Chat');
+    expect(output).not.toContain('Circle Feed');
     expect(output).not.toContain('Completion');
     expect(output).not.toContain('Members');
     expect(output).toContain('3 days');
@@ -1137,7 +1178,7 @@ describe('CircleDetailScreen reference redesign', () => {
     expect(output).toContain('Circle archived');
     expect(output).toContain('Read-only history');
     expect(output).toContain('Archived Aug 4, 2026');
-    expect(output).toContain('Circle Chat');
+    expect(output).toContain('Circle Feed');
     expect(output).not.toContain('Log your progress for today');
     expect(output).not.toContain('Send a Nudge');
     expect(output).not.toContain('Invite Members');

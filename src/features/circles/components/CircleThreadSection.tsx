@@ -18,6 +18,7 @@ import {
   Check,
   Flame,
   Heart,
+  Share2,
   X,
 } from 'lucide-react-native';
 import {launchImageLibrary} from 'react-native-image-picker';
@@ -50,6 +51,7 @@ type CircleThreadSectionProps = {
   isVisible: boolean;
   loadMoreRequestToken: number;
   onLayout?: (event: LayoutChangeEvent) => void;
+  onShareTapIn?: (item: CircleThreadItem) => void;
   timezone: string;
   viewerUid: string;
 };
@@ -142,6 +144,45 @@ function LikeButton({
   );
 }
 
+function canShareTapInActivity(item: CircleThreadItem, viewerUid?: string) {
+  return Boolean(
+    viewerUid &&
+      item.kind === 'activity' &&
+      item.activityType === 'tap_in' &&
+      item.tone === 'success' &&
+      item.actor.uid === viewerUid,
+  );
+}
+
+function ShareTapInButton({onPress}: {onPress: () => void}) {
+  const theme = useHoystTheme();
+
+  return (
+    <Pressable
+      accessibilityLabel="Share Tap In"
+      accessibilityRole="button"
+      onPress={onPress}
+      style={({pressed}) => [
+        styles.shareTapInButton,
+        {opacity: pressed ? actionMotion.pressedOpacity : 1},
+      ]}>
+      <Share2
+        color={theme.accentSecondaryForeground}
+        size={14}
+        strokeWidth={2.4}
+      />
+      <HoystText
+        style={[
+          styles.shareTapInLabel,
+          {color: theme.accentSecondaryForeground},
+        ]}
+        variant="caption">
+        Share Tap In
+      </HoystText>
+    </Pressable>
+  );
+}
+
 function ThreadMessageBubble({
   item,
   onLike,
@@ -230,17 +271,22 @@ function ThreadActivityItem({
   item,
   onLike,
   readOnly,
+  onShareTapIn,
   viewerUid,
 }: {
   item: CircleThreadItem;
   onLike: (item: CircleThreadItem) => void;
   readOnly?: boolean;
+  onShareTapIn?: (item: CircleThreadItem) => void;
   viewerUid?: string;
 }) {
   const theme = useHoystTheme();
   const palette = getActivityPalette(item.tone ?? 'success', theme);
   const isViewer = Boolean(viewerUid && item.actor.uid === viewerUid);
   const hasProof = Boolean(item.mediaImageUrl || item.note);
+  const canShare = Boolean(
+    onShareTapIn && canShareTapInActivity(item, viewerUid),
+  );
 
   return (
     <View style={styles.activityStack}>
@@ -295,6 +341,9 @@ function ThreadActivityItem({
               item={item}
               onPress={() => onLike(item)}
             />
+            {canShare ? (
+              <ShareTapInButton onPress={() => onShareTapIn?.(item)} />
+            ) : null}
           </View>
         </View>
       ) : (
@@ -306,6 +355,9 @@ function ThreadActivityItem({
             item={item}
             onPress={() => onLike(item)}
           />
+          {canShare ? (
+            <ShareTapInButton onPress={() => onShareTapIn?.(item)} />
+          ) : null}
         </View>
       )}
     </View>
@@ -316,11 +368,13 @@ function ThreadItem({
   item,
   onLike,
   readOnly,
+  onShareTapIn,
   viewerUid,
 }: {
   item: CircleThreadItem;
   onLike: (item: CircleThreadItem) => void;
   readOnly?: boolean;
+  onShareTapIn?: (item: CircleThreadItem) => void;
   viewerUid?: string;
 }) {
   if (item.kind === 'activity') {
@@ -329,6 +383,7 @@ function ThreadItem({
         item={item}
         onLike={onLike}
         readOnly={readOnly}
+        onShareTapIn={onShareTapIn}
         viewerUid={viewerUid}
       />
     );
@@ -359,6 +414,7 @@ export function CircleThreadSection({
   isVisible,
   loadMoreRequestToken,
   onLayout,
+  onShareTapIn,
   timezone,
   viewerUid,
 }: CircleThreadSectionProps): React.JSX.Element {
@@ -529,7 +585,7 @@ export function CircleThreadSection({
       onLayout={onLayout}
       style={styles.section}
       testID="circle-thread-section">
-      <SectionEyebrow>Circle Chat</SectionEyebrow>
+      <SectionEyebrow>Circle Feed</SectionEyebrow>
 
       {isArchived ? (
         <View
@@ -548,7 +604,7 @@ export function CircleThreadSection({
               Archived Circle
             </HoystText>
             <HoystText tone="muted" variant="caption">
-              This chat is read-only. Restore the Circle to send or react.
+              This feed is read-only. Restore the Circle to send or react.
             </HoystText>
           </View>
         </View>
@@ -704,7 +760,7 @@ export function CircleThreadSection({
               <HoystText
                 style={styles.emptyCardTitle}
                 testID="circle-thread-error-title">
-                Could not load circle chat
+                Could not load Circle Feed
               </HoystText>
               <HoystText
                 style={styles.emptyCardBody}
@@ -714,7 +770,7 @@ export function CircleThreadSection({
                 thread yet.
               </HoystText>
               <Pressable
-                accessibilityLabel="Retry circle chat"
+                accessibilityLabel="Retry Circle Feed"
                 accessibilityRole="button"
                 onPress={handleRetry}
                 style={({pressed}) => [
@@ -729,7 +785,7 @@ export function CircleThreadSection({
           <View style={styles.loadingRow} testID="circle-thread-loading">
             <ActivityIndicator color={theme.accentTertiaryForeground} />
             <HoystText tone="muted" variant="caption">
-              Loading circle chat...
+              Loading Circle Feed...
             </HoystText>
           </View>
         ) : items.length > 0 ? (
@@ -748,6 +804,7 @@ export function CircleThreadSection({
                   key={item.id}
                   onLike={handleLike}
                   readOnly={isArchived}
+                  onShareTapIn={onShareTapIn}
                   viewerUid={viewerUid}
                 />
               ))}
@@ -759,7 +816,7 @@ export function CircleThreadSection({
               <HoystText
                 style={styles.emptyCardTitle}
                 testID="circle-thread-empty-title">
-                Start the circle chat
+                Start the Circle Feed
               </HoystText>
               <HoystText
                 style={styles.emptyCardBody}
@@ -835,6 +892,8 @@ const styles = StyleSheet.create({
   },
   activityLikeRow: {
     alignSelf: 'flex-start',
+    flexDirection: 'row',
+    gap: 8,
   },
   activityProofCard: {
     borderRadius: 18,
@@ -983,6 +1042,16 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '900',
     lineHeight: 15,
+  },
+  shareTapInButton: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 4,
+    minHeight: 20,
+    paddingHorizontal: 4,
+  },
+  shareTapInLabel: {
+    fontWeight: '800',
   },
   loadingRow: {
     alignItems: 'center',
