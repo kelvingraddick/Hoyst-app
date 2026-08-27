@@ -1732,6 +1732,47 @@ export function getUpcomingAttentionCircles(circles: CircleManagementCard[]) {
   return sortHomeCircles(circles.filter(needsUpcomingAttention));
 }
 
+function isCompletedDailyStackCard(circle: CircleManagementCard) {
+  return Boolean(
+    circle.commitmentCadence === 'daily' &&
+      circle.viewerHasTappedInToday &&
+      getHomeCircleActionVariant(circle) !== 'nudge',
+  );
+}
+
+export function getHomeCommitmentStackCircles({
+  personalCommitments,
+  todayAttentionCircles,
+  upcomingAttentionCircles,
+}: {
+  personalCommitments: readonly CircleManagementCard[];
+  todayAttentionCircles: readonly CircleManagementCard[];
+  upcomingAttentionCircles: readonly CircleManagementCard[];
+}) {
+  const uniqueCircles = new Map<string, CircleManagementCard>();
+
+  [
+    ...personalCommitments,
+    ...todayAttentionCircles,
+    ...upcomingAttentionCircles,
+  ].forEach(circle => {
+    if (!uniqueCircles.has(circle.id)) {
+      uniqueCircles.set(circle.id, circle);
+    }
+  });
+
+  return sortHomeCircles([...uniqueCircles.values()]).sort((left, right) => {
+    const leftCompleted = isCompletedDailyStackCard(left);
+    const rightCompleted = isCompletedDailyStackCard(right);
+
+    if (leftCompleted !== rightCompleted) {
+      return leftCompleted ? 1 : -1;
+    }
+
+    return 0;
+  });
+}
+
 export function matchesHomeCircleFilter(
   circle: CircleManagementCard,
   filter: CircleManagementFilter,

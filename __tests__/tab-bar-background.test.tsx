@@ -18,12 +18,12 @@ describe('HoystTabBarBackground', () => {
       [
         {
           appearance: 'dark',
-          backgroundColor: '#222638',
+          backgroundColor: '#202020',
           borderColor: 'rgba(255,255,255,0.10)',
         },
         {
           appearance: 'light',
-          backgroundColor: '#FFFFFF',
+          backgroundColor: '#FAFAF7',
           borderColor: 'rgba(16,24,40,0.08)',
         },
       ] as const

@@ -116,16 +116,18 @@ describe('TabBarIcons', () => {
     });
   });
 
-  it('can render inactive icons in one gray color', () => {
-    icons.forEach(({Component}) => {
-      const tree = renderIcon(Component, {
-        color: brandColors.graySoft,
-        secondaryColor: brandColors.graySoft,
-      });
+  it('can render inactive icons in the configured gray colors', () => {
+    [brandColors.gray, brandColors.graySoft].forEach(inactiveColor => {
+      icons.forEach(({Component}) => {
+        const tree = renderIcon(Component, {
+          color: inactiveColor,
+          secondaryColor: inactiveColor,
+        });
 
-      expect(new Set(getVisibleGlyphColors(tree))).toEqual(
-        new Set([brandColors.graySoft]),
-      );
+        expect(new Set(getVisibleGlyphColors(tree))).toEqual(
+          new Set([inactiveColor]),
+        );
+      });
     });
   });
 

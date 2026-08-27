@@ -51,6 +51,13 @@ export function getHoystThemeColors(
     // Opaque app-wide panel fill. The FrostedBackdrop remains visible around
     // panels without showing through their content surfaces.
     panelSurface: isDark ? '#222638' : '#FFFFFF',
+    // Translucent neutral fill used by Home surfaces such as the Hoy bubble.
+    neutralSurface: isDark
+      ? 'rgba(255,255,255,0.06)'
+      : 'rgba(226,232,240,0.72)',
+    // Opaque equivalent of neutralSurface over the Home canvas. Floating
+    // navigation must not reveal changing screen content beneath it.
+    tabBarSurface: isDark ? '#202020' : '#FAFAF7',
     // Translucent supporting controls that are not part of the panel system.
     glassSurfaceStrong: isDark
       ? 'rgba(28,30,46,0.64)'

@@ -39,6 +39,7 @@ export type CircleCategoryVisual = {
 type CircleCategoryIconProps = {
   category: string;
   shape?: 'circle' | 'roundedSquare';
+  showBackplate?: boolean;
   size?: number;
   style?: StyleProp<ViewStyle>;
 };
@@ -453,9 +454,19 @@ function getBackplateRadius(
     : size / 2;
 }
 
+function getIconBackplateStyle(
+  visual: CircleCategoryVisual,
+  showBackplate: boolean,
+): ViewStyle {
+  return {
+    backgroundColor: showBackplate ? visual.backplateColor : 'transparent',
+  };
+}
+
 export function CircleCategoryIcon({
   category,
   shape = 'circle',
+  showBackplate = true,
   size = 38,
   style,
 }: CircleCategoryIconProps): React.JSX.Element {
@@ -470,11 +481,14 @@ export function CircleCategoryIcon({
     <View
       style={[
         styles.iconWrap,
-        {backgroundColor: visual.backplateColor},
+        getIconBackplateStyle(visual, showBackplate),
         sizeStyle,
         style,
       ]}>
-      <Svg height={size * 0.74} viewBox="0 0 64 64" width={size * 0.74}>
+      <Svg
+        height={showBackplate ? size * 0.74 : size}
+        viewBox="0 0 64 64"
+        width={showBackplate ? size * 0.74 : size}>
         {renderCategoryArtwork(visual)}
       </Svg>
     </View>

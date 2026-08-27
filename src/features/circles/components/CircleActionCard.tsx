@@ -1,5 +1,11 @@
 import React, {type ReactNode} from 'react';
-import {Pressable, StyleSheet, View} from 'react-native';
+import {
+  Pressable,
+  StyleSheet,
+  View,
+  type StyleProp,
+  type ViewStyle,
+} from 'react-native';
 import {ChevronRight, Search} from 'lucide-react-native';
 
 import {HoystText} from '../../../design/components/HoystText';
@@ -30,6 +36,7 @@ type CircleActionCardProps = {
   onPress: () => void;
   renderIcon?: (color: string) => ReactNode;
   subtitle: string;
+  style?: StyleProp<ViewStyle>;
   testID?: string;
   title: string;
 };
@@ -38,6 +45,7 @@ export function CircleActionCard({
   accessibilityLabel,
   onPress,
   renderIcon,
+  style,
   subtitle,
   testID,
   title,
@@ -62,13 +70,11 @@ export function CircleActionCard({
               borderColor: cardColors.border,
               opacity: pressed ? actionMotion.pressedOpacity : 1,
             },
+            style,
           ]}
           testID={testID}>
           <View
-            style={[
-              styles.icon,
-              {backgroundColor: cardColors.iconBackground},
-            ]}>
+            style={[styles.icon, {backgroundColor: cardColors.iconBackground}]}>
             {renderIcon ? (
               renderIcon(cardColors.icon)
             ) : (

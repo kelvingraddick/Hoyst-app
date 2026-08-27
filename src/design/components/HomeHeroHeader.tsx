@@ -1,9 +1,14 @@
 import React, {useEffect, useRef, useState} from 'react';
-import {Animated, Pressable, StyleSheet, View} from 'react-native';
+import {
+  Animated,
+  Pressable,
+  StyleSheet,
+  useWindowDimensions,
+  View,
+} from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {Bell} from 'lucide-react-native';
 
-import type {HomeHeroCopy} from '../../features/home/services/home-hero-copy';
 import type {HoyState} from '../../features/home/services/hoy-state';
 import type {MomentumStatus} from '../../types/models';
 import {brandColors} from '../tokens/colors';
@@ -15,11 +20,16 @@ import {HoyOrb} from './HoyOrb';
 import {MomentumStageIcon} from './MomentumStageIcon';
 import {getMomentumStatusVisualColor} from './MomentumStatusPill';
 
-const HOY_SIZE = 52;
-const UNREAD_BADGE_SIZE = 22;
-const BAR_HEIGHT = 10;
-const KNOB_SIZE = 34;
-const MOMENTUM_STAGE_ICON_BACKGROUND = '#FFF3DF';
+const HOY_SIZE = 48;
+const NOTIFICATION_BUTTON_SIZE = 36;
+const UNREAD_BADGE_SIZE = 18;
+const HEADER_HORIZONTAL_PADDING = 22;
+const LOGO_WIDTH = 84;
+const LOGO_RIGHT_MARGIN = 8;
+const TOP_ROW_GAP = 8;
+const MOMENTUM_VALUE_GAP = 8;
+const MOMENTUM_VALUE_WIDTH = 100;
+const MOMENTUM_KNOB_SIZE = 24;
 
 export const homeHeroPalettes = {
   light: {
@@ -40,19 +50,25 @@ export const homeHeroPalettes = {
 
 type HomeHeroHeaderProps = {
   bubbleText?: string;
-  copy: HomeHeroCopy;
   isHoyActionDisabled?: boolean;
   hoyAccessibilityLabel: string;
   hoyCelebrationKey?: number;
   hoyState?: HoyState;
-  momentumDetail: string;
+  onHoyActionPress: () => void;
+  surfaceColor: string;
+};
+
+type HomeNotificationButtonProps = {
+  accessibilityLabel: string;
+  badgeText?: string;
+  onPress: () => void;
+};
+
+type HomeMomentumBarProps = {
   momentumPercent: number;
   momentumStatus: MomentumStatus;
-  notificationAccessibilityLabel: string;
-  notificationBadgeText?: string;
-  onHoyActionPress: () => void;
-  onMomentumPress: () => void;
-  onNotificationPress: () => void;
+  onPress: () => void;
+  trackColor: string;
 };
 
 function BubbleText({text}: {text: string}) {
@@ -107,7 +123,7 @@ function BubbleText({text}: {text: string}) {
   }, [displayedText, opacity, text]);
 
   return (
-    <Animated.View style={{opacity}}>
+    <Animated.View style={[styles.bubbleTextContainer, {opacity}]}>
       <HoystText
         numberOfLines={3}
         style={[styles.bubbleText, {color: palette.bubbleText}]}>
@@ -117,7 +133,11 @@ function BubbleText({text}: {text: string}) {
   );
 }
 
-function HoyPlaceholder(): React.JSX.Element {
+function HoyPlaceholder({
+  surfaceColor,
+}: {
+  surfaceColor: string;
+}): React.JSX.Element {
   const theme = useHoystTheme();
 
   return (
@@ -127,8 +147,7 @@ function HoyPlaceholder(): React.JSX.Element {
       style={[
         styles.hoyPlaceholder,
         {
-          backgroundColor: theme.panelSurface,
-          borderColor: theme.border,
+          backgroundColor: surfaceColor,
           shadowColor: theme.shadow,
         },
       ]}
@@ -139,59 +158,53 @@ function HoyPlaceholder(): React.JSX.Element {
 
 export function HomeHeroHeader({
   bubbleText,
-  copy,
   isHoyActionDisabled = false,
   hoyAccessibilityLabel,
   hoyCelebrationKey,
   hoyState,
-  momentumDetail,
-  momentumPercent,
-  momentumStatus,
-  notificationAccessibilityLabel,
-  notificationBadgeText,
   onHoyActionPress,
-  onMomentumPress,
-  onNotificationPress,
+  surfaceColor,
 }: HomeHeroHeaderProps): React.JSX.Element {
   const theme = useHoystTheme();
   const insets = useSafeAreaInsets();
+  const {width: screenWidth} = useWindowDimensions();
   const palette = theme.isDark ? homeHeroPalettes.dark : homeHeroPalettes.light;
-  const clampedPercent = Math.max(
-    0,
-    Math.min(100, Number.isFinite(momentumPercent) ? momentumPercent : 0),
+  const bubbleMaxWidth = Math.max(
+    120,
+    screenWidth -
+      HEADER_HORIZONTAL_PADDING * 2 -
+      LOGO_WIDTH -
+      LOGO_RIGHT_MARGIN -
+      TOP_ROW_GAP * 2 -
+      HOY_SIZE,
   );
-  const knobPercent = Math.max(5, Math.min(95, clampedPercent));
-  const momentumVisualColor = getMomentumStatusVisualColor(
-    momentumStatus,
-    theme,
-  );
-
   return (
     <View style={[styles.header, {paddingTop: insets.top + 10}]}>
-      <Pressable
-        accessibilityLabel={hoyAccessibilityLabel}
-        accessibilityRole="button"
-        disabled={isHoyActionDisabled}
-        onPress={onHoyActionPress}
-        style={({pressed}) => ({
-          opacity: pressed ? actionMotion.pressedOpacity : 1,
-        })}
-        testID="home-hero-hoy-action">
-        <View style={styles.topRow}>
+      <View style={styles.topRow}>
+        <BrandMark isDark={theme.isDark} kind="logo" style={styles.logo} />
+        <Pressable
+          accessibilityLabel={hoyAccessibilityLabel}
+          accessibilityRole="button"
+          disabled={isHoyActionDisabled}
+          onPress={onHoyActionPress}
+          style={({pressed}) => [
+            styles.hoyAction,
+            {opacity: pressed ? actionMotion.pressedOpacity : 1},
+          ]}
+          testID="home-hero-hoy-action">
           <View
             testID="home-hero-bubble-surface"
             style={[
               styles.bubbleSurface,
               {
-                shadowColor: theme.shadow,
+                maxWidth: bubbleMaxWidth,
               },
             ]}>
             <View
               style={[
                 styles.bubble,
                 {
-                  backgroundColor: theme.panelSurface,
-                  borderColor: theme.border,
+                  backgroundColor: surfaceColor,
                 },
               ]}
               testID="home-hero-bubble-fill">
@@ -218,133 +231,150 @@ export function HomeHeroHeader({
               )}
             </View>
           </View>
-          <View style={styles.bubbleTail}>
+        </Pressable>
+        <View style={styles.hoyCluster}>
+          {hoyState ? (
+            <HoyOrb
+              celebrationKey={hoyCelebrationKey}
+              size={HOY_SIZE}
+              state={hoyState}
+              testID="home-hero-hoy-orb"
+            />
+          ) : (
+            <HoyPlaceholder surfaceColor={surfaceColor} />
+          )}
+          <View style={styles.hoyTail}>
             <View
               testID="home-hero-tail-dot-large"
-              style={[
-                styles.tailDotLarge,
-                {
-                  backgroundColor: theme.panelSurface,
-                  borderColor: theme.border,
-                  shadowColor: theme.shadow,
-                },
-              ]}
+              style={[styles.tailDotLarge, {backgroundColor: surfaceColor}]}
             />
             <View
               testID="home-hero-tail-dot-small"
-              style={[
-                styles.tailDotSmall,
-                {
-                  backgroundColor: theme.panelSurface,
-                  borderColor: theme.border,
-                  shadowColor: theme.shadow,
-                },
-              ]}
+              style={[styles.tailDotSmall, {backgroundColor: surfaceColor}]}
             />
           </View>
-          <View style={styles.hoyCluster}>
-            {hoyState ? (
-              <HoyOrb
-                celebrationKey={hoyCelebrationKey}
-                size={HOY_SIZE}
-                state={hoyState}
-                testID="home-hero-hoy-orb"
-              />
-            ) : (
-              <HoyPlaceholder />
-            )}
-          </View>
         </View>
-      </Pressable>
-
-      <View style={styles.logoRow}>
-        <BrandMark isDark={theme.isDark} kind="logo" style={styles.logo} />
-        <Pressable
-          accessibilityLabel={notificationAccessibilityLabel}
-          accessibilityRole="button"
-          hitSlop={4}
-          onPress={onNotificationPress}
-          style={({pressed}) => [
-            styles.notificationButton,
-            {opacity: pressed ? actionMotion.pressedOpacity : 1},
-          ]}
-          testID="home-hero-notification-button">
-          <Bell color={theme.text} size={24} strokeWidth={2.2} />
-          {notificationBadgeText ? (
-            <View
-              style={styles.unreadBadge}
-              testID="home-hero-notification-unread-badge">
-              <HoystText
-                allowFontScaling={false}
-                numberOfLines={1}
-                style={styles.unreadBadgeText}>
-                {notificationBadgeText}
-              </HoystText>
-            </View>
-          ) : null}
-        </Pressable>
       </View>
-
-      <View style={styles.copyBlock}>
-        <HoystText style={[styles.headline, {color: theme.text}]}>
-          {copy.headline}
-        </HoystText>
-        <HoystText style={[styles.subline, {color: palette.subline}]}>
-          {copy.subline}
-        </HoystText>
-      </View>
-
-      <Pressable
-        accessibilityLabel={`14-day momentum, ${momentumDetail}`}
-        accessibilityRole="button"
-        onPress={onMomentumPress}
-        style={({pressed}) => [
-          {
-            opacity: pressed ? actionMotion.pressedOpacity : 1,
-            transform: [{scale: pressed ? actionMotion.pressedScale : 1}],
-          },
-        ]}>
-        <View style={styles.momentumLabelRow}>
-          <HoystText
-            style={[styles.momentumLabel, {color: palette.bubbleSubtle}]}>
-            14-DAY MOMENTUM
-          </HoystText>
-          <HoystText style={[styles.momentumDetail, {color: theme.text}]}>
-            {momentumDetail}
-          </HoystText>
-        </View>
-        <View style={styles.barLayout}>
-          <View style={[styles.barTrack, {backgroundColor: palette.track}]}>
-            <View
-              testID="home-momentum-bar-fill"
-              style={[
-                styles.barFill,
-                {
-                  backgroundColor: momentumVisualColor,
-                  width: `${clampedPercent}%`,
-                },
-              ]}
-            />
-          </View>
-          <View
-            testID="home-momentum-bar-knob"
-            style={[
-              styles.barKnob,
-              {
-                backgroundColor: MOMENTUM_STAGE_ICON_BACKGROUND,
-                left: `${knobPercent}%`,
-                shadowColor: theme.glassShadow,
-              },
-            ]}>
-            <MomentumStageIcon
-              size={26}
-              status={momentumStatus}
-              testID="home-momentum-stage-icon"
-            />
-          </View>
-        </View>
-      </Pressable>
     </View>
+  );
+}
+
+export function HomeNotificationButton({
+  accessibilityLabel,
+  badgeText,
+  onPress,
+}: HomeNotificationButtonProps): React.JSX.Element {
+  const theme = useHoystTheme();
+
+  return (
+    <Pressable
+      accessibilityLabel={accessibilityLabel}
+      accessibilityRole="button"
+      hitSlop={4}
+      onPress={onPress}
+      style={({pressed}) => [
+        styles.notificationButton,
+        {opacity: pressed ? actionMotion.pressedOpacity : 1},
+      ]}
+      testID="home-hero-notification-button">
+      <Bell color={theme.text} size={22} strokeWidth={2.2} />
+      {badgeText ? (
+        <View
+          style={styles.unreadBadge}
+          testID="home-hero-notification-unread-badge">
+          <HoystText
+            allowFontScaling={false}
+            numberOfLines={1}
+            style={styles.unreadBadgeText}>
+            {badgeText}
+          </HoystText>
+        </View>
+      ) : null}
+    </Pressable>
+  );
+}
+
+export function HomeMomentumBar({
+  momentumPercent,
+  momentumStatus,
+  onPress,
+  trackColor,
+}: HomeMomentumBarProps): React.JSX.Element {
+  const theme = useHoystTheme();
+  const {width: screenWidth} = useWindowDimensions();
+  const clampedPercent = Math.max(
+    0,
+    Math.min(100, Number.isFinite(momentumPercent) ? momentumPercent : 0),
+  );
+  const momentumVisualColor = getMomentumStatusVisualColor(
+    momentumStatus,
+    theme,
+  );
+  const momentumBarWidth = Math.max(
+    160,
+    screenWidth - HEADER_HORIZONTAL_PADDING * 2,
+  );
+  const momentumTrackWidth = Math.max(
+    96,
+    momentumBarWidth - MOMENTUM_VALUE_WIDTH - MOMENTUM_VALUE_GAP,
+  );
+  const momentumKnobLeft = Math.max(
+    0,
+    Math.min(
+      momentumTrackWidth - MOMENTUM_KNOB_SIZE,
+      (momentumTrackWidth * clampedPercent) / 100 - MOMENTUM_KNOB_SIZE / 2,
+    ),
+  );
+
+  return (
+    <Pressable
+      accessibilityLabel={`14-day momentum, ${Math.round(clampedPercent)}%`}
+      accessibilityRole="button"
+      onPress={onPress}
+      style={({pressed}) => [
+        styles.momentumPressable,
+        {
+          opacity: pressed ? actionMotion.pressedOpacity : 1,
+          transform: [{scale: pressed ? actionMotion.pressedScale : 1}],
+        },
+      ]}
+      testID="home-momentum-bar">
+      <View style={[styles.compactBarArea, {width: momentumTrackWidth}]}>
+        <View
+          style={[styles.compactBarTrack, {backgroundColor: trackColor}]}
+          testID="home-momentum-bar-track">
+          <View
+            testID="home-momentum-bar-fill"
+            style={[
+              styles.compactBarFill,
+              {
+                backgroundColor: momentumVisualColor,
+                width: `${clampedPercent}%`,
+              },
+            ]}
+          />
+        </View>
+        <View
+          style={[
+            styles.compactBarKnob,
+            {left: momentumKnobLeft, shadowColor: theme.glassShadow},
+          ]}>
+          <MomentumStageIcon
+            size={18}
+            status={momentumStatus}
+            testID="home-momentum-stage-icon"
+          />
+        </View>
+      </View>
+      <HoystText
+        style={[
+          styles.momentumValue,
+          {color: theme.isDark ? '#8D96AD' : '#9A9ABC'},
+        ]}
+        testID="home-momentum-value">
+        {`${Math.round(clampedPercent)}% MOMENTUM`}
+      </HoystText>
+    </Pressable>
   );
 }
 
@@ -356,34 +386,46 @@ const styles = StyleSheet.create({
   topRow: {
     alignItems: 'flex-start',
     flexDirection: 'row',
+    gap: 8,
     justifyContent: 'flex-start',
   },
+  hoyAction: {
+    alignItems: 'center',
+    flexBasis: 0,
+    flexDirection: 'row',
+    flexGrow: 1,
+    flexShrink: 1,
+    gap: 5,
+    minWidth: 0,
+    position: 'relative',
+  },
   bubbleSurface: {
-    elevation: 4,
-    flex: 1,
+    flexBasis: 0,
+    flexGrow: 1,
     flexShrink: 1,
     minWidth: 0,
-    shadowOffset: {height: 7, width: 0},
-    shadowOpacity: 0.72,
-    shadowRadius: 18,
   },
   bubble: {
-    borderRadius: 18,
-    borderBottomLeftRadius: 6,
-    borderWidth: 1,
+    borderRadius: 16,
+    borderBottomLeftRadius: 5,
     overflow: 'hidden',
-    paddingHorizontal: 15,
-    paddingVertical: 12,
+    paddingHorizontal: 11,
+    paddingVertical: 9,
   },
   bubbleText: {
+    flexShrink: 1,
     fontSize: 15,
     fontWeight: '600',
     letterSpacing: 0,
     lineHeight: 20,
   },
+  bubbleTextContainer: {
+    flexShrink: 1,
+    width: '100%',
+  },
   bubbleSkeleton: {
     gap: 6,
-    minWidth: 150,
+    minWidth: 0,
     paddingVertical: 2,
   },
   bubbleSkeletonLine: {
@@ -398,41 +440,31 @@ const styles = StyleSheet.create({
     opacity: 0.6,
     width: '62%',
   },
-  bubbleTail: {
-    alignItems: 'flex-start',
-    flexDirection: 'row',
-    gap: 4,
-    marginHorizontal: 5,
-    marginTop: 22,
-  },
   tailDotLarge: {
-    borderRadius: 6,
-    borderWidth: 1,
-    elevation: 4,
-    height: 12,
-    shadowOffset: {height: 6, width: 0},
-    shadowOpacity: 0.64,
-    shadowRadius: 12,
-    width: 12,
+    borderRadius: 5,
+    height: 9,
+    width: 9,
   },
   tailDotSmall: {
-    borderRadius: 4,
-    borderWidth: 1,
-    elevation: 3,
-    height: 7,
-    marginTop: 8,
-    shadowOffset: {height: 5, width: 0},
-    shadowOpacity: 0.58,
-    shadowRadius: 10,
-    width: 7,
+    borderRadius: 3,
+    height: 5,
+    marginTop: 6,
+    width: 5,
   },
   hoyCluster: {
+    flexShrink: 0,
     height: HOY_SIZE,
+    position: 'relative',
     width: HOY_SIZE,
+  },
+  hoyTail: {
+    alignItems: 'flex-start',
+    left: -11,
+    position: 'absolute',
+    top: HOY_SIZE - 3,
   },
   hoyPlaceholder: {
     borderRadius: HOY_SIZE / 2,
-    borderWidth: 1,
     elevation: 3,
     height: HOY_SIZE,
     overflow: 'hidden',
@@ -450,100 +482,80 @@ const styles = StyleSheet.create({
     height: UNREAD_BADGE_SIZE,
     justifyContent: 'center',
     position: 'absolute',
-    right: -7,
-    top: -7,
+    right: -5,
+    top: -5,
     width: UNREAD_BADGE_SIZE,
   },
   unreadBadgeText: {
     color: brandColors.white,
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '800',
     letterSpacing: 0,
-    lineHeight: 15,
+    lineHeight: 13,
     textAlign: 'center',
   },
   logo: {
-    height: 40,
-    marginLeft: -3,
-    width: 86,
-  },
-  logoRow: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 22,
+    alignSelf: 'flex-start',
+    height: 36,
+    marginLeft: -4,
+    marginRight: LOGO_RIGHT_MARGIN,
+    width: LOGO_WIDTH,
   },
   notificationButton: {
     alignItems: 'center',
-    height: 44,
+    height: NOTIFICATION_BUTTON_SIZE,
     justifyContent: 'center',
-    width: 44,
+    position: 'relative',
+    width: NOTIFICATION_BUTTON_SIZE,
   },
-  copyBlock: {
-    gap: 6,
-    marginTop: 12,
+  momentumPressable: {
+    height: 44,
+    minWidth: 0,
+    position: 'relative',
+    width: '100%',
   },
-  headline: {
-    fontSize: 26,
-    fontWeight: '800',
-    letterSpacing: -0.4,
-    lineHeight: 30,
-    textAlign: 'left',
-  },
-  subline: {
-    fontSize: 15,
+  momentumValue: {
+    fontSize: 11,
     fontWeight: '700',
     letterSpacing: 0,
-    lineHeight: 20,
-    textAlign: 'left',
-  },
-  barLayout: {
-    height: KNOB_SIZE + 6,
-    justifyContent: 'center',
-    marginTop: 8,
-  },
-  momentumLabelRow: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: 12,
-    justifyContent: 'space-between',
-    marginTop: 14,
-  },
-  momentumLabel: {
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 0.9,
-    lineHeight: 15,
-  },
-  momentumDetail: {
-    flexShrink: 1,
-    fontSize: 12,
-    fontWeight: '800',
-    letterSpacing: 0,
     lineHeight: 16,
-    textAlign: 'right',
-  },
-  barTrack: {
-    borderRadius: BAR_HEIGHT / 2,
-    height: BAR_HEIGHT,
-    overflow: 'hidden',
-  },
-  barFill: {
-    borderRadius: BAR_HEIGHT / 2,
-    height: BAR_HEIGHT,
-  },
-  barKnob: {
-    alignItems: 'center',
-    borderRadius: KNOB_SIZE / 2,
-    elevation: 3,
-    height: KNOB_SIZE,
-    justifyContent: 'center',
-    marginLeft: -KNOB_SIZE / 2,
     position: 'absolute',
-    shadowOffset: {height: 3, width: 0},
-    shadowOpacity: 0.9,
-    shadowRadius: 8,
-    top: 3,
-    width: KNOB_SIZE,
+    right: 0,
+    textAlign: 'right',
+    top: 14,
+    width: MOMENTUM_VALUE_WIDTH,
+  },
+  compactBarArea: {
+    height: MOMENTUM_KNOB_SIZE,
+    left: 0,
+    position: 'relative',
+    top: 10,
+  },
+  compactBarTrack: {
+    borderRadius: 3,
+    height: 6,
+    left: 0,
+    overflow: 'hidden',
+    position: 'absolute',
+    right: 0,
+    top: 9,
+  },
+  compactBarFill: {
+    borderRadius: 3,
+    height: 6,
+  },
+  compactBarKnob: {
+    alignItems: 'center',
+    backgroundColor: '#FFF3DF',
+    borderRadius: MOMENTUM_KNOB_SIZE / 2,
+    elevation: 2,
+    height: MOMENTUM_KNOB_SIZE,
+    justifyContent: 'center',
+    position: 'absolute',
+    shadowOffset: {height: 2, width: 0},
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    top: 0,
+    width: MOMENTUM_KNOB_SIZE,
   },
 });

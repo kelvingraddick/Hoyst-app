@@ -1,16 +1,16 @@
 import React from 'react';
-import {Pressable, ScrollView, StyleSheet} from 'react-native';
+import {Pressable, StyleSheet} from 'react-native';
 import renderer, {act} from 'react-test-renderer';
 
 import {ActivityFeedCard} from '../src/design/components/ActivityFeedCard';
-import {FrostedBackdrop} from '../src/design/components/FrostedBackdrop';
-import {GlassPanel} from '../src/design/components/GlassPanel';
 import {HoystButton} from '../src/design/components/HoystButton';
 import {SectionEyebrow} from '../src/design/components/SectionEyebrow';
+import {WeekProgressStrip} from '../src/design/components/WeekProgressStrip';
 import {brandColors} from '../src/design/tokens/colors';
 import {HomeScreen} from '../src/features/home/screens/HomeScreen';
 import type {HomeData} from '../src/features/home/services/home-data-service';
 import {
+  getHomeCircleActionVariant,
   getHomeGreetingContext,
   getHomePrimaryAction,
   getTodayAttentionCircles,
@@ -32,6 +32,9 @@ import type {
   InboxEvent,
   MomentumSummary,
 } from '../src/types/models';
+
+const HOME_NEUTRAL_SURFACE_LIGHT = 'rgba(226,232,240,0.72)';
+const HOME_NEUTRAL_SURFACE_DARK = 'rgba(255,255,255,0.06)';
 
 const mockNavigate = jest.fn();
 const mockRootNavigate = jest.fn();
@@ -209,6 +212,27 @@ jest.mock('../src/features/home/services/home-data-service', () => ({
   })),
   getDateKey: jest.fn(() => '2026-05-26'),
   getHomeCircleActionVariant: jest.fn(() => 'view'),
+  getHomeCommitmentStackCircles: jest.fn(
+    ({
+      personalCommitments,
+      todayAttentionCircles,
+      upcomingAttentionCircles,
+    }) => {
+      const uniqueCircles = new Map();
+
+      [
+        ...personalCommitments,
+        ...todayAttentionCircles,
+        ...upcomingAttentionCircles,
+      ].forEach(circle => {
+        if (!uniqueCircles.has(circle.id)) {
+          uniqueCircles.set(circle.id, circle);
+        }
+      });
+
+      return [...uniqueCircles.values()];
+    },
+  ),
   getHomeGreetingContext: jest.fn(() => ({
     circleSummary: {
       atRiskCount: 0,
@@ -562,10 +586,16 @@ describe('HomeScreen Circle activity updates', () => {
     const tree = renderScreenTree();
     const output = JSON.stringify(tree.toJSON());
 
-    expect(output).toContain('PERSONAL COMMITMENTS');
+    expect(output).toContain('YOUR COMMITMENTS');
     expect(output).toContain('Read every day');
-    expect(output).toContain('Personal');
+    expect(output).toContain('PERSONAL');
     expect(output).not.toContain('1/1 Members');
+    expect(output).not.toContain('PERSONAL COMMITMENTS');
+    expect(
+      tree.root.findByProps({
+        testID: 'home-commitment-focused-personal-1',
+      }),
+    ).toBeTruthy();
   });
 
   it('opens the private Circles screen from the Home attention section', () => {
@@ -583,45 +613,57 @@ describe('HomeScreen Circle activity updates', () => {
     expect(mockRootNavigate).toHaveBeenCalledWith('Circles');
   });
 
-  it('renders the all-my-circles action with the shared dashed card style', () => {
+  it('renders the all-my-commitments action as a compact Home link', () => {
     const tree = renderScreenTree();
-    const allMyCirclesCard = tree.root
-      .findAllByProps({testID: 'all-my-circles-card'})
-      .find(node => node.props.style);
-    const allMyCirclesTitleStyle = tree.root
-      .findAll(node => node.props.children === 'All my commitments')
-      .map(node => StyleSheet.flatten(node.props.style))
-      .find(style => style?.fontSize === 15);
-    const allMyCirclesSubtitleStyle = tree.root
-      .findAll(
-        node => node.props.children === 'View commitments and join requests',
-      )
-      .map(node => StyleSheet.flatten(node.props.style))
-      .find(style => style?.fontSize === 14);
+    const allMyCommitmentsLink = tree.root.findByProps({
+      testID: 'all-my-commitments-link',
+    });
+    const linkPressableStyle = StyleSheet.flatten(
+      allMyCommitmentsLink.props.style({pressed: false}),
+    );
+    const linkContentStyle = StyleSheet.flatten(
+      tree.root.findByProps({testID: 'all-my-commitments-link-content'}).props
+        .style,
+    );
+    const allMyCommitmentsLabel = tree.root.findByProps({
+      testID: 'all-my-commitments-label',
+    });
+    const allMyCommitmentsLabelStyle = StyleSheet.flatten(
+      allMyCommitmentsLabel.props.style,
+    );
 
     expect(JSON.stringify(tree.toJSON())).toContain('All my commitments');
-    expect(JSON.stringify(tree.toJSON())).toContain(
+    expect(allMyCommitmentsLink.props.accessibilityRole).toBe('button');
+    expect(JSON.stringify(tree.toJSON())).not.toContain(
       'View commitments and join requests',
     );
-    expect(allMyCirclesCard).toBeTruthy();
-    expect(StyleSheet.flatten(allMyCirclesCard?.props.style)).toMatchObject({
-      borderRadius: 24,
-      borderStyle: 'dashed',
-      borderWidth: 1.25,
+    expect(
+      tree.root.findAllByProps({testID: 'all-my-circles-card'}),
+    ).toHaveLength(0);
+    expect(
+      tree.root.findByProps({testID: 'all-my-commitments-handshake'}),
+    ).toBeTruthy();
+    expect(
+      tree.root.findByProps({testID: 'all-my-commitments-chevron'}),
+    ).toBeTruthy();
+    expect(linkPressableStyle).toMatchObject({
+      marginBottom: -48,
+      marginTop: -18,
+      width: '100%',
+    });
+    expect(linkContentStyle).toMatchObject({
       flexDirection: 'row',
-      gap: 14,
-      minHeight: 78,
-      paddingHorizontal: 18,
-      paddingVertical: 12,
+      minHeight: 44,
+      transform: [{translateY: -10}],
     });
-    expect(allMyCirclesTitleStyle).toMatchObject({
-      fontSize: 15,
-      lineHeight: 18,
-    });
-    expect(allMyCirclesSubtitleStyle).toMatchObject({
+    expect(linkContentStyle.backgroundColor).toBeUndefined();
+    expect(linkContentStyle.borderWidth).toBeUndefined();
+    expect(allMyCommitmentsLabelStyle).toMatchObject({
       fontSize: 14,
-      lineHeight: 17,
+      lineHeight: 18,
+      color: '#4D5873',
     });
+    expect(allMyCommitmentsLabel.props.numberOfLines).toBe(1);
   });
 
   it('routes authenticated empty-state circle discovery to Explore', () => {
@@ -640,42 +682,83 @@ describe('HomeScreen Circle activity updates', () => {
     expect(mockNavigate).toHaveBeenCalledWith('Explore');
   });
 
-  it('renders the frosted backdrop around solid Home sections', () => {
+  it('uses a flat warm-neutral canvas and outline-free Home containers', () => {
     const tree = renderScreenTree();
+    const panelSurfaces = tree.root.findAllByProps({
+      testID: 'solid-panel-surface',
+    });
 
-    expect(tree.root.findAllByType(FrostedBackdrop)).toHaveLength(1);
-    expect(tree.root.findAllByType(GlassPanel).length).toBeGreaterThanOrEqual(
-      6,
-    );
+    expect(
+      tree.root.findAll(
+        node =>
+          StyleSheet.flatten(node.props.style)?.backgroundColor === '#FAFAF7',
+      ),
+    ).not.toHaveLength(0);
+    expect(panelSurfaces.length).toBeGreaterThan(0);
+    panelSurfaces.forEach(node => {
+      const style = StyleSheet.flatten(node.props.style);
+      expect(style.backgroundColor).toBe(HOME_NEUTRAL_SURFACE_LIGHT);
+      expect(style.borderWidth).toBe(0);
+    });
   });
 
-  it('uses opaque cool-slate panels across dark Home sections', () => {
+  it('renders Your Progress directly in the Home sheet with the notification control', () => {
+    const tree = renderScreenTree();
+    const panelSurfaces = tree.root.findAllByProps({
+      testID: 'solid-panel-surface',
+    });
+    const weekProgressStrip = tree.root.findByProps({
+      testID: 'week-progress-strip',
+    });
+    const homeProgressSection = tree.root.findByProps({
+      testID: 'home-progress-section',
+    });
+
+    expect(tree.root.findAllByType(WeekProgressStrip)).toHaveLength(1);
+    expect(StyleSheet.flatten(weekProgressStrip.props.style).gap).toBe(8);
+    expect(StyleSheet.flatten(homeProgressSection.props.style).gap).toBe(8);
+    expect(JSON.stringify(tree.toJSON())).toContain('YOUR PROGRESS');
+    expect(
+      tree.root
+        .findByProps({testID: 'week-progress-header-actions'})
+        .findAllByProps({testID: 'home-hero-notification-button'}),
+    ).not.toHaveLength(0);
+    panelSurfaces.forEach(panel => {
+      expect(panel.findAllByType(WeekProgressStrip)).toHaveLength(0);
+    });
+  });
+
+  it('uses a flat warm-neutral dark canvas and containers', () => {
     mockAppearance = 'dark';
 
     const tree = renderScreenTree();
     const panelSurfaces = tree.root.findAllByProps({
       testID: 'solid-panel-surface',
     });
+    const momentumTrackStyle = StyleSheet.flatten(
+      tree.root.findByProps({testID: 'home-momentum-bar-track'}).props.style,
+    );
 
-    expect(panelSurfaces.length).toBeGreaterThanOrEqual(6);
+    expect(panelSurfaces.length).toBeGreaterThan(0);
     panelSurfaces.forEach(node => {
-      expect(StyleSheet.flatten(node.props.style).backgroundColor).toBe(
-        '#222638',
-      );
+      const style = StyleSheet.flatten(node.props.style);
+      expect(style.backgroundColor).toBe(HOME_NEUTRAL_SURFACE_DARK);
+      expect(style.borderWidth).toBe(0);
     });
+    expect(momentumTrackStyle.backgroundColor).toBe(HOME_NEUTRAL_SURFACE_DARK);
     expect(tree.root.findAll(node => node.props.blurAmount)).toHaveLength(0);
   });
 
-  it('passes the cleaned first name into the rotating hero headline', () => {
+  it('removes the rotating hero headline and subline', () => {
     mockHomeData = {
       ...homeData(),
       todayDateKey: '2026-01-01',
     };
 
-    expect(renderScreen()).toContain('Set the tone, Kelvin.');
+    expect(renderScreen()).not.toContain('Set the tone, Kelvin.');
   });
 
-  it('keeps the lifted hero bubble and replaces the avatar with Hoy', () => {
+  it('keeps a compact flat Hoy bubble and replaces the avatar with Hoy', () => {
     const tree = renderScreenTree();
     const bubbleSurfaceStyle = StyleSheet.flatten(
       tree.root.findByProps({testID: 'home-hero-bubble-surface'}).props.style,
@@ -709,16 +792,16 @@ describe('HomeScreen Circle activity updates', () => {
         : notificationButton.props.style,
     );
 
-    expect(bubbleSurfaceStyle.elevation).toBe(4);
-    expect(bubbleSurfaceStyle.shadowOffset).toEqual({height: 7, width: 0});
-    expect(bubbleSurfaceStyle.shadowOpacity).toBe(0.72);
-    expect(bubbleSurfaceStyle.shadowRadius).toBe(18);
-    expect(bubbleFillStyle.backgroundColor).toBe('#FFFFFF');
-    expect(bubbleFillStyle.borderColor).toBe('rgba(16,24,40,0.08)');
-    expect(hoyPlaceholderStyle.height).toBe(52);
-    expect(hoyPlaceholderStyle.width).toBe(52);
-    expect(hoyPlaceholderStyle.backgroundColor).toBe('#FFFFFF');
-    expect(hoyPlaceholderStyle.borderColor).toBe('rgba(16,24,40,0.08)');
+    expect(bubbleSurfaceStyle.elevation).toBeUndefined();
+    expect(bubbleSurfaceStyle.shadowOffset).toBeUndefined();
+    expect(bubbleFillStyle.backgroundColor).toBe(HOME_NEUTRAL_SURFACE_LIGHT);
+    expect(bubbleFillStyle.borderWidth).toBeUndefined();
+    expect(hoyPlaceholderStyle.height).toBe(48);
+    expect(hoyPlaceholderStyle.width).toBe(48);
+    expect(hoyPlaceholderStyle.backgroundColor).toBe(
+      HOME_NEUTRAL_SURFACE_LIGHT,
+    );
+    expect(hoyPlaceholderStyle.borderWidth).toBeUndefined();
     expect(
       tree.root.findAllByProps({
         testID: 'home-hero-hoy-orb-thinking-image',
@@ -729,20 +812,22 @@ describe('HomeScreen Circle activity updates', () => {
         testID: 'home-hero-hoy-orb-locked-image',
       }),
     ).toHaveLength(0);
-    expect(largeTailDotStyle.backgroundColor).toBe('#FFFFFF');
-    expect(largeTailDotStyle.borderWidth).toBe(1);
-    expect(largeTailDotStyle.borderColor).toBe('rgba(16,24,40,0.08)');
-    expect(largeTailDotStyle.elevation).toBe(4);
-    expect(largeTailDotStyle.shadowOffset).toEqual({height: 6, width: 0});
-    expect(largeTailDotStyle.shadowOpacity).toBe(0.64);
-    expect(largeTailDotStyle.shadowRadius).toBe(12);
-    expect(smallTailDotStyle.backgroundColor).toBe('#FFFFFF');
-    expect(smallTailDotStyle.borderWidth).toBe(1);
-    expect(smallTailDotStyle.borderColor).toBe('rgba(16,24,40,0.08)');
-    expect(smallTailDotStyle.elevation).toBe(3);
-    expect(smallTailDotStyle.shadowOffset).toEqual({height: 5, width: 0});
-    expect(smallTailDotStyle.shadowOpacity).toBe(0.58);
-    expect(smallTailDotStyle.shadowRadius).toBe(10);
+    expect(largeTailDotStyle.backgroundColor).toBe(
+      HOME_NEUTRAL_SURFACE_LIGHT,
+    );
+    expect(largeTailDotStyle.borderWidth).toBeUndefined();
+    expect(largeTailDotStyle.height).toBe(9);
+    expect(largeTailDotStyle.width).toBe(9);
+    expect(largeTailDotStyle.elevation).toBeUndefined();
+    expect(largeTailDotStyle.shadowOffset).toBeUndefined();
+    expect(smallTailDotStyle.backgroundColor).toBe(
+      HOME_NEUTRAL_SURFACE_LIGHT,
+    );
+    expect(smallTailDotStyle.borderWidth).toBeUndefined();
+    expect(smallTailDotStyle.height).toBe(5);
+    expect(smallTailDotStyle.width).toBe(5);
+    expect(smallTailDotStyle.elevation).toBeUndefined();
+    expect(smallTailDotStyle.shadowOffset).toBeUndefined();
     expect(hoyAction.props.accessibilityRole).toBe('button');
     expect(hoyAction.props.disabled).toBe(true);
     expect(hoyAction.props.accessibilityLabel).toBe(
@@ -751,17 +836,14 @@ describe('HomeScreen Circle activity updates', () => {
     expect(notificationButton.props.accessibilityLabel).toBe(
       'Notifications, 1 unread update',
     );
-    expect(notificationButtonStyle).toMatchObject({
-      height: 44,
-      width: 44,
-    });
+    expect(notificationButtonStyle).toMatchObject({height: 36, width: 36});
     expect(unreadBadgeStyle).toMatchObject({
       backgroundColor: brandColors.red,
-      borderRadius: 11,
-      height: 22,
-      right: -7,
-      top: -7,
-      width: 22,
+      borderRadius: 9,
+      height: 18,
+      right: -5,
+      top: -5,
+      width: 18,
     });
   });
 
@@ -1126,7 +1208,7 @@ describe('HomeScreen Circle activity updates', () => {
     expect(generateHomeGreeting).not.toHaveBeenCalled();
   });
 
-  it('uses solid cool-slate hero surfaces in dark mode', () => {
+  it('uses flat dark hero surfaces without outlines', () => {
     mockAppearance = 'dark';
 
     const tree = renderScreenTree();
@@ -1140,22 +1222,18 @@ describe('HomeScreen Circle activity updates', () => {
       tree.root.findByProps({testID: 'home-hero-tail-dot-small'}).props.style,
     );
 
-    expect(bubbleFillStyle.backgroundColor).toBe('#222638');
-    expect(bubbleFillStyle.borderColor).toBe('rgba(255,255,255,0.10)');
-    expect(largeTailDotStyle.backgroundColor).toBe('#222638');
-    expect(largeTailDotStyle.borderColor).toBe('rgba(255,255,255,0.10)');
-    expect(largeTailDotStyle.borderWidth).toBe(1);
-    expect(largeTailDotStyle.height).toBe(12);
-    expect(largeTailDotStyle.width).toBe(12);
-    expect(largeTailDotStyle.elevation).toBe(4);
-    expect(largeTailDotStyle.shadowOpacity).toBe(0.64);
-    expect(smallTailDotStyle.backgroundColor).toBe('#222638');
-    expect(smallTailDotStyle.borderColor).toBe('rgba(255,255,255,0.10)');
-    expect(smallTailDotStyle.borderWidth).toBe(1);
-    expect(smallTailDotStyle.height).toBe(7);
-    expect(smallTailDotStyle.width).toBe(7);
-    expect(smallTailDotStyle.elevation).toBe(3);
-    expect(smallTailDotStyle.shadowOpacity).toBe(0.58);
+    expect(bubbleFillStyle.backgroundColor).toBe(HOME_NEUTRAL_SURFACE_DARK);
+    expect(bubbleFillStyle.borderWidth).toBeUndefined();
+    expect(largeTailDotStyle.backgroundColor).toBe(HOME_NEUTRAL_SURFACE_DARK);
+    expect(largeTailDotStyle.borderWidth).toBeUndefined();
+    expect(largeTailDotStyle.height).toBe(9);
+    expect(largeTailDotStyle.width).toBe(9);
+    expect(largeTailDotStyle.elevation).toBeUndefined();
+    expect(smallTailDotStyle.backgroundColor).toBe(HOME_NEUTRAL_SURFACE_DARK);
+    expect(smallTailDotStyle.borderWidth).toBeUndefined();
+    expect(smallTailDotStyle.height).toBe(5);
+    expect(smallTailDotStyle.width).toBe(5);
+    expect(smallTailDotStyle.elevation).toBeUndefined();
   });
 
   it('renders recent Circle activity updates and opens their deeplink', () => {
@@ -1203,6 +1281,10 @@ describe('HomeScreen Circle activity updates', () => {
       attentionLabel?.props.style,
     );
     expect(circleActivityCard.props.density).toBe('compact');
+    expect(StyleSheet.flatten(circleActivityCard.props.style)).toMatchObject({
+      backgroundColor: HOME_NEUTRAL_SURFACE_LIGHT,
+      borderWidth: 0,
+    });
     expect(circleActivityCard.props.item.mediaImageUrl).toBe(
       'https://example.com/tap-in.jpg',
     );
@@ -1226,7 +1308,7 @@ describe('HomeScreen Circle activity updates', () => {
     });
   });
 
-  it('uses the Momentum status palette and icon on Home momentum visuals', () => {
+  it('uses the Momentum status palette in the full-width Home momentum bar', () => {
     mockMomentumSummary = momentumSummary({
       label: 'Building',
       percentage: 35,
@@ -1244,78 +1326,50 @@ describe('HomeScreen Circle activity updates', () => {
     expect(
       tree.root.findByProps({testID: 'home-momentum-stage-icon'}).props.status,
     ).toBe('building_momentum');
-    expect(
-      tree.root.findByProps({testID: 'circle-summary-momentum-stage-icon'})
-        .props.status,
-    ).toBe('building_momentum');
-
     const barFillStyle = StyleSheet.flatten(
       tree.root.findByProps({testID: 'home-momentum-bar-fill'}).props.style,
     );
-    const barKnobStyle = StyleSheet.flatten(
-      tree.root.findByProps({testID: 'home-momentum-bar-knob'}).props.style,
+    const barTrackStyle = StyleSheet.flatten(
+      tree.root.findByProps({testID: 'home-momentum-bar-track'}).props.style,
     );
-    const contributionDiscStyle = StyleSheet.flatten(
-      tree.root.findByProps({testID: 'circle-summary-contribution-disc'}).props
-        .style,
+    const momentumBarStyle = StyleSheet.flatten(
+      tree.root
+        .findByProps({testID: 'home-momentum-bar'})
+        .props.style({pressed: false}),
     );
-    const momentumDiscStyle = StyleSheet.flatten(
-      tree.root.findByProps({testID: 'circle-summary-momentum-disc'}).props
-        .style,
-    );
-    const streakDiscStyle = StyleSheet.flatten(
-      tree.root.findByProps({testID: 'circle-summary-streak-disc'}).props.style,
-    );
-    const contributionIcon = tree.root.findByProps({
-      testID: 'circle-summary-contribution-icon',
-    });
-    const contributionArtwork = tree.root.findByProps({
-      testID: 'circle-summary-contribution-artwork',
-    });
-    const contributionSideLeft = tree.root.findByProps({
-      testID: 'circle-summary-contribution-side-left',
-    });
-    const contributionSideRight = tree.root.findByProps({
-      testID: 'circle-summary-contribution-side-right',
-    });
-    const contributionBadge = tree.root.findByProps({
-      testID: 'circle-summary-contribution-badge',
-    });
-    const contributionCheck = tree.root.findByProps({
-      testID: 'circle-summary-contribution-check',
-    });
-    const streakIcon = tree.root.findByProps({
-      testID: 'circle-summary-streak-icon',
-    });
 
     expect(barFillStyle.backgroundColor).toBe(brandColors.orange);
-    expect(contributionDiscStyle.backgroundColor).toBe('#E8F8EF');
-    expect(momentumDiscStyle.backgroundColor).toBe('#FFF3DF');
-    expect(streakDiscStyle.backgroundColor).toBe('#FFF3CF');
-    expect(barKnobStyle.backgroundColor).toBe('#FFF3DF');
-    expect(barKnobStyle.borderWidth).toBeUndefined();
-    expect(contributionIcon.props.height).toBe(28);
-    expect(contributionIcon.props.width).toBe(28);
-    expect(contributionArtwork.props.transform).toBe('translate(0 -4)');
-    expect(contributionSideLeft.props.fill).toBe('#0E9B57');
-    expect(contributionSideLeft.props.opacity).toBe(0.5);
-    expect(contributionSideRight.props.fill).toBe('#0E9B57');
-    expect(contributionSideRight.props.opacity).toBe(0.5);
-    expect(contributionBadge.props.fill).toBe(brandColors.green);
-    expect(contributionCheck.props.stroke).toBe('#FFFFFF');
-    expect(contributionCheck.props.strokeWidth).toBe(4.2);
-    expect(streakIcon.props.height).toBe(28);
-    expect(streakIcon.props.width).toBe(28);
+    expect(barFillStyle.width).toBe('30%');
+    expect(barTrackStyle.backgroundColor).toBe(HOME_NEUTRAL_SURFACE_LIGHT);
+    expect(momentumBarStyle.width).toBe('100%');
+    expect(
+      tree.root.findAllByProps({
+        testID: 'circle-summary-contribution-disc',
+      }),
+    ).toHaveLength(0);
+    expect(
+      tree.root.findAllByProps({testID: 'circle-summary-momentum-disc'}),
+    ).toHaveLength(0);
+    expect(
+      tree.root.findAllByProps({testID: 'circle-summary-streak-disc'}),
+    ).toHaveLength(0);
     const textLabels = tree.root
       .findAll(node => typeof node.props.children === 'string')
       .map(node => node.props.children);
-    expect(textLabels).toContain('Streak');
-    expect(textLabels).toContain('0 days');
-    expect(textLabels).not.toContain('Streak (0 Days!)');
-    expect(textLabels).toContain('Building');
+    expect(textLabels).toContain('30% MOMENTUM');
+    expect(
+      tree.root.findAllByProps({testID: 'home-momentum-bar-label'}),
+    ).toHaveLength(0);
+    const momentumValueStyle = StyleSheet.flatten(
+      tree.root.findByProps({testID: 'home-momentum-value'}).props.style,
+    );
+    expect(momentumValueStyle.color).toBe('#9A9ABC');
+    expect(
+      tree.root.findByProps({accessibilityLabel: '14-day momentum, 30%'}),
+    ).toBeTruthy();
   });
 
-  it('shows calibration progress instead of the provisional rolling score', () => {
+  it('shows the raw rolling score in the relocated Home momentum bar', () => {
     mockMomentumSummary = momentumSummary({
       rollingMomentum: {
         hasUnrecoveredMiss: false,
@@ -1334,16 +1388,14 @@ describe('HomeScreen Circle activity updates', () => {
       tree.root.findByProps({testID: 'home-momentum-bar-fill'}).props.style,
     );
 
-    expect(textLabels).toContain('14-DAY MOMENTUM');
-    expect(textLabels).toContain('Getting Started · 2 of 3');
-    expect(textLabels).not.toContain('Peak · 100%');
-    expect(barFillStyle.width).toBe('67%');
     expect(
-      tree.root.findByProps({testID: 'home-momentum-stage-icon'}).props.status,
-    ).toBe('getting_started');
+      tree.root.findByProps({accessibilityLabel: '14-day momentum, 100%'}),
+    ).toBeTruthy();
+    expect(textLabels).not.toContain('Getting Started · 2 of 3');
+    expect(barFillStyle.width).toBe('100%');
   });
 
-  it('renders Your week day circles with state-based frosted styling', () => {
+  it('renders Your Progress circles with state-based frosted styling', () => {
     mockHomeData = {
       ...homeData(),
       progressDays: [
@@ -1367,6 +1419,9 @@ describe('HomeScreen Circle activity updates', () => {
       tree.root.findByProps({testID: 'week-progress-2026-05-27-chip'}).props
         .style,
     );
+    const textLabels = tree.root
+      .findAll(node => typeof node.props.children === 'string')
+      .map(node => node.props.children);
 
     expect(doneChipStyle.height).toBe(32);
     expect(doneChipStyle.width).toBe(32);
@@ -1379,31 +1434,72 @@ describe('HomeScreen Circle activity updates', () => {
     expect(futureChipStyle.backgroundColor).toBe('rgba(226,232,240,0.72)');
     expect(futureChipStyle.borderColor).toBe('rgba(148,163,184,0.42)');
     expect(futureChipStyle.borderWidth).toBe(1.25);
+    expect(textLabels).toEqual(
+      expect.arrayContaining(['Sun', 'Mon', 'Tue', 'Wed']),
+    );
   });
 
-  it('renders Home attention circles as horizontal peek cards with title spacing', () => {
+  it('focuses Home commitments as a stacked list and routes its actions', () => {
     (getTodayAttentionCircles as jest.Mock).mockReturnValue([
       attentionCircle(),
+      attentionCircle({
+        id: 'circle-second',
+        title: 'Morning Walk',
+      }),
     ]);
     mockHomeData = {
       ...homeData(),
-      circles: [attentionCircle()],
-      membershipCount: 1,
+      circles: [
+        attentionCircle(),
+        attentionCircle({id: 'circle-second', title: 'Morning Walk'}),
+      ],
+      membershipCount: 2,
     };
 
     const tree = renderScreenTree();
     const output = JSON.stringify(tree.toJSON());
-    const attentionScroll = tree.root.findByProps({
-      testID: 'home-attention-scroll',
-    });
-    const attentionSectionStyle = StyleSheet.flatten(
-      attentionScroll.parent?.props.style,
-    );
 
     expect(output).toContain('Sleep 8 Hours');
-    expect(output).toContain('Sleep 8 hours in a day');
-    expect(attentionScroll.type).toBe(ScrollView);
-    expect(attentionScroll.props.horizontal).toBe(true);
-    expect(attentionSectionStyle.gap).toBe(14);
+    expect(output).toContain('YOUR COMMITMENTS');
+    expect(
+      tree.root.findByProps({
+        testID: 'home-commitment-focused-circle-attention',
+      }),
+    ).toBeTruthy();
+
+    act(() => {
+      tree.root
+        .findByProps({testID: 'home-commitment-collapsed-circle-second'})
+        .props.onPress();
+    });
+
+    expect(
+      tree.root.findByProps({
+        testID: 'home-commitment-focused-circle-second',
+      }),
+    ).toBeTruthy();
+
+    act(() => {
+      tree.root
+        .findByProps({testID: 'home-commitment-details-circle-second'})
+        .props.onPress();
+    });
+
+    expect(mockRootNavigate).toHaveBeenCalledWith('CircleDetail', {
+      circleId: 'circle-second',
+    });
+
+    (getHomeCircleActionVariant as jest.Mock).mockReturnValue('check_in');
+
+    act(() => {
+      tree.root
+        .findByProps({testID: 'home-commitment-check-circle-second'})
+        .props.onPress();
+    });
+
+    expect(mockRootNavigate).toHaveBeenCalledWith('TapInComposer', {
+      circleId: 'circle-second',
+      source: 'home',
+    });
   });
 });

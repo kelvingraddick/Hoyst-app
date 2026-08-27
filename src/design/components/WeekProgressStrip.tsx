@@ -10,10 +10,13 @@ import {MomentumFlameIllustration} from './MomentumIllustrations';
 import {SectionEyebrow} from './SectionEyebrow';
 
 type WeekProgressStripProps = {
+  compact?: boolean;
   days: WeekProgressDay[];
+  headerAccessory?: React.ReactNode;
   showStreak?: boolean;
   streakDays?: number;
   title?: string;
+  weekdayLabelLength?: 2 | 3;
 };
 
 type WeekProgressDay = HomeProgressCell & {
@@ -28,18 +31,39 @@ type DayCircleVisual = {
   label: string;
 };
 
-const WEEKDAY_LABELS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'] as const;
+const TWO_LETTER_WEEKDAY_LABELS = [
+  'Su',
+  'Mo',
+  'Tu',
+  'We',
+  'Th',
+  'Fr',
+  'Sa',
+] as const;
+const THREE_LETTER_WEEKDAY_LABELS = [
+  'Sun',
+  'Mon',
+  'Tue',
+  'Wed',
+  'Thu',
+  'Fri',
+  'Sat',
+] as const;
 
 // progressDays labels are day-of-month ("03"); the strip shows weekday names
 // like the reference design, derived from the cell's date key.
-function getWeekdayLabel(day: WeekProgressDay) {
+function getWeekdayLabel(day: WeekProgressDay, weekdayLabelLength: 2 | 3) {
   const date = new Date(`${day.dateKey}T12:00:00`);
 
   if (Number.isNaN(date.getTime())) {
     return day.label;
   }
 
-  return WEEKDAY_LABELS[date.getDay()];
+  return (
+    weekdayLabelLength === 3
+      ? THREE_LETTER_WEEKDAY_LABELS
+      : TWO_LETTER_WEEKDAY_LABELS
+  )[date.getDay()];
 }
 
 function getDayCircleVisual(
@@ -230,7 +254,13 @@ function DayPartialRing({
   );
 }
 
-function DayCell({day}: {day: WeekProgressDay}) {
+function DayCell({
+  day,
+  weekdayLabelLength,
+}: {
+  day: WeekProgressDay;
+  weekdayLabelLength: 2 | 3;
+}) {
   const theme = useHoystTheme();
   const partialProgress = getPartialProgress(day);
   const visual = getDayCircleVisual(
@@ -238,7 +268,7 @@ function DayCell({day}: {day: WeekProgressDay}) {
     day.state,
     partialProgress !== undefined,
   );
-  const weekdayLabel = getWeekdayLabel(day);
+  const weekdayLabel = getWeekdayLabel(day, weekdayLabelLength);
 
   return (
     <View
@@ -317,27 +347,44 @@ function StreakPill({streakDays}: {streakDays: number}) {
   );
 }
 
-// "Your week" content (v4 frosted style): an eyebrow + streak pill header over
-// a row of seven soft day circles. Render inside a GlassPanel.
+// "Your week" content: an eyebrow + streak pill header over a row of seven
+// soft day circles. It can render as a standalone section or in a panel.
 export function WeekProgressStrip({
+  compact = false,
   days,
+  headerAccessory,
   showStreak = true,
   streakDays = 0,
   title = 'Your last 7 days',
+  weekdayLabelLength = 2,
 }: WeekProgressStripProps): React.JSX.Element {
   const accessibilityLabel = showStreak
-    ? `Last 7 days, ${streakDays} day streak`
+    ? `${title}, ${streakDays} day streak`
     : title;
 
   return (
-    <View accessibilityLabel={accessibilityLabel} style={styles.strip}>
+    <View
+      accessibilityLabel={accessibilityLabel}
+      style={[styles.strip, compact ? styles.stripCompact : undefined]}
+      testID="week-progress-strip">
       <View style={styles.header}>
         <SectionEyebrow>{title}</SectionEyebrow>
-        {showStreak ? <StreakPill streakDays={streakDays} /> : null}
+        {showStreak || headerAccessory ? (
+          <View
+            style={styles.headerActions}
+            testID="week-progress-header-actions">
+            {showStreak ? <StreakPill streakDays={streakDays} /> : null}
+            {headerAccessory}
+          </View>
+        ) : null}
       </View>
       <View style={styles.daysRow}>
         {days.map(day => (
-          <DayCell day={day} key={day.dateKey} />
+          <DayCell
+            day={day}
+            key={day.dateKey}
+            weekdayLabelLength={weekdayLabelLength}
+          />
         ))}
       </View>
     </View>
@@ -348,10 +395,18 @@ const styles = StyleSheet.create({
   strip: {
     gap: 16,
   },
+  stripCompact: {
+    gap: 8,
+  },
   header: {
     alignItems: 'center',
     flexDirection: 'row',
     justifyContent: 'space-between',
+  },
+  headerActions: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 8,
   },
   daysRow: {
     flexDirection: 'row',

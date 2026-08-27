@@ -12,7 +12,7 @@ export function HoystTabBarBackground(): React.JSX.Element {
         StyleSheet.absoluteFill,
         styles.clip,
         {
-          backgroundColor: theme.panelSurface,
+          backgroundColor: theme.tabBarSurface,
           borderColor: theme.border,
         },
       ]}

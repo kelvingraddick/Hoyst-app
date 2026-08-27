@@ -8,6 +8,7 @@ import {
   createEmptyHomeData,
   getHomeFilterCounts,
   getHomeCircleActionVariant,
+  getHomeCommitmentStackCircles,
   getHomeGreetingContext,
   getHomeGreetingFallback,
   getHomeGreetingTimeWindow,
@@ -84,6 +85,38 @@ describe('home data mapping', () => {
     });
 
     expect(getHomeCircleActionVariant(personal)).toBe('view');
+  });
+
+  it('builds a de-duplicated commitment stack and moves completed daily cards to the end', () => {
+    const urgent = homeCard({
+      id: 'urgent',
+      state: 'risk',
+      title: 'Urgent Tap In',
+    });
+    const personal = homeCard({
+      circleMode: 'personal',
+      id: 'personal',
+      title: 'Read every day',
+    });
+    const complete = homeCard({
+      id: 'complete',
+      progressPercent: 100,
+      remainingCheckIns: 0,
+      state: 'done',
+      title: 'Completed today',
+      viewerHasCheckedIn: true,
+      viewerHasTappedInToday: true,
+      viewerRemainingTapIns: 0,
+      viewerTodayStatus: 'done',
+    });
+
+    expect(
+      getHomeCommitmentStackCircles({
+        personalCommitments: [personal],
+        todayAttentionCircles: [urgent, complete],
+        upcomingAttentionCircles: [complete],
+      }).map(circle => circle.id),
+    ).toEqual(['urgent', 'personal', 'complete']);
   });
 
   it('builds group last-7-days progress with partial, empty, complete, and skip-covered days', () => {

@@ -183,7 +183,7 @@ export function AppTabsNavigator({
         tabBarHideOnKeyboard: true,
         tabBarIconStyle:
           route.name === 'TapIn' ? styles.tapInIconSlot : styles.tabBarIcon,
-        tabBarInactiveTintColor: theme.text,
+        tabBarInactiveTintColor: inactiveIconColor,
         tabBarItemStyle: styles.tabBarItem,
         tabBarLabelStyle: styles.tabBarLabel,
         tabBarStyle: [

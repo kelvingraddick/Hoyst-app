@@ -11,26 +11,29 @@ import {
 import type {BottomTabNavigationProp} from '@react-navigation/bottom-tabs';
 import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import {useFocusEffect, useNavigation} from '@react-navigation/native';
-import {UsersRound} from 'lucide-react-native';
+import {ChevronRight, Handshake} from 'lucide-react-native';
 
 import {ActivityFeedCard} from '../../../design/components/ActivityFeedCard';
-import {CircleSummaryRings} from '../../../design/components/CircleSummaryRings';
-import {FrostedBackdrop} from '../../../design/components/FrostedBackdrop';
 import {GlassPanel} from '../../../design/components/GlassPanel';
-import {HomeHeroHeader} from '../../../design/components/HomeHeroHeader';
+import {
+  HomeHeroHeader,
+  HomeMomentumBar,
+  HomeNotificationButton,
+} from '../../../design/components/HomeHeroHeader';
 import {HoystButton} from '../../../design/components/HoystButton';
+import {HoystText} from '../../../design/components/HoystText';
 import {SectionEyebrow} from '../../../design/components/SectionEyebrow';
 import {SectionHeader} from '../../../design/components/SectionHeader';
-import {TodayCircleCard} from '../../../design/components/TodayCircleCard';
 import {WeekProgressStrip} from '../../../design/components/WeekProgressStrip';
 import {useHoystTheme} from '../../../design/theme/useHoystTheme';
+import {actionMotion} from '../../../design/tokens/actions';
 import {useProtectedAction} from '../../auth/hooks/useProtectedAction';
-import {getHomeHeroCopy} from '../services/home-hero-copy';
 import {
   createEmptyHomeData,
   getHomeCircleActionVariant,
   getHomeGreetingContext,
   getHomeGreetingFallback,
+  getHomeCommitmentStackCircles,
   getHomePrimaryAction,
   getNextHomeActionBoundary,
   getTodayAttentionCircles,
@@ -40,6 +43,7 @@ import {
   subscribeToHomeData,
   type HomeData,
 } from '../services/home-data-service';
+import {HomeCommitmentStack} from '../components/HomeCommitmentStack';
 import {
   buildHomeGreetingCacheKey,
   clearExpiredHomeGreetingCacheEntries,
@@ -69,7 +73,6 @@ import {useOnboardingStore} from '../../../store/onboarding-store';
 import {useHoyFeedbackStore} from '../../../store/hoy-feedback-store';
 import {useUserProfileStore} from '../../../store/profile-store';
 import {useSessionStore} from '../../../store/session-store';
-import {CircleActionCard} from '../../circles/components/CircleActionCard';
 import {nudgeCircleMembers} from '../../circles/services/circle-service';
 import {
   isCircleActivityEvent,
@@ -96,6 +99,14 @@ function canInvite(circle: CircleManagementCard) {
   return Boolean(
     circle.inviteUrl &&
       (circle.viewerRole === 'owner' || circle.viewerRole === 'admin'),
+  );
+}
+
+function isCompletedDailyHomeCommitment(circle: CircleManagementCard) {
+  return Boolean(
+    circle.commitmentCadence === 'daily' &&
+      circle.viewerHasTappedInToday &&
+      getHomeCircleActionVariant(circle) !== 'nudge',
   );
 }
 
@@ -210,6 +221,7 @@ export function HomeScreen(): React.JSX.Element {
   const [nudgingCircleIds, setNudgingCircleIds] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
+  const [focusedCommitmentId, setFocusedCommitmentId] = useState<string>();
   const [homeGreetingState, setHomeGreetingState] =
     useState<HomeGreetingState>();
   const [homeClock, setHomeClock] = useState(() => new Date());
@@ -227,6 +239,9 @@ export function HomeScreen(): React.JSX.Element {
   const lastResolvedGreetingRef = useRef<
     {headline: string; sessionKey: string} | undefined
   >(undefined);
+  const previousFocusedCommitmentRef = useRef<CircleManagementCard | undefined>(
+    undefined,
+  );
   const hoyCelebrationTimerRef = useRef<
     ReturnType<typeof setTimeout> | undefined
   >(undefined);
@@ -375,6 +390,49 @@ export function HomeScreen(): React.JSX.Element {
     () => getUpcomingAttentionCircles(groupCircles),
     [groupCircles],
   );
+  const commitmentStackCircles = useMemo(
+    () =>
+      getHomeCommitmentStackCircles({
+        personalCommitments,
+        todayAttentionCircles: todayActionCircles,
+        upcomingAttentionCircles: upcomingActionCircles,
+      }),
+    [personalCommitments, todayActionCircles, upcomingActionCircles],
+  );
+
+  useEffect(() => {
+    if (commitmentStackCircles.length === 0) {
+      previousFocusedCommitmentRef.current = undefined;
+      if (focusedCommitmentId) {
+        setFocusedCommitmentId(undefined);
+      }
+      return;
+    }
+
+    const focusedCommitment = commitmentStackCircles.find(
+      circle => circle.id === focusedCommitmentId,
+    );
+    const previousFocusedCommitment = previousFocusedCommitmentRef.current;
+    const completedWhileFocused = Boolean(
+      focusedCommitment &&
+        previousFocusedCommitment?.id === focusedCommitment.id &&
+        !previousFocusedCommitment.viewerHasTappedInToday &&
+        isCompletedDailyHomeCommitment(focusedCommitment),
+    );
+    const nextIncompleteCommitment = commitmentStackCircles.find(
+      circle => !isCompletedDailyHomeCommitment(circle),
+    );
+    const nextFocusedCommitment =
+      !focusedCommitment || completedWhileFocused
+        ? nextIncompleteCommitment ?? commitmentStackCircles[0]
+        : focusedCommitment;
+
+    if (nextFocusedCommitment.id !== focusedCommitmentId) {
+      setFocusedCommitmentId(nextFocusedCommitment.id);
+    }
+
+    previousFocusedCommitmentRef.current = nextFocusedCommitment;
+  }, [commitmentStackCircles, focusedCommitmentId]);
   const homePrimaryAction = useMemo(
     () =>
       getHomePrimaryAction({
@@ -469,13 +527,6 @@ export function HomeScreen(): React.JSX.Element {
   });
   const isCandidateHoyStateResolved =
     !isSessionResolving && candidateHoyState !== 'thinking';
-  const heroCopy = getHomeHeroCopy({
-    dateKey: homeData.todayDateKey,
-    firstName: homeGreetingContext.firstName,
-    momentumStatus: momentumDisplay.status,
-    streakDays: homeData.personalStreakDays,
-    timeWindow: homeGreetingContext.timeWindow,
-  });
   const showAccountPrompt = status === 'guest' || isIncompleteProfile;
   const showAuthenticatedEmptyState = shouldShowAuthenticatedHomeEmptyState({
     circleCount: homeData.circles.length,
@@ -503,9 +554,14 @@ export function HomeScreen(): React.JSX.Element {
     () => circleActivityEvents.map(mapInboxEventToActivity),
     [circleActivityEvents],
   );
+  const homeNeutralSurfaceColor = theme.neutralSurface;
   const homeCardLiftStyle = [
     styles.homeCardLift,
-    {shadowColor: theme.glassShadow},
+    {
+      backgroundColor: homeNeutralSurfaceColor,
+      borderWidth: 0,
+      shadowColor: theme.glassShadow,
+    },
   ];
 
   useEffect(() => {
@@ -878,8 +934,8 @@ export function HomeScreen(): React.JSX.Element {
   };
 
   return (
-    <View style={[styles.root, {backgroundColor: theme.background}]}>
-      <FrostedBackdrop />
+    <View
+      style={[styles.root, theme.isDark ? styles.rootDark : styles.rootLight]}>
       <ScrollView
         bounces={false}
         contentContainerStyle={styles.scrollContent}
@@ -887,7 +943,6 @@ export function HomeScreen(): React.JSX.Element {
         style={styles.scroll}>
         <HomeHeroHeader
           bubbleText={bubbleText}
-          copy={heroCopy}
           hoyAccessibilityLabel={getHoyAccessibilityLabel({
             headline: bubbleText,
             isDisabled: isHoyActionDisabled,
@@ -896,41 +951,39 @@ export function HomeScreen(): React.JSX.Element {
           hoyCelebrationKey={hoyCelebrationKey}
           hoyState={displayedHoyState}
           isHoyActionDisabled={isHoyActionDisabled}
-          momentumDetail={
-            momentumDisplay.isCalibrating
-              ? `${momentumDisplay.label} · ${momentumDisplay.resolvedOpportunityCount} of ${momentumDisplay.requiredResolvedOpportunityCount}`
-              : `${momentumDisplay.label} · ${momentumDisplay.rawRollingPercentage}%`
-          }
-          momentumPercent={momentumDisplay.displayProgress}
-          momentumStatus={momentumDisplay.status}
-          notificationAccessibilityLabel={getNotificationAccessibilityLabel(
-            unreadInboxCount,
-          )}
-          notificationBadgeText={getInboxBadgeText(unreadInboxCount)}
           onHoyActionPress={handleHoyAction}
-          onMomentumPress={() => navigation.navigate('Momentum')}
-          onNotificationPress={openInbox}
+          surfaceColor={homeNeutralSurfaceColor}
         />
         <View style={styles.sheet}>
-          <GlassPanel padding="regular" style={homeCardLiftStyle}>
+          <View
+            style={styles.homeProgressSection}
+            testID="home-progress-section">
             <WeekProgressStrip
+              compact
               days={homeData.progressDays}
+              headerAccessory={
+                <HomeNotificationButton
+                  accessibilityLabel={getNotificationAccessibilityLabel(
+                    unreadInboxCount,
+                  )}
+                  badgeText={getInboxBadgeText(unreadInboxCount)}
+                  onPress={openInbox}
+                />
+              }
               streakDays={homeData.personalStreakDays}
+              title="YOUR PROGRESS"
+              weekdayLabelLength={3}
             />
-          </GlassPanel>
-
-          <CircleSummaryRings
-            contributionPercent={homeData.progressPercent}
-            momentumLabel={momentumDisplay.label}
-            momentumPercent={momentumDisplay.displayProgress}
-            momentumStatus={momentumDisplay.status}
-            onPress={() => navigation.navigate('Momentum')}
-            surfaceStyle={homeCardLiftStyle}
-            streakDays={homeData.personalStreakDays}
-          />
+            <HomeMomentumBar
+              momentumPercent={momentumDisplay.rawRollingPercentage}
+              momentumStatus={momentumDisplay.status}
+              onPress={() => navigation.navigate('Momentum')}
+              trackColor={homeNeutralSurfaceColor}
+            />
+          </View>
 
           {showAccountPrompt ? (
-            <GlassPanel style={styles.emptyPanel}>
+            <GlassPanel style={[styles.emptyPanel, homeCardLiftStyle]}>
               <SectionHeader
                 description={
                   isIncompleteProfile
@@ -961,47 +1014,20 @@ export function HomeScreen(): React.JSX.Element {
 
           {isAuthenticatedHome ? (
             <View style={styles.circlesSection}>
-              {personalCommitments.length > 0 ? (
-                <View style={styles.circleSectionGroup}>
-                  <SectionEyebrow>PERSONAL COMMITMENTS</SectionEyebrow>
-                  {personalCommitments.map(commitment => (
-                    <TodayCircleCard
-                      card={commitment}
-                      key={commitment.id}
-                      onActionPress={() => handleCircleAction(commitment)}
-                      onCardPress={() => openCircleDetail(commitment.id)}
-                      surfaceStyle={homeCardLiftStyle}
-                      variant="list"
-                    />
-                  ))}
-                </View>
-              ) : null}
+              <SectionEyebrow>YOUR COMMITMENTS</SectionEyebrow>
 
-              <SectionEyebrow>CIRCLES THAT NEED ATTENTION NOW</SectionEyebrow>
-
-              {todayActionCircles.length > 0 ? (
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  style={styles.attentionScroll}
-                  testID="home-attention-scroll"
-                  contentContainerStyle={styles.attentionScrollContent}>
-                  {todayActionCircles.map(circle => (
-                    <TodayCircleCard
-                      card={circle}
-                      isNudged={nudgedCircleIds.has(circle.id)}
-                      isNudging={nudgingCircleIds.has(circle.id)}
-                      key={circle.id}
-                      onActionPress={() => handleCircleAction(circle)}
-                      onCardPress={() => openCircleDetail(circle.id)}
-                      surfaceStyle={homeCardLiftStyle}
-                      useCategoryTintGradient
-                      variant="attention"
-                    />
-                  ))}
-                </ScrollView>
+              {commitmentStackCircles.length > 0 ? (
+                <HomeCommitmentStack
+                  cards={commitmentStackCircles}
+                  focusedCardId={focusedCommitmentId}
+                  isNudged={circleId => nudgedCircleIds.has(circleId)}
+                  isNudging={circleId => nudgingCircleIds.has(circleId)}
+                  onActionPress={handleCircleAction}
+                  onFocusCard={setFocusedCommitmentId}
+                  onViewDetails={openCircleDetail}
+                />
               ) : !showAuthenticatedEmptyState ? (
-                <GlassPanel style={styles.emptyPanel}>
+                <GlassPanel style={[styles.emptyPanel, homeCardLiftStyle]}>
                   <SectionHeader
                     description="No Tap In or Nudge needs your attention today."
                     title="Today is clear"
@@ -1009,48 +1035,46 @@ export function HomeScreen(): React.JSX.Element {
                 </GlassPanel>
               ) : null}
 
-              <CircleActionCard
+              <Pressable
                 accessibilityLabel="All my commitments"
+                accessibilityRole="button"
                 onPress={() => rootNavigation?.navigate('Circles')}
-                renderIcon={color => (
-                  <UsersRound color={color} size={24} strokeWidth={2.4} />
-                )}
-                subtitle="View commitments and join requests"
-                testID="all-my-circles-card"
-                title="All my commitments"
-              />
-            </View>
-          ) : null}
-
-          {isAuthenticatedHome && upcomingActionCircles.length > 0 ? (
-            <View style={styles.circleSectionGroup}>
-              <SectionEyebrow>
-                CIRCLES THAT WILL NEED ACTION SOON
-              </SectionEyebrow>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                style={styles.upcomingScroll}
-                contentContainerStyle={styles.upcomingScrollContent}>
-                {upcomingActionCircles.map(circle => (
-                  <TodayCircleCard
-                    card={circle}
-                    isNudged={nudgedCircleIds.has(circle.id)}
-                    isNudging={nudgingCircleIds.has(circle.id)}
-                    key={circle.id}
-                    onActionPress={() => handleCircleAction(circle)}
-                    onCardPress={() => openCircleDetail(circle.id)}
-                    surfaceStyle={homeCardLiftStyle}
-                    useCategoryTintGradient
-                    variant="upcoming"
+                style={({pressed}) => [
+                  styles.allMyCommitmentsPressable,
+                  {opacity: pressed ? actionMotion.pressedOpacity : 1},
+                ]}
+                testID="all-my-commitments-link">
+                <View
+                  style={styles.allMyCommitmentsLink}
+                  testID="all-my-commitments-link-content">
+                  <Handshake
+                    color={theme.textMuted}
+                    size={20}
+                    strokeWidth={2.4}
+                    testID="all-my-commitments-handshake"
                   />
-                ))}
-              </ScrollView>
+                  <HoystText
+                    numberOfLines={1}
+                    style={[
+                      styles.allMyCommitmentsLabel,
+                      {color: theme.textMuted},
+                    ]}
+                    testID="all-my-commitments-label">
+                    All my commitments
+                  </HoystText>
+                  <ChevronRight
+                    color={theme.textMuted}
+                    size={20}
+                    strokeWidth={2.6}
+                    testID="all-my-commitments-chevron"
+                  />
+                </View>
+              </Pressable>
             </View>
           ) : null}
 
           {isLoadingHomeData ? (
-            <GlassPanel style={styles.emptyPanel}>
+            <GlassPanel style={[styles.emptyPanel, homeCardLiftStyle]}>
               <SectionHeader
                 description="Pulling your live Circle Progress from Hoyst."
                 title="Loading your circles"
@@ -1059,7 +1083,7 @@ export function HomeScreen(): React.JSX.Element {
           ) : null}
 
           {showHomeDataErrorPanel ? (
-            <GlassPanel style={styles.emptyPanel}>
+            <GlassPanel style={[styles.emptyPanel, homeCardLiftStyle]}>
               <SectionHeader
                 description="Your account is connected, but Home could not load live circle data."
                 title="Could not load Home"
@@ -1068,7 +1092,7 @@ export function HomeScreen(): React.JSX.Element {
           ) : null}
 
           {showAuthenticatedEmptyState ? (
-            <GlassPanel style={styles.emptyPanel}>
+            <GlassPanel style={[styles.emptyPanel, homeCardLiftStyle]}>
               <View style={styles.emptyActions}>
                 <HoystButton
                   label="Find circles"
@@ -1079,7 +1103,15 @@ export function HomeScreen(): React.JSX.Element {
           ) : null}
 
           {isAuthenticatedHome ? (
-            <View style={styles.circleSectionGroup}>
+            <View
+              style={[
+                styles.circleSectionGroup,
+                !isLoadingHomeData &&
+                !showHomeDataErrorPanel &&
+                !showAuthenticatedEmptyState
+                  ? styles.circleSectionGroupAfterCommitments
+                  : null,
+              ]}>
               <SectionEyebrow>CIRCLE ACTIVITY</SectionEyebrow>
               {circleActivityUpdates.length > 0 ? (
                 circleActivityUpdates.map((item, index) => (
@@ -1094,7 +1126,7 @@ export function HomeScreen(): React.JSX.Element {
                   </Pressable>
                 ))
               ) : (
-                <GlassPanel>
+                <GlassPanel style={homeCardLiftStyle}>
                   <SectionHeader
                     description="Tap Ins, skips, joins, nudges, and milestones will appear here."
                     title="No Circle activity yet"
@@ -1110,8 +1142,34 @@ export function HomeScreen(): React.JSX.Element {
 }
 
 const styles = StyleSheet.create({
+  allMyCommitmentsLabel: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '700',
+    letterSpacing: 0,
+    lineHeight: 18,
+  },
+  allMyCommitmentsLink: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 8,
+    minHeight: 44,
+    paddingVertical: 8,
+    transform: [{translateY: -10}],
+  },
+  allMyCommitmentsPressable: {
+    marginBottom: -48,
+    marginTop: -18,
+    width: '100%',
+  },
   root: {
     flex: 1,
+  },
+  rootDark: {
+    backgroundColor: '#121212',
+  },
+  rootLight: {
+    backgroundColor: '#FAFAF7',
   },
   scroll: {
     backgroundColor: 'transparent',
@@ -1126,22 +1184,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 22,
     paddingTop: 14,
   },
-  upcomingScroll: {
-    marginHorizontal: -20,
-  },
-  upcomingScrollContent: {
-    gap: 12,
-    paddingHorizontal: 20,
-  },
-  attentionScroll: {
-    marginHorizontal: -22,
-  },
-  attentionScrollContent: {
-    gap: 12,
-    paddingHorizontal: 22,
+  homeProgressSection: {
+    gap: 8,
   },
   circleSectionGroup: {
     gap: 12,
+  },
+  circleSectionGroupAfterCommitments: {
+    marginTop: -20,
   },
   circlesSection: {
     gap: 14,
