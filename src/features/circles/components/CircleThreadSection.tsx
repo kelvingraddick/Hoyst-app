@@ -23,7 +23,6 @@ import {
 } from 'lucide-react-native';
 import {launchImageLibrary} from 'react-native-image-picker';
 
-import {GlassPanel} from '../../../design/components/GlassPanel';
 import {HoystAvatar} from '../../../design/components/HoystAvatar';
 import {HoystText} from '../../../design/components/HoystText';
 import {SectionEyebrow} from '../../../design/components/SectionEyebrow';
@@ -168,17 +167,9 @@ function ShareTapInButton({onPress}: {onPress: () => void}) {
       ]}>
       <Share2
         color={theme.accentSecondaryForeground}
-        size={14}
+        size={18}
         strokeWidth={2.4}
       />
-      <HoystText
-        style={[
-          styles.shareTapInLabel,
-          {color: theme.accentSecondaryForeground},
-        ]}
-        variant="caption">
-        Share Tap In
-      </HoystText>
     </Pressable>
   );
 }
@@ -196,12 +187,9 @@ function ThreadMessageBubble({
 }) {
   const theme = useHoystTheme();
   const isViewer = Boolean(viewerUid && item.actor.uid === viewerUid);
-  const bubbleColor = isViewer
-    ? brandColors.blueVivid
-    : theme.isDark
-    ? 'rgba(255,255,255,0.10)'
-    : 'rgba(255,255,255,0.86)';
-  const textColor = isViewer ? brandColors.white : theme.text;
+  const isLikeDisabled = isViewer || readOnly;
+  const bubbleColor = isViewer ? theme.surfaceHigh : theme.surfaceStrong;
+  const hasFeedback = !isLikeDisabled || item.likeCount > 0;
 
   return (
     <View
@@ -224,13 +212,33 @@ function ThreadMessageBubble({
         ]}>
         <View
           style={[
+            styles.messageHeader,
+            isViewer ? styles.viewerMessageHeader : undefined,
+          ]}>
+          <HoystText
+            style={styles.messageAuthor}
+            testID={`circle-thread-message-author-${item.id}`}
+            tone={isViewer ? 'muted' : undefined}
+            variant="caption">
+            {isViewer ? 'You' : item.actor.name}
+          </HoystText>
+          <HoystText
+            style={styles.timestampText}
+            tone="muted"
+            variant="caption">
+            {item.createdAtLabel}
+          </HoystText>
+        </View>
+        <View
+          style={[
             styles.messageBubble,
             isViewer ? styles.viewerBubble : styles.companionBubble,
             {
               backgroundColor: bubbleColor,
-              borderColor: isViewer ? 'transparent' : theme.glassBorder,
+              borderColor: isViewer ? theme.borderStrong : theme.border,
             },
-          ]}>
+          ]}
+          testID={`circle-thread-message-bubble-${item.id}`}>
           {item.mediaImageUrl ? (
             <Image
               resizeMode="cover"
@@ -240,28 +248,24 @@ function ThreadMessageBubble({
             />
           ) : null}
           {item.text ? (
-            <HoystText style={[styles.messageText, {color: textColor}]}>
+            <HoystText style={[styles.messageText, {color: theme.text}]}>
               {item.text}
             </HoystText>
           ) : null}
         </View>
-        <View
-          style={[
-            styles.messageMetaRow,
-            isViewer ? styles.viewerMessageMetaRow : undefined,
-          ]}>
-          <LikeButton
-            disabled={isViewer || readOnly}
-            item={item}
-            onPress={() => onLike(item)}
-          />
-          <HoystText
-            style={styles.timestampText}
-            tone="muted"
-            variant="caption">
-            {item.createdAtLabel}
-          </HoystText>
-        </View>
+        {hasFeedback ? (
+          <View
+            style={[
+              styles.messageMetaRow,
+              isViewer ? styles.viewerMessageMetaRow : undefined,
+            ]}>
+            <LikeButton
+              disabled={isLikeDisabled}
+              item={item}
+              onPress={() => onLike(item)}
+            />
+          </View>
+        ) : null}
       </View>
     </View>
   );
@@ -283,32 +287,39 @@ function ThreadActivityItem({
   const theme = useHoystTheme();
   const palette = getActivityPalette(item.tone ?? 'success', theme);
   const isViewer = Boolean(viewerUid && item.actor.uid === viewerUid);
+  const isLikeDisabled = isViewer || item.readOnly || readOnly;
   const hasProof = Boolean(item.mediaImageUrl || item.note);
   const canShare = Boolean(
     onShareTapIn && canShareTapInActivity(item, viewerUid),
   );
+  const hasActions = !isLikeDisabled || item.likeCount > 0 || canShare;
 
   return (
-    <View style={styles.activityStack}>
-      <View style={styles.activityChipRow}>
+    <View
+      style={[
+        styles.activityCard,
+        {backgroundColor: theme.surfaceStrong, borderColor: theme.border},
+      ]}
+      testID={`circle-thread-activity-${item.id}`}>
+      <View style={styles.activityHeader}>
         <View
           style={[
-            styles.activityChip,
+            styles.activityIconBadge,
             {backgroundColor: palette.backgroundColor},
           ]}>
           <ActivityIcon color={palette.foregroundColor} item={item} />
-          <HoystText
-            numberOfLines={1}
-            style={[styles.activityChipText, {color: palette.foregroundColor}]}>
+        </View>
+        <View style={styles.activityCopy}>
+          <HoystText numberOfLines={2} style={styles.activityTitle}>
             {item.text}
           </HoystText>
+          <HoystText
+            style={styles.activityTimestamp}
+            tone="muted"
+            variant="caption">
+            {item.createdAtLabel}
+          </HoystText>
         </View>
-        <HoystText
-          style={styles.activityTimestamp}
-          tone="muted"
-          variant="caption">
-          {item.createdAtLabel}
-        </HoystText>
       </View>
 
       {hasProof ? (
@@ -321,7 +332,14 @@ function ThreadActivityItem({
             useBrandRing={item.tone === 'success'}
           />
           <View style={styles.activityProofStack}>
-            <GlassPanel padding="compact" style={styles.activityProofCard}>
+            <View
+              style={[
+                styles.activityProofCard,
+                {
+                  backgroundColor: theme.surfaceSoft,
+                  borderColor: theme.border,
+                },
+              ]}>
               {item.mediaImageUrl ? (
                 <Image
                   resizeMode="cover"
@@ -335,23 +353,17 @@ function ThreadActivityItem({
                   {item.note}
                 </HoystText>
               ) : null}
-            </GlassPanel>
-            <LikeButton
-              disabled={isViewer || item.readOnly || readOnly}
-              item={item}
-              onPress={() => onLike(item)}
-            />
-            {canShare ? (
-              <ShareTapInButton onPress={() => onShareTapIn?.(item)} />
-            ) : null}
+            </View>
           </View>
         </View>
-      ) : (
+      ) : null}
+
+      {hasActions ? (
         <View
-          style={styles.activityLikeRow}
+          style={styles.activityActionRow}
           testID={`circle-thread-activity-like-row-${item.id}`}>
           <LikeButton
-            disabled={isViewer || item.readOnly || readOnly}
+            disabled={isLikeDisabled}
             item={item}
             onPress={() => onLike(item)}
           />
@@ -359,7 +371,7 @@ function ThreadActivityItem({
             <ShareTapInButton onPress={() => onShareTapIn?.(item)} />
           ) : null}
         </View>
-      )}
+      ) : null}
     </View>
   );
 }
@@ -592,12 +604,11 @@ export function CircleThreadSection({
           style={[
             styles.archivedFooter,
             {
-              backgroundColor: theme.isDark
-                ? 'rgba(9,11,18,0.90)'
-                : 'rgba(245,246,255,0.92)',
+              backgroundColor: theme.surfaceMuted,
               borderColor: theme.border,
             },
-          ]}>
+          ]}
+          testID="circle-thread-archived">
           <Archive color={theme.textMuted} size={18} strokeWidth={2.2} />
           <View style={styles.archivedFooterCopy}>
             <HoystText style={styles.archivedFooterTitle}>
@@ -613,9 +624,7 @@ export function CircleThreadSection({
           style={[
             styles.composerShell,
             {
-              backgroundColor: theme.isDark
-                ? 'rgba(9,11,18,0.86)'
-                : 'rgba(245,246,255,0.86)',
+              backgroundColor: theme.surfaceStrong,
               borderColor: theme.border,
             },
           ]}
@@ -642,13 +651,8 @@ export function CircleThreadSection({
                   style={[
                     styles.quickMessagePill,
                     {
-                      backgroundColor: theme.isDark
-                        ? 'rgba(255,255,255,0.10)'
-                        : 'rgba(255,255,255,0.94)',
-                      borderColor: theme.isDark
-                        ? 'rgba(255,255,255,0.16)'
-                        : 'rgba(255,255,255,0.86)',
-                      shadowColor: theme.glassShadow,
+                      backgroundColor: theme.surfaceSoft,
+                      borderColor: theme.border,
                     },
                   ]}
                   testID={`circle-thread-quick-pill-${action.id}`}>
@@ -671,14 +675,26 @@ export function CircleThreadSection({
                 accessibilityLabel="Remove selected photo"
                 accessibilityRole="button"
                 onPress={() => setPhotoUri(undefined)}
-                style={styles.removePhotoButton}>
+                style={[
+                  styles.removePhotoButton,
+                  {
+                    backgroundColor: theme.surfaceStrong,
+                    borderColor: theme.border,
+                  },
+                ]}>
                 <X color={theme.text} size={14} strokeWidth={2.2} />
               </Pressable>
             </View>
           ) : null}
 
           <View
-            style={[styles.composerRow, {backgroundColor: theme.surfaceStrong}]}
+            style={[
+              styles.composerRow,
+              {
+                backgroundColor: theme.surfaceSoft,
+                borderColor: theme.border,
+              },
+            ]}
             testID="circle-thread-composer-row">
             <TextInput
               editable={!isSending}
@@ -709,9 +725,8 @@ export function CircleThreadSection({
                   style={[
                     styles.composerIconCircle,
                     {
-                      backgroundColor: theme.isDark
-                        ? 'rgba(122,85,255,0.22)'
-                        : 'rgba(122,85,255,0.14)',
+                      backgroundColor: theme.surfaceMuted,
+                      borderColor: theme.border,
                     },
                   ]}>
                   <Camera
@@ -755,7 +770,12 @@ export function CircleThreadSection({
 
       <View style={styles.threadContent} testID="circle-thread-feed">
         {threadError && items.length === 0 ? (
-          <GlassPanel padding="none" style={styles.emptyCard}>
+          <View
+            style={[
+              styles.stateCard,
+              {backgroundColor: theme.surfaceStrong, borderColor: theme.border},
+            ]}
+            testID="circle-thread-error">
             <View style={styles.emptyCardContent}>
               <HoystText
                 style={styles.emptyCardTitle}
@@ -780,9 +800,17 @@ export function CircleThreadSection({
                 <HoystText style={styles.retryButtonLabel}>Try again</HoystText>
               </Pressable>
             </View>
-          </GlassPanel>
+          </View>
         ) : isInitialLoading ? (
-          <View style={styles.loadingRow} testID="circle-thread-loading">
+          <View
+            style={[
+              styles.loadingRow,
+              {
+                backgroundColor: theme.neutralSurface,
+                borderColor: theme.border,
+              },
+            ]}
+            testID="circle-thread-loading">
             <ActivityIndicator color={theme.accentTertiaryForeground} />
             <HoystText tone="muted" variant="caption">
               Loading Circle Feed...
@@ -791,13 +819,33 @@ export function CircleThreadSection({
         ) : items.length > 0 ? (
           daySections.map(section => (
             <View key={section.dateKey} style={styles.daySection}>
-              <HoystText
-                style={styles.dayMarker}
-                testID={`circle-thread-day-${section.dateKey}`}
-                tone="muted"
-                variant="label">
-                {section.label}
-              </HoystText>
+              <View style={styles.dayMarkerRow}>
+                <View
+                  style={[
+                    styles.dayMarkerLine,
+                    {backgroundColor: theme.border},
+                  ]}
+                />
+                <View
+                  style={[
+                    styles.dayMarkerPill,
+                    {backgroundColor: theme.surfaceMuted},
+                  ]}>
+                  <HoystText
+                    style={styles.dayMarker}
+                    testID={`circle-thread-day-${section.dateKey}`}
+                    tone="muted"
+                    variant="label">
+                    {section.label}
+                  </HoystText>
+                </View>
+                <View
+                  style={[
+                    styles.dayMarkerLine,
+                    {backgroundColor: theme.border},
+                  ]}
+                />
+              </View>
               {section.items.map(item => (
                 <ThreadItem
                   item={item}
@@ -811,7 +859,12 @@ export function CircleThreadSection({
             </View>
           ))
         ) : (
-          <GlassPanel padding="none" style={styles.emptyCard}>
+          <View
+            style={[
+              styles.stateCard,
+              {backgroundColor: theme.surfaceStrong, borderColor: theme.border},
+            ]}
+            testID="circle-thread-empty">
             <View style={styles.emptyCardContent}>
               <HoystText
                 style={styles.emptyCardTitle}
@@ -826,11 +879,19 @@ export function CircleThreadSection({
                 momentum.
               </HoystText>
             </View>
-          </GlassPanel>
+          </View>
         )}
 
         {isLoadingMore ? (
-          <View style={styles.loadingRow} testID="circle-thread-loading-more">
+          <View
+            style={[
+              styles.loadingRow,
+              {
+                backgroundColor: theme.neutralSurface,
+                borderColor: theme.border,
+              },
+            ]}
+            testID="circle-thread-loading-more">
             <ActivityIndicator color={theme.accentTertiaryForeground} />
             <HoystText tone="muted" variant="caption">
               Loading older activity...
@@ -864,168 +925,141 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     borderWidth: 1,
     flexDirection: 'row',
-    gap: 12,
-    padding: 14,
+    gap: 10,
+    padding: 12,
   },
   archivedFooterCopy: {flex: 1, gap: 2},
   archivedFooterTitle: {fontSize: 15, fontWeight: '800', lineHeight: 19},
-  activityChip: {
-    alignItems: 'center',
-    borderRadius: radius.pill,
-    flexDirection: 'row',
-    gap: 5,
-    maxWidth: '76%',
-    minHeight: 28,
-    paddingHorizontal: 11,
-  },
-  activityChipRow: {
+  activityActionRow: {
     alignItems: 'center',
     flexDirection: 'row',
-    gap: 8,
+    gap: 10,
+    minHeight: 20,
   },
-  activityChipText: {
-    flexShrink: 1,
-    fontSize: 13,
-    fontWeight: '800',
-    letterSpacing: 0,
-    lineHeight: 17,
-  },
-  activityLikeRow: {
-    alignSelf: 'flex-start',
-    flexDirection: 'row',
-    gap: 8,
-  },
-  activityProofCard: {
-    borderRadius: 18,
-    maxWidth: 260,
-    minWidth: 190,
-  },
-  activityProofImage: {
-    borderRadius: 14,
-    height: 136,
-    marginBottom: 9,
+  activityCard: {
+    borderRadius: radius.md,
+    borderWidth: 1,
+    gap: 10,
+    padding: 12,
     width: '100%',
   },
-  activityProofRow: {
-    alignItems: 'flex-start',
-    flexDirection: 'row',
+  activityCopy: {flex: 1, gap: 1, minWidth: 0},
+  activityHeader: {alignItems: 'center', flexDirection: 'row', gap: 8},
+  activityIconBadge: {
+    alignItems: 'center',
+    borderRadius: 12,
+    height: 28,
+    justifyContent: 'center',
+    width: 28,
+  },
+  activityProofCard: {
+    borderRadius: radius.sm,
+    borderWidth: 1,
     gap: 8,
-    marginTop: 6,
+    padding: 8,
+    width: '100%',
   },
-  activityProofStack: {
-    alignItems: 'flex-start',
-    gap: 4,
-    maxWidth: '82%',
+  activityProofImage: {
+    borderRadius: 12,
+    height: 144,
+    width: '100%',
   },
+  activityProofRow: {alignItems: 'flex-start', flexDirection: 'row', gap: 8},
+  activityProofStack: {flex: 1, minWidth: 0},
   activityProofText: {
-    fontSize: 15,
+    fontSize: 14,
+    fontWeight: '700',
+    letterSpacing: 0,
+    lineHeight: 19,
+  },
+  activityTimestamp: {fontSize: 12, fontWeight: '600', lineHeight: 15},
+  activityTitle: {
+    fontSize: 14,
     fontWeight: '800',
     letterSpacing: 0,
-    lineHeight: 20,
+    lineHeight: 18,
   },
-  activityStack: {
-    alignItems: 'flex-start',
-    gap: 2,
-  },
-  activityTimestamp: {
-    color: '#B9B6CD',
-    fontSize: 12,
-    fontWeight: '700',
-    lineHeight: 15,
-  },
-  companionBubble: {
-    borderWidth: 1,
-  },
-  companionMessageRow: {
-    alignItems: 'flex-start',
-    justifyContent: 'flex-start',
-  },
+  companionBubble: {borderBottomLeftRadius: 12},
+  companionMessageRow: {alignItems: 'flex-start', justifyContent: 'flex-start'},
   composerActionCluster: {
     alignItems: 'center',
     flexDirection: 'row',
     flexShrink: 0,
-    gap: 8,
+    gap: 6,
     justifyContent: 'flex-end',
-    width: 92,
+    width: 82,
   },
   composerActionButton: {
     alignItems: 'center',
     borderRadius: radius.pill,
     flexShrink: 0,
-    height: 42,
+    height: 38,
     justifyContent: 'center',
-    width: 42,
+    width: 38,
   },
   composerIconCircle: {
     alignItems: 'center',
     borderRadius: radius.pill,
-    height: 42,
+    borderWidth: 1,
+    height: 38,
     justifyContent: 'center',
-    width: 42,
+    width: 38,
   },
   composerInput: {
     flex: 1,
     flexShrink: 1,
     fontSize: 15,
-    fontWeight: '700',
+    fontWeight: '600',
     letterSpacing: 0,
     lineHeight: 20,
     maxHeight: 96,
-    minHeight: 38,
+    minHeight: 36,
     minWidth: 0,
     paddingHorizontal: 4,
+    paddingVertical: 8,
     textAlign: 'left',
     textAlignVertical: 'center',
-    paddingVertical: 9,
   },
   composerRow: {
     alignItems: 'center',
-    borderRadius: 24,
-    flexDirection: 'row',
-    gap: 8,
-    minHeight: 56,
-    overflow: 'visible',
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-    position: 'relative',
-  },
-  composerShell: {
     borderRadius: radius.md,
     borderWidth: 1,
-    gap: 10,
-    padding: 12,
+    flexDirection: 'row',
+    gap: 6,
+    minHeight: 52,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  composerShell: {
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    gap: 8,
+    padding: 10,
   },
   dayMarker: {
-    alignSelf: 'center',
-    color: '#A9A7BA',
-    fontSize: 11,
-    fontWeight: '900',
-    letterSpacing: 1.5,
-    lineHeight: 14,
-    marginBottom: 4,
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 1.2,
+    lineHeight: 13,
   },
-  daySection: {
-    gap: 8,
-    width: '100%',
+  dayMarkerLine: {flex: 1, height: 1},
+  dayMarkerPill: {
+    borderRadius: radius.pill,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
   },
-  emptyCard: {
-    borderRadius: 22,
-    marginTop: 0,
-  },
+  dayMarkerRow: {alignItems: 'center', flexDirection: 'row', gap: 8},
+  daySection: {gap: 8, width: '100%'},
   emptyCardBody: {
     fontSize: 13,
     fontWeight: '600',
     letterSpacing: 0,
     lineHeight: 19,
   },
-  emptyCardContent: {
-    gap: 6,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-  },
+  emptyCardContent: {gap: 5, paddingHorizontal: 14, paddingVertical: 13},
   emptyCardTitle: {
     fontSize: 16,
-    fontWeight: '900',
+    fontWeight: '800',
     letterSpacing: 0,
     lineHeight: 20,
   },
@@ -1035,113 +1069,69 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 4,
     minHeight: 20,
-    paddingHorizontal: 4,
+    paddingHorizontal: 2,
   },
-  likeCount: {
-    color: '#9A97B6',
-    fontSize: 12,
-    fontWeight: '900',
-    lineHeight: 15,
-  },
-  shareTapInButton: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: 4,
-    minHeight: 20,
-    paddingHorizontal: 4,
-  },
-  shareTapInLabel: {
-    fontWeight: '800',
-  },
+  likeCount: {fontSize: 12, fontWeight: '800', lineHeight: 15},
   loadingRow: {
     alignItems: 'center',
+    borderRadius: radius.md,
+    borderWidth: 1,
     flexDirection: 'row',
     gap: 8,
     justifyContent: 'center',
-    paddingVertical: 14,
-  },
-  messageBubble: {
-    borderRadius: 18,
-    gap: 9,
-    maxWidth: 288,
-    minHeight: 38,
-    paddingHorizontal: 13,
+    minHeight: 48,
+    paddingHorizontal: 12,
     paddingVertical: 10,
   },
-  messageImage: {
-    borderRadius: 14,
-    height: 136,
-    width: 220,
-  },
-  messageMetaRow: {
-    alignItems: 'center',
-    flexDirection: 'row',
+  messageAuthor: {fontSize: 12, fontWeight: '800', lineHeight: 15},
+  messageBubble: {
+    borderRadius: radius.md,
+    borderWidth: 1,
     gap: 8,
+    maxWidth: 288,
+    minHeight: 36,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
   },
-  messageRow: {
-    flexDirection: 'row',
-    gap: 8,
-    width: '100%',
-  },
-  messageStack: {
-    alignItems: 'flex-start',
-    gap: 4,
-    maxWidth: '84%',
-  },
+  messageHeader: {alignItems: 'center', flexDirection: 'row', gap: 6},
+  messageImage: {borderRadius: 12, height: 132, width: 212},
+  messageMetaRow: {alignItems: 'center', flexDirection: 'row', minHeight: 20},
+  messageRow: {flexDirection: 'row', gap: 8, width: '100%'},
+  messageStack: {alignItems: 'flex-start', gap: 3, maxWidth: '84%'},
   messageText: {
-    fontSize: 16,
+    fontSize: 15,
+    fontWeight: '700',
+    letterSpacing: 0,
+    lineHeight: 20,
+  },
+  paginationError: {alignItems: 'center', gap: 8, paddingVertical: 10},
+  photoPreview: {borderRadius: 12, height: 56, width: 56},
+  photoPreviewRow: {alignSelf: 'flex-start', position: 'relative'},
+  quickMessageChip: {borderRadius: radius.pill},
+  quickMessageLabel: {
+    fontSize: 12,
     fontWeight: '800',
     letterSpacing: 0,
-    lineHeight: 21,
-  },
-  photoPreview: {
-    borderRadius: 14,
-    height: 60,
-    width: 60,
-  },
-  photoPreviewRow: {
-    alignSelf: 'flex-start',
-    position: 'relative',
-  },
-  paginationError: {
-    alignItems: 'center',
-    gap: 8,
-    paddingVertical: 10,
-  },
-  quickMessageChip: {
-    borderRadius: radius.pill,
+    lineHeight: 16,
   },
   quickMessagePill: {
     alignItems: 'center',
     borderRadius: radius.pill,
     borderWidth: 1,
-    elevation: 1,
     justifyContent: 'center',
-    minHeight: 34,
-    paddingHorizontal: 14,
-    shadowOffset: {height: 4, width: 0},
-    shadowOpacity: 0.08,
-    shadowRadius: 10,
+    minHeight: 30,
+    paddingHorizontal: 12,
   },
-  quickMessageLabel: {
-    color: '#706D92',
-    fontSize: 13,
-    fontWeight: '900',
-    letterSpacing: 0,
-    lineHeight: 17,
-  },
-  quickMessageRow: {
-    gap: 10,
-  },
+  quickMessageRow: {gap: 8},
   removePhotoButton: {
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.92)',
     borderRadius: radius.pill,
+    borderWidth: 1,
     height: 24,
     justifyContent: 'center',
     position: 'absolute',
-    right: -8,
-    top: -8,
+    right: -7,
+    top: -7,
     width: 24,
   },
   retryButton: {
@@ -1149,47 +1139,37 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
     borderRadius: radius.pill,
     justifyContent: 'center',
-    minHeight: 34,
-    paddingHorizontal: 14,
+    minHeight: 32,
+    paddingHorizontal: 12,
   },
   retryButtonLabel: {
     color: brandColors.blueVivid,
     fontSize: 13,
-    fontWeight: '900',
+    fontWeight: '800',
     lineHeight: 17,
   },
-  section: {
-    gap: 14,
-    width: '100%',
-  },
+  section: {gap: 12, width: '100%'},
   sendCircle: {
     alignItems: 'center',
     backgroundColor: brandColors.blueVivid,
     borderRadius: radius.pill,
-    height: 42,
+    height: 38,
     justifyContent: 'center',
-    width: 42,
+    width: 38,
   },
-  threadContent: {
-    gap: 12,
-    paddingBottom: 8,
+  shareTapInButton: {
+    alignItems: 'center',
+    borderRadius: radius.pill,
+    height: 32,
+    justifyContent: 'center',
+    width: 32,
   },
-  timestampText: {
-    color: '#B9B6CD',
-    fontSize: 12,
-    fontWeight: '700',
-    lineHeight: 15,
-  },
-  viewerBubble: {
-    borderBottomRightRadius: 10,
-  },
-  viewerMessageMetaRow: {
-    alignSelf: 'flex-end',
-  },
-  viewerMessageRow: {
-    justifyContent: 'flex-end',
-  },
-  viewerMessageStack: {
-    alignItems: 'flex-end',
-  },
+  stateCard: {borderRadius: radius.md, borderWidth: 1},
+  threadContent: {gap: 10, paddingBottom: 8},
+  timestampText: {fontSize: 12, fontWeight: '600', lineHeight: 15},
+  viewerBubble: {borderBottomRightRadius: 12},
+  viewerMessageHeader: {justifyContent: 'flex-end'},
+  viewerMessageMetaRow: {alignSelf: 'flex-end'},
+  viewerMessageRow: {justifyContent: 'flex-end'},
+  viewerMessageStack: {alignItems: 'flex-end'},
 });

@@ -34,10 +34,7 @@ const DARK_HOME_CANVAS_COLOR = '#121212';
 const FOCUSED_STACK_SURFACE_OPACITY = 0x31 / 255;
 const COLLAPSED_STACK_SURFACE_OPACITY = 0x26 / 255;
 
-function getOpaqueDarkStackSurface(
-  accentColor: string,
-  opacity: number,
-) {
+function getOpaqueDarkStackSurface(accentColor: string, opacity: number) {
   const foregroundChannels = [0, 2, 4].map(index =>
     Number.parseInt(accentColor.slice(index + 1, index + 3), 16),
   );
@@ -554,9 +551,9 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
     flexDirection: 'row',
     gap: 9,
-    minHeight: 71,
+    minHeight: 79,
     paddingHorizontal: 14,
-    paddingVertical: 14,
+    paddingVertical: 18,
   },
   collapsedCopy: {
     flex: 1,

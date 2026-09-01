@@ -228,13 +228,16 @@ describe('CircleThreadSection', () => {
     jest.clearAllMocks();
   });
 
-  it('renders mixed activity, left and right messages, images, likes, and composer chips', () => {
+  it('renders a compact neutral feed with clear conversation identity', () => {
     const {tree} = renderSection();
     const output = outputOf(tree);
 
     expect(output).toContain('Circle Feed');
     expect(output).toContain('TODAY');
     expect(output).toContain('Maya tapped in');
+    expect(output).toContain('Maya');
+    expect(output).toContain('Priya');
+    expect(output).toContain('You');
     expect(output).toContain('Rough night but got it done');
     expect(output).toContain("Let's gooo 🔥 proud of everyone");
     expect(output).toContain("who's still up 👀");
@@ -259,9 +262,43 @@ describe('CircleThreadSection', () => {
     );
 
     expect(activityLikeRowStyle).toEqual(
-      expect.objectContaining({alignSelf: 'flex-start'}),
+      expect.objectContaining({flexDirection: 'row', gap: 10, minHeight: 20}),
     );
-    expect(activityLikeRowStyle.paddingLeft).toBeUndefined();
+    const viewerBubble = tree.root.findByProps({
+      testID: 'circle-thread-message-bubble-message-1',
+    });
+    const companionBubble = tree.root.findByProps({
+      testID: 'circle-thread-message-bubble-message-2',
+    });
+
+    expect(
+      textContent(
+        tree.root.findByProps({
+          testID: 'circle-thread-message-author-message-1',
+        }),
+      ),
+    ).toBe('You');
+    expect(
+      textContent(
+        tree.root.findByProps({
+          testID: 'circle-thread-message-author-message-2',
+        }),
+      ),
+    ).toBe('Priya');
+    expect(StyleSheet.flatten(viewerBubble.props.style)).toEqual(
+      expect.objectContaining({
+        backgroundColor: '#F1F3FA',
+        borderColor: 'rgba(16,24,40,0.14)',
+        borderWidth: 1,
+      }),
+    );
+    expect(StyleSheet.flatten(companionBubble.props.style)).toEqual(
+      expect.objectContaining({
+        backgroundColor: '#FFFFFF',
+        borderColor: 'rgba(16,24,40,0.08)',
+        borderWidth: 1,
+      }),
+    );
     expect(
       tree.root
         .findAllByType(Image)
@@ -270,15 +307,6 @@ describe('CircleThreadSection', () => {
         ),
     ).toBe(true);
 
-    const currentMessage = tree.root
-      .findAll(node => textContent(node).includes("Let's gooo"))
-      .at(-1);
-    const currentMessageAncestors = tree.root.findAll(node =>
-      String(JSON.stringify(node.props?.style ?? {}) ?? '').includes('#2F6FED'),
-    );
-
-    expect(currentMessage).toBeTruthy();
-    expect(currentMessageAncestors.length).toBeGreaterThan(0);
     expect(
       tree.root
         .findAllByType(ScrollView)
@@ -362,6 +390,10 @@ describe('CircleThreadSection', () => {
       .filter(button => button.props.accessibilityLabel === 'Share Tap In');
 
     expect(shareButtons).toHaveLength(1);
+    expect(findTextNode(tree, 'Share Tap In')).toBeUndefined();
+    expect(
+      StyleSheet.flatten(shareButtons[0].props.style({pressed: false})),
+    ).toEqual(expect.objectContaining({height: 32, opacity: 1, width: 32}));
 
     act(() => {
       shareButtons[0].props.onPress();
@@ -449,7 +481,7 @@ describe('CircleThreadSection', () => {
     expect(mockSubscribeToCircleThreadItems).toHaveBeenCalledTimes(1);
   });
 
-  it('uses compact sizing for the feed, quick chips, and composer', () => {
+  it('uses compact neutral sizing for feed cards, quick chips, and composer', () => {
     const {tree} = renderSection();
     const activityCopy = findTextNode(tree, 'Maya tapped in');
     const messageCopy = findTextNode(tree, "Let's gooo 🔥 proud of everyone");
@@ -483,18 +515,40 @@ describe('CircleThreadSection', () => {
     const sendCircle = tree.root.findByProps({
       testID: 'circle-thread-composer-send-circle',
     });
+    const activityCard = tree.root.findByProps({
+      testID: 'circle-thread-activity-activity-1',
+    });
+    const composer = tree.root.findByProps({
+      testID: 'circle-thread-composer',
+    });
 
     expect(StyleSheet.flatten(activityCopy?.props.style)).toEqual(
-      expect.objectContaining({fontSize: 13, lineHeight: 17}),
+      expect.objectContaining({fontSize: 14, lineHeight: 18}),
     );
     expect(StyleSheet.flatten(messageCopy?.props.style)).toEqual(
-      expect.objectContaining({fontSize: 16, lineHeight: 21}),
+      expect.objectContaining({fontSize: 15, lineHeight: 20}),
     );
     expect(StyleSheet.flatten(timestamp?.props.style)).toEqual(
       expect.objectContaining({fontSize: 12, lineHeight: 15}),
     );
     expect(StyleSheet.flatten(messageImage.props.style)).toEqual(
-      expect.objectContaining({height: 136, width: 220}),
+      expect.objectContaining({height: 132, width: 212}),
+    );
+    expect(StyleSheet.flatten(activityCard.props.style)).toEqual(
+      expect.objectContaining({
+        backgroundColor: '#FFFFFF',
+        borderRadius: 20,
+        borderWidth: 1,
+        padding: 12,
+      }),
+    );
+    expect(StyleSheet.flatten(composer.props.style)).toEqual(
+      expect.objectContaining({
+        backgroundColor: '#FFFFFF',
+        borderRadius: 24,
+        borderWidth: 1,
+        padding: 10,
+      }),
     );
     expect(StyleSheet.flatten(quickChip.props.style({pressed: false}))).toEqual(
       expect.objectContaining({borderRadius: 999, opacity: 1}),
@@ -503,20 +557,19 @@ describe('CircleThreadSection', () => {
       expect.objectContaining({
         borderRadius: 999,
         borderWidth: 1,
-        minHeight: 34,
-        paddingHorizontal: 14,
-        shadowRadius: 10,
+        minHeight: 30,
+        paddingHorizontal: 12,
       }),
     );
     expect(StyleSheet.flatten(quickLabel?.props.style)).toEqual(
-      expect.objectContaining({fontSize: 13, lineHeight: 17}),
+      expect.objectContaining({fontSize: 12, lineHeight: 16}),
     );
     expect(StyleSheet.flatten(composerInput.props.style)).toEqual(
       expect.objectContaining({
         fontSize: 15,
         lineHeight: 20,
         maxHeight: 96,
-        minHeight: 38,
+        minHeight: 36,
         textAlign: 'left',
         textAlignVertical: 'center',
       }),
@@ -524,16 +577,17 @@ describe('CircleThreadSection', () => {
     expect(StyleSheet.flatten(composerRow.props.style)).toEqual(
       expect.objectContaining({
         flexDirection: 'row',
-        gap: 8,
-        minHeight: 56,
+        gap: 6,
+        minHeight: 52,
+        borderWidth: 1,
       }),
     );
     expect(StyleSheet.flatten(composerActions.props.style)).toEqual(
       expect.objectContaining({
         flexDirection: 'row',
         flexShrink: 0,
-        gap: 8,
-        width: 92,
+        gap: 6,
+        width: 82,
       }),
     );
     expect(
@@ -541,14 +595,15 @@ describe('CircleThreadSection', () => {
     ).toEqual(
       expect.objectContaining({
         flexShrink: 0,
-        height: 42,
-        width: 42,
+        height: 38,
+        width: 38,
       }),
     );
     expect(StyleSheet.flatten(cameraCircle.props.style)).toEqual(
       expect.objectContaining({
-        height: 42,
-        width: 42,
+        borderWidth: 1,
+        height: 38,
+        width: 38,
       }),
     );
     expect(
@@ -556,16 +611,16 @@ describe('CircleThreadSection', () => {
     ).toEqual(
       expect.objectContaining({
         flexShrink: 0,
-        height: 42,
+        height: 38,
         opacity: 1,
-        width: 42,
+        width: 38,
       }),
     );
     expect(StyleSheet.flatten(sendCircle.props.style)).toEqual(
       expect.objectContaining({
         backgroundColor: '#2F6FED',
-        height: 42,
-        width: 42,
+        height: 38,
+        width: 38,
       }),
     );
     expect(sendButton.props.accessibilityState).toEqual({disabled: true});
@@ -666,6 +721,17 @@ describe('CircleThreadSection', () => {
         tree.root.findByProps({testID: 'circle-thread-empty-body'}).props.style,
       ),
     ).toEqual(expect.objectContaining({fontSize: 13, lineHeight: 19}));
+    expect(
+      StyleSheet.flatten(
+        tree.root.findByProps({testID: 'circle-thread-empty'}).props.style,
+      ),
+    ).toEqual(
+      expect.objectContaining({
+        backgroundColor: '#FFFFFF',
+        borderRadius: 20,
+        borderWidth: 1,
+      }),
+    );
   });
 
   it('keeps archived Circle history readable without thread mutations', () => {
@@ -678,6 +744,17 @@ describe('CircleThreadSection', () => {
     expect(output).not.toContain('Message the circle...');
     expect(output).not.toContain('Send 👏 Nice');
     expect(mockMarkCircleThreadRead).not.toHaveBeenCalled();
+    expect(
+      StyleSheet.flatten(
+        tree.root.findByProps({testID: 'circle-thread-archived'}).props.style,
+      ),
+    ).toEqual(
+      expect.objectContaining({
+        backgroundColor: '#EEF1F7',
+        borderRadius: 20,
+        borderWidth: 1,
+      }),
+    );
 
     const likeButton = tree.root
       .findAllByType(Pressable)
@@ -707,5 +784,16 @@ describe('CircleThreadSection', () => {
         tree.root.findByProps({testID: 'circle-thread-error-body'}).props.style,
       ),
     ).toEqual(expect.objectContaining({fontSize: 13, lineHeight: 19}));
+    expect(
+      StyleSheet.flatten(
+        tree.root.findByProps({testID: 'circle-thread-error'}).props.style,
+      ),
+    ).toEqual(
+      expect.objectContaining({
+        backgroundColor: '#FFFFFF',
+        borderRadius: 20,
+        borderWidth: 1,
+      }),
+    );
   });
 });
