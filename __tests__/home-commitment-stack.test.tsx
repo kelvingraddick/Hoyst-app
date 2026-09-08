@@ -1,8 +1,8 @@
 import React from 'react';
-import {Clock3} from 'lucide-react-native';
-import {StyleSheet} from 'react-native';
+import {StyleSheet, TouchableWithoutFeedback} from 'react-native';
 import renderer, {act} from 'react-test-renderer';
 
+import {CircleCategoryIcon} from '../src/design/components/CircleCategoryIcon';
 import {HomeCommitmentStack} from '../src/features/home/components/HomeCommitmentStack';
 import type {CircleManagementCard} from '../src/types/models';
 
@@ -50,338 +50,194 @@ function circle(
   };
 }
 
-describe('HomeCommitmentStack', () => {
+function renderCards(
+  cards: CircleManagementCard[],
+  focusedCardId?: string,
+  busy = false,
+) {
+  const onActionPress = jest.fn();
+  const onFocusCard = jest.fn();
+  const onViewDetails = jest.fn();
+  let tree!: renderer.ReactTestRenderer;
+  act(() => {
+    tree = renderer.create(
+      <HomeCommitmentStack
+        cards={cards}
+        focusedCardId={focusedCardId}
+        isNudged={() => false}
+        isNudging={() => busy}
+        onActionPress={onActionPress}
+        onFocusCard={onFocusCard}
+        onViewDetails={onViewDetails}
+      />,
+    );
+  });
+  return {tree, onActionPress, onFocusCard, onViewDetails};
+}
+
+describe('Home commitment actions', () => {
   beforeEach(() => {
     mockAppearance = 'light';
   });
-
-  it('focuses one full card, collapses the rest, and does not optimistically fill a Tap In check', () => {
-    const onActionPress = jest.fn();
-    const onFocusCard = jest.fn();
-    const onViewDetails = jest.fn();
+  it('offers direct actions on expanded and compact rows without recording completion', () => {
     const first = circle();
-    const second = circle({
-      id: 'circle-2',
-      title: 'Read every day',
-    });
-    let tree: renderer.ReactTestRenderer | undefined;
-
+    const second = circle({id: 'second'});
+    const {tree, onActionPress, onFocusCard} = renderCards([first, second]);
     act(() => {
-      tree = renderer.create(
-        <HomeCommitmentStack
-          cards={[first, second]}
-          focusedCardId={first.id}
-          isNudged={() => false}
-          isNudging={() => false}
-          onActionPress={onActionPress}
-          onFocusCard={onFocusCard}
-          onViewDetails={onViewDetails}
-        />,
-      );
-    });
-
-    const check = tree!.root.findByProps({
-      testID: 'home-commitment-check-circle-1',
-    });
-
-    expect(
-      tree!.root.findByProps({
-        testID: 'home-commitment-focused-circle-1',
-      }),
-    ).toBeTruthy();
-    expect(
-      tree!.root.findByProps({
-        testID: 'home-commitment-collapsed-circle-2',
-      }),
-    ).toBeTruthy();
-    const stackInstances = tree!.root.findAllByProps({
-      testID: 'home-commitments-stack',
-    });
-    const stack = stackInstances[stackInstances.length - 1];
-    const focusedLayer = stack.findByProps({
-      testID: 'home-commitment-focused-layer-circle-1',
-    });
-
-    expect(stack.children.indexOf(focusedLayer)).toBe(0);
-    expect(check.props.accessibilityState).toEqual({
-      checked: false,
-      disabled: false,
-    });
-
-    act(() => {
-      check.props.onPress();
-    });
-
-    expect(onActionPress).toHaveBeenCalledWith(first);
-    expect(check.props.accessibilityState.checked).toBe(false);
-
-    act(() => {
-      tree!.root
-        .findByProps({testID: 'home-commitment-collapsed-circle-2'})
+      tree.root
+        .findByProps({testID: 'home-commitment-action-second'})
         .props.onPress();
     });
-
-    expect(onFocusCard).toHaveBeenCalledWith(second.id);
-
-    const collapsedLayerStyle = StyleSheet.flatten(
-      tree!.root.findByProps({
-        testID: 'home-commitment-collapsed-layer-circle-2',
-      }).props.style,
-    );
-    const focusedCardStyle = StyleSheet.flatten(
-      tree!.root.findByProps({
-        testID: 'home-commitment-focused-layer-circle-1',
-      }).props.style,
-    );
-    const focusedCheckStyle = StyleSheet.flatten(
-      tree!.root.findByProps({
-        testID: 'home-commitment-check-indicator-circle-1',
-      }).props.style,
-    );
-    const collapsedCheckStyle = StyleSheet.flatten(
-      tree!.root.findByProps({
-        testID: 'home-commitment-check-indicator-circle-2',
-      }).props.style,
-    );
-
-    expect(collapsedLayerStyle.marginTop).toBe(-14);
-    expect(focusedCardStyle.zIndex).toBeGreaterThan(collapsedLayerStyle.zIndex);
-    expect(focusedCheckStyle).toMatchObject({height: 30, width: 64});
-    expect(collapsedCheckStyle).toMatchObject({height: 30, width: 64});
+    expect(onActionPress).toHaveBeenCalledWith(second);
+    expect(onFocusCard).not.toHaveBeenCalled();
     expect(
-      tree!.root.findAllByProps({children: 'TAP IN'}).length,
-    ).toBeGreaterThan(0);
-
-    act(() => {
-      tree!.root
+      tree.root.findAllByProps({testID: 'home-commitment-done-second'}),
+    ).toHaveLength(0);
+  });
+  it('keeps focus and detail navigation separate from submitting an action', () => {
+    const second = circle({id: 'second'});
+    const {tree, onFocusCard, onViewDetails, onActionPress} = renderCards([
+      circle(),
+      second,
+    ]);
+    act(() =>
+      tree.root
+        .findByProps({testID: 'home-commitment-collapsed-second'})
+        .props.onPress(),
+    );
+    expect(onFocusCard).toHaveBeenCalledWith('second');
+    act(() =>
+      tree.root
+        .findByProps({testID: 'home-commitment-expand-second'})
+        .props.onPress(),
+    );
+    expect(onFocusCard).toHaveBeenCalledTimes(2);
+    act(() =>
+      tree.root
         .findByProps({testID: 'home-commitment-details-circle-1'})
-        .props.onPress();
-    });
-
-    expect(onViewDetails).toHaveBeenCalledWith(first.id);
-  });
-
-  it('expands the selected card in its existing stack position', () => {
-    const first = circle();
-    const second = circle({id: 'circle-2', title: 'Read every day'});
-    const third = circle({id: 'circle-3', title: 'Sleep 8 hours'});
-    const props = {
-      cards: [first, second, third],
-      isNudged: () => false,
-      isNudging: () => false,
-      onActionPress: jest.fn(),
-      onFocusCard: jest.fn(),
-      onViewDetails: jest.fn(),
-    };
-    let tree: renderer.ReactTestRenderer | undefined;
-
-    act(() => {
-      tree = renderer.create(
-        <HomeCommitmentStack {...props} focusedCardId={first.id} />,
-      );
-    });
-
-    act(() => {
-      tree!.update(
-        <HomeCommitmentStack {...props} focusedCardId={second.id} />,
-      );
-    });
-
-    const firstLayer = tree!.root.findByProps({
-      testID: 'home-commitment-collapsed-layer-circle-1',
-    });
-    const focusedLayer = tree!.root.findByProps({
-      testID: 'home-commitment-focused-layer-circle-2',
-    });
-    const thirdLayer = tree!.root.findByProps({
-      testID: 'home-commitment-collapsed-layer-circle-3',
-    });
-    const firstLayerStyle = StyleSheet.flatten(firstLayer.props.style);
-    const focusedLayerStyle = StyleSheet.flatten(focusedLayer.props.style);
-    const thirdLayerStyle = StyleSheet.flatten(thirdLayer.props.style);
-
-    expect(firstLayer.parent).toBe(focusedLayer.parent);
-    expect(focusedLayer.parent).toBe(thirdLayer.parent);
-    expect(focusedLayer.parent!.children.indexOf(firstLayer)).toBe(0);
-    expect(focusedLayer.parent!.children.indexOf(focusedLayer)).toBe(1);
-    expect(focusedLayer.parent!.children.indexOf(thirdLayer)).toBe(2);
-    expect(focusedLayerStyle.marginTop).toBe(-14);
-    expect(thirdLayerStyle.marginTop).toBe(-14);
-    expect(focusedLayerStyle.zIndex).toBeGreaterThan(firstLayerStyle.zIndex);
-    expect(focusedLayerStyle.zIndex).toBeGreaterThan(thirdLayerStyle.zIndex);
-  });
-
-  it('uses opaque dark category fills across overlapped stack cards', () => {
-    mockAppearance = 'dark';
-    const focused = circle({category: 'Deep Work'});
-    const collapsed = circle({
-      category: 'Fitness',
-      id: 'circle-2',
-      title: 'Read every day',
-    });
-    let tree: renderer.ReactTestRenderer | undefined;
-
-    act(() => {
-      tree = renderer.create(
-        <HomeCommitmentStack
-          cards={[focused, collapsed]}
-          focusedCardId={focused.id}
-          isNudged={() => false}
-          isNudging={() => false}
-          onActionPress={jest.fn()}
-          onFocusCard={jest.fn()}
-          onViewDetails={jest.fn()}
-        />,
-      );
-    });
-
-    const focusedStyle = StyleSheet.flatten(
-      tree!.root.findByProps({
-        testID: 'home-commitment-focused-circle-1',
-      }).props.style,
+        .props.onPress(),
     );
-    const collapsedStyle = StyleSheet.flatten(
-      tree!.root.findByProps({
-        testID: 'home-commitment-collapsed-surface-circle-2',
-      }).props.style,
-    );
+    expect(onViewDetails).toHaveBeenCalledWith('circle-1');
+    expect(onActionPress).not.toHaveBeenCalled();
 
-    expect(focusedStyle.backgroundColor).toBe('#133240');
-    expect(collapsedStyle.backgroundColor).toBe('#122b1f');
-  });
-
-  it('shows the saved Tap In state as a filled non-interactive check', () => {
-    const completed = circle({
-      id: 'completed',
-      state: 'done',
-      viewerHasCheckedIn: true,
-      viewerHasTappedInToday: true,
-      viewerRemainingTapIns: 0,
-      viewerTodayStatus: 'done',
-    });
-    let tree: renderer.ReactTestRenderer | undefined;
-
-    act(() => {
-      tree = renderer.create(
-        <HomeCommitmentStack
-          cards={[completed]}
-          focusedCardId={completed.id}
-          isNudged={() => false}
-          isNudging={() => false}
-          onActionPress={jest.fn()}
-          onFocusCard={jest.fn()}
-          onViewDetails={jest.fn()}
-        />,
-      );
-    });
-
-    const check = tree!.root.findByProps({
-      testID: 'home-commitment-check-completed',
-    });
-
-    expect(check.props.accessibilityState).toEqual({
-      checked: true,
-      disabled: true,
-    });
-    expect(check.props.onPress).toBeUndefined();
+    act(() => tree.root.findByType(TouchableWithoutFeedback).props.onPress());
+    expect(onViewDetails).toHaveBeenCalledTimes(2);
+    expect(
+      tree.root.findByProps({
+        testID: 'home-commitment-detail-arrow-circle-1',
+      }),
+    ).toBeTruthy();
+    const categoryIcons = tree.root.findAllByType(CircleCategoryIcon);
+    expect(categoryIcons[0].props.showBackplate).toBe(false);
+    expect(categoryIcons[1].props.showBackplate).toBeUndefined();
     expect(
       StyleSheet.flatten(
-        tree!.root.findByProps({
-          testID: 'home-commitment-check-indicator-completed',
-        }).props.style,
+        tree.root.findByProps({testID: 'home-commitment-focused-circle-1'})
+          .props.style,
       ),
-    ).toMatchObject({height: 30, width: 30});
-    expect(tree!.root.findAllByProps({children: 'TAP IN'})).toHaveLength(0);
-  });
+    ).toMatchObject({paddingHorizontal: 18, paddingVertical: 12});
 
-  it('shows pending approval with a clock instead of a checkbox', () => {
-    const pending = circle({
-      id: 'pending',
-      title: 'Pending Circle',
-      viewerMembershipStatus: 'pending',
-    });
-    let tree: renderer.ReactTestRenderer | undefined;
-
-    act(() => {
-      tree = renderer.create(
-        <HomeCommitmentStack
-          cards={[pending]}
-          focusedCardId={pending.id}
-          isNudged={() => false}
-          isNudging={() => false}
-          onActionPress={jest.fn()}
-          onFocusCard={jest.fn()}
-          onViewDetails={jest.fn()}
-        />,
-      );
-    });
-
-    const check = tree!.root.findByProps({
-      testID: 'home-commitment-check-pending',
-    });
-    const indicatorStyle = StyleSheet.flatten(
-      tree!.root.findByProps({
-        testID: 'home-commitment-check-indicator-pending',
-      }).props.style,
+    act(() =>
+      tree.root
+        .findByProps({testID: 'home-commitment-action-circle-1'})
+        .props.onPress(),
     );
-
-    expect(check.props.accessibilityLabel).toBe(
-      'Pending approval for Pending Circle',
-    );
-    expect(check.props.accessibilityRole).toBe('image');
-    expect(check.props.accessibilityState).toEqual({disabled: true});
-    expect(check.props.onPress).toBeUndefined();
-    expect(indicatorStyle).toMatchObject({
-      borderWidth: 0,
-      height: 30,
-      width: 30,
-    });
-    expect(tree!.root.findByType(Clock3)).toBeTruthy();
+    expect(onActionPress).toHaveBeenCalledWith(circle());
+    expect(onViewDetails).toHaveBeenCalledTimes(2);
   });
-
-  it('keeps a nudge action available when the viewer has already tapped in', () => {
-    const onActionPress = jest.fn();
-    const nudgeCircle = circle({
-      id: 'nudge-circle',
-      nudgeTargetCount: 2,
-      remainingCheckIns: 2,
-      viewerHasCheckedIn: true,
-      viewerHasTappedInToday: true,
-      viewerRemainingTapIns: 0,
-      viewerTodayStatus: 'done',
-    });
-    let tree: renderer.ReactTestRenderer | undefined;
-
-    act(() => {
-      tree = renderer.create(
-        <HomeCommitmentStack
-          cards={[nudgeCircle]}
-          focusedCardId={nudgeCircle.id}
-          isNudged={() => false}
-          isNudging={() => false}
-          onActionPress={onActionPress}
-          onFocusCard={jest.fn()}
-          onViewDetails={jest.fn()}
-        />,
+  it.each(['partial', 'failed', 'skip', 'done'] as const)(
+    'offers Nudge after a saved %s result',
+    status => {
+      const card = circle({
+        viewerHasTappedInToday: true,
+        viewerTodayStatus: status,
+        viewerCanUpdateTapIn: true,
+        nudgeTargetCount: 2,
+      });
+      const {tree, onActionPress} = renderCards([card]);
+      const action = tree.root.findByProps({
+        testID: 'home-commitment-action-circle-1',
+      });
+      expect(action.props.accessibilityLabel).toBe(
+        'Nudge for Morning Movement',
       );
-    });
-
-    const check = tree!.root.findByProps({
-      testID: 'home-commitment-check-nudge-circle',
-    });
-    const nudge = tree!.root.findByProps({
-      accessibilityLabel: 'Nudge 2 Members',
-    });
-
-    expect(check.props.accessibilityState).toEqual({
-      checked: true,
-      disabled: true,
-    });
-
+      act(() => action.props.onPress());
+      expect(onActionPress).toHaveBeenCalledWith(card);
+    },
+  );
+  it('keeps completed and pending rows compact and without submission controls', () => {
+    const {tree} = renderCards([
+      circle({viewerHasTappedInToday: true}),
+      circle({id: 'pending', viewerMembershipStatus: 'pending'}),
+    ]);
+    expect(
+      tree.root.findAllByProps({testID: 'home-commitment-action-circle-1'}),
+    ).toHaveLength(0);
+    expect(
+      tree.root.findAllByProps({testID: 'home-commitment-focused-circle-1'}),
+    ).toHaveLength(0);
+    expect(
+      tree.root.findByProps({testID: 'home-commitment-collapsed-pending'}).props
+        .accessibilityLabel,
+    ).toContain('Pending approval');
+  });
+  it.each([
+    {viewerHasTappedInToday: true},
+    {viewerMembershipStatus: 'pending' as const},
+  ])('allows intentional expansion of a non-actionable row: %p', overrides => {
+    const card = circle(overrides);
+    const {tree, onViewDetails, onActionPress} = renderCards([card], card.id);
+    expect(
+      tree.root.findByProps({testID: 'home-commitment-focused-circle-1'}),
+    ).toBeTruthy();
+    expect(JSON.stringify(tree.toJSON())).toContain(card.commitment);
+    expect(
+      tree.root.findAllByProps({testID: 'home-commitment-action-circle-1'}),
+    ).toHaveLength(0);
+    act(() =>
+      tree.root
+        .findByProps({testID: 'home-commitment-details-circle-1'})
+        .props.onPress(),
+    );
+    expect(onViewDetails).toHaveBeenCalledWith(card.id);
+    expect(onActionPress).not.toHaveBeenCalled();
+  });
+  it('expands completed and pending rows through either content or chevron', () => {
+    const {tree, onFocusCard, onActionPress, onViewDetails} = renderCards([
+      circle({viewerHasTappedInToday: true}),
+      circle({id: 'pending', viewerMembershipStatus: 'pending'}),
+    ]);
     act(() => {
-      nudge.props.onPress();
+      tree.root
+        .findByProps({testID: 'home-commitment-collapsed-circle-1'})
+        .props.onPress();
+      tree.root
+        .findByProps({testID: 'home-commitment-expand-pending'})
+        .props.onPress();
     });
-
-    expect(onActionPress).toHaveBeenCalledWith(nudgeCircle);
+    expect(onFocusCard.mock.calls).toEqual([['circle-1'], ['pending']]);
+    expect(onActionPress).not.toHaveBeenCalled();
+    expect(onViewDetails).not.toHaveBeenCalled();
+  });
+  it('disables the primary action while a Nudge is sending', () => {
+    const {tree} = renderCards(
+      [circle({viewerHasTappedInToday: true, nudgeTargetCount: 2})],
+      undefined,
+      true,
+    );
+    expect(
+      tree.root.findByProps({testID: 'home-commitment-action-circle-1'}).props
+        .accessibilityState,
+    ).toEqual({disabled: true, busy: true});
+  });
+  it('keeps full descriptions and long compact titles readable in dark mode', () => {
+    mockAppearance = 'dark';
+    const longTitle = 'A long personal commitment with a meaningful full title';
+    const {tree} = renderCards([
+      circle(),
+      circle({id: 'long', title: longTitle}),
+    ]);
+    expect(JSON.stringify(tree.toJSON())).toContain(longTitle);
+    expect(JSON.stringify(tree.toJSON())).toContain('Move for 30 minutes');
   });
 });

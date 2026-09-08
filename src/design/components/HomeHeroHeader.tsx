@@ -1,258 +1,239 @@
-import React, {useEffect, useRef, useState} from 'react';
-import {
-  Animated,
-  Pressable,
-  StyleSheet,
-  useWindowDimensions,
-  View,
-} from 'react-native';
+import React from 'react';
+import {Pressable, StyleSheet, useWindowDimensions, View} from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
-import {Bell} from 'lucide-react-native';
-
+import LinearGradient from 'react-native-linear-gradient';
+import {
+  Bell,
+  Clock3,
+  Ellipsis,
+  LockKeyhole,
+  Sparkles,
+  Check,
+  TriangleAlert,
+} from 'lucide-react-native';
+import Svg, {Path} from 'react-native-svg';
+import {homeTypography} from '../tokens/home';
 import type {HoyState} from '../../features/home/services/hoy-state';
-import type {MomentumStatus} from '../../types/models';
-import {brandColors} from '../tokens/colors';
-import {actionMotion} from '../tokens/actions';
 import {useHoystTheme} from '../theme/useHoystTheme';
 import {BrandMark} from './BrandMark';
 import {HoystText} from './HoystText';
 import {HoyOrb} from './HoyOrb';
-import {MomentumStageIcon} from './MomentumStageIcon';
-import {getMomentumStatusVisualColor} from './MomentumStatusPill';
 
-const HOY_SIZE = 48;
-const NOTIFICATION_BUTTON_SIZE = 36;
-const UNREAD_BADGE_SIZE = 18;
-const HEADER_HORIZONTAL_PADDING = 22;
-const LOGO_WIDTH = 84;
-const LOGO_RIGHT_MARGIN = 8;
-const TOP_ROW_GAP = 8;
-const MOMENTUM_VALUE_GAP = 8;
-const MOMENTUM_VALUE_WIDTH = 100;
-const MOMENTUM_KNOB_SIZE = 24;
-
-export const homeHeroPalettes = {
-  light: {
-    background: brandColors.backgroundLight,
-    bubbleText: '#16181D',
-    bubbleSubtle: '#5B5B86',
-    subline: brandColors.blueVivid,
-    track: 'rgba(124,111,240,0.18)',
-  },
-  dark: {
-    background: brandColors.backgroundDark,
-    bubbleText: '#E8ECF5',
-    bubbleSubtle: '#9292B4',
-    subline: brandColors.blue,
-    track: 'rgba(124,111,240,0.24)',
-  },
+export const homeHoyVisuals = {
+  locked: {tint: '#B4BCD1', accent: '#7785A2', Icon: LockKeyhole},
+  thinking: {tint: '#C8B5FA', accent: '#9171DB', Icon: Ellipsis},
+  momentum_building: {tint: '#C8B5FA', accent: '#9470E8', Icon: Sparkles},
+  momentum_strong: {tint: '#9CDEFF', accent: '#18B9FF', Icon: Sparkles},
+  momentum_peak: {tint: '#A2EBC5', accent: '#10B967', Icon: Sparkles},
+  celebrating: {tint: '#A2EBC5', accent: '#10B967', Icon: Sparkles},
+  risk_attention: {tint: '#FFE69A', accent: '#E8A600', Icon: TriangleAlert},
+  tap_in_needed: {tint: '#FFD4AE', accent: '#FF8A3D', Icon: Clock3},
 } as const;
 
-type HomeHeroHeaderProps = {
-  bubbleText?: string;
-  isHoyActionDisabled?: boolean;
-  hoyAccessibilityLabel: string;
-  hoyCelebrationKey?: number;
-  hoyState?: HoyState;
-  onHoyActionPress: () => void;
-  surfaceColor: string;
-};
-
-type HomeNotificationButtonProps = {
-  accessibilityLabel: string;
-  badgeText?: string;
-  onPress: () => void;
-};
-
-type HomeMomentumBarProps = {
-  momentumPercent: number;
-  momentumStatus: MomentumStatus;
-  onPress: () => void;
-  trackColor: string;
-};
-
-function BubbleText({text}: {text: string}) {
-  const palette = useHoystTheme().isDark
-    ? homeHeroPalettes.dark
-    : homeHeroPalettes.light;
-  const opacity = useRef(new Animated.Value(0)).current;
-  const [displayedText, setDisplayedText] = useState(text);
-
-  useEffect(() => {
-    let isActive = true;
-
-    if (text === displayedText) {
-      const fadeIn = Animated.timing(opacity, {
-        duration: 180,
-        toValue: 1,
-        useNativeDriver: true,
-      });
-
-      fadeIn.start();
-
-      return () => {
-        isActive = false;
-        fadeIn.stop();
-      };
+export function getHomeMessageParts(text: string, emphasis: readonly string[]) {
+  const spans = emphasis
+    .filter(Boolean)
+    .flatMap(value => {
+      const start = text.indexOf(value);
+      return start < 0 ? [] : [{start, end: start + value.length}];
+    })
+    .sort((a, b) => a.start - b.start);
+  const result: {text: string; bold: boolean}[] = [];
+  let cursor = 0;
+  for (const span of spans) {
+    if (span.start < cursor) {
+      continue;
     }
-
-    const fadeOut = Animated.timing(opacity, {
-      duration: 140,
-      toValue: 0,
-      useNativeDriver: true,
-    });
-
-    fadeOut.start(({finished}) => {
-      if (!finished || !isActive) {
-        return;
-      }
-
-      setDisplayedText(text);
-      opacity.setValue(0);
-      Animated.timing(opacity, {
-        duration: 180,
-        toValue: 1,
-        useNativeDriver: true,
-      }).start();
-    });
-
-    return () => {
-      isActive = false;
-      fadeOut.stop();
-    };
-  }, [displayedText, opacity, text]);
-
-  return (
-    <Animated.View style={[styles.bubbleTextContainer, {opacity}]}>
-      <HoystText
-        numberOfLines={3}
-        style={[styles.bubbleText, {color: palette.bubbleText}]}>
-        {displayedText}
-      </HoystText>
-    </Animated.View>
-  );
-}
-
-function HoyPlaceholder({
-  surfaceColor,
-}: {
-  surfaceColor: string;
-}): React.JSX.Element {
-  const theme = useHoystTheme();
-
-  return (
-    <View
-      accessibilityElementsHidden
-      importantForAccessibility="no-hide-descendants"
-      style={[
-        styles.hoyPlaceholder,
-        {
-          backgroundColor: surfaceColor,
-          shadowColor: theme.shadow,
-        },
-      ]}
-      testID="home-hero-hoy-placeholder"
-    />
-  );
+    if (span.start > cursor) {
+      result.push({text: text.slice(cursor, span.start), bold: false});
+    }
+    result.push({text: text.slice(span.start, span.end), bold: true});
+    cursor = span.end;
+  }
+  if (cursor < text.length) {
+    result.push({text: text.slice(cursor), bold: false});
+  }
+  return result;
 }
 
 export function HomeHeroHeader({
   bubbleText,
-  isHoyActionDisabled = false,
+  emphasis = [],
   hoyAccessibilityLabel,
   hoyCelebrationKey,
   hoyState,
+  isHoyActionDisabled = false,
   onHoyActionPress,
-  surfaceColor,
-}: HomeHeroHeaderProps): React.JSX.Element {
+  notification,
+  surfaceColor: _surfaceColor,
+}: {
+  bubbleText?: string;
+  emphasis?: readonly string[];
+  hoyAccessibilityLabel: string;
+  hoyCelebrationKey?: number;
+  hoyState?: HoyState;
+  isHoyActionDisabled?: boolean;
+  onHoyActionPress: () => void;
+  notification?: React.ReactNode;
+  surfaceColor: string;
+}) {
   const theme = useHoystTheme();
+  const {width, fontScale} = useWindowDimensions();
   const insets = useSafeAreaInsets();
-  const {width: screenWidth} = useWindowDimensions();
-  const palette = theme.isDark ? homeHeroPalettes.dark : homeHeroPalettes.light;
-  const bubbleMaxWidth = Math.max(
-    120,
-    screenWidth -
-      HEADER_HORIZONTAL_PADDING * 2 -
-      LOGO_WIDTH -
-      LOGO_RIGHT_MARGIN -
-      TOP_ROW_GAP * 2 -
-      HOY_SIZE,
-  );
+  const state = hoyState ?? 'thinking';
+  const visual = homeHoyVisuals[state];
+  const Icon = visual.Icon;
+  const orbSize = width < 390 ? 68 : 72;
+  const bubbleColor = theme.isDark ? '#252527' : '#FFFFFF';
+  const stacked = fontScale >= 1.6;
+  const messageOpacity = isHoyActionDisabled ? 0.8 : 1;
+  const bubbleShadow = theme.isDark ? '#000000' : '#92723E';
   return (
-    <View style={[styles.header, {paddingTop: insets.top + 10}]}>
+    <View style={[styles.header, {paddingTop: insets.top + 4}]}>
+      <LinearGradient
+        pointerEvents="none"
+        colors={[
+          `${visual.tint}${theme.isDark ? '26' : 'A6'}`,
+          `${visual.tint}00`,
+        ]}
+        style={StyleSheet.absoluteFill}
+        testID="home-hoy-context-tint"
+      />
       <View style={styles.topRow}>
         <BrandMark isDark={theme.isDark} kind="logo" style={styles.logo} />
+        {notification}
+      </View>
+      <View style={[styles.heroRow, stacked && styles.heroStacked]}>
         <Pressable
           accessibilityLabel={hoyAccessibilityLabel}
           accessibilityRole="button"
           disabled={isHoyActionDisabled}
           onPress={onHoyActionPress}
-          style={({pressed}) => [
-            styles.hoyAction,
-            {opacity: pressed ? actionMotion.pressedOpacity : 1},
+          style={[
+            styles.bubbleSurface,
+            {
+              opacity: messageOpacity,
+              width: stacked ? width - 44 : width - 44 - orbSize - 12 - 16,
+              shadowColor: bubbleShadow,
+              backgroundColor: bubbleColor,
+            },
           ]}
           testID="home-hero-hoy-action">
-          <View
-            testID="home-hero-bubble-surface"
-            style={[
-              styles.bubbleSurface,
-              {
-                maxWidth: bubbleMaxWidth,
-              },
-            ]}>
-            <View
-              style={[
-                styles.bubble,
-                {
-                  backgroundColor: surfaceColor,
-                },
-              ]}
-              testID="home-hero-bubble-fill">
+          <View testID="home-hero-bubble-surface">
+            <View testID="home-hero-bubble-fill">
               {bubbleText ? (
-                <BubbleText text={bubbleText} />
+                <HoystText style={styles.message}>
+                  {getHomeMessageParts(bubbleText, emphasis).map(
+                    (part, index) => (
+                      <HoystText
+                        key={index}
+                        style={[
+                          styles.message,
+                          part.bold && styles.messageBold,
+                        ]}>
+                        {part.text}
+                      </HoystText>
+                    ),
+                  )}
+                </HoystText>
               ) : (
                 <View
                   accessibilityElementsHidden
-                  importantForAccessibility="no-hide-descendants"
-                  style={styles.bubbleSkeleton}>
+                  style={styles.skeleton}
+                  testID="home-hero-bubble-skeleton">
                   <View
                     style={[
-                      styles.bubbleSkeletonLine,
-                      {backgroundColor: palette.track},
+                      styles.skeletonLine,
+                      {backgroundColor: theme.borderStrong},
                     ]}
                   />
                   <View
                     style={[
-                      styles.bubbleSkeletonLineShort,
-                      {backgroundColor: palette.track},
+                      styles.skeletonLine,
+                      {backgroundColor: theme.borderStrong},
+                      styles.skeletonShort,
                     ]}
                   />
                 </View>
               )}
             </View>
           </View>
+          {!stacked && (
+            <View
+              pointerEvents="none"
+              style={[styles.tail, {borderLeftColor: bubbleColor}]}
+            />
+          )}
         </Pressable>
-        <View style={styles.hoyCluster}>
+        <View
+          accessibilityElementsHidden
+          importantForAccessibility="no-hide-descendants"
+          style={[
+            styles.hoyCluster,
+            {width: orbSize + 12, height: orbSize + 12},
+          ]}>
           {hoyState ? (
             <HoyOrb
+              presentation="home"
+              shadowTone={theme.isDark ? 'dark' : 'light'}
               celebrationKey={hoyCelebrationKey}
-              size={HOY_SIZE}
+              size={orbSize}
               state={hoyState}
               testID="home-hero-hoy-orb"
             />
           ) : (
-            <HoyPlaceholder surfaceColor={surfaceColor} />
+            <View
+              testID="home-hero-hoy-placeholder"
+              style={{
+                width: orbSize,
+                height: orbSize,
+                borderRadius: orbSize / 2,
+                backgroundColor: theme.borderStrong,
+              }}
+            />
           )}
-          <View style={styles.hoyTail}>
-            <View
-              testID="home-hero-tail-dot-large"
-              style={[styles.tailDotLarge, {backgroundColor: surfaceColor}]}
-            />
-            <View
-              testID="home-hero-tail-dot-small"
-              style={[styles.tailDotSmall, {backgroundColor: surfaceColor}]}
-            />
-          </View>
+          {hoyState && (
+            <>
+              <View
+                style={styles.decorLeft}
+                testID={`home-hoy-decoration-${state}`}>
+                {[
+                  'momentum_building',
+                  'momentum_strong',
+                  'momentum_peak',
+                  'celebrating',
+                ].includes(state) ? (
+                  <Svg width={16} height={16} viewBox="0 0 16 16">
+                    <Path
+                      fill={visual.accent}
+                      d="M8 0 C9.3 5.3 10.7 6.7 16 8 C10.7 9.3 9.3 10.7 8 16 C6.7 10.7 5.3 9.3 0 8 C5.3 6.7 6.7 5.3 8 0Z"
+                    />
+                  </Svg>
+                ) : (
+                  <Icon color={visual.accent} size={16} strokeWidth={1.8} />
+                )}
+              </View>
+              {state !== 'locked' && state !== 'thinking' && (
+                <View style={styles.decorRight}>
+                  {state === 'momentum_peak' ? (
+                    <Check size={16} color={visual.accent} strokeWidth={2} />
+                  ) : (
+                    <Svg width={20} height={20} viewBox="0 0 20 20">
+                      <Path
+                        d="M3 8 L3 2 M9 10 L13 4 M12 16 L18 13"
+                        stroke={
+                          state === 'risk_attention' ? '#18B9FF' : visual.accent
+                        }
+                        strokeWidth={1.8}
+                        strokeLinecap="round"
+                        fill="none"
+                      />
+                    </Svg>
+                  )}
+                </View>
+              )}
+            </>
+          )}
         </View>
       </View>
     </View>
@@ -263,299 +244,115 @@ export function HomeNotificationButton({
   accessibilityLabel,
   badgeText,
   onPress,
-}: HomeNotificationButtonProps): React.JSX.Element {
+}: {
+  accessibilityLabel: string;
+  badgeText?: string;
+  onPress: () => void;
+}) {
   const theme = useHoystTheme();
-
   return (
     <Pressable
       accessibilityLabel={accessibilityLabel}
       accessibilityRole="button"
-      hitSlop={4}
       onPress={onPress}
-      style={({pressed}) => [
-        styles.notificationButton,
-        {opacity: pressed ? actionMotion.pressedOpacity : 1},
-      ]}
+      style={styles.notification}
       testID="home-hero-notification-button">
-      <Bell color={theme.text} size={22} strokeWidth={2.2} />
-      {badgeText ? (
-        <View
-          style={styles.unreadBadge}
-          testID="home-hero-notification-unread-badge">
-          <HoystText
-            allowFontScaling={false}
-            numberOfLines={1}
-            style={styles.unreadBadgeText}>
-            {badgeText}
-          </HoystText>
-        </View>
-      ) : null}
-    </Pressable>
-  );
-}
-
-export function HomeMomentumBar({
-  momentumPercent,
-  momentumStatus,
-  onPress,
-  trackColor,
-}: HomeMomentumBarProps): React.JSX.Element {
-  const theme = useHoystTheme();
-  const {width: screenWidth} = useWindowDimensions();
-  const clampedPercent = Math.max(
-    0,
-    Math.min(100, Number.isFinite(momentumPercent) ? momentumPercent : 0),
-  );
-  const momentumVisualColor = getMomentumStatusVisualColor(
-    momentumStatus,
-    theme,
-  );
-  const momentumBarWidth = Math.max(
-    160,
-    screenWidth - HEADER_HORIZONTAL_PADDING * 2,
-  );
-  const momentumTrackWidth = Math.max(
-    96,
-    momentumBarWidth - MOMENTUM_VALUE_WIDTH - MOMENTUM_VALUE_GAP,
-  );
-  const momentumKnobLeft = Math.max(
-    0,
-    Math.min(
-      momentumTrackWidth - MOMENTUM_KNOB_SIZE,
-      (momentumTrackWidth * clampedPercent) / 100 - MOMENTUM_KNOB_SIZE / 2,
-    ),
-  );
-
-  return (
-    <Pressable
-      accessibilityLabel={`14-day momentum, ${Math.round(clampedPercent)}%`}
-      accessibilityRole="button"
-      onPress={onPress}
-      style={({pressed}) => [
-        styles.momentumPressable,
-        {
-          opacity: pressed ? actionMotion.pressedOpacity : 1,
-          transform: [{scale: pressed ? actionMotion.pressedScale : 1}],
-        },
-      ]}
-      testID="home-momentum-bar">
-      <View style={[styles.compactBarArea, {width: momentumTrackWidth}]}>
-        <View
-          style={[styles.compactBarTrack, {backgroundColor: trackColor}]}
-          testID="home-momentum-bar-track">
+      <View style={styles.notificationGlyph}>
+        <Bell color={theme.text} size={22} strokeWidth={2} />
+        {badgeText ? (
           <View
-            testID="home-momentum-bar-fill"
-            style={[
-              styles.compactBarFill,
-              {
-                backgroundColor: momentumVisualColor,
-                width: `${clampedPercent}%`,
-              },
-            ]}
-          />
-        </View>
-        <View
-          style={[
-            styles.compactBarKnob,
-            {left: momentumKnobLeft, shadowColor: theme.glassShadow},
-          ]}>
-          <MomentumStageIcon
-            size={18}
-            status={momentumStatus}
-            testID="home-momentum-stage-icon"
-          />
-        </View>
+            style={styles.badge}
+            testID="home-hero-notification-unread-badge">
+            <HoystText allowFontScaling={false} style={styles.badgeText}>
+              {badgeText}
+            </HoystText>
+          </View>
+        ) : null}
       </View>
-      <HoystText
-        style={[
-          styles.momentumValue,
-          {color: theme.isDark ? '#8D96AD' : '#9A9ABC'},
-        ]}
-        testID="home-momentum-value">
-        {`${Math.round(clampedPercent)}% MOMENTUM`}
-      </HoystText>
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  header: {
-    paddingBottom: 0,
-    paddingHorizontal: 22,
-  },
+  skeletonShort: {width: '70%'},
+  header: {paddingHorizontal: 22, paddingBottom: 8},
   topRow: {
-    alignItems: 'flex-start',
     flexDirection: 'row',
-    gap: 8,
-    justifyContent: 'flex-start',
-  },
-  hoyAction: {
     alignItems: 'center',
-    flexBasis: 0,
-    flexDirection: 'row',
-    flexGrow: 1,
-    flexShrink: 1,
-    gap: 5,
-    minWidth: 0,
-    position: 'relative',
+    justifyContent: 'space-between',
   },
+  logo: {width: 92, height: 44},
+  heroRow: {flexDirection: 'row', alignItems: 'center', gap: 16, marginTop: 12},
+  heroStacked: {flexDirection: 'column-reverse', alignItems: 'stretch'},
   bubbleSurface: {
-    flexBasis: 0,
-    flexGrow: 1,
     flexShrink: 1,
-    minWidth: 0,
+    borderRadius: 18,
+    padding: 16,
+    minHeight: 80,
+    justifyContent: 'center',
+    shadowOffset: {width: 0, height: 6},
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 3,
   },
-  bubble: {
-    borderRadius: 16,
-    borderBottomLeftRadius: 5,
-    overflow: 'hidden',
-    paddingHorizontal: 11,
-    paddingVertical: 9,
-  },
-  bubbleText: {
-    flexShrink: 1,
-    fontSize: 15,
-    fontWeight: '600',
-    letterSpacing: 0,
-    lineHeight: 20,
-  },
-  bubbleTextContainer: {
-    flexShrink: 1,
-    width: '100%',
-  },
-  bubbleSkeleton: {
-    gap: 6,
-    minWidth: 0,
-    paddingVertical: 2,
-  },
-  bubbleSkeletonLine: {
-    borderRadius: 6,
-    height: 12,
-    opacity: 0.8,
-    width: '94%',
-  },
-  bubbleSkeletonLineShort: {
-    borderRadius: 6,
-    height: 12,
-    opacity: 0.6,
-    width: '62%',
-  },
-  tailDotLarge: {
-    borderRadius: 5,
-    height: 9,
-    width: 9,
-  },
-  tailDotSmall: {
-    borderRadius: 3,
-    height: 5,
-    marginTop: 6,
-    width: 5,
+  message: homeTypography.message,
+  messageBold: {fontWeight: '700'},
+  tail: {
+    position: 'absolute',
+    right: -9,
+    top: '48%',
+    borderTopWidth: 7,
+    borderBottomWidth: 7,
+    borderLeftWidth: 10,
+    borderTopColor: 'transparent',
+    borderBottomColor: 'transparent',
   },
   hoyCluster: {
-    flexShrink: 0,
-    height: HOY_SIZE,
-    position: 'relative',
-    width: HOY_SIZE,
-  },
-  hoyTail: {
-    alignItems: 'flex-start',
-    left: -11,
-    position: 'absolute',
-    top: HOY_SIZE - 3,
-  },
-  hoyPlaceholder: {
-    borderRadius: HOY_SIZE / 2,
-    elevation: 3,
-    height: HOY_SIZE,
-    overflow: 'hidden',
-    shadowOffset: {height: 3, width: 0},
-    shadowOpacity: 0.18,
-    shadowRadius: 6,
-    width: HOY_SIZE,
-  },
-  unreadBadge: {
-    alignItems: 'center',
-    backgroundColor: brandColors.red,
-    borderColor: brandColors.white,
-    borderRadius: UNREAD_BADGE_SIZE / 2,
-    borderWidth: 2,
-    height: UNREAD_BADGE_SIZE,
     justifyContent: 'center',
+    alignItems: 'center',
+    alignSelf: 'center',
+  },
+  decorLeft: {
+    position: 'absolute',
+    top: -2,
+    left: 0,
+    transform: [{rotate: '-12deg'}],
+  },
+  decorRight: {
     position: 'absolute',
     right: -5,
     top: -5,
-    width: UNREAD_BADGE_SIZE,
+    transform: [{rotate: '12deg'}],
   },
-  unreadBadgeText: {
-    color: brandColors.white,
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 0,
-    lineHeight: 13,
-    textAlign: 'center',
-  },
-  logo: {
-    alignSelf: 'flex-start',
-    height: 36,
-    marginLeft: -4,
-    marginRight: LOGO_RIGHT_MARGIN,
-    width: LOGO_WIDTH,
-  },
-  notificationButton: {
+  notification: {
+    minWidth: 44,
+    minHeight: 44,
     alignItems: 'center',
-    height: NOTIFICATION_BUTTON_SIZE,
     justifyContent: 'center',
-    position: 'relative',
-    width: NOTIFICATION_BUTTON_SIZE,
   },
-  momentumPressable: {
-    height: 44,
-    minWidth: 0,
-    position: 'relative',
-    width: '100%',
+  notificationGlyph: {
+    width: 22,
+    height: 22,
+    transform: [{translateY: -2}],
   },
-  momentumValue: {
+  badge: {
+    position: 'absolute',
+    right: -8,
+    top: -7,
+    minWidth: 19,
+    height: 19,
+    borderRadius: 10,
+    backgroundColor: '#FF3B30',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 3,
+  },
+  badgeText: {
     fontSize: 11,
+    lineHeight: 14,
+    color: '#FFFFFF',
     fontWeight: '700',
-    letterSpacing: 0,
-    lineHeight: 16,
-    position: 'absolute',
-    right: 0,
-    textAlign: 'right',
-    top: 14,
-    width: MOMENTUM_VALUE_WIDTH,
   },
-  compactBarArea: {
-    height: MOMENTUM_KNOB_SIZE,
-    left: 0,
-    position: 'relative',
-    top: 10,
-  },
-  compactBarTrack: {
-    borderRadius: 3,
-    height: 6,
-    left: 0,
-    overflow: 'hidden',
-    position: 'absolute',
-    right: 0,
-    top: 9,
-  },
-  compactBarFill: {
-    borderRadius: 3,
-    height: 6,
-  },
-  compactBarKnob: {
-    alignItems: 'center',
-    backgroundColor: '#FFF3DF',
-    borderRadius: MOMENTUM_KNOB_SIZE / 2,
-    elevation: 2,
-    height: MOMENTUM_KNOB_SIZE,
-    justifyContent: 'center',
-    position: 'absolute',
-    shadowOffset: {height: 2, width: 0},
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    top: 0,
-    width: MOMENTUM_KNOB_SIZE,
-  },
+  skeleton: {gap: 12},
+  skeletonLine: {height: 12, borderRadius: 6, width: '100%'},
 });

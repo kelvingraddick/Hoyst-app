@@ -9,7 +9,8 @@ import {
   ProfileTabIcon,
   type TabBarIconProps,
 } from '../src/design/components/TabBarIcons';
-import {brandColors} from '../src/design/tokens/colors';
+import {brandColors, getHoystThemeColors} from '../src/design/tokens/colors';
+import {getAppTabBarColors} from '../src/navigation/tab-bar-colors';
 
 const icons: Array<{
   Component: (props: TabBarIconProps) => React.JSX.Element;
@@ -62,6 +63,22 @@ function getVisibleGlyphColors(tree: renderer.ReactTestRenderer) {
 }
 
 describe('TabBarIcons', () => {
+  it.each([
+    ['light', brandColors.charcoal, brandColors.graySoft],
+    ['dark', brandColors.white, brandColors.gray],
+  ] as const)(
+    'keeps %s tab labels on the themed text color without changing icon colors',
+    (appearance, label, inactiveIcon) => {
+      const colors = getAppTabBarColors(getHoystThemeColors(appearance));
+
+      expect(colors).toEqual({
+        activeIcon: brandColors.blue,
+        inactiveIcon,
+        label,
+      });
+    },
+  );
+
   it('renders every tab icon at the same visible size', () => {
     icons.forEach(({Component}) => {
       const tree = renderIcon(Component);

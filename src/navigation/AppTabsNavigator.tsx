@@ -17,8 +17,8 @@ import {HomeScreen} from '../features/home/screens/HomeScreen';
 import {MomentumScreen} from '../features/momentum/screens/MomentumScreen';
 import {ProfileScreen} from '../features/profile/screens/ProfileScreen';
 import {useHoystTheme} from '../design/theme/useHoystTheme';
-import {brandColors} from '../design/tokens/colors';
 import {HoystTabBarBackground} from './components/HoystTabBarBackground';
+import {getAppTabBarColors} from './tab-bar-colors';
 import {canResumePendingAction} from './pending-action-resume';
 import {navigateToAuthWelcome} from './auth-modal-navigation';
 import {getRootAuthPresentation} from './root-mode';
@@ -76,9 +76,7 @@ export function AppTabsNavigator({
   const setCurrentStep = useOnboardingStore(state => state.setCurrentStep);
   const [tabPulseInteractionKey, setTabPulseInteractionKey] = useState(0);
   const didAutoPresentOnboardingRef = useRef(false);
-  const inactiveIconColor = theme.isDark
-    ? brandColors.gray
-    : brandColors.graySoft;
+  const tabBarColors = getAppTabBarColors(theme);
 
   useEffect(() => {
     if (
@@ -178,12 +176,12 @@ export function AppTabsNavigator({
         sceneStyle: {
           backgroundColor: theme.background,
         },
-        tabBarActiveTintColor: brandColors.blue,
+        tabBarActiveTintColor: tabBarColors.label,
         tabBarBackground: HoystTabBarBackground,
         tabBarHideOnKeyboard: true,
         tabBarIconStyle:
           route.name === 'TapIn' ? styles.tapInIconSlot : styles.tabBarIcon,
-        tabBarInactiveTintColor: inactiveIconColor,
+        tabBarInactiveTintColor: tabBarColors.label,
         tabBarItemStyle: styles.tabBarItem,
         tabBarLabelStyle: styles.tabBarLabel,
         tabBarStyle: [
@@ -211,7 +209,9 @@ export function AppTabsNavigator({
 
           const Icon = routeIcons[route.name as StandardTabName];
           const iconSize = 28;
-          const iconColor = focused ? brandColors.blue : inactiveIconColor;
+          const iconColor = focused
+            ? tabBarColors.activeIcon
+            : tabBarColors.inactiveIcon;
 
           return (
             <Icon

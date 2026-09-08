@@ -14,11 +14,24 @@ function hasAuthRoute(navigation: MaybeParentNavigation) {
 export function navigateToAuthWelcome(
   navigation?: MaybeParentNavigation,
 ): boolean {
+  return navigateToAuth(navigation, 'Welcome');
+}
+
+export function navigateToAuthSignIn(
+  navigation?: MaybeParentNavigation,
+): boolean {
+  return navigateToAuth(navigation, 'SignIn');
+}
+
+function navigateToAuth(
+  navigation: MaybeParentNavigation | undefined,
+  screen: 'SignIn' | 'Welcome',
+): boolean {
   let currentNavigation = navigation;
 
   while (currentNavigation) {
     if (hasAuthRoute(currentNavigation)) {
-      currentNavigation.navigate('Auth', {screen: 'Welcome'});
+      currentNavigation.navigate('Auth', {screen});
       return true;
     }
 

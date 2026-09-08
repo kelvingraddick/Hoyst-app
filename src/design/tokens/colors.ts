@@ -93,6 +93,9 @@ export function getHoystThemeColors(
     successForeground: isDark ? '#4BE083' : '#07763E',
     warning: brandColors.orangeStrong,
     warningForeground: isDark ? '#FF8A3D' : '#A83A00',
+    // Streaks use a lighter, flat orange while retaining readable contrast
+    // against their light and dark surfaces.
+    streakForeground: isDark ? '#FF9A4D' : '#C25400',
     danger: brandColors.red,
     dangerForeground: isDark ? '#FF6B63' : '#D21F18',
     accent: brandColors.purple,

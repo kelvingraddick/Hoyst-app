@@ -1,4 +1,4 @@
-import React, {useEffect, useMemo, useRef, useState} from 'react';
+import React, {useEffect, useId, useMemo, useRef, useState} from 'react';
 import {
   AccessibilityInfo,
   Animated,
@@ -16,6 +16,7 @@ import {
 } from 'lucide-react-native';
 
 import type {HoyState} from '../../features/home/services/hoy-state';
+import Svg, {Defs, Ellipse, RadialGradient, Stop} from 'react-native-svg';
 import {brandColors} from '../tokens/colors';
 
 const DEFAULT_SIZE = 52;
@@ -38,6 +39,8 @@ const confettiSource = require('../../assets/hoy/confetti.png');
 
 export type HoyOrbProps = {
   animated?: boolean;
+  presentation?: 'default' | 'home';
+  shadowTone?: 'light' | 'dark';
   celebrationKey?: number;
   size?: number;
   state: HoyState;
@@ -107,12 +110,16 @@ function getGlyph(state: HoyState, size: number) {
 
 export function HoyOrb({
   animated = true,
+  presentation = 'default',
+  shadowTone = 'light',
   celebrationKey = 0,
   size = DEFAULT_SIZE,
   state,
   style,
   testID = 'hoy-orb',
 }: HoyOrbProps): React.JSX.Element {
+  const darkShadow = shadowTone === 'dark';
+  const shadowId = `hoy-shadow-${useId().replace(/:/g, '')}`;
   const [reduceMotion, setReduceMotion] = useState(IS_TEST_ENVIRONMENT);
   const [displayedState, setDisplayedState] = useState(state);
   const [previousState, setPreviousState] = useState<HoyState>();
@@ -349,7 +356,9 @@ export function HoyOrb({
         }
       : undefined;
   const glyphSize = Math.max(17, Math.round(size * 0.34));
-  const imageSize = size * 1.16;
+  // Compensate for the artwork's transparent padding so Home's visible
+  // face matches its requested size without changing other uses.
+  const imageSize = size * (presentation === 'home' ? 4 / 3 : 1.16);
   const imageOffset = (size - imageSize) / 2;
   const currentImageTransitionStyle = previousState
     ? {
@@ -391,18 +400,53 @@ export function HoyOrb({
       <Animated.View
         testID={`${testID}-animated-surface`}
         style={[styles.orbSurface, loopStyle, celebrationStyle]}>
-        <View
-          style={[
-            styles.hoverShadow,
-            {
-              borderRadius: size * 0.28,
-              bottom: size * 0.025,
-              height: size * 0.1,
-              left: size * 0.22,
-              width: size * 0.56,
-            },
-          ]}
-        />
+        {presentation === 'home' ? (
+          <Svg
+            width={size}
+            height={size * 0.2}
+            style={[styles.homeShadow, {bottom: -size * 0.14}]}
+            testID={`${testID}-home-shadow`}>
+            <Defs>
+              <RadialGradient id={shadowId} cx="50%" cy="50%" rx="50%" ry="50%">
+                <Stop
+                  offset="0"
+                  stopColor={darkShadow ? '#000000' : '#6B5128'}
+                  stopOpacity={darkShadow ? 0.5 : 0.34}
+                />
+                <Stop
+                  offset="0.45"
+                  stopColor={darkShadow ? '#000000' : '#6B5128'}
+                  stopOpacity={darkShadow ? 0.25 : 0.16}
+                />
+                <Stop
+                  offset="1"
+                  stopColor={darkShadow ? '#000000' : '#6B5128'}
+                  stopOpacity={0}
+                />
+              </RadialGradient>
+            </Defs>
+            <Ellipse
+              cx={size / 2}
+              cy={size * 0.1}
+              rx={size * 0.38}
+              ry={size * 0.07}
+              fill={`url(#${shadowId})`}
+            />
+          </Svg>
+        ) : (
+          <View
+            style={[
+              styles.hoverShadow,
+              {
+                borderRadius: size * 0.28,
+                bottom: size * 0.025,
+                height: size * 0.1,
+                left: size * 0.22,
+                width: size * 0.56,
+              },
+            ]}
+          />
+        )}
         {previousState ? (
           <Animated.Image
             accessibilityIgnoresInvertColors
@@ -469,7 +513,7 @@ export function HoyOrb({
         />
       ) : null}
 
-      {glyph ? (
+      {glyph && presentation !== 'home' ? (
         <View
           style={[
             styles.glyph,
@@ -490,6 +534,7 @@ export function HoyOrb({
 }
 
 const styles = StyleSheet.create({
+  homeShadow: {position: 'absolute', left: 0},
   root: {
     overflow: 'visible',
   },

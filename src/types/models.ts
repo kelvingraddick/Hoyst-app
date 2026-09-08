@@ -326,6 +326,7 @@ export type CircleSummary = {
   joinLabel?: CircleJoinLabel;
   matchCopy?: string;
   nudgeTargetCount?: number;
+  viewerHasNudgedToday?: boolean;
   completionLabel?: string;
   progressLabel?: string;
   timezone?: string;

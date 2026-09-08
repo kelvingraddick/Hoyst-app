@@ -51,6 +51,7 @@ import {
 } from '../momentum';
 import {getLeaveCirclePlan} from './leave-plan';
 import {getNudgeTargetUids} from './nudge-targets';
+import {recordNudgeCompletion} from './nudge-completion';
 
 const graceRuleSchema = z.object({
   allowance: z.number().int().min(0).max(30),
@@ -1375,6 +1376,8 @@ export const nudgeCircleMembers = onCall(
         console.error('create_thread_nudge_activity_failed', error),
       );
     }
+
+    await recordNudgeCompletion(db, memberRef, targetUids.length, now);
 
     return {nudged: targetUids.length};
   },

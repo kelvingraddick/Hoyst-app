@@ -1424,7 +1424,7 @@ describe('Home greeting fallback', () => {
         now: new Date('2026-05-07T19:00:00.000Z'),
         timezone: 'UTC',
       }).circleSummary,
-    ).toMatchObject({atRiskCount: 0, needsYouCount: 1});
+    ).toMatchObject({atRiskCount: 0, needsYouCount: 0});
     expect(
       getHomeGreetingContext({
         circles: [nonActionableFailedRisk],
@@ -1511,7 +1511,7 @@ describe('Home greeting fallback', () => {
         circles: [updateTapIn],
         firstName: 'Kelvin',
       }).context,
-    ).toMatchObject({circleTitle: 'Water Goal', kind: 'update_tap_in'});
+    ).toMatchObject({kind: 'momentum'});
     expect(
       getHomePrimaryAction({
         circles: [personalTapIn],
@@ -1656,6 +1656,22 @@ describe('Home greeting fallback', () => {
       kind: 'tap_in',
       urgency: 'deadline',
     });
+  });
+
+  it('refreshes completed circles at their own midnight before the profile day ends', () => {
+    expect(
+      getNextHomeActionBoundary({
+        circles: [
+          homeCard({
+            timezone: 'Asia/Tokyo',
+            viewerHasTappedInToday: true,
+            viewerHasNudgedToday: true,
+          }),
+        ],
+        now: new Date('2026-09-07T13:00:00Z'),
+        timezone: 'UTC',
+      }),
+    ).toBe(new Date('2026-09-07T15:00:00Z').getTime());
   });
 
   it('returns the next warning or midnight boundary', () => {

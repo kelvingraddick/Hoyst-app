@@ -16,13 +16,18 @@ const allStates: readonly HoyState[] = [
   'momentum_building',
 ];
 
-function renderOrb(state: HoyState, animated = true) {
+function renderOrb(
+  state: HoyState,
+  animated = true,
+  presentation: 'home' | 'default' = 'default',
+) {
   let tree: renderer.ReactTestRenderer | undefined;
 
   act(() => {
     tree = renderer.create(
       <HoyOrb
         animated={animated}
+        presentation={presentation}
         celebrationKey={1}
         size={52}
         state={state}
@@ -69,6 +74,26 @@ describe('HoyOrb', () => {
       0,
     );
   });
+
+  it.each(allStates)(
+    'keeps Home shadow and badge treatment scoped for %s',
+    state => {
+      const home = renderOrb(state, false, 'home');
+      const original = renderOrb(state, false);
+      expect(
+        home.root.findAllByProps({testID: 'test-hoy-home-shadow'}).length,
+      ).toBeGreaterThan(0);
+      expect(home.root.findAllByProps({testID: 'test-hoy-glyph'})).toHaveLength(
+        0,
+      );
+      expect(
+        original.root.findAllByProps({testID: 'test-hoy-home-shadow'}),
+      ).toHaveLength(0);
+      expect(
+        home.root.findByProps({testID: `test-hoy-${state}-image`}).props.source,
+      ).toBe(getHoyAssetSource(state));
+    },
+  );
 
   it('uses temporary confetti only while celebrating', () => {
     const celebrating = renderOrb('celebrating');

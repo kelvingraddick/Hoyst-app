@@ -17,6 +17,7 @@ const thread_1 = require("../thread");
 const momentum_1 = require("../momentum");
 const leave_plan_1 = require("./leave-plan");
 const nudge_targets_1 = require("./nudge-targets");
+const nudge_completion_1 = require("./nudge-completion");
 const graceRuleSchema = zod_1.z.object({
     allowance: zod_1.z.number().int().min(0).max(30),
     windowDays: zod_1.z.number().int().min(1).max(365),
@@ -1027,6 +1028,7 @@ exports.nudgeCircleMembers = (0, https_1.onCall)({ secrets: [notifications_1.one
             type: 'nudge',
         }).catch(error => console.error('create_thread_nudge_activity_failed', error));
     }
+    await (0, nudge_completion_1.recordNudgeCompletion)(firebase_1.db, memberRef, targetUids.length, now);
     return { nudged: targetUids.length };
 });
 exports.leaveCircle = (0, https_1.onCall)(async (request) => {

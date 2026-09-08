@@ -2,42 +2,54 @@ import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {
   Alert,
   AppState,
+  AccessibilityInfo,
+  StatusBar,
+  Image,
   Pressable,
   ScrollView,
-  Share,
   StyleSheet,
   View,
 } from 'react-native';
 import type {BottomTabNavigationProp} from '@react-navigation/bottom-tabs';
 import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import {useFocusEffect, useNavigation} from '@react-navigation/native';
-import {ChevronRight, Handshake} from 'lucide-react-native';
+import {ChevronRight, List} from 'lucide-react-native';
+import {DateTime} from 'luxon';
 
-import {ActivityFeedCard} from '../../../design/components/ActivityFeedCard';
-import {GlassPanel} from '../../../design/components/GlassPanel';
+import {
+  HomeActivityRow,
+  HomeButton as HoystButton,
+  HomeSurface as GlassPanel,
+  HomeSectionTitle as SectionEyebrow,
+  HomeStateCopy as SectionHeader,
+} from '../components/HomeSurfaces';
+import {
+  HomeDailyActionProgress,
+  HomeProgress,
+  HomeWeekPath,
+} from '../components/HomeProgress';
+import {
+  getHomeDailyAction,
+  getHomeDailyProgress,
+} from '../services/home-daily-actions';
+import {getCircleCategoryVisual} from '../../../design/components/CircleCategoryIcon';
 import {
   HomeHeroHeader,
-  HomeMomentumBar,
   HomeNotificationButton,
 } from '../../../design/components/HomeHeroHeader';
-import {HoystButton} from '../../../design/components/HoystButton';
+import {homeTypography} from '../../../design/tokens/home';
 import {HoystText} from '../../../design/components/HoystText';
-import {SectionEyebrow} from '../../../design/components/SectionEyebrow';
-import {SectionHeader} from '../../../design/components/SectionHeader';
-import {WeekProgressStrip} from '../../../design/components/WeekProgressStrip';
+import {LayeredAvatar} from '../../../design/components/LayeredAvatar';
 import {useHoystTheme} from '../../../design/theme/useHoystTheme';
 import {actionMotion} from '../../../design/tokens/actions';
 import {useProtectedAction} from '../../auth/hooks/useProtectedAction';
 import {
   createEmptyHomeData,
-  getHomeCircleActionVariant,
   getHomeGreetingContext,
   getHomeGreetingFallback,
   getHomeCommitmentStackCircles,
   getHomePrimaryAction,
   getNextHomeActionBoundary,
-  getTodayAttentionCircles,
-  getUpcomingAttentionCircles,
   shouldShowAuthenticatedHomeEmptyState,
   shouldShowHomeDataErrorPanel,
   subscribeToHomeData,
@@ -62,10 +74,14 @@ import type {
   AppTabsParamList,
   RootStackParamList,
 } from '../../../navigation/types';
-import {navigateToAuthWelcome} from '../../../navigation/auth-modal-navigation';
+import {
+  navigateToAuthSignIn,
+  navigateToAuthWelcome,
+} from '../../../navigation/auth-modal-navigation';
 import type {
   CircleActivityItem,
   CircleManagementCard,
+  ExploreCircle,
   InboxEvent,
   MomentumSummary,
 } from '../../../types/models';
@@ -74,6 +90,7 @@ import {useHoyFeedbackStore} from '../../../store/hoy-feedback-store';
 import {useUserProfileStore} from '../../../store/profile-store';
 import {useSessionStore} from '../../../store/session-store';
 import {nudgeCircleMembers} from '../../circles/services/circle-service';
+import {subscribeToPublicCircles} from '../../circles/services/public-circle-service';
 import {
   isCircleActivityEvent,
   legacyCircleActivityEventTypes,
@@ -89,25 +106,22 @@ import {
   subscribeToInboxUnreadCount,
 } from '../../settings/services/notification-settings-service';
 
+const guestStarterArtwork = require('../../../assets/hoy/get-started-invites-network-hands.png');
+
 type HomeGreetingState = {
   requestKey: string;
   headline: string;
   source: 'fallback' | 'gemini';
 };
 
-function canInvite(circle: CircleManagementCard) {
-  return Boolean(
-    circle.inviteUrl &&
-      (circle.viewerRole === 'owner' || circle.viewerRole === 'admin'),
-  );
-}
-
-function isCompletedDailyHomeCommitment(circle: CircleManagementCard) {
-  return Boolean(
-    circle.commitmentCadence === 'daily' &&
-      circle.viewerHasTappedInToday &&
-      getHomeCircleActionVariant(circle) !== 'nudge',
-  );
+function nudgeKey(
+  uid: string | undefined,
+  circle: CircleManagementCard,
+  now = new Date(),
+) {
+  return `${uid}:${circle.id}:${DateTime.fromJSDate(now, {
+    zone: circle.timezone ?? 'UTC',
+  }).toISODate()}`;
 }
 
 function getInitials(name: string) {
@@ -203,18 +217,35 @@ function getInboxBadgeText(unreadCount: number) {
     return undefined;
   }
 
-  return String(Math.min(unreadCount, 9));
+  return unreadCount > 9 ? '9+' : String(unreadCount);
+}
+
+function getFeaturedPublicCircle(circles: ExploreCircle[]) {
+  return [...circles].sort((left, right) => {
+    if (right.completionRate !== left.completionRate) {
+      return right.completionRate - left.completionRate;
+    }
+
+    return right.memberCount - left.memberCount;
+  })[0];
 }
 
 export function HomeScreen(): React.JSX.Element {
   const theme = useHoystTheme();
-  const [homeData, setHomeData] = useState<HomeData>(() =>
-    createEmptyHomeData(),
-  );
+  const [homeSnapshot, setHomeSnapshot] = useState<{
+    uid?: string;
+    data: HomeData;
+  }>(() => ({data: createEmptyHomeData()}));
   const [isLoadingHomeData, setIsLoadingHomeData] = useState(false);
   const [hasHomeDataError, setHasHomeDataError] = useState(false);
-  const [events, setEvents] = useState<InboxEvent[]>([]);
-  const [unreadInboxCount, setUnreadInboxCount] = useState(0);
+  const [inboxSnapshot, setInboxSnapshot] = useState<{
+    uid?: string;
+    events: InboxEvent[];
+  }>({events: []});
+  const [unreadSnapshot, setUnreadSnapshot] = useState<{
+    uid?: string;
+    count: number;
+  }>({count: 0});
   const [nudgedCircleIds, setNudgedCircleIds] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
@@ -224,11 +255,15 @@ export function HomeScreen(): React.JSX.Element {
   const [focusedCommitmentId, setFocusedCommitmentId] = useState<string>();
   const [homeGreetingState, setHomeGreetingState] =
     useState<HomeGreetingState>();
+  const nudgeInFlight = useRef(new Set<string>());
   const [homeClock, setHomeClock] = useState(() => new Date());
   const [hoyCelebrationKey, setHoyCelebrationKey] = useState(0);
   const [isHoyCelebrating, setIsHoyCelebrating] = useState(false);
-  const [remoteMomentumSummary, setRemoteMomentumSummary] =
-    useState<MomentumSummary>();
+  const [momentumSnapshot, setMomentumSnapshot] = useState<{
+    uid?: string;
+    summary?: MomentumSummary;
+  }>({});
+  const [publicCircles, setPublicCircles] = useState<ExploreCircle[]>([]);
   const lastResolvedHoyStateRef = useRef<
     | {
         sessionKey: string;
@@ -248,6 +283,14 @@ export function HomeScreen(): React.JSX.Element {
   const profile = useUserProfileStore(state => state.profile);
   const status = useSessionStore(state => state.status);
   const user = useSessionStore(state => state.user);
+  const events = useMemo(
+    () => (inboxSnapshot.uid === user?.uid ? inboxSnapshot.events : []),
+    [inboxSnapshot, user?.uid],
+  );
+  const unreadInboxCount =
+    unreadSnapshot.uid === user?.uid ? unreadSnapshot.count : 0;
+  const remoteMomentumSummary =
+    momentumSnapshot.uid === user?.uid ? momentumSnapshot.summary : undefined;
   const beginAuthFlow = useSessionStore(state => state.beginAuthFlow);
   const clearPendingAction = useSessionStore(state => state.clearPendingAction);
   const pendingHoyTapInCelebration = useHoyFeedbackStore(
@@ -272,13 +315,51 @@ export function HomeScreen(): React.JSX.Element {
   const isAuthenticatedHome =
     status === 'authenticatedReady' && Boolean(user?.uid && profile);
   const isIncompleteProfile = status === 'authenticatedIncompleteProfile';
+  const isGuestHome = status === 'guest';
   const isSessionResolving =
     status === 'initializing' || status === 'authenticating';
+
+  const homeData = useMemo(
+    () =>
+      homeSnapshot.uid === user?.uid
+        ? homeSnapshot.data
+        : createEmptyHomeData(timezone, homeClock),
+    [homeSnapshot, user?.uid, timezone, homeClock],
+  );
+  const currentAccountRef = useRef(user?.uid);
+  currentAccountRef.current = user?.uid;
+
+  const actionCircles = useMemo(
+    () =>
+      homeData.circles.map(circle => ({
+        ...circle,
+        viewerHasNudgedToday: Boolean(
+          circle.viewerHasNudgedToday ||
+            nudgedCircleIds.has(nudgeKey(user?.uid, circle, homeClock)),
+        ),
+      })),
+    [homeData.circles, homeClock, nudgedCircleIds, user?.uid],
+  );
+  const dailyProgress = useMemo(
+    () => getHomeDailyProgress(actionCircles),
+    [actionCircles],
+  );
+
+  useEffect(() => {
+    if (!isGuestHome) {
+      setPublicCircles([]);
+      return undefined;
+    }
+
+    return subscribeToPublicCircles(setPublicCircles, () =>
+      setPublicCircles([]),
+    );
+  }, [isGuestHome]);
 
   useFocusEffect(
     useCallback(() => {
       if (!isAuthenticatedHome || !user?.uid) {
-        setHomeData(createEmptyHomeData(timezone, homeClock));
+        setHomeSnapshot({data: createEmptyHomeData(timezone, homeClock)});
         setIsLoadingHomeData(false);
         setHasHomeDataError(false);
         return undefined;
@@ -287,56 +368,74 @@ export function HomeScreen(): React.JSX.Element {
       setIsLoadingHomeData(true);
       setHasHomeDataError(false);
 
-      return subscribeToHomeData({
+      let active = true;
+      const unsubscribe = subscribeToHomeData({
         onData: data => {
-          setHomeData(data);
+          if (!active) {
+            return;
+          }
+          setHomeSnapshot(previous =>
+            !data.hasResolvedGreetingContext &&
+            previous.uid === user.uid &&
+            previous.data.hasResolvedGreetingContext
+              ? previous
+              : {uid: user.uid, data},
+          );
           setHasHomeDataError(false);
-          setIsLoadingHomeData(false);
+          setIsLoadingHomeData(!data.hasResolvedGreetingContext);
         },
         onError: () => {
+          if (!active) {
+            return;
+          }
           setHasHomeDataError(true);
           setIsLoadingHomeData(false);
         },
         timezone,
         uid: user.uid,
       });
+      return () => {
+        active = false;
+        unsubscribe();
+      };
     }, [homeClock, isAuthenticatedHome, timezone, user?.uid]),
   );
 
   useEffect(() => {
     if (!isAuthenticatedHome || !user?.uid) {
-      setRemoteMomentumSummary(undefined);
+      setMomentumSnapshot({});
       return undefined;
     }
 
     return subscribeToMomentumSummary({
       onError: () => undefined,
-      onSummary: setRemoteMomentumSummary,
+      onSummary: summary => setMomentumSnapshot({uid: user.uid, summary}),
       uid: user.uid,
     });
   }, [isAuthenticatedHome, user?.uid]);
 
   useEffect(() => {
     if (!isAuthenticatedHome || !user?.uid) {
-      setUnreadInboxCount(0);
+      setUnreadSnapshot({count: 0});
       return undefined;
     }
 
     return subscribeToInboxUnreadCount({
-      onCount: setUnreadInboxCount,
-      onError: () => setUnreadInboxCount(0),
+      onCount: count => setUnreadSnapshot({uid: user.uid, count}),
+      onError: () => setUnreadSnapshot({uid: user.uid, count: 0}),
       uid: user.uid,
     });
   }, [isAuthenticatedHome, user?.uid]);
 
   useEffect(() => {
     if (!isAuthenticatedHome || !user?.uid) {
-      setEvents([]);
+      setInboxSnapshot({events: []});
       return undefined;
     }
 
     return subscribeToInboxEvents({
-      onEvents: setEvents,
+      onEvents: nextEvents =>
+        setInboxSnapshot({uid: user.uid, events: nextEvents}),
       uid: user.uid,
     });
   }, [isAuthenticatedHome, user?.uid]);
@@ -374,30 +473,18 @@ export function HomeScreen(): React.JSX.Element {
     return () => clearTimeout(timer);
   }, [homeClock, homeData.circles, timezone]);
 
-  const personalCommitments = useMemo(
-    () => homeData.circles.filter(circle => circle.circleMode === 'personal'),
-    [homeData.circles],
-  );
-  const groupCircles = useMemo(
-    () => homeData.circles.filter(circle => circle.circleMode !== 'personal'),
-    [homeData.circles],
-  );
-  const todayActionCircles = useMemo(
-    () => getTodayAttentionCircles(groupCircles),
-    [groupCircles],
-  );
-  const upcomingActionCircles = useMemo(
-    () => getUpcomingAttentionCircles(groupCircles),
-    [groupCircles],
-  );
   const commitmentStackCircles = useMemo(
     () =>
       getHomeCommitmentStackCircles({
-        personalCommitments,
-        todayAttentionCircles: todayActionCircles,
-        upcomingAttentionCircles: upcomingActionCircles,
+        personalCommitments: actionCircles.filter(
+          circle => circle.circleMode === 'personal',
+        ),
+        todayAttentionCircles: actionCircles.filter(
+          circle => circle.circleMode !== 'personal',
+        ),
+        upcomingAttentionCircles: [],
       }),
-    [personalCommitments, todayActionCircles, upcomingActionCircles],
+    [actionCircles],
   );
 
   useEffect(() => {
@@ -416,19 +503,21 @@ export function HomeScreen(): React.JSX.Element {
     const completedWhileFocused = Boolean(
       focusedCommitment &&
         previousFocusedCommitment?.id === focusedCommitment.id &&
-        !previousFocusedCommitment.viewerHasTappedInToday &&
-        isCompletedDailyHomeCommitment(focusedCommitment),
+        ['tap_in', 'nudge'].includes(
+          getHomeDailyAction(previousFocusedCommitment),
+        ) &&
+        !['tap_in', 'nudge'].includes(getHomeDailyAction(focusedCommitment)),
     );
-    const nextIncompleteCommitment = commitmentStackCircles.find(
-      circle => !isCompletedDailyHomeCommitment(circle),
+    const nextIncompleteCommitment = commitmentStackCircles.find(circle =>
+      ['tap_in', 'nudge'].includes(getHomeDailyAction(circle)),
     );
     const nextFocusedCommitment =
       !focusedCommitment || completedWhileFocused
-        ? nextIncompleteCommitment ?? commitmentStackCircles[0]
+        ? nextIncompleteCommitment
         : focusedCommitment;
 
-    if (nextFocusedCommitment.id !== focusedCommitmentId) {
-      setFocusedCommitmentId(nextFocusedCommitment.id);
+    if (nextFocusedCommitment?.id !== focusedCommitmentId) {
+      setFocusedCommitmentId(nextFocusedCommitment?.id);
     }
 
     previousFocusedCommitmentRef.current = nextFocusedCommitment;
@@ -436,31 +525,31 @@ export function HomeScreen(): React.JSX.Element {
   const homePrimaryAction = useMemo(
     () =>
       getHomePrimaryAction({
-        circles: homeData.circles,
+        circles: actionCircles,
         firstName: profile?.name,
         now: homeClock,
       }),
-    [homeClock, homeData.circles, profile?.name],
+    [homeClock, actionCircles, profile?.name],
   );
   const homeGreetingContext = useMemo(
     () =>
       getHomeGreetingContext({
-        circles: homeData.circles,
+        circles: actionCircles,
         firstName: profile?.name,
         now: homeClock,
         timezone,
       }),
-    [homeClock, homeData.circles, profile?.name, timezone],
+    [homeClock, actionCircles, profile?.name, timezone],
   );
   const homeGreetingFallback = useMemo(
     () =>
       getHomeGreetingFallback({
-        circles: homeData.circles,
+        circles: actionCircles,
         firstName: profile?.name,
         now: homeClock,
         timezone,
       }),
-    [homeClock, homeData.circles, profile?.name, timezone],
+    [homeClock, actionCircles, profile?.name, timezone],
   );
   const homeGreetingRequestKey = useMemo(
     () =>
@@ -488,7 +577,9 @@ export function HomeScreen(): React.JSX.Element {
       : undefined;
   const bubbleText =
     activeHomeGreetingState?.headline ??
-    (status === 'guest' || isIncompleteProfile
+    (isGuestHome
+      ? 'Ready to make a promise? Let’s build your first commitment.'
+      : isIncompleteProfile
       ? homeGreetingFallback
       : homeData.hasResolvedGreetingContext
       ? homeGreetingFallback
@@ -527,7 +618,10 @@ export function HomeScreen(): React.JSX.Element {
   });
   const isCandidateHoyStateResolved =
     !isSessionResolving && candidateHoyState !== 'thinking';
-  const showAccountPrompt = status === 'guest' || isIncompleteProfile;
+  const featuredPublicCircle = useMemo(
+    () => (isGuestHome ? getFeaturedPublicCircle(publicCircles) : undefined),
+    [isGuestHome, publicCircles],
+  );
   const showAuthenticatedEmptyState = shouldShowAuthenticatedHomeEmptyState({
     circleCount: homeData.circles.length,
     hasHomeDataError,
@@ -554,14 +648,10 @@ export function HomeScreen(): React.JSX.Element {
     () => circleActivityEvents.map(mapInboxEventToActivity),
     [circleActivityEvents],
   );
-  const homeNeutralSurfaceColor = theme.neutralSurface;
+  const homeLinkIconColor = theme.isDark ? '#252527' : '#EEEEF0';
+  const homeNeutralSurfaceColor = theme.isDark ? '#252527' : '#FFFFFF';
   const homeCardLiftStyle = [
-    styles.homeCardLift,
-    {
-      backgroundColor: homeNeutralSurfaceColor,
-      borderWidth: 0,
-      shadowColor: theme.glassShadow,
-    },
+    {backgroundColor: theme.isDark ? '#1D1D20' : '#F1F1EE'},
   ];
 
   useEffect(() => {
@@ -755,21 +845,14 @@ export function HomeScreen(): React.JSX.Element {
     navigateToAuthWelcome(rootNavigation);
   };
 
-  const openCircleDetail = (circleId: string) => {
-    rootNavigation?.navigate('CircleDetail', {circleId});
+  const openReturningMemberSignIn = () => {
+    clearPendingAction();
+    beginAuthFlow();
+    navigateToAuthSignIn(rootNavigation);
   };
 
-  const shareCircle = (circle: CircleManagementCard) => {
-    if (!canInvite(circle) || !circle.inviteUrl) {
-      openCircleDetail(circle.id);
-      return;
-    }
-
-    Share.share({
-      title: `Join ${circle.title} on Hoyst`,
-      message: `Join ${circle.title} on Hoyst: ${circle.inviteUrl}`,
-      url: circle.inviteUrl,
-    }).catch(() => undefined);
+  const openCircleDetail = (circleId: string) => {
+    rootNavigation?.navigate('CircleDetail', {circleId});
   };
 
   const nudgeCircle = (circle: CircleManagementCard) => {
@@ -778,26 +861,44 @@ export function HomeScreen(): React.JSX.Element {
       return;
     }
 
-    if (nudgedCircleIds.has(circle.id) || nudgingCircleIds.has(circle.id)) {
+    const key = nudgeKey(user?.uid, circle);
+    if (
+      circle.viewerHasNudgedToday ||
+      nudgedCircleIds.has(key) ||
+      nudgeInFlight.current.has(key)
+    ) {
       return;
     }
 
+    nudgeInFlight.current.add(key);
     setNudgingCircleIds(currentNudgingCircleIds => {
       const nextNudgingCircleIds = new Set(currentNudgingCircleIds);
-      nextNudgingCircleIds.add(circle.id);
+      nextNudgingCircleIds.add(key);
       return nextNudgingCircleIds;
     });
 
+    const sendingAccount = user?.uid;
     nudgeCircleMembers(circle.id)
       .then(result => {
-        setNudgedCircleIds(currentNudgedCircleIds => {
-          const nextNudgedCircleIds = new Set(currentNudgedCircleIds);
-          nextNudgedCircleIds.add(circle.id);
-          return nextNudgedCircleIds;
-        });
+        if (currentAccountRef.current !== sendingAccount) {
+          return;
+        }
+        if (result.nudged > 0) {
+          setNudgedCircleIds(currentNudgedCircleIds => {
+            const nextNudgedCircleIds = new Set(currentNudgedCircleIds);
+            nextNudgedCircleIds.add(key);
+            return nextNudgedCircleIds;
+          });
+        }
 
+        AccessibilityInfo.announceForAccessibility(
+          result.nudged > 0 ? 'Nudge complete' : 'No members need a nudge',
+        );
+        if (result.nudged === 0) {
+          setHomeClock(new Date());
+        }
         Alert.alert(
-          'Nudge sent',
+          result.nudged > 0 ? 'Nudge sent' : 'No nudge needed',
           result.nudged > 0
             ? `${result.nudged} ${
                 result.nudged === 1 ? 'Member' : 'Members'
@@ -806,33 +907,40 @@ export function HomeScreen(): React.JSX.Element {
         );
       })
       .catch(error => {
+        if (currentAccountRef.current !== sendingAccount) {
+          return;
+        }
+        AccessibilityInfo.announceForAccessibility(
+          'Nudge failed. Please try again.',
+        );
         Alert.alert(
           'Nudge failed',
           (error as {message?: string}).message ?? 'Could not send a nudge.',
         );
       })
       .finally(() => {
+        nudgeInFlight.current.delete(key);
         setNudgingCircleIds(currentNudgingCircleIds => {
-          if (!currentNudgingCircleIds.has(circle.id)) {
+          if (!currentNudgingCircleIds.has(key)) {
             return currentNudgingCircleIds;
           }
 
           const nextNudgingCircleIds = new Set(currentNudgingCircleIds);
-          nextNudgingCircleIds.delete(circle.id);
+          nextNudgingCircleIds.delete(key);
           return nextNudgingCircleIds;
         });
       });
   };
 
   const handleCircleAction = (circle: CircleManagementCard) => {
-    const actionVariant = getHomeCircleActionVariant(circle);
+    const actionVariant = getHomeDailyAction(circle);
 
     if (circle.viewerMembershipStatus === 'pending') {
       openCircleDetail(circle.id);
       return;
     }
 
-    if (actionVariant === 'check_in') {
+    if (actionVariant === 'tap_in') {
       requireAccount({circleId: circle.id, source: 'home', type: 'tapIn'}, () =>
         rootNavigation?.navigate('TapInComposer', {
           circleId: circle.id,
@@ -847,7 +955,7 @@ export function HomeScreen(): React.JSX.Element {
       return;
     }
 
-    shareCircle(circle);
+    openCircleDetail(circle.id);
   };
 
   const isHoyActionDisabled =
@@ -901,7 +1009,7 @@ export function HomeScreen(): React.JSX.Element {
   };
 
   const openInbox = () => {
-    setUnreadInboxCount(0);
+    setUnreadSnapshot({count: 0});
 
     if (isAuthenticatedHome && user?.uid) {
       markAllInboxEventsRead().catch(() => undefined);
@@ -936,6 +1044,7 @@ export function HomeScreen(): React.JSX.Element {
   return (
     <View
       style={[styles.root, theme.isDark ? styles.rootDark : styles.rootLight]}>
+      <StatusBar barStyle={theme.isDark ? 'light-content' : 'dark-content'} />
       <ScrollView
         bounces={false}
         contentContainerStyle={styles.scrollContent}
@@ -943,6 +1052,19 @@ export function HomeScreen(): React.JSX.Element {
         style={styles.scroll}>
         <HomeHeroHeader
           bubbleText={bubbleText}
+          emphasis={[
+            homeGreetingContext.firstName ?? '',
+            homeGreetingContext.primaryAction?.circleTitle ?? '',
+          ]}
+          notification={
+            <HomeNotificationButton
+              accessibilityLabel={getNotificationAccessibilityLabel(
+                unreadInboxCount,
+              )}
+              badgeText={getInboxBadgeText(unreadInboxCount)}
+              onPress={openInbox}
+            />
+          }
           hoyAccessibilityLabel={getHoyAccessibilityLabel({
             headline: bubbleText,
             isDisabled: isHoyActionDisabled,
@@ -956,51 +1078,125 @@ export function HomeScreen(): React.JSX.Element {
         />
         <View style={styles.sheet}>
           <View
-            style={styles.homeProgressSection}
+            style={[
+              styles.homeProgressSection,
+              isIncompleteProfile && styles.hidden,
+            ]}
             testID="home-progress-section">
-            <WeekProgressStrip
-              compact
-              days={homeData.progressDays}
-              headerAccessory={
-                <HomeNotificationButton
-                  accessibilityLabel={getNotificationAccessibilityLabel(
-                    unreadInboxCount,
-                  )}
-                  badgeText={getInboxBadgeText(unreadInboxCount)}
-                  onPress={openInbox}
-                />
-              }
-              streakDays={homeData.personalStreakDays}
-              title="YOUR PROGRESS"
-              weekdayLabelLength={3}
-            />
-            <HomeMomentumBar
-              momentumPercent={momentumDisplay.rawRollingPercentage}
-              momentumStatus={momentumDisplay.status}
-              onPress={() => navigation.navigate('Momentum')}
-              trackColor={homeNeutralSurfaceColor}
-            />
+            {isGuestHome || homeData.hasResolvedGreetingContext ? (
+              <HomeWeekPath days={homeData.progressDays} />
+            ) : (
+              <View
+                accessibilityLabel="Loading your week"
+                style={styles.progressPlaceholder}
+              />
+            )}
+            {isGuestHome ? (
+              <HoystText style={styles.guestProgressCopy} tone="muted">
+                Your first streak starts with one Tap In.
+              </HoystText>
+            ) : isAuthenticatedHome &&
+              homeData.hasResolvedGreetingContext &&
+              !hasHomeDataError ? (
+              <HomeProgress
+                streakDays={homeData.personalStreakDays}
+                momentumPercent={momentumDisplay.rawRollingPercentage}
+                onMomentumPress={() => navigation.navigate('Momentum')}
+              />
+            ) : isSessionResolving || isLoadingHomeData ? (
+              <View
+                accessibilityLabel="Loading your progress"
+                style={styles.progressPlaceholder}
+              />
+            ) : null}
           </View>
 
-          {showAccountPrompt ? (
+          {isGuestHome ? (
+            <View style={styles.guestStarterSection}>
+              <Image
+                accessible={false}
+                resizeMode="contain"
+                source={guestStarterArtwork}
+                style={styles.guestStarterArtwork}
+                testID="guest-home-get-started-artwork"
+              />
+              <View style={styles.guestStarterPanelContainer}>
+                <GlassPanel
+                  padding="compact"
+                  style={[styles.guestStarterPanel, homeCardLiftStyle]}>
+                  <View style={styles.guestStarterCopy}>
+                    <SectionEyebrow>GET STARTED</SectionEyebrow>
+                    <HoystText
+                      style={styles.guestStarterDescription}
+                      tone="muted">
+                      Create a Circle. Invite your people.
+                    </HoystText>
+                  </View>
+                  <Pressable
+                    accessibilityLabel="Start your commitment"
+                    accessibilityRole="button"
+                    onPress={openAccountAuth}
+                    style={({pressed}) => [
+                      styles.guestStarterAction,
+                      {
+                        opacity: pressed ? actionMotion.pressedOpacity : 1,
+                      },
+                    ]}
+                    testID="guest-home-start-commitment">
+                    <View
+                      style={[
+                        styles.guestStarterActionFill,
+                        {backgroundColor: theme.actionSurface},
+                      ]}>
+                      <HoystText
+                        style={[
+                          styles.guestStarterActionText,
+                          {color: theme.actionForeground},
+                        ]}>
+                        Start your commitment
+                      </HoystText>
+                      <ChevronRight color={theme.actionForeground} size={18} />
+                    </View>
+                  </Pressable>
+                  <Pressable
+                    accessibilityLabel="Already a member? Log in"
+                    accessibilityRole="button"
+                    hitSlop={8}
+                    onPress={openReturningMemberSignIn}
+                    style={({pressed}) => [
+                      {opacity: pressed ? actionMotion.pressedOpacity : 1},
+                    ]}
+                    testID="guest-home-log-in-link">
+                    <View
+                      style={[
+                        styles.returningMemberLink,
+                        {borderColor: theme.borderStrong},
+                      ]}>
+                      <HoystText
+                        style={[
+                          styles.returningMemberLinkText,
+                          {color: theme.text},
+                        ]}>
+                        Already a member?{' '}
+                        <HoystText style={styles.returningMemberActionText}>
+                          Log in
+                        </HoystText>
+                      </HoystText>
+                      <ChevronRight color={theme.text} size={16} />
+                    </View>
+                  </Pressable>
+                </GlassPanel>
+              </View>
+            </View>
+          ) : isIncompleteProfile ? (
             <GlassPanel style={[styles.emptyPanel, homeCardLiftStyle]}>
               <SectionHeader
-                description={
-                  isIncompleteProfile
-                    ? 'Finish your handle and profile before circles and Tap Ins unlock.'
-                    : 'Get started to save Progress, join Circles, and build your Tap In streak.'
-                }
-                title={
-                  isIncompleteProfile
-                    ? 'Complete your profile'
-                    : 'Start making Progress'
-                }
+                description="Finish your handle and profile before circles and Tap Ins unlock."
+                title="Complete your profile"
               />
               <View style={styles.emptyActions}>
                 <HoystButton
-                  label={
-                    isIncompleteProfile ? 'Complete profile' : 'Get started'
-                  }
+                  label="Complete profile"
                   onPress={openAccountAuth}
                 />
                 <HoystButton
@@ -1012,21 +1208,135 @@ export function HomeScreen(): React.JSX.Element {
             </GlassPanel>
           ) : null}
 
+          {isGuestHome ? (
+            <View style={styles.guestDiscoverySection}>
+              <SectionEyebrow>DISCOVER A CIRCLE</SectionEyebrow>
+              {featuredPublicCircle ? (
+                <Pressable
+                  accessibilityLabel={`View ${featuredPublicCircle.title}`}
+                  accessibilityRole="button"
+                  onPress={() => openCircleDetail(featuredPublicCircle.id)}
+                  style={({pressed}) => [
+                    styles.guestFeaturedPressable,
+                    {opacity: pressed ? actionMotion.pressedOpacity : 1},
+                  ]}
+                  testID="guest-home-featured-circle">
+                  <GlassPanel
+                    style={[styles.guestFeaturedCard, homeCardLiftStyle]}
+                    variant="panel">
+                    <View style={styles.guestFeaturedTopRow}>
+                      <HoystText style={homeTypography.category} tone="muted">
+                        {getCircleCategoryVisual(
+                          featuredPublicCircle.category,
+                        ).label.toUpperCase()}
+                      </HoystText>
+                      <HoystText style={styles.guestFeaturedPace} tone="muted">
+                        {featuredPublicCircle.joinLabel}
+                      </HoystText>
+                    </View>
+                    <View style={styles.guestFeaturedCopy}>
+                      <HoystText style={homeTypography.title}>
+                        {featuredPublicCircle.title}
+                      </HoystText>
+                      <HoystText style={homeTypography.body} tone="muted">
+                        {featuredPublicCircle.commitment}
+                      </HoystText>
+                    </View>
+                    <View style={styles.guestFeaturedFooter}>
+                      <View style={styles.guestFeaturedMembers}>
+                        <View style={styles.guestFeaturedAvatarRow}>
+                          {featuredPublicCircle.members
+                            .slice(0, 3)
+                            .map((member, index) => (
+                              <View
+                                key={member.id}
+                                style={
+                                  index === 0
+                                    ? undefined
+                                    : styles.guestFeaturedAvatarOverlap
+                                }>
+                                <LayeredAvatar
+                                  chrome="minimal"
+                                  imageSource={member.avatarImage}
+                                  imageUrl={member.avatarUrl}
+                                  initials={member.initials}
+                                  size={24}
+                                  state={member.state}
+                                />
+                              </View>
+                            ))}
+                        </View>
+                        <HoystText
+                          numberOfLines={1}
+                          style={styles.guestFeaturedMembersLabel}
+                          tone="muted"
+                          variant="caption">
+                          {featuredPublicCircle.memberCount} member
+                          {featuredPublicCircle.memberCount === 1 ? '' : 's'}
+                        </HoystText>
+                      </View>
+                      <ChevronRight color={theme.textMuted} size={20} />
+                    </View>
+                  </GlassPanel>
+                </Pressable>
+              ) : null}
+              <Pressable
+                accessibilityLabel="Explore all circles"
+                accessibilityRole="button"
+                onPress={() => navigation.navigate('Explore')}
+                style={({pressed}) => [
+                  styles.exploreAllLink,
+                  {opacity: pressed ? actionMotion.pressedOpacity : 1},
+                ]}
+                testID="guest-home-explore-all-link">
+                <View style={styles.exploreAllLinkContent}>
+                  <HoystText style={styles.exploreAllLinkText}>
+                    Explore all circles
+                  </HoystText>
+                  <ChevronRight color={theme.textMuted} size={18} />
+                </View>
+              </Pressable>
+            </View>
+          ) : null}
+
           {isAuthenticatedHome ? (
             <View style={styles.circlesSection}>
-              <SectionEyebrow>YOUR COMMITMENTS</SectionEyebrow>
-
-              {commitmentStackCircles.length > 0 ? (
+              <View style={styles.commitmentsHeading}>
+                <SectionEyebrow>Your commitments</SectionEyebrow>
+                {homeData.hasResolvedGreetingContext && !hasHomeDataError ? (
+                  <HomeDailyActionProgress progress={dailyProgress} />
+                ) : null}
+              </View>
+              {commitmentStackCircles.length > 0 &&
+              homeData.hasResolvedGreetingContext ? (
                 <HomeCommitmentStack
                   cards={commitmentStackCircles}
                   focusedCardId={focusedCommitmentId}
-                  isNudged={circleId => nudgedCircleIds.has(circleId)}
-                  isNudging={circleId => nudgingCircleIds.has(circleId)}
+                  isNudged={circleId =>
+                    Boolean(
+                      actionCircles.find(circle => circle.id === circleId)
+                        ?.viewerHasNudgedToday,
+                    )
+                  }
+                  isNudging={circleId => {
+                    const circle = actionCircles.find(
+                      item => item.id === circleId,
+                    );
+                    return Boolean(
+                      circle &&
+                        nudgingCircleIds.has(
+                          nudgeKey(user?.uid, circle, homeClock),
+                        ),
+                    );
+                  }}
                   onActionPress={handleCircleAction}
                   onFocusCard={setFocusedCommitmentId}
                   onViewDetails={openCircleDetail}
                 />
-              ) : !showAuthenticatedEmptyState ? (
+              ) : !showAuthenticatedEmptyState &&
+                homeData.hasResolvedGreetingContext &&
+                !isLoadingHomeData &&
+                !hasHomeDataError ? (
                 <GlassPanel style={[styles.emptyPanel, homeCardLiftStyle]}>
                   <SectionHeader
                     description="No Tap In or Nudge needs your attention today."
@@ -1045,16 +1355,24 @@ export function HomeScreen(): React.JSX.Element {
                 ]}
                 testID="all-my-commitments-link">
                 <View
-                  style={styles.allMyCommitmentsLink}
+                  style={[
+                    styles.allMyCommitmentsLink,
+                    {borderBottomColor: theme.border},
+                  ]}
                   testID="all-my-commitments-link-content">
-                  <Handshake
-                    color={theme.textMuted}
-                    size={20}
-                    strokeWidth={2.4}
-                    testID="all-my-commitments-handshake"
-                  />
+                  <View
+                    style={[
+                      styles.linkIcon,
+                      {backgroundColor: homeLinkIconColor},
+                    ]}>
+                    <List
+                      color={theme.textMuted}
+                      size={20}
+                      strokeWidth={2.4}
+                      testID="all-my-commitments-list-icon"
+                    />
+                  </View>
                   <HoystText
-                    numberOfLines={1}
                     style={[
                       styles.allMyCommitmentsLabel,
                       {color: theme.textMuted},
@@ -1073,7 +1391,7 @@ export function HomeScreen(): React.JSX.Element {
             </View>
           ) : null}
 
-          {isLoadingHomeData ? (
+          {isLoadingHomeData && !homeData.hasResolvedGreetingContext ? (
             <GlassPanel style={[styles.emptyPanel, homeCardLiftStyle]}>
               <SectionHeader
                 description="Pulling your live Circle Progress from Hoyst."
@@ -1082,11 +1400,15 @@ export function HomeScreen(): React.JSX.Element {
             </GlassPanel>
           ) : null}
 
-          {showHomeDataErrorPanel ? (
+          {hasHomeDataError && isAuthenticatedHome ? (
             <GlassPanel style={[styles.emptyPanel, homeCardLiftStyle]}>
               <SectionHeader
                 description="Your account is connected, but Home could not load live circle data."
                 title="Could not load Home"
+              />
+              <HoystButton
+                label="Retry"
+                onPress={() => setHomeClock(new Date())}
               />
             </GlassPanel>
           ) : null}
@@ -1112,26 +1434,33 @@ export function HomeScreen(): React.JSX.Element {
                   ? styles.circleSectionGroupAfterCommitments
                   : null,
               ]}>
-              <SectionEyebrow>CIRCLE ACTIVITY</SectionEyebrow>
+              <View style={styles.sectionHeadingRow}>
+                <SectionEyebrow>Circle activity</SectionEyebrow>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="See all activity in Inbox"
+                  onPress={openInbox}
+                  style={styles.seeAll}>
+                  <HoystText style={styles.secondaryCopy} tone="muted">
+                    See all
+                  </HoystText>
+                </Pressable>
+              </View>
               {circleActivityUpdates.length > 0 ? (
                 circleActivityUpdates.map((item, index) => (
-                  <Pressable
+                  <HomeActivityRow
                     key={item.id}
-                    onPress={() => openEvent(circleActivityEvents[index])}>
-                    <ActivityFeedCard
-                      density="compact"
-                      item={item}
-                      style={homeCardLiftStyle}
-                    />
-                  </Pressable>
+                    item={item}
+                    onPress={() => openEvent(circleActivityEvents[index])}
+                  />
                 ))
               ) : (
-                <GlassPanel style={homeCardLiftStyle}>
+                <View style={styles.activityEmpty}>
                   <SectionHeader
                     description="Tap Ins, skips, joins, nudges, and milestones will appear here."
                     title="No Circle activity yet"
                   />
-                </GlassPanel>
+                </View>
               )}
             </View>
           ) : null}
@@ -1142,24 +1471,52 @@ export function HomeScreen(): React.JSX.Element {
 }
 
 const styles = StyleSheet.create({
+  hidden: {display: 'none'},
+  secondaryCopy: homeTypography.secondary,
+  progressPlaceholder: {
+    height: 96,
+    borderRadius: 16,
+    backgroundColor: 'rgba(128,128,128,0.08)',
+  },
+  linkIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sectionHeadingRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  seeAll: {
+    minHeight: 44,
+    minWidth: 44,
+    justifyContent: 'center',
+    alignItems: 'flex-end',
+  },
+  activityEmpty: {paddingVertical: 16},
   allMyCommitmentsLabel: {
     flex: 1,
     fontSize: 14,
-    fontWeight: '700',
+    fontWeight: '600',
     letterSpacing: 0,
-    lineHeight: 18,
+    lineHeight: 20,
   },
   allMyCommitmentsLink: {
     alignItems: 'center',
     flexDirection: 'row',
-    gap: 8,
+    gap: 12,
     minHeight: 44,
-    paddingVertical: 8,
-    transform: [{translateY: -10}],
+    paddingVertical: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   allMyCommitmentsPressable: {
-    marginBottom: -48,
-    marginTop: -18,
+    marginBottom: 0,
+    marginTop: 0,
     width: '100%',
   },
   root: {
@@ -1179,33 +1536,125 @@ const styles = StyleSheet.create({
   },
   sheet: {
     flexGrow: 1,
-    gap: 20,
+    gap: 16,
     paddingBottom: 172,
     paddingHorizontal: 22,
-    paddingTop: 14,
+    paddingTop: 4,
   },
   homeProgressSection: {
-    gap: 8,
-  },
-  circleSectionGroup: {
     gap: 12,
   },
-  circleSectionGroupAfterCommitments: {
-    marginTop: -20,
+  guestProgressCopy: homeTypography.body,
+  circleSectionGroup: {
+    gap: 0,
   },
+  circleSectionGroupAfterCommitments: {
+    marginTop: 0,
+  },
+  commitmentsHeading: {gap: 4},
   circlesSection: {
-    gap: 14,
+    gap: 12,
   },
   emptyActions: {
     gap: 12,
   },
   emptyPanel: {
-    gap: 16,
+    gap: 12,
   },
-  homeCardLift: {
-    elevation: 9,
-    shadowOffset: {height: 10, width: 0},
-    shadowOpacity: 0.13,
-    shadowRadius: 22,
+  guestStarterPanel: {
+    gap: 12,
   },
+  guestStarterArtwork: {
+    height: 190,
+    width: '100%',
+  },
+  guestStarterPanelContainer: {
+    paddingHorizontal: 22,
+  },
+  guestStarterSection: {
+    gap: 4,
+    marginHorizontal: -22,
+  },
+  guestStarterCopy: {
+    gap: 4,
+  },
+  guestStarterDescription: homeTypography.body,
+  guestStarterAction: {
+    width: '100%',
+  },
+  guestStarterActionFill: {
+    alignItems: 'center',
+    borderRadius: 18,
+    flexDirection: 'row',
+    gap: 4,
+    justifyContent: 'center',
+    minHeight: 44,
+    paddingHorizontal: 18,
+  },
+  guestStarterActionText: homeTypography.action,
+  returningMemberLink: {
+    alignItems: 'center',
+    borderRadius: 18,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: 4,
+    minHeight: 44,
+    justifyContent: 'center',
+    paddingHorizontal: 12,
+  },
+  returningMemberLinkText: homeTypography.action,
+  returningMemberActionText: homeTypography.action,
+  guestDiscoverySection: {
+    gap: 12,
+  },
+  guestFeaturedPressable: {
+    borderRadius: 18,
+  },
+  guestFeaturedCard: {
+    gap: 12,
+  },
+  guestFeaturedTopRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 12,
+    justifyContent: 'space-between',
+  },
+  guestFeaturedPace: homeTypography.category,
+  guestFeaturedCopy: {
+    gap: 4,
+  },
+  guestFeaturedFooter: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  guestFeaturedMembers: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 9,
+    minWidth: 0,
+  },
+  guestFeaturedAvatarRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+  },
+  guestFeaturedAvatarOverlap: {
+    marginLeft: -7,
+  },
+  guestFeaturedMembersLabel: {
+    ...homeTypography.secondary,
+    flexShrink: 1,
+  },
+  exploreAllLink: {
+    alignSelf: 'flex-start',
+    minHeight: 44,
+    paddingRight: 6,
+  },
+  exploreAllLinkContent: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 3,
+    minHeight: 44,
+  },
+  exploreAllLinkText: homeTypography.action,
 });

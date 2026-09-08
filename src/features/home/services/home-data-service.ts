@@ -23,6 +23,7 @@ import type {
   ViewerTodayCheckIn,
 } from '../../../types/models';
 import {canTapInToday, getHomeCircleActionVariant} from './home-circle-actions';
+import {getHomeDailyAction, hasNudgedOnCircleDay} from './home-daily-actions';
 import {getCircleLifecycleStatus} from '../../circles/services/circle-lifecycle';
 import {
   formatQuantityValue,
@@ -866,7 +867,7 @@ export function getHomeGreetingCircleSummary(
         return summary;
       }
 
-      const viewerCanTapInToday = canTapInToday(circle);
+      const viewerCanTapInToday = getHomeDailyAction(circle) === 'tap_in';
 
       if (viewerCanTapInToday) {
         summary.needsYouCount += 1;
@@ -947,6 +948,14 @@ export function getNextHomeActionBoundary({
   const boundaries = [profileMidnight];
 
   circles.forEach(circle => {
+    if (circle.viewerMembershipStatus === 'active') {
+      boundaries.push(
+        DateTime.fromJSDate(now, {zone: circle.timezone ?? 'UTC'})
+          .plus({days: 1})
+          .startOf('day')
+          .toMillis(),
+      );
+    }
     if (
       circle.viewerMembershipStatus !== 'active' ||
       circle.viewerHasTappedInToday ||
@@ -1036,10 +1045,10 @@ export function getHomePrimaryAction({
   const sortedCircles = sortHomeCircles([...circles]);
   const actionCircles = sortedCircles
     .filter(circle => {
-      const variant = getHomeCircleActionVariant(circle);
+      const variant = getHomeDailyAction(circle);
 
       return (
-        variant === 'check_in' ||
+        variant === 'tap_in' ||
         variant === 'nudge' ||
         circle.viewerMembershipStatus === 'pending'
       );
@@ -1061,7 +1070,7 @@ export function getHomePrimaryAction({
     };
   }
 
-  const variant = getHomeCircleActionVariant(primaryCircle);
+  const variant = getHomeDailyAction(primaryCircle);
   const kind: HomeGreetingPrimaryActionKind =
     primaryCircle.viewerMembershipStatus === 'pending'
       ? 'pending_approval'
@@ -1627,6 +1636,10 @@ export function mapHomeCircleFromData({
       ? {minimumValue: quantityConfig.minimumValue}
       : {}),
     nudgeTargetCount: circleMode === 'personal' ? 0 : nudgeTargetCount,
+    viewerHasNudgedToday: hasNudgedOnCircleDay(
+      asDate(membershipData.lastNudgedAt),
+      asString(circleData.timezone, 'UTC'),
+    ),
     periodTapInCount: periodCoveredCount,
     privacy: normalizePrivacy(circleData.privacy),
     ...(quantityLabel ? {quantityLabel} : {}),
@@ -1732,14 +1745,6 @@ export function getUpcomingAttentionCircles(circles: CircleManagementCard[]) {
   return sortHomeCircles(circles.filter(needsUpcomingAttention));
 }
 
-function isCompletedDailyStackCard(circle: CircleManagementCard) {
-  return Boolean(
-    circle.commitmentCadence === 'daily' &&
-      circle.viewerHasTappedInToday &&
-      getHomeCircleActionVariant(circle) !== 'nudge',
-  );
-}
-
 export function getHomeCommitmentStackCircles({
   personalCommitments,
   todayAttentionCircles,
@@ -1761,16 +1766,17 @@ export function getHomeCommitmentStackCircles({
     }
   });
 
-  return sortHomeCircles([...uniqueCircles.values()]).sort((left, right) => {
-    const leftCompleted = isCompletedDailyStackCard(left);
-    const rightCompleted = isCompletedDailyStackCard(right);
-
-    if (leftCompleted !== rightCompleted) {
-      return leftCompleted ? 1 : -1;
-    }
-
-    return 0;
-  });
+  return sortHomeCircles([...uniqueCircles.values()])
+    .filter(circle => circle.lifecycleStatus !== 'archived')
+    .sort((left, right) => {
+      const rank = (circle: CircleManagementCard) =>
+        ['tap_in', 'nudge'].includes(getHomeDailyAction(circle))
+          ? 0
+          : getHomeDailyAction(circle) === 'pending'
+          ? 1
+          : 2;
+      return rank(left) - rank(right);
+    });
 }
 
 export function matchesHomeCircleFilter(
@@ -2425,10 +2431,7 @@ export function subscribeToHomeData({
         hasResolvedGreetingContext: hasResolvedGreetingContext(),
         lookbackDays,
         membershipCount: circles.length,
-        quantityMarkers: getRecentQuantityMarkers(
-          activeStates,
-          recentDateKeys,
-        ),
+        quantityMarkers: getRecentQuantityMarkers(activeStates, recentDateKeys),
         timezone,
       }),
     );

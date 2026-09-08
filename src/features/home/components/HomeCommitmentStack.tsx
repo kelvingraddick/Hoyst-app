@@ -1,16 +1,21 @@
 import React from 'react';
-import {Pressable, StyleSheet, View} from 'react-native';
-import {Check, ChevronRight, Clock3} from 'lucide-react-native';
-
-import type {CircleManagementCard} from '../../../types/models';
 import {
-  canTapInToday,
-  getHomeCircleActionVariant,
-} from '../services/home-circle-actions';
+  ActivityIndicator,
+  Pressable,
+  StyleSheet,
+  TouchableWithoutFeedback,
+  useWindowDimensions,
+  View,
+} from 'react-native';
+import {
+  ArrowUpRight,
+  Check,
+  ChevronRight,
+  Clock3,
+  Minus,
+} from 'lucide-react-native';
+import type {CircleManagementCard} from '../../../types/models';
 import {useHoystTheme} from '../../../design/theme/useHoystTheme';
-import {actionMotion, touchTarget} from '../../../design/tokens/actions';
-import {brandColors} from '../../../design/tokens/colors';
-import {radius} from '../../../design/tokens/radius';
 import {
   CircleCategoryIcon,
   getCircleCategoryForegroundColor,
@@ -18,9 +23,13 @@ import {
 } from '../../../design/components/CircleCategoryIcon';
 import {HoystText} from '../../../design/components/HoystText';
 import {LayeredAvatar} from '../../../design/components/LayeredAvatar';
-import {NudgeActionButton} from '../../../design/components/NudgeActionButton';
+import {homeTypography} from '../../../design/tokens/home';
+import {getHomeDailyAction} from '../services/home-daily-actions';
 
-type HomeCommitmentStackProps = {
+export const HOME_ROW_ICON_SIZE = 32;
+export const HOME_ROW_GAP = 12;
+
+type Props = {
   cards: readonly CircleManagementCard[];
   focusedCardId?: string;
   isNudged: (circleId: string) => boolean;
@@ -30,425 +39,135 @@ type HomeCommitmentStackProps = {
   onViewDetails: (circleId: string) => void;
 };
 
-const DARK_HOME_CANVAS_COLOR = '#121212';
-const FOCUSED_STACK_SURFACE_OPACITY = 0x31 / 255;
-const COLLAPSED_STACK_SURFACE_OPACITY = 0x26 / 255;
-
-function getOpaqueDarkStackSurface(accentColor: string, opacity: number) {
-  const foregroundChannels = [0, 2, 4].map(index =>
-    Number.parseInt(accentColor.slice(index + 1, index + 3), 16),
-  );
-  const backgroundChannels = [0, 2, 4].map(index =>
-    Number.parseInt(DARK_HOME_CANVAS_COLOR.slice(index + 1, index + 3), 16),
-  );
-  const channels = foregroundChannels.map((channel, index) =>
-    Math.round(channel * opacity + backgroundChannels[index] * (1 - opacity)),
-  );
-
-  return `#${channels
-    .map(channel => channel.toString(16).padStart(2, '0'))
-    .join('')}`;
+function statusCopy(card: CircleManagementCard) {
+  switch (getHomeDailyAction(card)) {
+    case 'tap_in':
+      return 'Needs your Tap In';
+    case 'nudge':
+      return `${card.nudgeTargetCount} member${
+        card.nudgeTargetCount === 1 ? '' : 's'
+      } need${card.nudgeTargetCount === 1 ? 's' : ''} a nudge`;
+    case 'pending':
+      return 'Pending approval';
+    case 'complete':
+      return card.circleMode !== 'personal' && card.viewerHasNudgedToday
+        ? card.viewerHasTappedInToday
+          ? 'Tap In and Nudge handled'
+          : 'Nudged today'
+        : 'Tapped in today';
+    default:
+      return 'No action needed today';
+  }
 }
 
-function getPeriodCopy(card: CircleManagementCard) {
-  if (card.commitmentCadence === 'monthly') {
-    return 'this month';
-  }
-
-  return card.commitmentCadence === 'daily' ? 'today' : 'this week';
-}
-
-function getStatusCopy(card: CircleManagementCard) {
-  const actionVariant = getHomeCircleActionVariant(card);
-
-  if (card.viewerMembershipStatus === 'pending') {
-    return 'Pending approval';
-  }
-
-  if (actionVariant === 'nudge') {
-    const count = card.nudgeTargetCount ?? 0;
-    return count === 1
-      ? '1 member needs a nudge'
-      : `${count} members need a nudge`;
-  }
-
-  if (card.viewerHasTappedInToday) {
-    return card.state === 'done' ? 'Complete today' : 'Tapped in today';
-  }
-
-  if (canTapInToday(card)) {
-    return 'Needs your Tap In';
-  }
-
-  if (card.commitmentCadence === 'daily') {
-    return 'Next tap tomorrow';
-  }
-
-  return `Next tap ${getPeriodCopy(card)}`;
-}
-
-function getCheckAccessibilityLabel(card: CircleManagementCard) {
-  if (card.viewerMembershipStatus === 'pending') {
-    return `Pending approval for ${card.title}`;
-  }
-
-  const canUpdate = getHomeCircleActionVariant(card) === 'check_in';
-
-  if (card.viewerHasTappedInToday) {
-    return canUpdate
-      ? `Update Tap In for ${card.title}`
-      : `${card.title} tapped in today`;
-  }
-
-  return canUpdate
-    ? `Tap In for ${card.title}`
-    : `${card.title} has not been tapped in today`;
-}
-
-function getContextCopy(card: CircleManagementCard) {
-  if (card.circleMode === 'personal') {
-    return 'Personal commitment';
-  }
-
-  const completedCount = card.members.filter(
-    member => member.state === 'done',
-  ).length;
-  const memberCount = Math.max(card.memberCount, card.members.length);
-
-  if (memberCount <= 0) {
-    return 'Circle';
-  }
-
-  return `${completedCount}/${memberCount} members tapped in`;
-}
-
-function getNudgeLabel(card: CircleManagementCard) {
-  const count = card.nudgeTargetCount ?? 0;
-  return count === 1 ? 'Nudge 1' : `Nudge ${count}`;
-}
-
-function getStackCardSurfaceStyle(
-  theme: ReturnType<typeof useHoystTheme>,
-  visual: ReturnType<typeof getCircleCategoryVisual>,
-  isFocused: boolean,
-) {
-  return {
-    backgroundColor: theme.isDark
-      ? getOpaqueDarkStackSurface(
-          visual.accentColor,
-          isFocused
-            ? FOCUSED_STACK_SURFACE_OPACITY
-            : COLLAPSED_STACK_SURFACE_OPACITY,
-        )
-      : visual.backplateColor,
-    borderColor: theme.isDark ? '#121212' : '#FAFAF7',
-  };
-}
-
-function CompletionControl({
+function Action({
   card,
-  compact = false,
+  prominent,
+  busy,
   onPress,
 }: {
   card: CircleManagementCard;
-  compact?: boolean;
-  onPress?: () => void;
-}): React.JSX.Element {
+  prominent?: boolean;
+  busy: boolean;
+  onPress: () => void;
+}) {
   const theme = useHoystTheme();
-  const checked = Boolean(card.viewerHasTappedInToday);
-  const isPending = card.viewerMembershipStatus === 'pending';
-  const isActionable = getHomeCircleActionVariant(card) === 'check_in';
-  const isDisabled = !isActionable;
-  const indicatorSize = 30;
-  const tapInPillWidth = 64;
-  const iconSize = 16;
-  const categoryColor = getCircleCategoryForegroundColor(card.category, theme);
-  const showsTapInPill = !checked && isActionable;
-  const indicatorWidth = showsTapInPill ? tapInPillWidth : indicatorSize;
-  const check = (
-    <View
-      testID={`home-commitment-check-indicator-${card.id}`}
-      style={[
-        styles.check,
-        checked ? styles.checkFilled : undefined,
-        isPending ? styles.pendingClock : undefined,
-        showsTapInPill ? styles.tapInPill : undefined,
-        {
-          borderColor: checked
-            ? theme.success
-            : showsTapInPill
-            ? categoryColor
-            : theme.textMuted,
-          borderRadius: showsTapInPill ? radius.pill : indicatorSize / 2,
-          height: indicatorSize,
-          width: indicatorWidth,
-        },
-      ]}>
-      {checked ? (
-        <Check color="#FFFFFF" size={iconSize} strokeWidth={3} />
-      ) : showsTapInPill ? (
-        <HoystText
-          style={[styles.tapInPillLabel, {color: categoryColor}]}
-          variant="tiny">
-          TAP IN
-        </HoystText>
-      ) : isPending ? (
-        <Clock3 color={theme.textMuted} size={20} strokeWidth={2.2} />
-      ) : null}
-    </View>
-  );
-
-  if (compact) {
+  const action = getHomeDailyAction(card);
+  const color = getCircleCategoryForegroundColor(card.category, theme);
+  if (action !== 'tap_in' && action !== 'nudge') {
     return (
       <View
-        accessible={false}
-        pointerEvents="none"
-        style={[
-          styles.checkPressable,
-          {height: indicatorSize, width: indicatorWidth},
-        ]}
-        testID={`home-commitment-check-${card.id}`}>
-        {check}
+        accessible
+        accessibilityLabel={statusCopy(card)}
+        style={styles.done}
+        testID={`home-commitment-done-${card.id}`}>
+        {action === 'view' ? (
+          <Minus color={theme.textMuted} size={20} />
+        ) : action === 'pending' ? (
+          <Clock3 color={theme.textMuted} size={20} />
+        ) : (
+          <Check color={theme.textMuted} size={20} />
+        )}
       </View>
     );
   }
-
+  const label = action === 'tap_in' ? 'Tap In' : 'Nudge';
+  const actionBackground = prominent ? color : 'transparent';
+  const actionOpacity = busy ? 0.65 : 1;
   return (
     <Pressable
-      accessibilityLabel={getCheckAccessibilityLabel(card)}
-      accessibilityRole={isPending ? 'image' : 'checkbox'}
-      accessibilityState={
-        isPending ? {disabled: true} : {checked, disabled: isDisabled}
-      }
-      disabled={isDisabled}
-      hitSlop={7}
-      onPress={isActionable ? onPress : undefined}
-      style={({pressed}) => [
-        styles.checkPressable,
-        {
-          borderRadius: touchTarget.minimum / 2,
-          height: touchTarget.minimum,
-          opacity: isDisabled ? (checked ? 1 : 0.56) : pressed ? 0.82 : 1,
-          transform: [
-            {scale: pressed && !isDisabled ? actionMotion.pressedScale : 1},
-          ],
-          width: Math.max(touchTarget.minimum, indicatorWidth),
-        },
-      ]}
-      testID={`home-commitment-check-${card.id}`}>
-      {check}
-    </Pressable>
-  );
-}
-
-function CircleContext({card}: {card: CircleManagementCard}) {
-  const theme = useHoystTheme();
-  const categoryColor = getCircleCategoryForegroundColor(card.category, theme);
-
-  if (card.circleMode === 'personal') {
-    return (
-      <View
-        style={[styles.personalPill, {backgroundColor: `${categoryColor}1A`}]}>
-        <HoystText style={[styles.personalPillLabel, {color: categoryColor}]}>
-          PERSONAL
-        </HoystText>
-      </View>
-    );
-  }
-
-  return (
-    <View style={styles.circleContext}>
-      <View style={styles.avatarRow}>
-        {card.members.slice(0, 3).map((member, index) => (
-          <View
-            key={member.id}
-            style={index === 0 ? undefined : styles.avatarOverlap}>
-            <LayeredAvatar
-              chrome="minimal"
-              initials={member.initials}
-              imageSource={member.avatarImage}
-              imageUrl={member.avatarUrl}
-              size={32}
-              state={member.state}
-            />
-          </View>
-        ))}
-      </View>
-    </View>
-  );
-}
-
-function CollapsedCommitmentCard({
-  card,
-  onFocus,
-}: {
-  card: CircleManagementCard;
-  onFocus: () => void;
-}): React.JSX.Element {
-  const theme = useHoystTheme();
-  const visual = getCircleCategoryVisual(card.category);
-  const categoryColor = getCircleCategoryForegroundColor(card.category, theme);
-
-  return (
-    <Pressable
-      accessibilityLabel={`Focus ${card.title}`}
       accessibilityRole="button"
-      onPress={onFocus}
-      style={({pressed}) => [
-        styles.collapsedPressable,
-        {opacity: pressed ? actionMotion.pressedOpacity : 1},
-      ]}
-      testID={`home-commitment-collapsed-${card.id}`}>
+      accessibilityLabel={`${label} for ${card.title}`}
+      accessibilityState={{disabled: busy, busy}}
+      disabled={busy}
+      onPress={event => {
+        event?.stopPropagation();
+        onPress();
+      }}
+      style={styles.actionTarget}
+      testID={`home-commitment-action-${card.id}`}>
       <View
         style={[
-          styles.collapsedCard,
-          getStackCardSurfaceStyle(theme, visual, false),
-        ]}
-        testID={`home-commitment-collapsed-surface-${card.id}`}>
-        <CircleCategoryIcon
-          category={card.category}
-          showBackplate={false}
-          size={24}
-        />
-        <View style={styles.collapsedCopy}>
-          <HoystText numberOfLines={1} style={styles.collapsedTitle}>
-            {card.title}
-          </HoystText>
+          styles.action,
+          {
+            backgroundColor: actionBackground,
+            borderColor: color,
+            opacity: actionOpacity,
+          },
+        ]}>
+        {busy ? (
+          <ActivityIndicator
+            size="small"
+            color={prominent ? (theme.isDark ? '#121212' : '#FFFFFF') : color}
+          />
+        ) : (
           <HoystText
-            numberOfLines={1}
-            style={[styles.collapsedStatus, {color: categoryColor}]}
-            variant="caption">
-            {getStatusCopy(card)}
+            style={[
+              styles.actionLabel,
+              {
+                color: prominent
+                  ? theme.isDark
+                    ? '#121212'
+                    : '#FFFFFF'
+                  : color,
+              },
+            ]}>
+            {label}
           </HoystText>
-        </View>
-        <CompletionControl card={card} compact />
+        )}
       </View>
     </Pressable>
   );
 }
 
-function FocusedCommitmentCard({
-  card,
-  isNudged,
-  isNudging,
-  onActionPress,
-  onViewDetails,
-}: {
-  card: CircleManagementCard;
-  isNudged: boolean;
-  isNudging: boolean;
-  onActionPress: () => void;
-  onViewDetails: () => void;
-}): React.JSX.Element {
-  const theme = useHoystTheme();
-  const visual = getCircleCategoryVisual(card.category);
-  const categoryColor = getCircleCategoryForegroundColor(card.category, theme);
-  const actionVariant = getHomeCircleActionVariant(card);
-  const progress = Math.max(
-    0,
-    Math.min(100, card.completionRate ?? card.progressPercent),
-  );
-
+function Members({card}: {card: CircleManagementCard}) {
+  const done = card.members.filter(member => member.state === 'done').length;
   return (
-    <View
-      style={[
-        styles.focusedCard,
-        getStackCardSurfaceStyle(theme, visual, true),
-      ]}
-      testID={`home-commitment-focused-${card.id}`}>
-      <View style={styles.focusedHeader}>
-        <View style={styles.focusedTitleCluster}>
-          <CircleCategoryIcon
-            category={card.category}
-            showBackplate={false}
-            size={32}
-          />
-          <View style={styles.focusedTitleCopy}>
-            <HoystText numberOfLines={2} style={styles.focusedTitle}>
-              {card.title}
-            </HoystText>
-            <HoystText
-              style={[styles.focusedCategory, {color: categoryColor}]}
-              variant="caption">
-              {card.circleMode === 'personal'
-                ? 'PERSONAL COMMITMENT'
-                : visual.label.toUpperCase()}
-            </HoystText>
-          </View>
-        </View>
-        <CompletionControl card={card} onPress={onActionPress} />
-      </View>
-
-      <HoystText numberOfLines={2} style={styles.commitmentCopy} tone="muted">
-        {card.commitment}
-      </HoystText>
-
-      <View style={styles.statusRow}>
-        <HoystText
-          style={[styles.statusCopy, {color: categoryColor}]}
-          variant="caption">
-          {getStatusCopy(card)}
-        </HoystText>
-        <HoystText style={styles.progressCopy} tone="muted" variant="caption">
-          {card.circleMode === 'personal'
-            ? `${progress}% complete`
-            : getContextCopy(card)}
-        </HoystText>
-      </View>
-
-      <View
-        style={[
-          styles.progressTrack,
-          {backgroundColor: `${visual.accentColor}26`},
-        ]}>
-        <View
-          style={[
-            styles.progressFill,
-            {backgroundColor: categoryColor, width: `${progress}%`},
-          ]}
-        />
-      </View>
-
-      <View style={styles.focusedFooter}>
-        <CircleContext card={card} />
-        <View style={styles.footerActions}>
-          {actionVariant === 'nudge' ? (
-            <NudgeActionButton
-              isLoading={isNudging}
-              isSent={isNudged}
-              label={getNudgeLabel(card)}
-              onPress={onActionPress}
-              size="compact"
-              targetCount={card.nudgeTargetCount}
-              style={styles.nudgeAction}
-            />
-          ) : null}
-          <Pressable
-            accessibilityLabel={`View details for ${card.title}`}
-            accessibilityRole="button"
-            onPress={onViewDetails}
-            style={({pressed}) => [
-              styles.detailsButton,
-              {
-                backgroundColor: theme.isDark
-                  ? `${categoryColor}36`
-                  : `${categoryColor}18`,
-                opacity: pressed ? actionMotion.pressedOpacity : 1,
-              },
-            ]}
-            testID={`home-commitment-details-${card.id}`}>
-            <View style={styles.detailsContent}>
-              <HoystText
-                numberOfLines={1}
-                style={[styles.detailsLabel, {color: categoryColor}]}
-                variant="caption">
-                View details
-              </HoystText>
-              <ChevronRight color={categoryColor} size={20} strokeWidth={2.8} />
+    <View style={styles.members}>
+      {card.circleMode !== 'personal' && (
+        <View style={styles.avatars}>
+          {card.members.slice(0, 2).map((member, i) => (
+            <View key={member.id} style={i ? styles.avatarOverlap : undefined}>
+              <LayeredAvatar
+                chrome="minimal"
+                initials={member.initials}
+                imageSource={member.avatarImage}
+                imageUrl={member.avatarUrl}
+                size={24}
+                state={member.state}
+              />
             </View>
-          </Pressable>
+          ))}
         </View>
-      </View>
+      )}
+      <HoystText style={styles.meta} tone="muted">
+        {card.circleMode === 'personal'
+          ? 'Personal commitment'
+          : `${done}/${Math.max(
+              card.memberCount,
+              card.members.length,
+            )} members tapped in`}
+      </HoystText>
     </View>
   );
 }
@@ -456,263 +175,237 @@ function FocusedCommitmentCard({
 export function HomeCommitmentStack({
   cards,
   focusedCardId,
-  isNudged,
   isNudging,
   onActionPress,
   onFocusCard,
   onViewDetails,
-}: HomeCommitmentStackProps): React.JSX.Element | null {
-  const focusedCard = cards.find(card => card.id === focusedCardId) ?? cards[0];
-
-  if (!focusedCard) {
-    return null;
-  }
-
-  const focusCard = (circleId: string) => {
-    if (circleId === focusedCard.id) {
-      return;
-    }
-
-    onFocusCard(circleId);
-  };
-
+}: Props) {
+  const theme = useHoystTheme();
+  const {fontScale} = useWindowDimensions();
+  const focusedShadowColor = theme.isDark ? '#000000' : '#92723E';
+  const largeType = fontScale >= 1.5;
+  const focused =
+    cards.find(card => card.id === focusedCardId) ??
+    (focusedCardId === undefined
+      ? cards.find(card =>
+          ['tap_in', 'nudge'].includes(getHomeDailyAction(card)),
+        )
+      : undefined);
   return (
-    <View style={styles.stack} testID="home-commitments-stack">
-      {cards.map((card, index) => {
-        const isFocused = card.id === focusedCard.id;
-
+    <View style={styles.list} testID="home-commitments-stack">
+      {cards.map(card => {
+        const isFocused = card.id === focused?.id;
+        const color = getCircleCategoryForegroundColor(card.category, theme);
+        const visual = getCircleCategoryVisual(card.category);
+        const action = getHomeDailyAction(card);
+        const actionable = action === 'tap_in' || action === 'nudge';
+        if (isFocused) {
+          return (
+            <TouchableWithoutFeedback
+              key={card.id}
+              accessible={false}
+              onPress={() => onViewDetails(card.id)}>
+              <View
+                style={[
+                  styles.focused,
+                  {
+                    shadowColor: focusedShadowColor,
+                    backgroundColor: theme.isDark
+                      ? `${visual.accentColor}20`
+                      : visual.backplateColor,
+                  },
+                ]}
+                testID={`home-commitment-focused-${card.id}`}>
+                <View
+                  pointerEvents="none"
+                  style={styles.detailArrow}
+                  testID={`home-commitment-detail-arrow-${card.id}`}>
+                  <ArrowUpRight color={theme.textMuted} size={18} />
+                </View>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`View details for ${card.title}`}
+                  onPress={event => {
+                    event?.stopPropagation();
+                    onViewDetails(card.id);
+                  }}
+                  style={styles.titleRow}
+                  testID={`home-commitment-details-${card.id}`}>
+                  <CircleCategoryIcon
+                    category={card.category}
+                    showBackplate={false}
+                    size={HOME_ROW_ICON_SIZE}
+                  />
+                  <View style={styles.copy}>
+                    <HoystText style={styles.title}>{card.title}</HoystText>
+                    <HoystText style={[styles.category, {color}]}>
+                      {card.circleMode === 'personal'
+                        ? 'PERSONAL COMMITMENT'
+                        : visual.label.toUpperCase()}
+                    </HoystText>
+                  </View>
+                </Pressable>
+                <HoystText style={styles.description} tone="muted">
+                  {card.commitment}
+                </HoystText>
+                {!actionable && (
+                  <HoystText style={styles.meta} tone="muted">
+                    {statusCopy(card)}
+                  </HoystText>
+                )}
+                <View style={styles.footer}>
+                  <Members card={card} />
+                  <Action
+                    card={card}
+                    prominent
+                    busy={isNudging(card.id)}
+                    onPress={() => onActionPress(card)}
+                  />
+                </View>
+              </View>
+            </TouchableWithoutFeedback>
+          );
+        }
         return (
           <View
             key={card.id}
             style={[
-              styles.cardLayer,
-              index > 0 ? styles.stackedLayer : undefined,
-              isFocused
-                ? [styles.focusedLayer, {zIndex: cards.length + 1}]
-                : {zIndex: cards.length - index},
+              styles.row,
+              largeType && styles.largeRow,
+              {borderBottomColor: theme.border},
             ]}
-            testID={
-              isFocused
-                ? `home-commitment-focused-layer-${card.id}`
-                : `home-commitment-collapsed-layer-${card.id}`
-            }>
-            {isFocused ? (
-              <FocusedCommitmentCard
-                card={card}
-                isNudged={isNudged(card.id)}
-                isNudging={isNudging(card.id)}
-                onActionPress={() => onActionPress(card)}
-                onViewDetails={() => onViewDetails(card.id)}
+            testID={`home-commitment-collapsed-surface-${card.id}`}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`Expand ${card.title}. ${statusCopy(card)}`}
+              accessibilityState={{expanded: false}}
+              onPress={() => onFocusCard(card.id)}
+              style={[styles.rowContent, largeType && styles.largeContent]}
+              testID={`home-commitment-collapsed-${card.id}`}>
+              <CircleCategoryIcon
+                category={card.category}
+                size={HOME_ROW_ICON_SIZE}
               />
-            ) : (
-              <CollapsedCommitmentCard
-                card={card}
-                onFocus={() => focusCard(card.id)}
-              />
+              <View style={styles.copy}>
+                <HoystText style={styles.title}>{card.title}</HoystText>
+                <HoystText
+                  style={[
+                    styles.meta,
+                    {color: actionable ? color : theme.textMuted},
+                  ]}>
+                  {statusCopy(card)}
+                </HoystText>
+              </View>
+            </Pressable>
+            {actionable && (
+              <View style={largeType && styles.largeAction}>
+                <Action
+                  card={card}
+                  busy={isNudging(card.id)}
+                  onPress={() => onActionPress(card)}
+                />
+              </View>
             )}
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`Expand ${card.title}`}
+              accessibilityState={{expanded: false}}
+              onPress={() => onFocusCard(card.id)}
+              style={[styles.chevron, largeType && styles.largeChevron]}
+              testID={`home-commitment-expand-${card.id}`}>
+              <ChevronRight size={18} color={theme.textMuted} />
+            </Pressable>
           </View>
         );
       })}
     </View>
   );
 }
-
 const styles = StyleSheet.create({
-  avatarOverlap: {
-    marginLeft: -9,
+  list: {gap: 0},
+  focused: {
+    borderRadius: 18,
+    gap: 12,
+    marginBottom: 0,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    shadowOffset: {width: 0, height: 6},
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 3,
   },
-  avatarRow: {
-    alignItems: 'center',
+  detailArrow: {
+    position: 'absolute',
+    right: 18,
+    top: 18,
+  },
+  titleRow: {
     flexDirection: 'row',
-  },
-  check: {
+    gap: 12,
     alignItems: 'center',
-    borderWidth: 1.8,
-    justifyContent: 'center',
+    minHeight: 44,
+    paddingRight: 28,
   },
-  checkFilled: {
-    backgroundColor: brandColors.green,
-  },
-  checkPressable: {
+  copy: {flex: 1, gap: 4, minWidth: 0, minHeight: 44, justifyContent: 'center'},
+  title: homeTypography.title,
+  category: {...homeTypography.category, letterSpacing: 0.5},
+  description: homeTypography.body,
+  footer: {
+    flexDirection: 'row',
     alignItems: 'center',
-    flexShrink: 0,
-    justifyContent: 'center',
+    gap: 12,
+    flexWrap: 'wrap',
   },
-  circleContext: {
-    alignItems: 'center',
+  members: {
     flex: 1,
+    minWidth: 140,
     flexDirection: 'row',
-    gap: 8,
-    minWidth: 0,
-  },
-  collapsedCard: {
     alignItems: 'center',
-    borderWidth: 4,
-    borderRadius: radius.lg,
-    flexDirection: 'row',
-    gap: 9,
-    minHeight: 79,
-    paddingHorizontal: 14,
-    paddingVertical: 18,
-  },
-  collapsedCopy: {
-    flex: 1,
-    gap: 3,
-    minWidth: 0,
-  },
-  cardLayer: {
-    position: 'relative',
-  },
-  collapsedPressable: {
-    borderRadius: radius.lg,
-  },
-  collapsedStatus: {
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 0,
-    lineHeight: 14,
-  },
-  collapsedTitle: {
-    fontSize: 15,
-    fontWeight: '800',
-    letterSpacing: 0,
-    lineHeight: 18,
-  },
-  commitmentCopy: {
-    fontSize: 15,
-    fontWeight: '600',
-    lineHeight: 20,
-  },
-  detailsButton: {
-    alignItems: 'center',
-    borderRadius: radius.pill,
-    justifyContent: 'center',
-    minHeight: touchTarget.minimum,
-    paddingHorizontal: 14,
-  },
-  detailsContent: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    flexShrink: 0,
-    gap: 3,
-  },
-  detailsLabel: {
-    fontSize: 14,
-    fontWeight: '800',
-    lineHeight: 18,
-  },
-  focusedCard: {
-    borderWidth: 4,
-    borderRadius: 28,
-    gap: 10,
-    padding: 16,
-    position: 'relative',
-  },
-  focusedCategory: {
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 0.6,
-    lineHeight: 12,
-  },
-  focusedFooter: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: 10,
-    justifyContent: 'space-between',
-    marginTop: -4,
-    minHeight: touchTarget.minimum,
-  },
-  focusedHeader: {
-    alignItems: 'flex-start',
-    flexDirection: 'row',
-    gap: 10,
-    justifyContent: 'space-between',
-  },
-  focusedTitle: {
-    fontSize: 18,
-    fontWeight: '800',
-    letterSpacing: 0,
-    lineHeight: 22,
-  },
-  focusedTitleCluster: {
-    alignItems: 'center',
-    flex: 1,
-    flexDirection: 'row',
-    gap: 8,
-    minWidth: 0,
-  },
-  focusedTitleCopy: {
-    flex: 1,
-    gap: 4,
-    minWidth: 0,
-  },
-  footerActions: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    flexShrink: 0,
     gap: 8,
   },
-  nudgeAction: {
-    minWidth: 112,
-  },
-  personalPill: {
-    alignItems: 'center',
-    borderRadius: radius.pill,
-    justifyContent: 'center',
-    minHeight: 26,
-    paddingHorizontal: 8,
-  },
-  personalPillLabel: {
-    fontSize: 9,
-    fontWeight: '800',
-    letterSpacing: 0.55,
-    lineHeight: 11,
-  },
-  pendingClock: {
-    borderWidth: 0,
-  },
-  progressCopy: {
-    fontSize: 11,
-    fontWeight: '600',
-    lineHeight: 14,
-  },
-  progressFill: {
-    borderRadius: 999,
-    height: 5,
-  },
-  progressTrack: {
-    borderRadius: 999,
-    height: 5,
-    overflow: 'hidden',
-    width: '100%',
-  },
-  focusedLayer: {
-    position: 'relative',
-  },
-  stack: {
-    marginHorizontal: -4,
-  },
-  stackedLayer: {
-    marginTop: -14,
-  },
-  tapInPill: {
-    paddingHorizontal: 8,
-  },
-  tapInPillLabel: {
-    fontSize: 9,
-    fontWeight: '800',
-    letterSpacing: 0.55,
-    lineHeight: 11,
-  },
-  statusCopy: {
-    flex: 1,
-    fontSize: 11,
-    fontWeight: '800',
-    lineHeight: 14,
-  },
-  statusRow: {
-    alignItems: 'center',
+  avatars: {flexDirection: 'row'},
+  avatarOverlap: {marginLeft: -6},
+  meta: {...homeTypography.secondary, flexShrink: 1},
+  largeRow: {flexWrap: 'wrap'},
+  largeAction: {marginLeft: 44},
+  largeChevron: {marginLeft: 'auto'},
+  row: {
     flexDirection: 'row',
-    gap: 10,
+    alignItems: 'center',
+    columnGap: 4,
+    rowGap: 8,
+    paddingVertical: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  rowContent: {
+    flex: 1,
+    minHeight: 44,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: HOME_ROW_GAP,
+  },
+  largeContent: {flexBasis: '100%'},
+  chevron: {
+    width: 44,
+    minHeight: 44,
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+  },
+  actionTarget: {minHeight: 44, minWidth: 66, justifyContent: 'center'},
+  action: {
+    minWidth: 66,
+    minHeight: 32,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    paddingHorizontal: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  actionLabel: homeTypography.action,
+  done: {
+    width: 44,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

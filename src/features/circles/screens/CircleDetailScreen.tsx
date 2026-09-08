@@ -667,7 +667,7 @@ function CircleStatsSection({
             allowFontScaling={false}
             style={[
               styles.statsStreakPillLabel,
-              {color: theme.warningForeground},
+              {color: theme.streakForeground},
             ]}
             testID="circle-stats-streak-label">
             {`${streakValue} ${streakDayLabel}`}

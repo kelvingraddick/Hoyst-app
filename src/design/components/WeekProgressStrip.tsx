@@ -340,7 +340,7 @@ function StreakPill({streakDays}: {streakDays: number}) {
       <MomentumFlameIllustration size={16} />
       <HoystText
         allowFontScaling={false}
-        style={[styles.streakPillLabel, {color: theme.warningForeground}]}>
+        style={[styles.streakPillLabel, {color: theme.streakForeground}]}>
         {`${streakDays} ${dayLabel}`}
       </HoystText>
     </View>

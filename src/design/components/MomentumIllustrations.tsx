@@ -256,20 +256,11 @@ export function MomentumFlameIllustration({
   size = 44,
   ...props
 }: IllustrationProps): React.JSX.Element {
-  const gradientId = useGradientId('momentum-flame');
-
   return (
     <Svg height={size} viewBox="0 0 64 64" width={size} {...props}>
-      <Defs>
-        <LinearGradient id={gradientId} x1="16" x2="48" y1="8" y2="56">
-          <Stop offset="0" stopColor="#FF2D12" />
-          <Stop offset="0.62" stopColor={brandColors.orangeStrong} />
-          <Stop offset="1" stopColor="#FFB020" />
-        </LinearGradient>
-      </Defs>
       <Path
         d="M32.4 57C21.9 55.1 15 47 16.2 36.8c.8-6.8 5.5-11.6 10.1-16.1 4.1-4 5.9-7.8 4.8-12.7 11.4 5.7 17.3 15.2 14.2 26 4.8 2.8 6.5 8.3 4.2 13.3C46.6 54 39.5 58.3 32.4 57Z"
-        fill={`url(#${gradientId})`}
+        fill="#F57C25"
       />
       <Path
         d="M33.1 50c-5.8-1.1-9.1-5.3-8.4-10.6.4-3.4 2.8-5.9 5.2-8.2 2.2-2.1 3.2-4 2.7-6.5 6 3.2 9.1 8.2 7.3 13.8 2.7 1.4 3.7 4.4 2.5 7-1.5 3.4-5.4 5.5-9.3 4.5Z"

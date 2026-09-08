@@ -1,15 +1,20 @@
 import React from 'react';
-import {Pressable, StyleSheet} from 'react-native';
+import {StyleSheet} from 'react-native';
 import renderer, {act} from 'react-test-renderer';
 
-import {ActivityFeedCard} from '../src/design/components/ActivityFeedCard';
-import {HoystButton} from '../src/design/components/HoystButton';
-import {SectionEyebrow} from '../src/design/components/SectionEyebrow';
+import {HomeActivityRow} from '../src/features/home/components/HomeSurfaces';
+import {HomeButton as HoystButton} from '../src/features/home/components/HomeSurfaces';
 import {WeekProgressStrip} from '../src/design/components/WeekProgressStrip';
-import {brandColors} from '../src/design/tokens/colors';
 import {HomeScreen} from '../src/features/home/screens/HomeScreen';
+import {
+  HomeDailyActionProgress,
+  HomeProgress,
+  HomeWeekPath,
+} from '../src/features/home/components/HomeProgress';
+import {getHomeMessageParts} from '../src/design/components/HomeHeroHeader';
 import type {HomeData} from '../src/features/home/services/home-data-service';
 import {
+  subscribeToHomeData,
   getHomeCircleActionVariant,
   getHomeGreetingContext,
   getHomePrimaryAction,
@@ -18,6 +23,10 @@ import {
 } from '../src/features/home/services/home-data-service';
 import {generateHomeGreeting} from '../src/features/home/services/home-greeting-service';
 import {nudgeCircleMembers} from '../src/features/circles/services/circle-service';
+import {
+  navigateToAuthSignIn,
+  navigateToAuthWelcome,
+} from '../src/navigation/auth-modal-navigation';
 import type {
   AuthSessionStatus,
   AuthSessionUser,
@@ -29,15 +38,17 @@ import {
 } from '../src/features/settings/services/notification-settings-service';
 import type {
   CircleManagementCard,
+  ExploreCircle,
   InboxEvent,
   MomentumSummary,
 } from '../src/types/models';
 
-const HOME_NEUTRAL_SURFACE_LIGHT = 'rgba(226,232,240,0.72)';
-const HOME_NEUTRAL_SURFACE_DARK = 'rgba(255,255,255,0.06)';
-
 const mockNavigate = jest.fn();
 const mockRootNavigate = jest.fn();
+const mockBeginAuthFlow = jest.fn();
+const mockClearPendingAction = jest.fn();
+const mockSetOnboardingStep = jest.fn();
+const mockStartOnboardingWizard = jest.fn();
 const mockRequireAccount = jest.fn(
   (_pendingAction: unknown, onReady: () => void) => onReady(),
 );
@@ -57,6 +68,7 @@ let mockPendingHoyTapInCelebration:
   | undefined;
 const mockClearStaleHoyTapInCelebration = jest.fn();
 const mockConsumeHoyTapInCelebration = jest.fn();
+let mockPublicCircles: ExploreCircle[] = [];
 
 jest.mock('@react-native-community/blur', () => {
   const MockReact = require('react');
@@ -140,8 +152,8 @@ jest.mock('../src/store/session-store', () => ({
     }) => unknown,
   ) =>
     selector({
-      beginAuthFlow: jest.fn(),
-      clearPendingAction: jest.fn(),
+      beginAuthFlow: mockBeginAuthFlow,
+      clearPendingAction: mockClearPendingAction,
       status: mockSessionStatus,
       user: mockSessionUser,
     }),
@@ -180,8 +192,8 @@ jest.mock('../src/store/onboarding-store', () => ({
     }) => unknown,
   ) =>
     selector({
-      setCurrentStep: jest.fn(),
-      startOnboardingWizard: jest.fn(),
+      setCurrentStep: mockSetOnboardingStep,
+      startOnboardingWizard: mockStartOnboardingWizard,
     }),
 }));
 
@@ -190,11 +202,21 @@ jest.mock('../src/features/auth/hooks/useProtectedAction', () => ({
 }));
 
 jest.mock('../src/navigation/auth-modal-navigation', () => ({
+  navigateToAuthSignIn: jest.fn(),
   navigateToAuthWelcome: jest.fn(),
 }));
 
 jest.mock('../src/features/circles/services/circle-service', () => ({
   nudgeCircleMembers: jest.fn(() => Promise.resolve({nudged: 0})),
+}));
+
+jest.mock('../src/features/circles/services/public-circle-service', () => ({
+  subscribeToPublicCircles: jest.fn(
+    (onCircles: (circles: ExploreCircle[]) => void) => {
+      onCircles(mockPublicCircles);
+      return jest.fn();
+    },
+  ),
 }));
 
 jest.mock('../src/features/home/services/home-data-service', () => ({
@@ -417,6 +439,37 @@ function attentionCircle(
   };
 }
 
+function publicCircle(overrides: Partial<ExploreCircle> = {}): ExploreCircle {
+  return {
+    category: 'Fitness',
+    circleMode: 'group',
+    commitment: 'Move for 30 minutes every day',
+    commitmentCadence: 'daily',
+    commitmentFrequency: {tapInsPerWeek: 7},
+    completionRate: 88,
+    id: 'public-circle-1',
+    joinLabel: 'Open seats',
+    joinMode: 'open',
+    matchCopy: 'A welcoming daily movement circle.',
+    maxSize: 10,
+    memberCount: 4,
+    members: [
+      {
+        id: 'member-1',
+        initials: 'AR',
+        name: 'Ari Runner',
+        state: 'done',
+      },
+    ],
+    privacy: 'public',
+    streakLabel: 'Moving together',
+    title: 'Morning Movers',
+    ...overrides,
+  };
+}
+
+const mountedScreens: renderer.ReactTestRenderer[] = [];
+
 function renderScreenTree() {
   let screen: renderer.ReactTestRenderer | undefined;
 
@@ -424,6 +477,7 @@ function renderScreenTree() {
     screen = renderer.create(<HomeScreen />);
   });
 
+  mountedScreens.push(screen!);
   return screen!;
 }
 
@@ -482,6 +536,9 @@ function setResolvedHoyAction({
 }
 
 describe('HomeScreen Circle activity updates', () => {
+  afterEach(() => {
+    act(() => mountedScreens.splice(0).forEach(screen => screen.unmount()));
+  });
   beforeEach(() => {
     jest.clearAllMocks();
     mockHomeData = homeData();
@@ -492,6 +549,7 @@ describe('HomeScreen Circle activity updates', () => {
     mockSessionStatus = 'authenticatedReady';
     mockSessionUser = {providerIds: [], uid: 'user-1'};
     mockPendingHoyTapInCelebration = undefined;
+    mockPublicCircles = [];
     mockConsumeHoyTapInCelebration.mockImplementation(
       ({dateKey, uid}: {dateKey: string; uid: string}) => {
         const pendingFeedback = mockPendingHoyTapInCelebration;
@@ -546,9 +604,9 @@ describe('HomeScreen Circle activity updates', () => {
         uid: 'user-1',
       }),
     );
-    expect(output).toContain('CIRCLE ACTIVITY');
+    expect(output).toContain('Circle activity');
     expect(output).toContain('No Circle activity yet');
-    expect(output.indexOf('CIRCLE ACTIVITY')).toBeGreaterThan(
+    expect(output.indexOf('Circle activity')).toBeGreaterThan(
       output.indexOf('Today is clear'),
     );
   });
@@ -564,9 +622,74 @@ describe('HomeScreen Circle activity updates', () => {
     ).toHaveLength(0);
   });
 
-  it('renders a dedicated personal commitment section', () => {
+  it('makes the guest Home a commitment launchpad with public discovery', () => {
+    mockSessionStatus = 'guest';
+    mockSessionUser = undefined;
+    mockPublicCircles = [publicCircle()];
+
+    const tree = renderScreenTree();
+    const output = JSON.stringify(tree.toJSON());
+    const startButton = tree.root.findByProps({
+      testID: 'guest-home-start-commitment',
+    });
+    const starterArtwork = tree.root.findByProps({
+      testID: 'guest-home-get-started-artwork',
+    });
+
+    expect(tree.root.findByProps({testID: 'home-week-path'})).toBeTruthy();
+    expect(output).toContain('Your first streak starts with one Tap In.');
+    expect(output).not.toContain('0 days');
+    expect(output).not.toContain('0% MOMENTUM');
+    expect(output).toContain('Get started');
+    expect(output).toContain('Create a Circle. Invite your people.');
+    expect(output).toContain('Discover a circle');
+    expect(output).toContain('Morning Movers');
+    expect(startButton).toBeTruthy();
+    expect(starterArtwork.props.accessible).toBe(false);
+
+    act(() => {
+      startButton.props.onPress();
+    });
+
+    expect(mockBeginAuthFlow).toHaveBeenCalledTimes(1);
+    expect(mockStartOnboardingWizard).toHaveBeenCalledTimes(1);
+    expect(navigateToAuthWelcome).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      tree.root.findByProps({testID: 'guest-home-log-in-link'}).props.onPress();
+    });
+
+    expect(navigateToAuthSignIn).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      tree.root.findByProps({testID: 'home-hero-hoy-action'}).props.onPress();
+    });
+
+    expect(mockStartOnboardingWizard).toHaveBeenCalledTimes(2);
+
+    act(() => {
+      tree.root
+        .findByProps({testID: 'guest-home-featured-circle'})
+        .props.onPress();
+    });
+
+    expect(mockRootNavigate).toHaveBeenCalledWith('CircleDetail', {
+      circleId: 'public-circle-1',
+    });
+
+    act(() => {
+      tree.root
+        .findByProps({testID: 'guest-home-explore-all-link'})
+        .props.onPress();
+    });
+
+    expect(mockNavigate).toHaveBeenCalledWith('Explore');
+  });
+
+  it('includes personal commitments in the Home stack', () => {
     mockHomeData = {
       ...homeData(),
+      hasResolvedGreetingContext: true,
       circles: [
         attentionCircle({
           circleMode: 'personal',
@@ -586,7 +709,7 @@ describe('HomeScreen Circle activity updates', () => {
     const tree = renderScreenTree();
     const output = JSON.stringify(tree.toJSON());
 
-    expect(output).toContain('YOUR COMMITMENTS');
+    expect(output).toContain('Your commitments');
     expect(output).toContain('Read every day');
     expect(output).toContain('PERSONAL');
     expect(output).not.toContain('1/1 Members');
@@ -615,55 +738,21 @@ describe('HomeScreen Circle activity updates', () => {
 
   it('renders the all-my-commitments action as a compact Home link', () => {
     const tree = renderScreenTree();
-    const allMyCommitmentsLink = tree.root.findByProps({
-      testID: 'all-my-commitments-link',
+    const content = tree.root.findByProps({
+      testID: 'all-my-commitments-link-content',
     });
-    const linkPressableStyle = StyleSheet.flatten(
-      allMyCommitmentsLink.props.style({pressed: false}),
-    );
-    const linkContentStyle = StyleSheet.flatten(
-      tree.root.findByProps({testID: 'all-my-commitments-link-content'}).props
-        .style,
-    );
-    const allMyCommitmentsLabel = tree.root.findByProps({
-      testID: 'all-my-commitments-label',
-    });
-    const allMyCommitmentsLabelStyle = StyleSheet.flatten(
-      allMyCommitmentsLabel.props.style,
-    );
-
-    expect(JSON.stringify(tree.toJSON())).toContain('All my commitments');
-    expect(allMyCommitmentsLink.props.accessibilityRole).toBe('button');
-    expect(JSON.stringify(tree.toJSON())).not.toContain(
-      'View commitments and join requests',
-    );
-    expect(
-      tree.root.findAllByProps({testID: 'all-my-circles-card'}),
-    ).toHaveLength(0);
-    expect(
-      tree.root.findByProps({testID: 'all-my-commitments-handshake'}),
-    ).toBeTruthy();
-    expect(
-      tree.root.findByProps({testID: 'all-my-commitments-chevron'}),
-    ).toBeTruthy();
-    expect(linkPressableStyle).toMatchObject({
-      marginBottom: -48,
-      marginTop: -18,
-      width: '100%',
-    });
-    expect(linkContentStyle).toMatchObject({
-      flexDirection: 'row',
+    expect(StyleSheet.flatten(content.props.style)).toMatchObject({
+      gap: 12,
       minHeight: 44,
-      transform: [{translateY: -10}],
     });
-    expect(linkContentStyle.backgroundColor).toBeUndefined();
-    expect(linkContentStyle.borderWidth).toBeUndefined();
-    expect(allMyCommitmentsLabelStyle).toMatchObject({
-      fontSize: 14,
-      lineHeight: 18,
-      color: '#4D5873',
-    });
-    expect(allMyCommitmentsLabel.props.numberOfLines).toBe(1);
+    const label = tree.root.findByProps({testID: 'all-my-commitments-label'});
+    expect(StyleSheet.flatten(label.props.style).color).toBe('#4D5873');
+    act(() =>
+      tree.root
+        .findByProps({testID: 'all-my-commitments-link'})
+        .props.onPress(),
+    );
+    expect(mockRootNavigate).toHaveBeenCalledWith('Circles');
   });
 
   it('routes authenticated empty-state circle discovery to Explore', () => {
@@ -684,68 +773,39 @@ describe('HomeScreen Circle activity updates', () => {
 
   it('uses a flat warm-neutral canvas and outline-free Home containers', () => {
     const tree = renderScreenTree();
-    const panelSurfaces = tree.root.findAllByProps({
-      testID: 'solid-panel-surface',
-    });
-
     expect(
       tree.root.findAll(
         node =>
           StyleSheet.flatten(node.props.style)?.backgroundColor === '#FAFAF7',
-      ),
-    ).not.toHaveLength(0);
-    expect(panelSurfaces.length).toBeGreaterThan(0);
-    panelSurfaces.forEach(node => {
-      const style = StyleSheet.flatten(node.props.style);
-      expect(style.backgroundColor).toBe(HOME_NEUTRAL_SURFACE_LIGHT);
-      expect(style.borderWidth).toBe(0);
-    });
+      ).length,
+    ).toBeGreaterThan(0);
+    expect(
+      tree.root.findAllByProps({testID: 'solid-panel-surface'}),
+    ).toHaveLength(0);
   });
 
-  it('renders Your Progress directly in the Home sheet with the notification control', () => {
+  it('places the week in Home and the notification bell in the header', () => {
+    mockHomeData = {...homeData(), hasResolvedGreetingContext: true};
     const tree = renderScreenTree();
-    const panelSurfaces = tree.root.findAllByProps({
-      testID: 'solid-panel-surface',
-    });
-    const weekProgressStrip = tree.root.findByProps({
-      testID: 'week-progress-strip',
-    });
-    const homeProgressSection = tree.root.findByProps({
-      testID: 'home-progress-section',
-    });
-
-    expect(tree.root.findAllByType(WeekProgressStrip)).toHaveLength(1);
-    expect(StyleSheet.flatten(weekProgressStrip.props.style).gap).toBe(8);
-    expect(StyleSheet.flatten(homeProgressSection.props.style).gap).toBe(8);
-    expect(JSON.stringify(tree.toJSON())).toContain('YOUR PROGRESS');
+    const section = tree.root.findByProps({testID: 'home-progress-section'});
     expect(
-      tree.root
-        .findByProps({testID: 'week-progress-header-actions'})
-        .findAllByProps({testID: 'home-hero-notification-button'}),
-    ).not.toHaveLength(0);
-    panelSurfaces.forEach(panel => {
-      expect(panel.findAllByType(WeekProgressStrip)).toHaveLength(0);
-    });
+      section.findAllByProps({testID: 'home-week-path'}).length,
+    ).toBeGreaterThan(0);
+    expect(
+      section.findAllByProps({testID: 'home-hero-notification-button'}),
+    ).toHaveLength(0);
+    expect(tree.root.findAllByType(WeekProgressStrip)).toHaveLength(0);
   });
 
   it('uses a flat warm-neutral dark canvas and containers', () => {
     mockAppearance = 'dark';
-
     const tree = renderScreenTree();
-    const panelSurfaces = tree.root.findAllByProps({
-      testID: 'solid-panel-surface',
-    });
-    const momentumTrackStyle = StyleSheet.flatten(
-      tree.root.findByProps({testID: 'home-momentum-bar-track'}).props.style,
-    );
-
-    expect(panelSurfaces.length).toBeGreaterThan(0);
-    panelSurfaces.forEach(node => {
-      const style = StyleSheet.flatten(node.props.style);
-      expect(style.backgroundColor).toBe(HOME_NEUTRAL_SURFACE_DARK);
-      expect(style.borderWidth).toBe(0);
-    });
-    expect(momentumTrackStyle.backgroundColor).toBe(HOME_NEUTRAL_SURFACE_DARK);
+    expect(
+      tree.root.findAll(
+        node =>
+          StyleSheet.flatten(node.props.style)?.backgroundColor === '#121212',
+      ).length,
+    ).toBeGreaterThan(0);
     expect(tree.root.findAll(node => node.props.blurAmount)).toHaveLength(0);
   });
 
@@ -760,91 +820,19 @@ describe('HomeScreen Circle activity updates', () => {
 
   it('keeps a compact flat Hoy bubble and replaces the avatar with Hoy', () => {
     const tree = renderScreenTree();
-    const bubbleSurfaceStyle = StyleSheet.flatten(
-      tree.root.findByProps({testID: 'home-hero-bubble-surface'}).props.style,
-    );
-    const bubbleFillStyle = StyleSheet.flatten(
-      tree.root.findByProps({testID: 'home-hero-bubble-fill'}).props.style,
-    );
-    const hoyPlaceholderStyle = StyleSheet.flatten(
-      tree.root.findByProps({testID: 'home-hero-hoy-placeholder'}).props.style,
-    );
-    const largeTailDotStyle = StyleSheet.flatten(
-      tree.root.findByProps({testID: 'home-hero-tail-dot-large'}).props.style,
-    );
-    const smallTailDotStyle = StyleSheet.flatten(
-      tree.root.findByProps({testID: 'home-hero-tail-dot-small'}).props.style,
-    );
-    const hoyAction = tree.root.findByProps({
-      testID: 'home-hero-hoy-action',
-    });
-    const notificationButton = tree.root.findByProps({
-      testID: 'home-hero-notification-button',
-    });
-    const unreadBadgeStyle = StyleSheet.flatten(
-      tree.root.findByProps({
-        testID: 'home-hero-notification-unread-badge',
-      }).props.style,
-    );
-    const notificationButtonStyle = StyleSheet.flatten(
-      typeof notificationButton.props.style === 'function'
-        ? notificationButton.props.style({pressed: false})
-        : notificationButton.props.style,
-    );
-
-    expect(bubbleSurfaceStyle.elevation).toBeUndefined();
-    expect(bubbleSurfaceStyle.shadowOffset).toBeUndefined();
-    expect(bubbleFillStyle.backgroundColor).toBe(HOME_NEUTRAL_SURFACE_LIGHT);
-    expect(bubbleFillStyle.borderWidth).toBeUndefined();
-    expect(hoyPlaceholderStyle.height).toBe(48);
-    expect(hoyPlaceholderStyle.width).toBe(48);
-    expect(hoyPlaceholderStyle.backgroundColor).toBe(
-      HOME_NEUTRAL_SURFACE_LIGHT,
-    );
-    expect(hoyPlaceholderStyle.borderWidth).toBeUndefined();
-    expect(
-      tree.root.findAllByProps({
-        testID: 'home-hero-hoy-orb-thinking-image',
-      }).length,
-    ).toBe(0);
-    expect(
-      tree.root.findAllByProps({
-        testID: 'home-hero-hoy-orb-locked-image',
-      }),
-    ).toHaveLength(0);
-    expect(largeTailDotStyle.backgroundColor).toBe(
-      HOME_NEUTRAL_SURFACE_LIGHT,
-    );
-    expect(largeTailDotStyle.borderWidth).toBeUndefined();
-    expect(largeTailDotStyle.height).toBe(9);
-    expect(largeTailDotStyle.width).toBe(9);
-    expect(largeTailDotStyle.elevation).toBeUndefined();
-    expect(largeTailDotStyle.shadowOffset).toBeUndefined();
-    expect(smallTailDotStyle.backgroundColor).toBe(
-      HOME_NEUTRAL_SURFACE_LIGHT,
-    );
-    expect(smallTailDotStyle.borderWidth).toBeUndefined();
-    expect(smallTailDotStyle.height).toBe(5);
-    expect(smallTailDotStyle.width).toBe(5);
-    expect(smallTailDotStyle.elevation).toBeUndefined();
-    expect(smallTailDotStyle.shadowOffset).toBeUndefined();
-    expect(hoyAction.props.accessibilityRole).toBe('button');
-    expect(hoyAction.props.disabled).toBe(true);
-    expect(hoyAction.props.accessibilityLabel).toBe(
+    const action = tree.root.findByProps({testID: 'home-hero-hoy-action'});
+    expect(action.props.disabled).toBe(true);
+    expect(action.props.accessibilityLabel).toBe(
       'Hoy is getting your next action ready.',
     );
-    expect(notificationButton.props.accessibilityLabel).toBe(
-      'Notifications, 1 unread update',
-    );
-    expect(notificationButtonStyle).toMatchObject({height: 36, width: 36});
-    expect(unreadBadgeStyle).toMatchObject({
-      backgroundColor: brandColors.red,
-      borderRadius: 9,
-      height: 18,
-      right: -5,
-      top: -5,
-      width: 18,
+    expect(StyleSheet.flatten(action.props.style)).toMatchObject({
+      borderRadius: 18,
+      backgroundColor: '#FFFFFF',
+      shadowRadius: 12,
     });
+    expect(
+      tree.root.findAllByProps({testID: 'home-hero-tail-dot-large'}),
+    ).toHaveLength(0);
   });
 
   it('does not treat an authenticating session as a guest Hoy state', () => {
@@ -1042,7 +1030,7 @@ describe('HomeScreen Circle activity updates', () => {
       tree.root.findByProps({
         testID: 'home-hero-notification-unread-badge',
       }).props.children.props.children,
-    ).toBe('9');
+    ).toBe('9+');
     expect(
       tree.root.findByProps({testID: 'home-hero-notification-button'}).props
         .accessibilityLabel,
@@ -1198,7 +1186,8 @@ describe('HomeScreen Circle activity updates', () => {
     expect(mockNavigate).toHaveBeenCalledWith('Momentum');
   });
 
-  it('does not generate or activate Hoy before greeting context resolves', () => {
+  it('does not generate Hoy or offer card actions before greeting context resolves', () => {
+    mockHomeData = {...homeData(), circles: [attentionCircle()]};
     const tree = renderScreenTree();
     const hoyAction = tree.root.findByProps({
       testID: 'home-hero-hoy-action',
@@ -1206,34 +1195,21 @@ describe('HomeScreen Circle activity updates', () => {
 
     expect(hoyAction.props.disabled).toBe(true);
     expect(generateHomeGreeting).not.toHaveBeenCalled();
+    expect(
+      tree.root.findAllByProps({testID: 'home-commitments-stack'}),
+    ).toHaveLength(0);
   });
 
   it('uses flat dark hero surfaces without outlines', () => {
     mockAppearance = 'dark';
-
     const tree = renderScreenTree();
-    const bubbleFillStyle = StyleSheet.flatten(
-      tree.root.findByProps({testID: 'home-hero-bubble-fill'}).props.style,
+    const action = tree.root.findByProps({testID: 'home-hero-hoy-action'});
+    expect(StyleSheet.flatten(action.props.style).backgroundColor).toBe(
+      '#252527',
     );
-    const largeTailDotStyle = StyleSheet.flatten(
-      tree.root.findByProps({testID: 'home-hero-tail-dot-large'}).props.style,
-    );
-    const smallTailDotStyle = StyleSheet.flatten(
-      tree.root.findByProps({testID: 'home-hero-tail-dot-small'}).props.style,
-    );
-
-    expect(bubbleFillStyle.backgroundColor).toBe(HOME_NEUTRAL_SURFACE_DARK);
-    expect(bubbleFillStyle.borderWidth).toBeUndefined();
-    expect(largeTailDotStyle.backgroundColor).toBe(HOME_NEUTRAL_SURFACE_DARK);
-    expect(largeTailDotStyle.borderWidth).toBeUndefined();
-    expect(largeTailDotStyle.height).toBe(9);
-    expect(largeTailDotStyle.width).toBe(9);
-    expect(largeTailDotStyle.elevation).toBeUndefined();
-    expect(smallTailDotStyle.backgroundColor).toBe(HOME_NEUTRAL_SURFACE_DARK);
-    expect(smallTailDotStyle.borderWidth).toBeUndefined();
-    expect(smallTailDotStyle.height).toBe(5);
-    expect(smallTailDotStyle.width).toBe(5);
-    expect(smallTailDotStyle.elevation).toBeUndefined();
+    expect(
+      tree.root.findByProps({testID: 'home-hoy-context-tint'}).props.colors[0],
+    ).toMatch(/26$/);
   });
 
   it('renders recent Circle activity updates and opens their deeplink', () => {
@@ -1263,38 +1239,31 @@ describe('HomeScreen Circle activity updates', () => {
     const tree = renderScreenTree();
     const output = JSON.stringify(tree.toJSON());
 
-    expect(output).toContain('CIRCLE ACTIVITY');
+    expect(output).toContain('Circle activity');
     expect(output).toContain('Ari Runner');
     expect(output).toContain('tapped in for Morning Movers.');
     expect(output).not.toContain('Tap In to keep Morning Movers moving.');
     expect(output).not.toContain('Kelvin reached a 7-day streak.');
 
-    const circleActivityLabel = tree.root
-      .findAllByType(SectionEyebrow)
-      .find(node => node.props.children === 'CIRCLE ACTIVITY');
-    const attentionLabel = tree.root
-      .findAllByType(SectionEyebrow)
-      .find(node => node.props.children === 'Circles need your attention');
-    const circleActivityCard = tree.root.findByType(ActivityFeedCard);
-
-    expect(circleActivityLabel?.props.style).toEqual(
-      attentionLabel?.props.style,
-    );
-    expect(circleActivityCard.props.density).toBe('compact');
-    expect(StyleSheet.flatten(circleActivityCard.props.style)).toMatchObject({
-      backgroundColor: HOME_NEUTRAL_SURFACE_LIGHT,
-      borderWidth: 0,
-    });
+    const circleActivityCard = tree.root.findByType(HomeActivityRow);
     expect(circleActivityCard.props.item.mediaImageUrl).toBe(
       'https://example.com/tap-in.jpg',
     );
     expect(
-      tree.root.findAllByProps({testID: 'activity-feed-media-image'}).length,
+      StyleSheet.flatten(
+        tree.root.findByProps({testID: 'home-activity-avatar'}).props.style,
+      ),
+    ).toMatchObject({
+      alignSelf: 'flex-start',
+      borderRadius: 14,
+      height: 28,
+      width: 28,
+    });
+    expect(
+      tree.root.findAllByProps({accessibilityLabel: 'Activity photo'}).length,
     ).toBeGreaterThan(0);
 
-    const eventPressable = tree.root
-      .findAllByType(Pressable)
-      .find(node => node.findAllByType(ActivityFeedCard).length > 0);
+    const eventPressable = tree.root.findByType(HomeActivityRow);
 
     expect(eventPressable).toBeTruthy();
 
@@ -1309,134 +1278,301 @@ describe('HomeScreen Circle activity updates', () => {
   });
 
   it('uses the Momentum status palette in the full-width Home momentum bar', () => {
-    mockMomentumSummary = momentumSummary({
-      label: 'Building',
-      percentage: 35,
-      rollingMomentum: {
-        hasUnrecoveredMiss: false,
-        percentage: 30,
-        resolvedOpportunityCount: 3,
-        status: 'building_momentum',
-        windowDays: 14,
-      },
-      status: 'building_momentum',
+    mockHomeData = {
+      ...homeData(),
+      hasResolvedGreetingContext: true,
+      circles: [attentionCircle()],
+    };
+    const tree = renderScreenTree();
+    const progress = tree.root.findByProps({
+      testID: 'home-daily-action-progress',
+    });
+    expect(progress.props.accessibilityValue).toMatchObject({now: 0, max: 1});
+    act(() =>
+      tree.root.findByProps({testID: 'home-momentum-bar'}).props.onPress(),
+    );
+    expect(mockNavigate).toHaveBeenCalledWith('Momentum');
+  });
+
+  it('places icon-free daily action progress beneath Your commitments', () => {
+    mockHomeData = {
+      ...homeData(),
+      hasResolvedGreetingContext: true,
+      circles: [attentionCircle()],
+    };
+    const tree = renderScreenTree();
+    const dailyProgress = tree.root.findByType(HomeDailyActionProgress);
+    const momentumProgress = tree.root.findByType(HomeProgress);
+    const progressbar = tree.root.findByProps({
+      testID: 'home-daily-action-progress',
     });
 
-    const tree = renderScreenTree();
     expect(
-      tree.root.findByProps({testID: 'home-momentum-stage-icon'}).props.status,
-    ).toBe('building_momentum');
-    const barFillStyle = StyleSheet.flatten(
-      tree.root.findByProps({testID: 'home-momentum-bar-fill'}).props.style,
-    );
-    const barTrackStyle = StyleSheet.flatten(
-      tree.root.findByProps({testID: 'home-momentum-bar-track'}).props.style,
-    );
-    const momentumBarStyle = StyleSheet.flatten(
-      tree.root
-        .findByProps({testID: 'home-momentum-bar'})
-        .props.style({pressed: false}),
-    );
-
-    expect(barFillStyle.backgroundColor).toBe(brandColors.orange);
-    expect(barFillStyle.width).toBe('30%');
-    expect(barTrackStyle.backgroundColor).toBe(HOME_NEUTRAL_SURFACE_LIGHT);
-    expect(momentumBarStyle.width).toBe('100%');
+      dailyProgress.parent?.findAll(
+        node => node.props.children === 'Your commitments',
+      ).length,
+    ).toBeGreaterThan(0);
     expect(
-      tree.root.findAllByProps({
-        testID: 'circle-summary-contribution-disc',
-      }),
+      momentumProgress.findAllByProps({testID: 'home-daily-action-progress'}),
     ).toHaveLength(0);
+    expect(progressbar.props.accessibilityLabel).toBe('1 action needed today');
     expect(
-      tree.root.findAllByProps({testID: 'circle-summary-momentum-disc'}),
-    ).toHaveLength(0);
-    expect(
-      tree.root.findAllByProps({testID: 'circle-summary-streak-disc'}),
-    ).toHaveLength(0);
-    const textLabels = tree.root
-      .findAll(node => typeof node.props.children === 'string')
-      .map(node => node.props.children);
-    expect(textLabels).toContain('30% MOMENTUM');
-    expect(
-      tree.root.findAllByProps({testID: 'home-momentum-bar-label'}),
-    ).toHaveLength(0);
-    const momentumValueStyle = StyleSheet.flatten(
-      tree.root.findByProps({testID: 'home-momentum-value'}).props.style,
-    );
-    expect(momentumValueStyle.color).toBe('#9A9ABC');
-    expect(
-      tree.root.findByProps({accessibilityLabel: '14-day momentum, 30%'}),
-    ).toBeTruthy();
+      dailyProgress.findAllByProps({
+        testID: 'home-daily-action-progress-track',
+      }).length,
+    ).toBeGreaterThan(0);
+    const output = JSON.stringify(tree.toJSON());
+    expect(output).not.toContain('Tap In remaining');
+    expect(output).not.toContain('Tap Ins remaining');
   });
 
   it('shows the raw rolling score in the relocated Home momentum bar', () => {
-    mockMomentumSummary = momentumSummary({
-      rollingMomentum: {
-        hasUnrecoveredMiss: false,
-        percentage: 100,
-        resolvedOpportunityCount: 2,
-        status: 'getting_started',
-        windowDays: 14,
-      },
-    });
-
+    mockHomeData = {...homeData(), hasResolvedGreetingContext: true};
+    mockMomentumSummary = {
+      rollingMomentum: {percentage: 30, status: 'building_momentum'},
+    } as MomentumSummary;
     const tree = renderScreenTree();
-    const textLabels = tree.root
-      .findAll(node => typeof node.props.children === 'string')
-      .map(node => node.props.children);
-    const barFillStyle = StyleSheet.flatten(
-      tree.root.findByProps({testID: 'home-momentum-bar-fill'}).props.style,
-    );
-
     expect(
-      tree.root.findByProps({accessibilityLabel: '14-day momentum, 100%'}),
-    ).toBeTruthy();
-    expect(textLabels).not.toContain('Getting Started · 2 of 3');
-    expect(barFillStyle.width).toBe('100%');
+      tree.root.findByProps({testID: 'home-momentum-bar'}).props
+        .accessibilityLabel,
+    ).toContain('30%');
+    expect(
+      tree.root.findByProps({testID: 'home-daily-action-progress'}).props
+        .accessibilityLabel,
+    ).toBe('No actions needed today');
   });
 
-  it('renders Your Progress circles with state-based frosted styling', () => {
+  it('uses the Home week path without changing shared week strips', () => {
+    mockHomeData = {...homeData(), hasResolvedGreetingContext: true};
+    const tree = renderScreenTree();
+    const path = tree.root.findByProps({testID: 'home-week-path'});
+    expect(path).toBeTruthy();
+    expect(tree.root.findAllByType(WeekProgressStrip)).toHaveLength(0);
+  });
+
+  it('bolds only the supplied name and commitment without changing the message', () => {
+    const message = 'Phil, Building Hoyst needs your Tap In today.';
+    expect(getHomeMessageParts(message, ['Phil', 'Building Hoyst'])).toEqual([
+      {text: 'Phil', bold: true},
+      {text: ', ', bold: false},
+      {text: 'Building Hoyst', bold: true},
+      {text: ' needs your Tap In today.', bold: false},
+    ]);
+    expect(
+      getHomeMessageParts(message, ['Not present'])
+        .map(part => part.text)
+        .join(''),
+    ).toBe(message);
+  });
+
+  it('shows saved partial quantity progress instead of a missed marker', () => {
+    let tree!: renderer.ReactTestRenderer;
+    act(() => {
+      tree = renderer.create(
+        <HomeWeekPath
+          days={[
+            {
+              dateKey: '2026-09-07',
+              label: 'Mon',
+              state: 'missed',
+              quantityValue: 3,
+              quantityLabel: '3',
+            },
+          ]}
+        />,
+      );
+    });
+    expect(
+      tree.root.findByProps({testID: 'home-week-partial-2026-09-07'}),
+    ).toBeTruthy();
+    expect(JSON.stringify(tree.toJSON())).toContain(
+      'partial progress, 3 logged',
+    );
+    act(() => tree.unmount());
+  });
+
+  it.each([0, 3])(
+    'credits only a positive Nudge response (%s targets) and blocks duplicate submissions',
+    async nudged => {
+      mockHomeData = {
+        ...homeData(),
+        hasResolvedGreetingContext: true,
+        circles: [
+          attentionCircle({viewerHasTappedInToday: true, nudgeTargetCount: 3}),
+        ],
+      };
+      let finish!: (result: {nudged: number}) => void;
+      (nudgeCircleMembers as jest.Mock).mockReturnValueOnce(
+        new Promise(resolve => {
+          finish = resolve;
+        }),
+      );
+      const tree = renderScreenTree();
+      const action = tree.root.findByProps({
+        testID: 'home-commitment-action-circle-attention',
+      });
+      act(() => {
+        action.props.onPress();
+        action.props.onPress();
+      });
+      expect(nudgeCircleMembers).toHaveBeenCalledTimes(1);
+      expect(
+        tree.root.findByProps({testID: 'home-daily-action-progress'}).props
+          .accessibilityValue.now,
+      ).toBe(1);
+      await act(async () => {
+        finish({nudged});
+      });
+      expect(
+        tree.root.findByProps({testID: 'home-daily-action-progress'}).props
+          .accessibilityValue.now,
+      ).toBe(nudged ? 2 : 1);
+    },
+  );
+
+  it('retains the unfinished Nudge after a failed request', async () => {
     mockHomeData = {
       ...homeData(),
-      progressDays: [
-        {dateKey: '2026-05-24', label: '24', state: 'done'},
-        {dateKey: '2026-05-25', label: '25', state: 'missed'},
-        {dateKey: '2026-05-26', label: '26', state: 'today'},
-        {dateKey: '2026-05-27', label: '27', state: 'future'},
+      hasResolvedGreetingContext: true,
+      circles: [
+        attentionCircle({viewerHasTappedInToday: true, nudgeTargetCount: 1}),
       ],
     };
-
+    (nudgeCircleMembers as jest.Mock).mockRejectedValueOnce(
+      new Error('Unavailable'),
+    );
     const tree = renderScreenTree();
-    const doneChipStyle = StyleSheet.flatten(
-      tree.root.findByProps({testID: 'week-progress-2026-05-24-chip'}).props
-        .style,
-    );
-    const todayChipStyle = StyleSheet.flatten(
-      tree.root.findByProps({testID: 'week-progress-2026-05-26-chip'}).props
-        .style,
-    );
-    const futureChipStyle = StyleSheet.flatten(
-      tree.root.findByProps({testID: 'week-progress-2026-05-27-chip'}).props
-        .style,
-    );
-    const textLabels = tree.root
-      .findAll(node => typeof node.props.children === 'string')
-      .map(node => node.props.children);
+    await act(async () => {
+      tree.root
+        .findByProps({testID: 'home-commitment-action-circle-attention'})
+        .props.onPress();
+    });
+    expect(
+      tree.root.findByProps({testID: 'home-daily-action-progress'}).props
+        .accessibilityValue.now,
+    ).toBe(1);
+    expect(
+      tree.root.findByProps({testID: 'home-commitment-action-circle-attention'})
+        .props.disabled,
+    ).toBe(false);
+  });
 
-    expect(doneChipStyle.height).toBe(32);
-    expect(doneChipStyle.width).toBe(32);
-    expect(doneChipStyle.borderRadius).toBe(16);
-    expect(doneChipStyle.backgroundColor).toBe('#22A565');
-    expect(doneChipStyle.borderWidth).toBe(0);
-    expect(todayChipStyle.backgroundColor).toBe('rgba(245,166,35,0.16)');
-    expect(todayChipStyle.borderColor).toBe('#F5A623');
-    expect(todayChipStyle.borderWidth).toBe(2);
-    expect(futureChipStyle.backgroundColor).toBe('rgba(226,232,240,0.72)');
-    expect(futureChipStyle.borderColor).toBe('rgba(148,163,184,0.42)');
-    expect(futureChipStyle.borderWidth).toBe(1.25);
-    expect(textLabels).toEqual(
-      expect.arrayContaining(['Sun', 'Mon', 'Tue', 'Wed']),
+  it('clears the previous account content while the next account subscription resolves', () => {
+    mockHomeData = {
+      ...homeData(),
+      hasResolvedGreetingContext: true,
+      circles: [attentionCircle({title: 'First account private commitment'})],
+    };
+    const tree = renderScreenTree();
+    expect(JSON.stringify(tree.toJSON())).toContain(
+      'First account private commitment',
     );
+    (subscribeToHomeData as jest.Mock).mockImplementationOnce(() => jest.fn());
+    mockSessionUser = {uid: 'user-2', providerIds: []};
+    act(() => tree.update(<HomeScreen />));
+    expect(JSON.stringify(tree.toJSON())).not.toContain(
+      'First account private commitment',
+    );
+    expect(
+      tree.root.findAllByProps({testID: 'home-daily-action-progress'}),
+    ).toHaveLength(0);
+  });
+
+  it('restarts a failed subscription through Retry without reporting completion', () => {
+    (subscribeToHomeData as jest.Mock).mockImplementation(({onError}) => {
+      onError();
+      return jest.fn();
+    });
+    const tree = renderScreenTree();
+    expect(JSON.stringify(tree.toJSON())).toContain('Could not load Home');
+    expect(
+      tree.root.findAllByProps({testID: 'home-daily-action-progress'}),
+    ).toHaveLength(0);
+    (subscribeToHomeData as jest.Mock).mockImplementation(({onData}) => {
+      onData(mockHomeData);
+      return jest.fn();
+    });
+    const retry = tree.root
+      .findAllByType(HoystButton)
+      .find(node => node.props.label === 'Retry');
+    expect(retry).toBeTruthy();
+    const previousCalls = (subscribeToHomeData as jest.Mock).mock.calls.length;
+    act(() => retry?.props.onPress());
+    expect(
+      (subscribeToHomeData as jest.Mock).mock.calls.length,
+    ).toBeGreaterThan(previousCalls);
+  });
+
+  it('preserves deliberate completed and pending expansion and advances when focused work finishes', () => {
+    const first = attentionCircle();
+    const second = attentionCircle({id: 'second'});
+    const done = attentionCircle({
+      id: 'done',
+      viewerHasTappedInToday: true,
+      nudgeTargetCount: 0,
+    });
+    const pending = attentionCircle({
+      id: 'pending',
+      viewerMembershipStatus: 'pending',
+    });
+    mockHomeData = {
+      ...homeData(),
+      circles: [first, second, done, pending],
+      membershipCount: 4,
+      hasResolvedGreetingContext: true,
+    };
+    const tree = renderScreenTree();
+    const push = (circles: typeof mockHomeData.circles) => {
+      const subscription = (subscribeToHomeData as jest.Mock).mock.calls.at(
+        -1,
+      )[0];
+      act(() => subscription.onData({...mockHomeData, circles}));
+    };
+    act(() =>
+      tree.root
+        .findByProps({testID: 'home-commitment-expand-done'})
+        .props.onPress(),
+    );
+    push([first, second, done, pending]);
+    expect(
+      tree.root.findByProps({testID: 'home-commitment-focused-done'}),
+    ).toBeTruthy();
+    act(() =>
+      tree.root
+        .findByProps({testID: 'home-commitment-collapsed-pending'})
+        .props.onPress(),
+    );
+    push([first, second, done, pending]);
+    expect(
+      tree.root.findByProps({testID: 'home-commitment-focused-pending'}),
+    ).toBeTruthy();
+    act(() =>
+      tree.root
+        .findByProps({testID: 'home-commitment-collapsed-circle-attention'})
+        .props.onPress(),
+    );
+    const finishedFirst = {
+      ...first,
+      viewerHasTappedInToday: true,
+      nudgeTargetCount: 0,
+    };
+    push([finishedFirst, second, done, pending]);
+    expect(
+      tree.root.findByProps({testID: 'home-commitment-focused-second'}),
+    ).toBeTruthy();
+    push([
+      finishedFirst,
+      {...second, viewerHasTappedInToday: true, nudgeTargetCount: 0},
+      done,
+      pending,
+    ]);
+    expect(
+      tree.root.findAll(
+        node =>
+          typeof node.props.testID === 'string' &&
+          node.props.testID.startsWith('home-commitment-focused-'),
+      ),
+    ).toHaveLength(0);
   });
 
   it('focuses Home commitments as a stacked list and routes its actions', () => {
@@ -1454,13 +1590,14 @@ describe('HomeScreen Circle activity updates', () => {
         attentionCircle({id: 'circle-second', title: 'Morning Walk'}),
       ],
       membershipCount: 2,
+      hasResolvedGreetingContext: true,
     };
 
     const tree = renderScreenTree();
     const output = JSON.stringify(tree.toJSON());
 
     expect(output).toContain('Sleep 8 Hours');
-    expect(output).toContain('YOUR COMMITMENTS');
+    expect(output).toContain('Your commitments');
     expect(
       tree.root.findByProps({
         testID: 'home-commitment-focused-circle-attention',
@@ -1493,7 +1630,7 @@ describe('HomeScreen Circle activity updates', () => {
 
     act(() => {
       tree.root
-        .findByProps({testID: 'home-commitment-check-circle-second'})
+        .findByProps({testID: 'home-commitment-action-circle-second'})
         .props.onPress();
     });
 
