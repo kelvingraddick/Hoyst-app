@@ -99,11 +99,13 @@ describe('Tap In story sharing', () => {
 
     expect(story).toEqual({
       circleTitle: 'Morning Movers',
+      category: 'Wellness',
       ctaLabel: 'Join this Circle on Hoyst',
       commitment: 'Move for 20 minutes',
       hasInviteUrl: true,
       inviteUrl: 'https://hoyst.app/invite/circle-1',
       memberCount: 7,
+      members: [],
       note: 'Finished the set before breakfast.',
       photoUri: 'file:///tmp/proof.jpg',
       progressLabel: 'Today · 82%',
@@ -137,7 +139,7 @@ describe('Tap In story sharing', () => {
     ).toBe('Momentum saved');
   });
 
-  it('returns story templates based on whether a Tap In photo exists', () => {
+  it('returns the two share templates whether or not a Tap In photo exists', () => {
     const storyWithPhoto = buildTapInStoryShareData({
       detail,
       photoUri: 'file:///tmp/proof.jpg',
@@ -145,13 +147,12 @@ describe('Tap In story sharing', () => {
     const storyWithoutPhoto = buildTapInStoryShareData({detail});
 
     expect(getAvailableTapInStoryTemplates(storyWithPhoto)).toEqual([
-      'photoOverlay',
-      'designedPost',
-      'transparentStats',
+      'tapInMoment',
+      'transparentOverlay',
     ]);
     expect(getAvailableTapInStoryTemplates(storyWithoutPhoto)).toEqual([
-      'designedPost',
-      'transparentStats',
+      'tapInMoment',
+      'transparentOverlay',
     ]);
   });
 
@@ -171,7 +172,7 @@ describe('Tap In story sharing', () => {
 
     expect(story.hasInviteUrl).toBe(false);
     expect(story.inviteUrl).toBeUndefined();
-    expect(story.ctaLabel).toBe('Build your Progress on Hoyst');
+    expect(story.ctaLabel).toBe('Join my Circle on Hoyst');
     expect(story.note).toBe('No note added. Still counted.');
     expect(story.shareMessage).toBe(
       'I tapped in with Morning Movers on Hoyst.',
@@ -237,7 +238,7 @@ describe('Tap In story sharing', () => {
       inviteUrl: detail.inviteUrl,
       message: 'Story message',
       storyCardRef: ref,
-      templateId: 'designedPost',
+      templateId: 'tapInMoment',
     });
 
     expect(mockShareSingle).toHaveBeenCalledWith({
@@ -262,7 +263,7 @@ describe('Tap In story sharing', () => {
       inviteUrl: undefined,
       message: 'Story message',
       storyCardRef: ref,
-      templateId: 'transparentStats',
+      templateId: 'transparentOverlay',
     });
 
     expect(mockShareSingle).toHaveBeenCalledWith({
@@ -285,7 +286,7 @@ describe('Tap In story sharing', () => {
       inviteUrl: detail.inviteUrl,
       message: 'Story message',
       storyCardRef: ref,
-      templateId: 'designedPost',
+      templateId: 'tapInMoment',
     });
 
     expect(mockShareSingle).toHaveBeenCalledWith({
@@ -308,7 +309,7 @@ describe('Tap In story sharing', () => {
       inviteUrl: detail.inviteUrl,
       message: 'Story message',
       storyCardRef: ref,
-      templateId: 'designedPost',
+      templateId: 'tapInMoment',
     });
 
     expect(mockShareSingle).not.toHaveBeenCalled();

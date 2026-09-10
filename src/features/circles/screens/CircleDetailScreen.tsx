@@ -1,6 +1,8 @@
 import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {
+  ActivityIndicator,
   Alert,
+  Animated,
   Pressable,
   Share,
   StyleSheet,
@@ -14,19 +16,19 @@ import {
 import {
   Archive,
   ArrowLeft,
-  ChevronRight,
+  Check,
   Clock3,
   Crown,
   Globe2,
   Lock,
   Settings2,
   Trash2,
-  UserCheck,
   UserPlus,
   UsersRound,
 } from 'lucide-react-native';
 import type {NativeStackScreenProps} from '@react-navigation/native-stack';
 import LinearGradient from 'react-native-linear-gradient';
+import {useSafeAreaInsets} from 'react-native-safe-area-context';
 
 import {GlassPanel} from '../../../design/components/GlassPanel';
 import {HoystButton} from '../../../design/components/HoystButton';
@@ -39,20 +41,30 @@ import {
   getCircleCategoryVisual,
 } from '../../../design/components/CircleCategoryIcon';
 import {HeroIconButton} from '../../../design/components/ScreenHeroHeader';
-import {SectionEyebrow} from '../../../design/components/SectionEyebrow';
 import {SectionHeader} from '../../../design/components/SectionHeader';
 import {TapInPulseButton} from '../../../design/components/TapInPulseButton';
-import {WeekProgressStrip} from '../../../design/components/WeekProgressStrip';
+import {NudgeMark} from '../../../design/components/NudgeMark';
 import {getPulseRingStateForCircle} from '../../../design/components/pulse-ring-state';
-import {actionMotion} from '../../../design/tokens/actions';
 import {radius} from '../../../design/tokens/radius';
 import {useHoystTheme} from '../../../design/theme/useHoystTheme';
+import {
+  DesignSystemProvider,
+  DSListRow,
+  DSSectionHeading,
+  useSystemTheme,
+} from '../../../design/system';
 import {useProtectedAction} from '../../auth/hooks/useProtectedAction';
 import {useUserProfileStore} from '../../../store/profile-store';
 import {useSessionStore} from '../../../store/session-store';
+import {useSettingsStore} from '../../../store/settings-store';
+import {
+  getProfileAvatarSource,
+  getProfileInitials,
+} from '../../profile/services/profile-display';
 import {removeTapIn} from '../../check-in/services/check-in-service';
 import {getCircleDetail} from '../mockData';
 import {CircleThreadSection} from '../components/CircleThreadSection';
+import {CircleGroupWeekPath} from '../components/CircleGroupWeekPath';
 import {
   CircleMemberStrip,
   type CircleMemberStripAction,
@@ -73,6 +85,7 @@ import type {
   CircleMemberStatus,
   CircleSummary,
   CircleThreadItem,
+  ProgressDayState,
 } from '../../../types/models';
 import type {RootStackParamList} from '../../../navigation/types';
 
@@ -101,35 +114,7 @@ function getDetailStatusPill(
     return {label: 'Pending approval', tone: 'purple'};
   }
 
-  if (!detail.viewerRole) {
-    return undefined;
-  }
-
-  if (detail.viewerTodayStatus === 'skip') {
-    return {label: 'Skipped', tone: 'orange'};
-  }
-
-  if (detail.viewerTodayStatus === 'failed') {
-    return {label: 'Goal not met', tone: 'orange'};
-  }
-
-  if (detail.viewerTodayStatus === 'partial') {
-    return {label: 'Progress saved', tone: 'yellow'};
-  }
-
-  if (detail.viewerHasTappedInToday) {
-    return {label: 'Tapped in today', tone: 'green'};
-  }
-
-  if (!detail.viewerHasCheckedIn) {
-    return {label: 'Needs your Tap In', tone: 'orange'};
-  }
-
-  if (detail.remainingCheckIns && detail.remainingCheckIns > 0) {
-    return {label: 'Others Needed', tone: 'yellow'};
-  }
-
-  return {label: 'Complete today', tone: 'green'};
+  return undefined;
 }
 
 function getRoleLabel(detail: CircleDetailModel) {
@@ -142,10 +127,6 @@ function getRoleLabel(detail: CircleDetailModel) {
   }
 
   return 'Member';
-}
-
-function formatNudgeTargetCount(count: number) {
-  return count === 1 ? '1 Member to nudge' : `${count} Members to nudge`;
 }
 
 function formatArchivedDate(date?: Date) {
@@ -238,6 +219,159 @@ function HeroInlineMetaItem({
   );
 }
 
+function HeroInlineMetaSegment({
+  children,
+  separated = false,
+}: {
+  children: React.ReactNode;
+  separated?: boolean;
+}) {
+  const theme = useHoystTheme();
+
+  return (
+    <View style={styles.heroInlineMetaSegment}>
+      {separated ? (
+        <View
+          style={[
+            styles.heroInlineMetaDivider,
+            {backgroundColor: theme.border},
+          ]}
+          testID="circle-detail-meta-divider"
+        />
+      ) : null}
+      {children}
+    </View>
+  );
+}
+
+function CircleNudgeAllRow({
+  isLoading,
+  isSent,
+  onPress,
+  targetCount,
+}: {
+  isLoading: boolean;
+  isSent: boolean;
+  onPress: () => void;
+  targetCount: number;
+}) {
+  const theme = useSystemTheme();
+  const isUnavailable = isLoading || isSent;
+  const memberLabel = targetCount === 1 ? '1 member' : `${targetCount} members`;
+  const targetDescription =
+    targetCount === 1
+      ? '1 member who needs Tap In'
+      : `${targetCount} members who need Tap In`;
+  const subtitle = isLoading
+    ? `Sending to ${memberLabel}...`
+    : isSent
+    ? `Sent to ${memberLabel}`
+    : 'Remind everyone who still needs to Tap In';
+  const accessibilityLabel = isLoading
+    ? `Sending nudge to ${memberLabel}`
+    : isSent
+    ? `Nudge sent to ${memberLabel}`
+    : `Nudge all ${targetDescription}`;
+  const isReady = !isUnavailable;
+
+  return (
+    <View
+      accessibilityLabel={isUnavailable ? accessibilityLabel : undefined}
+      accessibilityRole={isUnavailable ? 'button' : undefined}
+      accessibilityState={
+        isUnavailable ? {busy: isLoading, disabled: true} : undefined
+      }
+      accessible={isUnavailable}
+      style={styles.nudgeAllRow}
+      testID="circle-nudge-all-row">
+      <DSListRow
+        accessibilityLabel={accessibilityLabel}
+        action={
+          isUnavailable ? (
+            <View style={styles.nudgeAllTrailing}>
+              {isLoading ? (
+                <ActivityIndicator color={theme.progress} size="small" />
+              ) : (
+                <Check color={theme.success} size={20} strokeWidth={2.5} />
+              )}
+            </View>
+          ) : undefined
+        }
+        leading={
+          <View
+            style={[
+              styles.nudgeAllIconTile,
+              {backgroundColor: theme.category.purple.surface},
+            ]}>
+            <NudgeMark
+              color={theme.category.purple.foreground}
+              size={18}
+              strokeWidth={4.4}
+            />
+          </View>
+        }
+        onPress={isReady ? onPress : undefined}
+        subtitle={subtitle}
+        testID={isReady ? 'circle-nudge-all-action' : undefined}
+        title="Nudge all"
+      />
+    </View>
+  );
+}
+
+function CircleRemoveTapInRow({
+  isLoading,
+  label,
+  onPress,
+}: {
+  isLoading: boolean;
+  label: string;
+  onPress: () => void;
+}) {
+  const theme = useSystemTheme();
+  const subtitle = isLoading ? "Undoing today's Tap In..." : 'Undo today';
+  const accessibilityLabel = isLoading
+    ? "Removing today's Tap In"
+    : `${label}. Undo today's Tap In`;
+
+  return (
+    <View
+      accessibilityLabel={isLoading ? accessibilityLabel : undefined}
+      accessibilityRole={isLoading ? 'button' : undefined}
+      accessibilityState={isLoading ? {busy: true, disabled: true} : undefined}
+      accessible={isLoading}
+      style={styles.removeTapInRow}
+      testID="circle-remove-tap-in-row">
+      <DSListRow
+        accessibilityLabel={accessibilityLabel}
+        action={
+          isLoading ? (
+            <View style={styles.removeTapInTrailing}>
+              <ActivityIndicator color={theme.danger} size="small" />
+            </View>
+          ) : undefined
+        }
+        chevronTone="danger"
+        leading={
+          <View
+            style={[
+              styles.removeTapInIconTile,
+              {backgroundColor: `${theme.danger}1A`},
+            ]}
+            testID="circle-remove-tap-in-icon-tile">
+            <Trash2 color={theme.danger} size={18} strokeWidth={2.3} />
+          </View>
+        }
+        onPress={isLoading ? undefined : onPress}
+        subtitle={subtitle}
+        testID={isLoading ? undefined : 'circle-remove-tap-in-action'}
+        title={isLoading ? 'Removing Tap In...' : label}
+        titleTone="danger"
+      />
+    </View>
+  );
+}
+
 function getHeroStatusPillPalette(
   tone: HeroPillTone,
   theme: ReturnType<typeof useHoystTheme>,
@@ -299,25 +433,59 @@ function CircleDetailCanvas() {
   );
 }
 
-function CircleDetailTopTint({accentColor}: {accentColor: string}) {
+function CircleDetailTopTint({
+  accentColor,
+  height,
+  translateY,
+}: {
+  accentColor: string;
+  height: number;
+  translateY: ReturnType<typeof Animated.multiply>;
+}) {
   const theme = useHoystTheme();
   const canvasColor = theme.isDark ? '#121212' : '#FAFAF7';
+  const tintColor = `${accentColor}${theme.isDark ? '30' : '24'}`;
+  const measuredHeightStyle = {height};
 
   return (
-    <LinearGradient
-      colors={[
-        canvasColor,
-        `${accentColor}${theme.isDark ? '30' : '24'}`,
-        `${accentColor}${theme.isDark ? '30' : '24'}`,
-        canvasColor,
-      ]}
-      end={{x: 0.5, y: 1}}
-      locations={[0, 0.18, 0.72, 1]}
+    <Animated.View
       pointerEvents="none"
-      start={{x: 0.5, y: 0}}
-      style={styles.circleDetailTopTint}
-      testID="circle-detail-top-tint"
-    />
+      style={[
+        styles.circleDetailTopTint,
+        measuredHeightStyle,
+        {transform: [{translateY}]},
+      ]}
+      testID="circle-detail-top-tint-frame">
+      <LinearGradient
+        colors={[tintColor, canvasColor]}
+        end={{x: 0.5, y: 1}}
+        locations={[0, 1]}
+        start={{x: 0.5, y: 0}}
+        style={StyleSheet.absoluteFill}
+        testID="circle-detail-top-tint"
+      />
+    </Animated.View>
+  );
+}
+
+function CircleDetailBackground({
+  accentColor,
+  tintTranslateY,
+  tintHeight,
+}: {
+  accentColor: string;
+  tintTranslateY: ReturnType<typeof Animated.multiply>;
+  tintHeight: number;
+}) {
+  return (
+    <View style={StyleSheet.absoluteFill} testID="circle-detail-background">
+      <CircleDetailCanvas />
+      <CircleDetailTopTint
+        accentColor={accentColor}
+        height={tintHeight}
+        translateY={tintTranslateY}
+      />
+    </View>
   );
 }
 
@@ -325,12 +493,14 @@ function CircleDetailHero({
   detail,
   onBack,
   onOpenSettings,
+  onTintLayout,
   primaryAction,
   statusPill,
 }: {
   detail: CircleDetailModel;
   onBack: () => void;
   onOpenSettings: () => void;
+  onTintLayout: (event: LayoutChangeEvent) => void;
   primaryAction?: React.ReactNode;
   statusPill?: DetailStatusPill;
 }) {
@@ -351,226 +521,181 @@ function CircleDetailHero({
       : detail.viewerRole === 'admin'
       ? theme.accentSecondaryForeground
       : theme.textMuted;
-  const commitmentPrefix =
+  const commitmentPace =
     detail.commitmentCadence === 'monthly'
-      ? 'Monthly Pace'
+      ? 'Monthly pace'
       : detail.commitmentCadence === 'weekly'
-      ? 'Weekly Pace'
-      : 'Daily Pace';
+      ? 'Weekly pace'
+      : 'Daily pace';
   const previewCopy =
     detail.matchCopy ?? 'Preview the circle before you jump in.';
 
   return (
     <View style={styles.circleHero}>
-      <View style={styles.circleHeroNav}>
-        <View style={styles.circleHeroNavSide}>
-          <HeroIconButton accessibilityLabel="Go back" onPress={onBack}>
-            <ArrowLeft color={theme.text} size={22} strokeWidth={2.3} />
-          </HeroIconButton>
-        </View>
-        <HoystText numberOfLines={1} style={styles.circleHeroNavTitle}>
-          {isPersonal ? 'Personal Commitment' : 'Circle'}
-        </HoystText>
-        <View style={[styles.circleHeroNavSide, styles.circleHeroNavSideEnd]}>
-          <HeroIconButton
-            accessibilityLabel="Open circle settings"
-            onPress={onOpenSettings}>
-            <Settings2 color={theme.textMuted} size={20} strokeWidth={2.2} />
-          </HeroIconButton>
-        </View>
-      </View>
-
       <View
-        style={styles.circleHeroContent}
-        testID="circle-detail-hero-content">
-        <View style={styles.circleHeroIdentityRow}>
-          <View testID="circle-detail-title-category-icon">
-            <CircleCategoryIcon
-              category={detail.category}
-              showBackplate={false}
-              size={34}
-            />
+        onLayout={onTintLayout}
+        style={styles.circleHeroTintRegion}
+        testID="circle-detail-hero-tint-region">
+        <View style={styles.circleHeroNav}>
+          <View style={styles.circleHeroNavSide}>
+            <HeroIconButton accessibilityLabel="Go back" onPress={onBack}>
+              <ArrowLeft color={theme.text} size={22} strokeWidth={2.3} />
+            </HeroIconButton>
           </View>
-          <View style={styles.circleHeroIdentityCopy}>
-            <HoystText numberOfLines={2} style={styles.circleHeroTitle}>
-              {detail.title}
-            </HoystText>
-            <HoystText
-              style={[styles.circleHeroCategory, {color: categoryColor}]}
-              variant="caption">
-              {isPersonal ? 'PERSONAL COMMITMENT' : visual.label.toUpperCase()}
-            </HoystText>
+          <HoystText numberOfLines={1} style={styles.circleHeroNavTitle}>
+            {isPersonal ? 'Personal Commitment' : 'Circle'}
+          </HoystText>
+          <View style={[styles.circleHeroNavSide, styles.circleHeroNavSideEnd]}>
+            <HeroIconButton
+              accessibilityLabel="Open circle settings"
+              onPress={onOpenSettings}>
+              <Settings2 color={theme.textMuted} size={20} strokeWidth={2.2} />
+            </HeroIconButton>
           </View>
         </View>
 
-        <HoystText style={styles.circleHeroCommitment} tone="muted">
-          {detail.commitment}
-        </HoystText>
+        <View
+          style={styles.circleHeroContent}
+          testID="circle-detail-hero-content">
+          <View style={styles.circleHeroIdentityRow}>
+            <View testID="circle-detail-title-category-icon">
+              <CircleCategoryIcon
+                category={detail.category}
+                showBackplate={false}
+                size={34}
+              />
+            </View>
+            <View style={styles.circleHeroIdentityCopy}>
+              <HoystText numberOfLines={2} style={styles.circleHeroTitle}>
+                {detail.title}
+              </HoystText>
+              <HoystText
+                style={[styles.circleHeroCategory, {color: categoryColor}]}
+                variant="caption">
+                {isPersonal
+                  ? 'PERSONAL COMMITMENT'
+                  : visual.label.toUpperCase()}
+              </HoystText>
+            </View>
+          </View>
 
-        <View style={styles.circleHeroMetaRow}>
-          <HeroTextPill
-            backgroundColor={
-              theme.isDark ? 'rgba(255,255,255,0.08)' : '#FFFFFF99'
-            }
-            foregroundColor={theme.textMuted}
-            label={commitmentPrefix}
-          />
-          {statusPill && statusPalette ? (
-            <HeroTextPill
-              backgroundColor={statusPalette.backgroundColor}
-              foregroundColor={statusPalette.foregroundColor}
-              icon={
-                detail.viewerMembershipStatus === 'pending' ? (
-                  <Clock3
-                    color={statusPalette.foregroundColor}
-                    size={14}
-                    strokeWidth={2.3}
-                    testID="circle-detail-pending-clock"
-                  />
-                ) : undefined
-              }
-              label={statusPill.label}
-              style={styles.circleHeroStatusPill}
-            />
-          ) : null}
-          {isPersonal ? (
-            <HeroInlineMetaItem
-              color={theme.successForeground}
-              icon={
-                <Lock
-                  color={theme.successForeground}
-                  size={15}
-                  strokeWidth={2.2}
-                />
-              }
-              label="Personal commitment"
-            />
-          ) : (
-            <>
+          <HoystText style={styles.circleHeroCommitment} tone="muted">
+            {detail.commitment}
+          </HoystText>
+
+          <View style={styles.circleHeroMetaRow}>
+            <HeroInlineMetaSegment>
               <HeroInlineMetaItem
                 color={theme.textMuted}
                 icon={
-                  detail.privacy === 'private' ? (
-                    <Lock color={theme.textMuted} size={15} strokeWidth={2.2} />
-                  ) : (
-                    <Globe2
-                      color={theme.textMuted}
+                  <Clock3 color={theme.textMuted} size={15} strokeWidth={2.2} />
+                }
+                label={commitmentPace}
+              />
+            </HeroInlineMetaSegment>
+            {statusPill && statusPalette ? (
+              <HeroTextPill
+                backgroundColor={statusPalette.backgroundColor}
+                foregroundColor={statusPalette.foregroundColor}
+                icon={
+                  detail.viewerMembershipStatus === 'pending' ? (
+                    <Clock3
+                      color={statusPalette.foregroundColor}
+                      size={14}
+                      strokeWidth={2.3}
+                      testID="circle-detail-pending-clock"
+                    />
+                  ) : undefined
+                }
+                label={statusPill.label}
+                style={styles.circleHeroStatusPill}
+              />
+            ) : null}
+            {isPersonal ? (
+              <HeroInlineMetaSegment separated>
+                <HeroInlineMetaItem
+                  color={theme.successForeground}
+                  icon={
+                    <Lock
+                      color={theme.successForeground}
                       size={15}
                       strokeWidth={2.2}
                     />
-                  )
-                }
-                label={detail.privacy === 'private' ? 'Private' : 'Public'}
-              />
-              <View style={styles.heroInlineMetaDot} />
-              <HeroInlineMetaItem
-                color={theme.textMuted}
-                icon={
-                  <UsersRound
-                    color={theme.textMuted}
-                    size={15}
-                    strokeWidth={2.2}
-                  />
-                }
-                label={`${detail.memberCount}/${detail.maxSize}`}
-              />
-              {detail.viewerRole ? (
-                <>
-                  <View style={styles.heroInlineMetaDot} />
+                  }
+                  label="Personal"
+                />
+              </HeroInlineMetaSegment>
+            ) : (
+              <>
+                <HeroInlineMetaSegment separated>
                   <HeroInlineMetaItem
-                    color={roleMetaColor}
+                    color={theme.textMuted}
                     icon={
-                      <Crown
-                        color={roleMetaColor}
+                      detail.privacy === 'private' ? (
+                        <Lock
+                          color={theme.textMuted}
+                          size={15}
+                          strokeWidth={2.2}
+                        />
+                      ) : (
+                        <Globe2
+                          color={theme.textMuted}
+                          size={15}
+                          strokeWidth={2.2}
+                        />
+                      )
+                    }
+                    label={detail.privacy === 'private' ? 'Private' : 'Public'}
+                  />
+                </HeroInlineMetaSegment>
+                <HeroInlineMetaSegment separated>
+                  <HeroInlineMetaItem
+                    color={theme.textMuted}
+                    icon={
+                      <UsersRound
+                        color={theme.textMuted}
                         size={15}
                         strokeWidth={2.2}
                       />
                     }
-                    label={roleLabel}
+                    label={`${detail.memberCount}/${detail.maxSize}`}
                   />
-                </>
-              ) : null}
-            </>
-          )}
+                </HeroInlineMetaSegment>
+                {detail.viewerRole ? (
+                  <HeroInlineMetaSegment separated>
+                    <HeroInlineMetaItem
+                      color={roleMetaColor}
+                      icon={
+                        <Crown
+                          color={roleMetaColor}
+                          size={15}
+                          strokeWidth={2.2}
+                        />
+                      }
+                      label={roleLabel}
+                    />
+                  </HeroInlineMetaSegment>
+                ) : null}
+              </>
+            )}
+          </View>
+
+          {!statusPill && !detail.viewerRole && !isPersonal ? (
+            <HoystText style={styles.circleHeroPreview} tone="muted">
+              {previewCopy}
+            </HoystText>
+          ) : null}
         </View>
-
-        {!statusPill ? (
-          <HoystText style={styles.circleHeroPreview} tone="muted">
-            {previewCopy}
-          </HoystText>
-        ) : null}
-
-        {primaryAction ? (
-          <View style={styles.circleHeroPrimaryAction}>{primaryAction}</View>
-        ) : null}
       </View>
-    </View>
-  );
-}
 
-function DashboardUtilityAction({
-  icon,
-  label,
-  labelColor,
-  onPress,
-  showChevron = true,
-  supportingText,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  labelColor?: string;
-  onPress?: () => void;
-  showChevron?: boolean;
-  supportingText: string;
-}) {
-  const theme = useHoystTheme();
-  const content = (
-    <View
-      style={[
-        styles.dashboardUtilityFill,
-        {
-          backgroundColor: theme.surfaceSoft,
-          borderColor: theme.borderStrong,
-        },
-      ]}>
-      <View style={styles.dashboardUtilityIcon}>{icon}</View>
-      <View style={styles.dashboardActionCopy}>
-        <HoystText
-          numberOfLines={1}
-          style={[
-            styles.dashboardUtilityLabel,
-            labelColor ? {color: labelColor} : undefined,
-          ]}
-          variant="button">
-          {label}
-        </HoystText>
-        <HoystText numberOfLines={1} tone="muted" variant="caption">
-          {supportingText}
-        </HoystText>
-      </View>
-      {showChevron ? (
-        <ChevronRight color={theme.textSubtle} size={17} strokeWidth={2.2} />
+      {primaryAction ? (
+        <View
+          style={styles.circleHeroPrimaryAction}
+          testID="circle-detail-hero-primary-action">
+          {primaryAction}
+        </View>
       ) : null}
     </View>
-  );
-
-  if (!onPress) {
-    return <View style={styles.dashboardUtilityPressable}>{content}</View>;
-  }
-
-  return (
-    <Pressable
-      accessibilityRole="button"
-      onPress={onPress}
-      style={({pressed}) => [
-        styles.dashboardUtilityPressable,
-        {
-          opacity: pressed ? actionMotion.pressedOpacity : 1,
-          transform: [{scale: pressed ? actionMotion.pressedScale : 1}],
-        },
-      ]}>
-      {content}
-    </Pressable>
   );
 }
 
@@ -598,17 +723,6 @@ function TapInReferenceAction({
   );
 }
 
-function getMemberProgressSubtitle(detail: CircleDetailModel) {
-  const activeMembers = detail.members.filter(
-    member => member.membershipStatus !== 'pending',
-  );
-  const doneCount = activeMembers.filter(
-    member => member.state === 'done',
-  ).length;
-
-  return `${doneCount}/${activeMembers.length} members tapped in`;
-}
-
 function clampProgressPercent(value: number) {
   if (!Number.isFinite(value)) {
     return 0;
@@ -616,6 +730,15 @@ function clampProgressPercent(value: number) {
 
   return Math.max(0, Math.min(100, Math.round(value)));
 }
+
+type CircleDetailWeekCell = {
+  coveredCount?: number;
+  dateKey: string;
+  quantityLabel?: string;
+  quantityValue?: number;
+  state: ProgressDayState;
+  totalCount?: number;
+};
 
 function CircleStatsSection({
   detail,
@@ -626,7 +749,7 @@ function CircleStatsSection({
   detail: CircleDetailModel;
   progressColor: string;
   progressPercent: number;
-  weekCells: React.ComponentProps<typeof WeekProgressStrip>['days'];
+  weekCells: readonly CircleDetailWeekCell[];
 }) {
   const theme = useHoystTheme();
   const normalizedProgressPercent = clampProgressPercent(progressPercent);
@@ -637,177 +760,93 @@ function CircleStatsSection({
     : 0;
   const streakDayLabel = streakValue === 1 ? 'day' : 'days';
   const isPersonal = detail.circleMode === 'personal';
-  const visual = getCircleCategoryVisual(detail.category);
+  const activeMembers = detail.members.filter(
+    member => member.membershipStatus !== 'pending',
+  );
+  const doneCount = activeMembers.filter(
+    member => member.state === 'done',
+  ).length;
   const progressLabel = isPersonal
-    ? 'Personal Progress'
-    : getMemberProgressSubtitle(detail);
-  const streakSurfaceStyle = {
-    backgroundColor: theme.isDark ? 'rgba(255,255,255,0.08)' : '#FFFFFF99',
-    borderColor: theme.isDark ? 'rgba(255,255,255,0.12)' : '#FFFFFF',
-  };
+    ? 'Personal progress'
+    : `${doneCount} of ${activeMembers.length} members tapped in today`;
   const progressTrackSurfaceStyle = {
-    backgroundColor: theme.isDark
-      ? 'rgba(255,255,255,0.14)'
-      : `${visual.accentColor}26`,
+    backgroundColor: theme.isDark ? '#303036' : '#E9E9ED',
   };
 
   return (
     <View style={styles.statsSection} testID="circle-detail-stats-content">
-      <View style={styles.statsTitleRow}>
-        <SectionEyebrow>Today's Progress</SectionEyebrow>
+      <View style={styles.statsSummaryGrid}>
+        <View
+          style={styles.statsProgressSummary}
+          testID="circle-stats-progress">
+          <DSSectionHeading
+            title={isPersonal ? 'Personal progress' : 'Group progress'}
+          />
+          <View style={styles.statsProgressLabelRow}>
+            <HoystText style={styles.statsProgressLabel} tone="muted">
+              {progressLabel}
+            </HoystText>
+            {isPersonal ? (
+              <HoystText
+                style={{color: progressColor}}
+                testID="circle-stats-progress-value"
+                variant="caption">
+                {normalizedProgressPercent}%
+              </HoystText>
+            ) : null}
+          </View>
+        </View>
         <View
           accessibilityLabel={`Streak ${streakValue} ${streakDayLabel}`}
-          style={[styles.statsStreakPill, streakSurfaceStyle]}
+          style={styles.statsStreakPill}
           testID="circle-stats-streak-pill">
-          <MomentumFlameIllustration
-            size={16}
-            testID="circle-stats-streak-icon"
-          />
-          <HoystText
-            allowFontScaling={false}
-            style={[
-              styles.statsStreakPillLabel,
-              {color: theme.streakForeground},
-            ]}
-            testID="circle-stats-streak-label">
-            {`${streakValue} ${streakDayLabel}`}
+          <View style={styles.statsStreakValueRow}>
+            <MomentumFlameIllustration
+              size={16}
+              testID="circle-stats-streak-icon"
+            />
+            <HoystText
+              allowFontScaling={false}
+              style={[
+                styles.statsStreakPillLabel,
+                {color: theme.streakForeground},
+              ]}
+              testID="circle-stats-streak-label">
+              {`${streakValue} ${streakDayLabel}`}
+            </HoystText>
+          </View>
+          <HoystText style={styles.statsStreakCaption} tone="muted">
+            Current streak
           </HoystText>
         </View>
       </View>
-      <View style={styles.statsProgressBlock} testID="circle-stats-progress">
-        <View style={styles.statsProgressLabelRow}>
-          <HoystText tone="muted" variant="caption">
-            {progressLabel}
-          </HoystText>
-          {isPersonal ? (
-            <HoystText
-              style={{color: progressColor}}
-              testID="circle-stats-progress-value"
-              variant="bodyStrong">
-              {normalizedProgressPercent}%
-            </HoystText>
-          ) : null}
-        </View>
-        <View style={[styles.statsProgressTrack, progressTrackSurfaceStyle]}>
-          <View
-            style={[
-              styles.statsProgressFill,
-              {
-                backgroundColor: progressColor,
-                width: `${Math.max(normalizedProgressPercent, 2)}%`,
-              },
-            ]}
-            testID="circle-stats-progress-fill"
-          />
-        </View>
+      <View
+        style={[styles.statsProgressTrack, progressTrackSurfaceStyle]}
+        testID="circle-stats-progress-track">
+        <View
+          style={[
+            styles.statsProgressFill,
+            {
+              backgroundColor: progressColor,
+              width: `${Math.max(normalizedProgressPercent, 2)}%`,
+            },
+          ]}
+          testID="circle-stats-progress-fill"
+        />
       </View>
       <View style={styles.statsWeekHistory} testID="circle-detail-week-history">
-        <WeekProgressStrip
-          compact
-          days={weekCells}
-          showStreak={false}
-          title="LAST 7 DAYS"
-          weekdayLabelLength={3}
-        />
+        <CircleGroupWeekPath days={weekCells} />
       </View>
     </View>
   );
 }
 
-function NudgePanel({
-  isNudging,
-  nudged,
-  onPress,
-  targetCopy,
-}: {
-  isNudging: boolean;
-  nudged: boolean;
-  onPress: () => void;
-  targetCopy: string;
-}) {
-  const theme = useHoystTheme();
-  const title = isNudging
-    ? 'Nudging...'
-    : nudged
-    ? 'Nudge Sent'
-    : 'Send a Nudge';
-  const disabled = isNudging || nudged;
-  const foregroundColor = theme.accentSecondaryForeground;
-
-  return (
-    <Pressable
-      accessibilityLabel={`${title}. ${targetCopy}`}
-      accessibilityRole="button"
-      accessibilityState={{busy: isNudging, disabled}}
-      disabled={disabled}
-      onPress={disabled ? undefined : onPress}
-      testID="circle-detail-nudge-panel"
-      style={({pressed}) => [
-        styles.nudgePanel,
-        {
-          opacity: disabled ? (nudged ? 0.84 : 0.58) : pressed ? 0.94 : 1,
-          transform: [{scale: pressed ? actionMotion.pressedScale : 1}],
-        },
-      ]}>
-      <View
-        testID="circle-detail-nudge-panel-frame"
-        style={[
-          styles.nudgePanelFrame,
-          {
-            backgroundColor: theme.isDark
-              ? 'rgba(255,255,255,0.07)'
-              : '#FFFFFF',
-            borderColor: theme.isDark
-              ? 'rgba(255,255,255,0.14)'
-              : 'rgba(77,88,115,0.10)',
-          },
-        ]}>
-        <View style={styles.nudgePanelContent}>
-          <View
-            testID="circle-detail-nudge-icon"
-            style={[
-              styles.nudgeMarkWrap,
-              {
-                backgroundColor: theme.isDark
-                  ? 'rgba(122,85,255,0.24)'
-                  : 'rgba(122,85,255,0.14)',
-              },
-            ]}>
-            <UserCheck color={foregroundColor} size={18} strokeWidth={2.4} />
-          </View>
-          <View style={styles.nudgeCopy}>
-            <HoystText style={[styles.nudgeTitle, {color: theme.text}]}>
-              {title}
-            </HoystText>
-            <HoystText
-              numberOfLines={1}
-              style={[styles.nudgeSubtitle, {color: theme.textMuted}]}>
-              {targetCopy}
-            </HoystText>
-          </View>
-          <View
-            testID="circle-detail-nudge-action"
-            style={[
-              styles.nudgeActionIcon,
-              {
-                borderColor: theme.isDark
-                  ? 'rgba(255,255,255,0.14)'
-                  : 'rgba(77,88,115,0.10)',
-              },
-            ]}>
-            <ChevronRight color={foregroundColor} size={15} strokeWidth={2.4} />
-          </View>
-        </View>
-      </View>
-    </Pressable>
-  );
-}
-
-export function CircleDetailScreen({
+function CircleDetailScreenContent({
   navigation,
   route,
 }: Props): React.JSX.Element {
   const theme = useHoystTheme();
+  const insets = useSafeAreaInsets();
   const navigateBack = useCallback(() => {
     if (navigation.canGoBack()) {
       navigation.goBack();
@@ -836,9 +875,15 @@ export function CircleDetailScreen({
   const [isThreadVisible, setIsThreadVisible] = useState(false);
   const [threadLoadMoreRequestToken, setThreadLoadMoreRequestToken] =
     useState(0);
+  const [heroTintRegionHeight, setHeroTintRegionHeight] = useState(0);
   const bodyOffsetYRef = useRef<number | undefined>(undefined);
   const threadOffsetYRef = useRef<number | undefined>(undefined);
   const wasNearThreadEndRef = useRef(false);
+  const heroTintScrollY = useRef(new Animated.Value(0)).current;
+  const heroTintTranslateY = useMemo(
+    () => Animated.multiply(heroTintScrollY, -1),
+    [heroTintScrollY],
+  );
   const scrollMetricsRef = useRef({
     contentHeight: 0,
     offsetY: 0,
@@ -907,6 +952,12 @@ export function CircleDetailScreen({
     },
     [updateThreadScrollState],
   );
+  const handleHeroTintLayout = useCallback((event: LayoutChangeEvent) => {
+    const nextHeight = event.nativeEvent.layout.height;
+    setHeroTintRegionHeight(currentHeight =>
+      currentHeight === nextHeight ? currentHeight : nextHeight,
+    );
+  }, []);
   const handleThreadLayout = useCallback(
     (event: LayoutChangeEvent) => {
       threadOffsetYRef.current = event.nativeEvent.layout.y;
@@ -931,6 +982,7 @@ export function CircleDetailScreen({
   const handleScreenScroll = useCallback(
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
       const {contentOffset, contentSize, layoutMeasurement} = event.nativeEvent;
+      heroTintScrollY.setValue(contentOffset.y);
       scrollMetricsRef.current = {
         contentHeight: contentSize.height,
         offsetY: contentOffset.y,
@@ -938,7 +990,7 @@ export function CircleDetailScreen({
       };
       updateThreadScrollState();
     },
-    [updateThreadScrollState],
+    [heroTintScrollY, updateThreadScrollState],
   );
   const nudgeTargetMembers = useMemo(
     () =>
@@ -960,7 +1012,8 @@ export function CircleDetailScreen({
     bodyOffsetYRef.current = undefined;
     threadOffsetYRef.current = undefined;
     wasNearThreadEndRef.current = false;
-  }, [detail?.id]);
+    heroTintScrollY.setValue(0);
+  }, [detail?.id, heroTintScrollY]);
 
   useEffect(() => {
     return subscribeToPublicCircle(route.params.circleId, setPublicCircle, () =>
@@ -1060,7 +1113,6 @@ export function CircleDetailScreen({
   const detailStatusPill = getDetailStatusPill(detail);
   const nudgeTargetCount = detail.nudgeTargetCount ?? nudgeTargetMembers.length;
   const canNudgeTargets = nudgeTargetCount > 0;
-  const nudgeTargetCopy = formatNudgeTargetCount(nudgeTargetCount);
   const joinActionLabel = joinRequested
     ? detail.joinLabel === 'Open seats'
       ? 'Joined'
@@ -1097,7 +1149,7 @@ export function CircleDetailScreen({
     : 'This will undo Progress for this Cycle.';
   const tapInSupportingText = canReviewTodayCheckIn
     ? "Review today's Tap In"
-    : 'Log Progress for this Cycle';
+    : 'Log Progress for this Circle';
   const categoryProgressColor = getCircleCategoryForegroundColor(
     detail.category,
     theme,
@@ -1325,30 +1377,35 @@ export function CircleDetailScreen({
   };
 
   const removeTapInAction = canRemoveTodayCheckIn ? (
-    <DashboardUtilityAction
-      icon={
-        <Trash2 color={theme.dangerForeground} size={17} strokeWidth={2.2} />
-      }
-      labelColor={theme.dangerForeground}
-      label={isRemovingTapIn ? 'Removing...' : removeActionLabel}
-      onPress={isRemovingTapIn ? undefined : confirmRemoveTodayCheckIn}
-      showChevron={false}
-      supportingText="Undo today"
+    <CircleRemoveTapInRow
+      isLoading={isRemovingTapIn}
+      label={removeActionLabel}
+      onPress={confirmRemoveTodayCheckIn}
     />
   ) : null;
-  const memberFooterAction =
+  const memberBelowStripAction =
     isMemberCircle && !isPersonal && !isArchived && canNudgeTargets ? (
-      <View
-        style={styles.memberActionStack}
-        testID="circle-detail-member-actions">
-        <NudgePanel
-          isNudging={isNudging}
-          nudged={nudged}
-          onPress={handleSendNudge}
-          targetCopy={nudgeTargetCopy}
-        />
-      </View>
+      <CircleNudgeAllRow
+        isLoading={isNudging}
+        isSent={nudged}
+        onPress={handleSendNudge}
+        targetCount={nudgeTargetCount}
+      />
     ) : undefined;
+  const memberCountLabel = `${detail.memberCount} ${
+    detail.memberCount === 1 ? 'member' : 'members'
+  } total`;
+  const viewerMember = detail.members.find(member => member.id === user?.uid);
+  const viewerAvatarSource =
+    viewerMember?.avatarImage ??
+    (viewerMember?.avatarUrl
+      ? {uri: viewerMember.avatarUrl}
+      : getProfileAvatarSource(profile));
+  const viewerPresentation = {
+    avatarSource: viewerAvatarSource,
+    initials: viewerMember?.initials ?? getProfileInitials(profile),
+    name: viewerMember?.name ?? profile?.name ?? 'You',
+  };
   const selectedMember = detail.members.find(
     member => member.id === selectedMemberId,
   );
@@ -1403,7 +1460,13 @@ export function CircleDetailScreen({
 
   return (
     <HoystScreen
-      background={<CircleDetailCanvas />}
+      background={
+        <CircleDetailBackground
+          accentColor={categoryBackdropAccent}
+          tintHeight={insets.top + heroTintRegionHeight}
+          tintTranslateY={heroTintTranslateY}
+        />
+      }
       contentContainerStyle={styles.content}
       keyboardAvoiding
       keyboardDismissMode="interactive"
@@ -1414,11 +1477,11 @@ export function CircleDetailScreen({
       padded={false}
       scrollEventThrottle={16}>
       <View style={styles.detailStack}>
-        <CircleDetailTopTint accentColor={categoryBackdropAccent} />
         <CircleDetailHero
           detail={detail}
           onBack={navigateBack}
           onOpenSettings={openCircleSettings}
+          onTintLayout={handleHeroTintLayout}
           primaryAction={
             isMemberCircle && !isArchived ? (
               <TapInReferenceAction
@@ -1472,6 +1535,7 @@ export function CircleDetailScreen({
             <>
               <CircleMemberStrip
                 action={selectedMemberAction}
+                belowStripAction={memberBelowStripAction}
                 inviteAction={
                   !isArchived && canInvite
                     ? {
@@ -1483,10 +1547,9 @@ export function CircleDetailScreen({
                 members={detail.members}
                 onSelectMember={member => setSelectedMemberId(member.id)}
                 selectedMemberId={selectedMemberId}
-                subtitle={getMemberProgressSubtitle(detail)}
+                subtitle={memberCountLabel}
                 viewerUid={user?.uid}
               />
-              {memberFooterAction}
             </>
           ) : null}
 
@@ -1561,12 +1624,23 @@ export function CircleDetailScreen({
               onLayout={handleThreadLayout}
               onShareTapIn={shareFeedTapIn}
               timezone={timezone}
+              viewer={viewerPresentation}
               viewerUid={user.uid}
             />
           ) : null}
         </View>
       </View>
     </HoystScreen>
+  );
+}
+
+export function CircleDetailScreen(props: Props): React.JSX.Element {
+  const appearance = useSettingsStore(state => state.appearance);
+
+  return (
+    <DesignSystemProvider scheme={appearance}>
+      <CircleDetailScreenContent {...props} />
+    </DesignSystemProvider>
   );
 }
 
@@ -1587,16 +1661,13 @@ const styles = StyleSheet.create({
   detailStack: {position: 'relative'},
   bodyStack: {
     gap: 22,
-    paddingHorizontal: 20,
-    paddingTop: 12,
+    paddingHorizontal: 22,
+    paddingTop: 20,
   },
   circleHero: {
-    gap: 12,
-    paddingHorizontal: 20,
-    paddingTop: 8,
+    gap: 4,
   },
   circleDetailTopTint: {
-    height: 300,
     left: 0,
     position: 'absolute',
     right: 0,
@@ -1609,14 +1680,14 @@ const styles = StyleSheet.create({
     backgroundColor: '#FAFAF7',
   },
   circleHeroCategory: {
-    fontSize: 10,
-    fontWeight: '800',
+    fontSize: 11,
+    fontWeight: '600',
     letterSpacing: 0.6,
-    lineHeight: 12,
+    lineHeight: 15,
   },
   circleHeroCommitment: {
-    fontSize: 15,
-    fontWeight: '600',
+    fontSize: 14,
+    fontWeight: '400',
     lineHeight: 20,
   },
   circleHeroIdentityCopy: {
@@ -1652,18 +1723,18 @@ const styles = StyleSheet.create({
   circleHeroNavTitle: {
     flex: 1,
     fontSize: 17,
-    fontWeight: '800',
+    fontWeight: '600',
     letterSpacing: 0,
     lineHeight: 21,
     textAlign: 'center',
   },
   circleHeroPreview: {
     fontSize: 14,
-    fontWeight: '600',
-    lineHeight: 19,
+    fontWeight: '400',
+    lineHeight: 20,
   },
   circleHeroPrimaryAction: {
-    marginTop: 2,
+    paddingHorizontal: 22,
   },
   circleHeroStatusPill: {
     flexShrink: 1,
@@ -1674,14 +1745,18 @@ const styles = StyleSheet.create({
   circleHeroContent: {
     gap: 10,
   },
-  circleHeroTitle: {
-    fontSize: 20,
-    fontWeight: '800',
-    letterSpacing: 0,
-    lineHeight: 24,
+  circleHeroTintRegion: {
+    gap: 12,
+    paddingBottom: 8,
+    paddingHorizontal: 22,
+    paddingTop: 8,
+    position: 'relative',
   },
-  memberActionStack: {
-    gap: 10,
+  circleHeroTitle: {
+    fontSize: 24,
+    fontWeight: '600',
+    letterSpacing: 0,
+    lineHeight: 29,
   },
   heroPill: {
     alignItems: 'center',
@@ -1695,15 +1770,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 0,
   },
-  heroIdentityPill: {
-    flexGrow: 1,
-    minWidth: 104,
-  },
-  heroInlineMetaDot: {
-    backgroundColor: 'rgba(142,147,176,0.42)',
-    borderRadius: 2,
-    height: 4,
-    width: 4,
+  heroInlineMetaDivider: {
+    height: 16,
+    width: StyleSheet.hairlineWidth,
   },
   heroInlineMetaIcon: {
     alignItems: 'center',
@@ -1719,18 +1788,17 @@ const styles = StyleSheet.create({
   },
   heroInlineMetaLabel: {
     flexShrink: 1,
-    fontSize: 13,
-    fontWeight: '500',
+    fontSize: 12,
+    fontWeight: '400',
     letterSpacing: 0,
-    lineHeight: 17,
+    lineHeight: 16,
   },
-  heroInlineMetaRow: {
+  heroInlineMetaSegment: {
     alignItems: 'center',
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 9,
-    paddingHorizontal: 2,
-    width: '100%',
+    flexShrink: 1,
+    gap: 8,
+    minWidth: 0,
   },
   heroPillIcon: {
     alignItems: 'center',
@@ -1743,43 +1811,95 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   statsSection: {
-    gap: 14,
+    gap: 8,
   },
   statsWeekHistory: {
     paddingTop: 8,
   },
-  statsProgressBlock: {
-    gap: 8,
+  statsProgressSummary: {
+    flex: 1,
+    gap: 4,
+    minWidth: 0,
   },
   statsProgressFill: {
     borderRadius: radius.pill,
-    height: 10,
+    height: 5,
   },
   statsProgressLabelRow: {
     alignItems: 'center',
     flexDirection: 'row',
     justifyContent: 'space-between',
   },
+  statsProgressLabel: {
+    flexShrink: 1,
+    fontSize: 12,
+    fontWeight: '400',
+    lineHeight: 16,
+  },
   statsProgressTrack: {
     borderRadius: radius.pill,
-    height: 10,
+    height: 5,
     overflow: 'hidden',
   },
   statsStreakPill: {
-    alignItems: 'center',
-    borderRadius: 20,
-    borderWidth: 1,
-    flexDirection: 'row',
-    gap: 5,
-    paddingHorizontal: 11,
-    paddingLeft: 8,
-    paddingVertical: 4,
+    alignItems: 'flex-start',
+    flexShrink: 0,
+    gap: 2,
   },
   statsStreakPillLabel: {
-    fontSize: 13,
-    fontWeight: '700',
+    fontSize: 18,
+    fontWeight: '600',
     letterSpacing: 0,
-    lineHeight: 16,
+    lineHeight: 22,
+  },
+  statsStreakCaption: {
+    fontSize: 11,
+    fontWeight: '400',
+    lineHeight: 15,
+    marginLeft: 24,
+  },
+  statsStreakValueRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 8,
+  },
+  statsSummaryGrid: {
+    alignItems: 'flex-start',
+    flexDirection: 'row',
+    gap: 12,
+    justifyContent: 'space-between',
+  },
+  nudgeAllIconTile: {
+    alignItems: 'center',
+    borderRadius: 10,
+    height: 32,
+    justifyContent: 'center',
+    width: 32,
+  },
+  nudgeAllRow: {
+    width: '100%',
+  },
+  nudgeAllTrailing: {
+    alignItems: 'center',
+    height: 44,
+    justifyContent: 'center',
+    width: 44,
+  },
+  removeTapInIconTile: {
+    alignItems: 'center',
+    borderRadius: 10,
+    height: 32,
+    justifyContent: 'center',
+    width: 32,
+  },
+  removeTapInRow: {
+    width: '100%',
+  },
+  removeTapInTrailing: {
+    alignItems: 'center',
+    height: 44,
+    justifyContent: 'center',
+    width: 44,
   },
   topBar: {
     alignItems: 'center',
@@ -1808,113 +1928,7 @@ const styles = StyleSheet.create({
     lineHeight: 26,
     textAlign: 'center',
   },
-  heroTaskDescription: {
-    maxWidth: '100%',
-  },
-  heroTaskPrimary: {
-    flexShrink: 1,
-    fontSize: 15,
-    fontWeight: '600',
-    letterSpacing: 0,
-    lineHeight: 20,
-  },
-  nudgePanel: {
-    alignSelf: 'stretch',
-    borderRadius: radius.md,
-    width: '100%',
-  },
-  nudgePanelFrame: {
-    alignSelf: 'stretch',
-    borderRadius: radius.md,
-    borderWidth: 1,
-    minHeight: 54,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    width: '100%',
-  },
-  nudgePanelContent: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: 10,
-    minHeight: 40,
-    width: '100%',
-  },
-  nudgeActionIcon: {
-    alignItems: 'center',
-    borderRadius: 14,
-    borderWidth: 1,
-    height: 28,
-    justifyContent: 'center',
-    width: 28,
-  },
-  nudgeCopy: {
-    flex: 1,
-    gap: 1,
-    minWidth: 0,
-  },
-  nudgeMarkWrap: {
-    alignItems: 'center',
-    borderRadius: 12,
-    height: 36,
-    justifyContent: 'center',
-    width: 36,
-  },
-  nudgeSubtitle: {
-    fontSize: 13,
-    fontWeight: '600',
-    letterSpacing: 0,
-    lineHeight: 17,
-    opacity: 0.88,
-  },
-  nudgeTitle: {
-    fontSize: 15,
-    fontWeight: '800',
-    letterSpacing: 0,
-    lineHeight: 19,
-  },
-  dashboardUtilityPressable: {
-    alignSelf: 'stretch',
-    borderRadius: radius.pill,
-    width: '100%',
-  },
-  dashboardUtilityFill: {
-    alignItems: 'center',
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    flexDirection: 'row',
-    gap: 9,
-    minHeight: 54,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    width: '100%',
-  },
-  dashboardUtilityIcon: {
-    alignItems: 'center',
-    height: 28,
-    justifyContent: 'center',
-    width: 28,
-  },
-  dashboardActionCopy: {
-    flex: 1,
-    gap: 2,
-    minWidth: 0,
-  },
-  dashboardUtilityLabel: {
-    fontSize: 14,
-    lineHeight: 18,
-  },
   publicActionStack: {
     gap: 10,
-  },
-  statsSeeAll: {
-    fontSize: 14,
-    fontWeight: '800',
-    letterSpacing: 0,
-    lineHeight: 18,
-  },
-  statsTitleRow: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
   },
 });

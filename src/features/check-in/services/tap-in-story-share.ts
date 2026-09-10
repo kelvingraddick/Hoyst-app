@@ -2,22 +2,27 @@ import type {RefObject} from 'react';
 import {NativeModules, TurboModuleRegistry, type View} from 'react-native';
 import type {ShareSingleOptions, Social} from 'react-native-share';
 
-import type {CheckInStatus, CircleDetailModel} from '../../../types/models';
+import type {
+  CheckInStatus,
+  CircleDetailModel,
+  CircleMemberStatus,
+  CommitmentType,
+} from '../../../types/models';
 import type {ProfileSummary} from '../../profile/services/profile-summary-service';
 
 export type TapInStoryShareStatus = Exclude<CheckInStatus, 'rest'> | undefined;
-export type TapInStoryTemplateId =
-  | 'designedPost'
-  | 'photoOverlay'
-  | 'transparentStats';
+export type TapInStoryTemplateId = 'tapInMoment' | 'transparentOverlay';
 
 export type TapInStoryShareData = {
+  category: string;
   circleTitle: string;
+  commitmentType?: CommitmentType;
   ctaLabel: string;
   commitment: string;
   hasInviteUrl: boolean;
   inviteUrl?: string;
   memberCount: number;
+  members: CircleMemberStatus[];
   note: string;
   photoUri?: string;
   progressLabel: string;
@@ -31,9 +36,12 @@ type TapInStoryShareDetail = Pick<CircleDetailModel, 'commitment' | 'title'> &
   Partial<
     Pick<
       CircleDetailModel,
+      | 'category'
+      | 'commitmentType'
       | 'completionRate'
       | 'inviteUrl'
       | 'memberCount'
+      | 'members'
       | 'periodTapInCount'
       | 'progressLabel'
       | 'streakDays'
@@ -51,7 +59,7 @@ type BuildTapInStoryShareDataInput = {
 const fallbackCircleTitle = 'Hoyst Circle';
 const fallbackCommitment = "Today's Tap In";
 const fallbackNote = 'No note added. Still counted.';
-const fallbackCtaLabel = 'Build your Progress on Hoyst';
+const fallbackCtaLabel = 'Join my Circle on Hoyst';
 const unavailableMessage =
   'Story sharing is not available in this app build yet. Rebuild the app, then try again.';
 const imageClipboardUnavailableMessage =
@@ -103,18 +111,9 @@ export function canShareTapInStory(status: TapInStoryShareStatus) {
 }
 
 export function getAvailableTapInStoryTemplates(
-  story: TapInStoryShareData,
+  _story: TapInStoryShareData,
 ): TapInStoryTemplateId[] {
-  const templates: TapInStoryTemplateId[] = [
-    'designedPost',
-    'transparentStats',
-  ];
-
-  if (story.photoUri) {
-    return ['photoOverlay', ...templates];
-  }
-
-  return templates;
+  return ['tapInMoment', 'transparentOverlay'];
 }
 
 export function getTapInStoryClipboardText(story: TapInStoryShareData) {
@@ -137,6 +136,7 @@ export function buildTapInStoryShareData({
   profileSummary,
 }: BuildTapInStoryShareDataInput): TapInStoryShareData {
   const circleTitle = cleanText(detail?.title, fallbackCircleTitle);
+  const category = cleanText(detail?.category, 'General');
   const commitment = cleanText(detail?.commitment, fallbackCommitment);
   const cleanNote = cleanText(note, fallbackNote);
   const progressLabel =
@@ -154,6 +154,10 @@ export function buildTapInStoryShareData({
       ? 'Momentum saved'
       : cleanText(detail?.streakLabel, 'Momentum saved');
   const memberCount = cleanCount(detail?.memberCount);
+  const members =
+    detail?.members
+      ?.filter(member => member.membershipStatus !== 'pending')
+      .slice(0, 3) ?? [];
   const totalTapIns = cleanCount(
     profileSummary?.totalTapIns ?? detail?.periodTapInCount,
   );
@@ -164,12 +168,15 @@ export function buildTapInStoryShareData({
     : `I tapped in with ${circleTitle} on Hoyst.`;
 
   return {
+    category,
     circleTitle,
+    ...(detail?.commitmentType ? {commitmentType: detail.commitmentType} : {}),
     ctaLabel,
     commitment,
     hasInviteUrl: Boolean(inviteUrl),
     inviteUrl,
     memberCount,
+    members,
     note: cleanNote,
     photoUri,
     progressLabel,
@@ -336,7 +343,7 @@ export async function shareTapInStoryToInstagram({
     }
 
     const storyAssetOptions =
-      templateId === 'transparentStats'
+      templateId === 'transparentOverlay'
         ? {
             backgroundBottomColor: '#000000',
             backgroundTopColor: '#000000',

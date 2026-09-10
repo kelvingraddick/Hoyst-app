@@ -6,7 +6,6 @@ import {
   Bell,
   Clock3,
   Ellipsis,
-  LockKeyhole,
   Sparkles,
   Check,
   TriangleAlert,
@@ -20,7 +19,7 @@ import {HoystText} from './HoystText';
 import {HoyOrb} from './HoyOrb';
 
 export const homeHoyVisuals = {
-  locked: {tint: '#B4BCD1', accent: '#7785A2', Icon: LockKeyhole},
+  getting_started: {tint: '#C8B5FA', accent: '#9470E8', Icon: Sparkles},
   thinking: {tint: '#C8B5FA', accent: '#9171DB', Icon: Ellipsis},
   momentum_building: {tint: '#C8B5FA', accent: '#9470E8', Icon: Sparkles},
   momentum_strong: {tint: '#9CDEFF', accent: '#18B9FF', Icon: Sparkles},
@@ -202,6 +201,7 @@ export function HomeHeroHeader({
                   'momentum_strong',
                   'momentum_peak',
                   'celebrating',
+                  'getting_started',
                 ].includes(state) ? (
                   <Svg width={16} height={16} viewBox="0 0 16 16">
                     <Path
@@ -213,7 +213,7 @@ export function HomeHeroHeader({
                   <Icon color={visual.accent} size={16} strokeWidth={1.8} />
                 )}
               </View>
-              {state !== 'locked' && state !== 'thinking' && (
+              {state !== 'thinking' && (
                 <View style={styles.decorRight}>
                   {state === 'momentum_peak' ? (
                     <Check size={16} color={visual.accent} strokeWidth={2} />

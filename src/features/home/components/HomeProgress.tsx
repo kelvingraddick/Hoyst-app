@@ -152,7 +152,7 @@ export function HomeProgress({
 }) {
   const theme = useHoystTheme();
   const accent = theme.isDark ? '#B89FFF' : theme.accentForeground;
-  const statsSurface = theme.isDark ? '#121212' : '#FAFAF7';
+  const statsSurface = theme.isDark ? '#121212' : '#FFFFFF';
   const statsShadow = theme.isDark ? '#000000' : '#92723E';
   return (
     <View style={styles.progress}>
@@ -200,7 +200,7 @@ export function HomeDailyActionProgress({
   progress: ReturnType<typeof getHomeDailyProgress>;
 }) {
   const theme = useHoystTheme();
-  const accent = theme.isDark ? '#B89FFF' : theme.accentForeground;
+  const accent = brandColors.blue;
   const trackSurface = theme.isDark ? '#303036' : '#E9E9ED';
   const label = getHomeDailyActionProgressLabel(progress);
 

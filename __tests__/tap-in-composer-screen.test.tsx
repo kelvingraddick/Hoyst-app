@@ -1,10 +1,11 @@
 import React from 'react';
 import {Alert, Image, Pressable, StyleSheet} from 'react-native';
+import {Stop} from 'react-native-svg';
 import renderer, {act} from 'react-test-renderer';
 
 import {HoystTapInMark} from '../src/design/components/HoystTapInMark';
-import {CommitmentTypePill} from '../src/design/components/CommitmentTypeVisual';
-import {TapInActionButton} from '../src/design/components/TapInActionButton';
+import {DSButton} from '../src/design/system';
+import {ComposerDisclosure} from '../src/features/check-in/components/TapInComposerPresentation';
 import {TapInComposerScreen} from '../src/features/check-in/screens/TapInComposerScreen';
 import {useHoyFeedbackStore} from '../src/store/hoy-feedback-store';
 import type {CircleDetailModel} from '../src/types/models';
@@ -47,6 +48,7 @@ const baseMockDetail: CircleDetailModel = {
   viewerRemainingTapIns: 2,
   viewerTodayStatus: 'rest',
 };
+let mockLoadMode: 'ready' | 'loading' | 'error' = 'ready';
 let mockDetail: CircleDetailModel = {...baseMockDetail};
 
 jest.mock('@react-native-community/blur', () => {
@@ -119,11 +121,18 @@ jest.mock('../src/features/check-in/services/check-in-service', () => ({
 jest.mock('../src/features/home/services/home-data-service', () => ({
   subscribeToMemberCircleDetail: ({
     onDetail,
+    onError,
   }: {
     onDetail: (detail: typeof mockDetail) => void;
+    onError: () => void;
   }) => {
     mockSubscribeToMemberCircleDetail();
-    onDetail(mockDetail);
+    if (mockLoadMode === 'ready') {
+      onDetail(mockDetail);
+    }
+    if (mockLoadMode === 'error') {
+      onError();
+    }
     return jest.fn();
   },
 }));
@@ -148,6 +157,7 @@ function renderComposerScreen() {
           goBack: jest.fn(),
           navigate: jest.fn(),
           replace: jest.fn(),
+          setOptions: jest.fn(),
         } as never
       }
       route={
@@ -185,6 +195,7 @@ function findPressableContainingText(
 describe('TapInComposerScreen', () => {
   beforeEach(() => {
     useHoyFeedbackStore.setState({pendingTapInCelebration: undefined});
+    mockLoadMode = 'ready';
     mockDetail = {...baseMockDetail};
     mockSubmitTapIn.mockResolvedValue({
       checkInId: 'user-1',
@@ -207,6 +218,76 @@ describe('TapInComposerScreen', () => {
     jest.clearAllMocks();
   });
 
+  it('prevents duplicate submissions while a save is pending and permits retry after failure', async () => {
+    let reject!: (error: Error) => void;
+    mockSubmitTapIn.mockImplementationOnce(
+      () =>
+        new Promise((_resolve, fail) => {
+          reject = fail;
+        }),
+    );
+    jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    let tree!: renderer.ReactTestRenderer;
+    await act(async () => {
+      tree = renderComposerScreen();
+    });
+    const confirm = tree.root
+      .findAllByType(DSButton)
+      .find(button => button.props.label === 'Tap In')!.props.onPress;
+    await act(async () => {
+      confirm();
+      confirm();
+    });
+    expect(mockSubmitTapIn).toHaveBeenCalledTimes(1);
+    expect(
+      tree.root.findAll(
+        node => node.props.testID === 'tap-in-composer-action-glow',
+      ),
+    ).toHaveLength(0);
+    await act(async () => {
+      reject(new Error('Offline'));
+    });
+    expect(Alert.alert).toHaveBeenCalled();
+    await act(async () => {
+      tree.root
+        .findAllByType(DSButton)
+        .find(button => button.props.label === 'Tap In')!
+        .props.onPress();
+    });
+    expect(mockSubmitTapIn).toHaveBeenCalledTimes(2);
+  });
+
+  it('shows unresolved loading without actions, then retries unavailable details', async () => {
+    mockLoadMode = 'loading';
+    let tree!: renderer.ReactTestRenderer;
+    await act(async () => {
+      tree = renderComposerScreen();
+    });
+    expect(JSON.stringify(tree.toJSON())).toContain('Loading');
+    expect(
+      tree.root.findAll(
+        node => node.props.testID === 'tap-in-composer-confirm-action',
+      ),
+    ).toHaveLength(0);
+    await act(async () => {
+      tree.unmount();
+    });
+    mockLoadMode = 'error';
+    await act(async () => {
+      tree = renderComposerScreen();
+    });
+    const calls = mockSubscribeToMemberCircleDetail.mock.calls.length;
+    mockLoadMode = 'ready';
+    await act(async () => {
+      tree.root
+        .findAllByType(DSButton)
+        .find(button => button.props.label === 'Try again')!
+        .props.onPress();
+    });
+    expect(mockSubscribeToMemberCircleDetail).toHaveBeenCalledTimes(calls + 1);
+    expect(JSON.stringify(tree.toJSON())).toContain('Morning Movers');
+  });
+
   it('passes circle snapshot params to the complete screen after submit', async () => {
     let tree: renderer.ReactTestRenderer | undefined;
 
@@ -216,67 +297,25 @@ describe('TapInComposerScreen', () => {
 
     const navigation =
       tree!.root.findByType(TapInComposerScreen).props.navigation;
-    expect(tree!.root.findByProps({testID: 'tap-in-composer-logo'}).type).toBe(
-      HoystTapInMark,
-    );
+    expect(
+      tree!.root.findByProps({testID: 'tap-in-composer-logo'}).props.size,
+    ).toBe(52);
     expect(
       tree!.root.findByProps({testID: 'tap-in-composer-circle-title'}).props
-        .children,
-    ).toBe('Morning Movers');
-    expect(
-      tree!.root.findByProps({testID: 'tap-in-composer-commitment'}).props
-        .children,
-    ).toBe('Move for 30 minutes');
-    expect(
-      StyleSheet.flatten(
-        tree!.root.findByProps({testID: 'tap-in-composer-close-row'}).props
-          .style,
-      ),
-    ).toEqual(
-      expect.objectContaining({height: 54, marginBottom: -38, paddingTop: 16}),
-    );
-    expect(JSON.stringify(tree!.toJSON())).not.toContain('Circle Commitment');
-    const confirmButton = tree!.root
-      .findAllByType(TapInActionButton)
-      .find(button => button.props.label === 'Tap In');
-    const actionFooter = tree!.root.findByProps({
-      testID: 'tap-in-composer-action-footer',
-    });
-
-    expect(confirmButton?.props.variant).toBe('primary');
-    expect(confirmButton?.props.emphasis).toBe('spectrumBreathing');
-    expect(
-      actionFooter
-        .findAllByType(TapInActionButton)
-        .map(button => button.props.label),
-    ).toEqual(['Tap In']);
-    expect(StyleSheet.flatten(actionFooter.props.style)).toEqual(
-      expect.objectContaining({gap: 24}),
-    );
-    expect(
-      StyleSheet.flatten(
-        tree!.root.findByProps({
-          testID: 'tap-in-composer-action-footer-position',
-        }).props.style,
-      ),
-    ).toEqual(
-      expect.objectContaining({
-        flexShrink: 0,
-        paddingBottom: 8,
-        paddingTop: 10,
-      }),
-    );
-    expect(
-      StyleSheet.flatten(
-        tree!.root.findByProps({
-          testID: 'tap-in-composer-action-footer-position',
-        }).props.style,
-      ).position,
+        .numberOfLines,
     ).toBeUndefined();
     expect(
-      tree!.root.findByType(CommitmentTypePill).props.commitmentType,
-    ).toBe('build');
-
+      tree!.root
+        .findByProps({testID: 'tap-in-composer-category-fade'})
+        .findAllByType(Stop)
+        .map(stop => stop.props.stopColor),
+    ).toEqual(['#E7F8EF', '#FAFAF7']);
+    const confirmButton = tree!.root
+      .findAllByType(DSButton)
+      .find(button => button.props.label === 'Tap In');
+    expect(
+      tree!.root.findByProps({testID: 'tap-in-composer-action-glow'}),
+    ).toBeTruthy();
     await act(async () => {
       confirmButton!.props.onPress();
       await Promise.resolve();
@@ -302,9 +341,7 @@ describe('TapInComposerScreen', () => {
       streakDays: 4,
       streakLabel: '4d streak',
     });
-    expect(
-      useHoyFeedbackStore.getState().pendingTapInCelebration,
-    ).toEqual({
+    expect(useHoyFeedbackStore.getState().pendingTapInCelebration).toEqual({
       circleId: 'circle-1',
       dateKey: '2026-05-29',
       uid: 'user-1',
@@ -360,10 +397,10 @@ describe('TapInComposerScreen', () => {
 
     const output = JSON.stringify(tree!.toJSON());
     const confirmButton = tree!.root
-      .findAllByType(TapInActionButton)
+      .findAllByType(DSButton)
       .find(button => button.props.label === 'Tap In');
 
-    expect(output).toContain('COMMITMENT COMPLETE');
+    expect(output).toContain('Commitment complete');
     expect(confirmButton).toBeTruthy();
     expect(confirmButton?.props.disabled).toBe(false);
   });
@@ -380,15 +417,21 @@ describe('TapInComposerScreen', () => {
     });
 
     const confirmButton = tree!.root
-      .findAllByType(TapInActionButton)
+      .findAllByType(DSButton)
       .find(button => button.props.label === 'Tap In');
-    const typePill = tree!.root.findByType(CommitmentTypePill);
     const navigation =
       tree!.root.findByType(TapInComposerScreen).props.navigation;
 
     expect(confirmButton).toBeTruthy();
-    expect(typePill.props.commitmentType).toBe('avoid');
-    expect(JSON.stringify(tree!.toJSON())).not.toContain("Today's Progress");
+    expect(
+      tree!.root.findByProps({testID: 'tap-in-composer-category-label'}).props
+        .children,
+    ).toBe('FITNESS');
+    expect(
+      tree!.root.findByProps({testID: 'tap-in-composer-commitment-type'}).props
+        .children,
+    ).toBe(' · AVOID');
+    expect(JSON.stringify(tree!.toJSON())).not.toContain("Today's progress");
 
     await act(async () => {
       confirmButton!.props.onPress();
@@ -418,14 +461,19 @@ describe('TapInComposerScreen', () => {
     });
 
     const confirmButton = tree!.root
-      .findAllByType(TapInActionButton)
+      .findAllByType(DSButton)
       .find(button => button.props.label === 'Log Progress');
 
     expect(confirmButton).toBeTruthy();
-    expect(tree!.root.findByType(CommitmentTypePill).props.commitmentType).toBe(
-      'limit',
-    );
-    expect(JSON.stringify(tree!.toJSON())).toContain("Today's Progress");
+    expect(
+      tree!.root.findByProps({testID: 'tap-in-composer-category-label'}).props
+        .children,
+    ).toBe('FITNESS');
+    expect(
+      tree!.root.findByProps({testID: 'tap-in-composer-commitment-type'}).props
+        .children,
+    ).toBe(' · LIMIT');
+    expect(JSON.stringify(tree!.toJSON())).toContain("Today's amount");
   });
 
   it('uses Update Progress when reopening a saved Limit quantity', async () => {
@@ -451,7 +499,7 @@ describe('TapInComposerScreen', () => {
     });
 
     const confirmButton = tree!.root
-      .findAllByType(TapInActionButton)
+      .findAllByType(DSButton)
       .find(button => button.props.label === 'Update Progress');
 
     expect(confirmButton).toBeTruthy();
@@ -491,7 +539,7 @@ describe('TapInComposerScreen', () => {
     const navigation =
       tree!.root.findByType(TapInComposerScreen).props.navigation;
     const progressButton = tree!.root
-      .findAllByType(TapInActionButton)
+      .findAllByType(DSButton)
       .find(button => button.props.label === 'Log Progress');
 
     expect(progressButton).toBeTruthy();
@@ -530,9 +578,7 @@ describe('TapInComposerScreen', () => {
         unitLabel: 'pages',
       }),
     );
-    expect(
-      useHoyFeedbackStore.getState().pendingTapInCelebration,
-    ).toEqual({
+    expect(useHoyFeedbackStore.getState().pendingTapInCelebration).toEqual({
       circleId: 'circle-1',
       dateKey: '2026-05-29',
       uid: 'user-1',
@@ -574,7 +620,7 @@ describe('TapInComposerScreen', () => {
     }
 
     const progressButton = tree!.root
-      .findAllByType(TapInActionButton)
+      .findAllByType(DSButton)
       .find(button => button.props.label === 'Log Progress');
 
     await act(async () => {
@@ -626,10 +672,10 @@ describe('TapInComposerScreen', () => {
       accessibilityLabel: 'Increase quantity',
     });
     const updateButton = tree!.root
-      .findAllByType(TapInActionButton)
+      .findAllByType(DSButton)
       .find(button => button.props.label === 'Update Progress');
 
-    expect(JSON.stringify(tree!.toJSON())).toContain("Today's Progress");
+    expect(JSON.stringify(tree!.toJSON())).toContain("Today's progress");
     expect(updateButton?.props.disabled).toBe(false);
 
     await act(async () => {
@@ -706,7 +752,7 @@ describe('TapInComposerScreen', () => {
     });
 
     const updateButton = tree!.root
-      .findAllByType(TapInActionButton)
+      .findAllByType(DSButton)
       .find(button => button.props.label === 'Update Progress');
 
     await act(async () => {
@@ -715,9 +761,7 @@ describe('TapInComposerScreen', () => {
       await Promise.resolve();
     });
 
-    expect(
-      useHoyFeedbackStore.getState().pendingTapInCelebration,
-    ).toEqual({
+    expect(useHoyFeedbackStore.getState().pendingTapInCelebration).toEqual({
       circleId: 'circle-1',
       dateKey: '2026-05-29',
       uid: 'user-1',
@@ -763,7 +807,7 @@ describe('TapInComposerScreen', () => {
     });
 
     const updateButton = tree!.root
-      .findAllByType(TapInActionButton)
+      .findAllByType(DSButton)
       .find(button => button.props.label === 'Update Progress');
 
     await act(async () => {
@@ -806,20 +850,20 @@ describe('TapInComposerScreen', () => {
 
     const navigation =
       tree!.root.findByType(TapInComposerScreen).props.navigation;
-    const actionButtons = tree!.root.findAllByType(TapInActionButton);
+    const actionButtons = tree!.root.findAllByType(DSButton);
     const updateButton = actionButtons.find(
       button => button.props.label === 'Update Progress',
     );
-    const removeButton = actionButtons.find(
-      button => button.props.label === 'Remove Tap In',
-    );
+    const removeButton = tree!.root.findByProps({
+      testID: 'tap-in-composer-remove-action',
+    });
 
-    expect(JSON.stringify(tree!.toJSON())).toContain("Today's Progress");
+    expect(JSON.stringify(tree!.toJSON())).toContain("Today's progress");
     expect(updateButton).toBeTruthy();
-    expect(removeButton?.props.variant).toBe('dangerOutline');
+    expect(removeButton.props.tone).toBe('danger');
 
     await act(async () => {
-      removeButton!.props.onPress();
+      removeButton.props.onPress();
     });
 
     expect(alertSpy).toHaveBeenCalledWith(
@@ -939,33 +983,33 @@ describe('TapInComposerScreen', () => {
     const output = JSON.stringify(tree!.toJSON());
     const navigation =
       tree!.root.findByType(TapInComposerScreen).props.navigation;
-    const actionButtons = tree!.root.findAllByType(TapInActionButton);
-    const shareButton = actionButtons.find(
-      button => button.props.label === 'Share Story',
-    );
-    const removeButton = actionButtons.find(
-      button => button.props.label === 'Remove Tap In',
-    );
+    const shareButton = tree!.root.findByProps({
+      testID: 'tap-in-composer-share-story',
+    });
+    const removeButton = tree!.root.findByProps({
+      testID: 'tap-in-composer-remove-action',
+    });
 
-    expect(output).toContain('SAVED TODAY');
+    expect(output).toContain('Saved today');
     expect(output).toContain('Morning Movers');
     expect(output).toContain("Today's proof");
     expect(output).not.toContain('Already tapped in');
     expect(output).toContain('No note added. Your Tap In still counts.');
     expect(tree!.root.findAllByType(HoystTapInMark).length).toBeGreaterThan(0);
-    expect(shareButton?.props.variant).toBe('accentOutline');
-    expect(removeButton?.props.variant).toBe('dangerOutline');
-    expect(removeButton?.props.disabled).toBe(false);
+    expect(shareButton.props.title).toBe('Share Story');
+    expect(removeButton.props.tone).toBe('danger');
+    expect(removeButton.props.disabled).toBe(false);
     expect(
-      actionButtons
-        .map(button => button.props.label)
-        .filter((label: string) =>
-          ['Share Story', 'Remove Tap In'].includes(label),
+      tree!.root
+        .findAllByType(ComposerDisclosure)
+        .map(action => action.props.title)
+        .filter((title: string) =>
+          ['Share Story', 'Remove Tap In'].includes(title),
         ),
     ).toEqual(['Share Story', 'Remove Tap In']);
 
     await act(async () => {
-      shareButton!.props.onPress();
+      shareButton.props.onPress();
     });
 
     expect(navigation.navigate).toHaveBeenCalledWith('TapInStoryShare', {
@@ -1009,9 +1053,9 @@ describe('TapInComposerScreen', () => {
     const proofImage = tree!.root.findByProps({
       testID: 'tap-in-view-proof-image',
     });
-    const shareButton = tree!.root
-      .findAllByType(TapInActionButton)
-      .find(button => button.props.label === 'Share Story');
+    const shareButton = tree!.root.findByProps({
+      testID: 'tap-in-composer-share-story',
+    });
 
     expect(output).toContain('Slept eight hours and woke up steady.');
     expect(proofImage.type).toBe(Image);
@@ -1023,7 +1067,7 @@ describe('TapInComposerScreen', () => {
     ).toBeTruthy();
 
     await act(async () => {
-      shareButton!.props.onPress();
+      shareButton.props.onPress();
     });
 
     expect(navigation.navigate).toHaveBeenCalledWith('TapInStoryShare', {
@@ -1058,7 +1102,7 @@ describe('TapInComposerScreen', () => {
 
     const output = JSON.stringify(tree!.toJSON());
 
-    expect(output).toContain("Today's Progress");
+    expect(output).toContain("Today's progress");
     expect(output).not.toContain('Optional Note');
     expect(output).not.toContain('Add Photo');
     expect(output).not.toContain('Take Photo');
@@ -1079,12 +1123,6 @@ describe('TapInComposerScreen', () => {
     });
 
     expect(tree!.root.findByProps({testID: 'photo-picker-add'})).toBeTruthy();
-
-    const photoButton = tree!.root
-      .findAllByType(TapInActionButton)
-      .find(button => button.props.label === 'Add Photo');
-
-    expect(photoButton?.props.variant).toBe('surface');
 
     await act(async () => {
       tree!.root.findByProps({testID: 'photo-picker-add'}).props.onPress();
@@ -1119,7 +1157,7 @@ describe('TapInComposerScreen', () => {
     const navigation =
       tree!.root.findByType(TapInComposerScreen).props.navigation;
     const submitButton = tree!.root
-      .findAllByType(TapInActionButton)
+      .findAllByType(DSButton)
       .find(button => button.props.label === 'Tap In');
 
     await act(async () => {

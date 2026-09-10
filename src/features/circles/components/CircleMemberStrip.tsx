@@ -1,4 +1,4 @@
-import React from 'react';
+import React, {type ReactNode} from 'react';
 import {Pressable, ScrollView, StyleSheet, View} from 'react-native';
 import {ArrowUp, Check, UserPlus} from 'lucide-react-native';
 
@@ -9,10 +9,7 @@ import {useHoystTheme} from '../../../design/theme/useHoystTheme';
 import {GradientRing} from '../../../design/components/GradientRing';
 import {HoystText} from '../../../design/components/HoystText';
 import {LayeredAvatar} from '../../../design/components/LayeredAvatar';
-import {
-  SectionEyebrow,
-  SectionEyebrowTrailing,
-} from '../../../design/components/SectionEyebrow';
+import {DSSectionHeading} from '../../../design/system';
 
 type MemberInviteAction = {
   accessibilityLabel: string;
@@ -30,18 +27,19 @@ export type CircleMemberStripAction = {
 
 type CircleMemberStripProps = {
   action?: CircleMemberStripAction;
+  belowStripAction?: ReactNode;
   inviteAction?: MemberInviteAction;
   members: CircleMemberStatus[];
   onSelectMember: (member: CircleMemberStatus) => void;
   selectedMemberId?: string;
-  subtitle: string;
+  subtitle?: string;
   title?: string;
   viewerUid?: string;
 };
 
-const AVATAR_SIZE = 54;
-const RING_SIZE = 62;
-const RING_STROKE_WIDTH = 4;
+const AVATAR_SIZE = 40;
+const RING_SIZE = 48;
+const RING_STROKE_WIDTH = 3;
 const NEEDED_RING_COLOR = '#F5A623';
 const NEEDED_LABEL_COLOR = '#C2410C';
 
@@ -60,6 +58,26 @@ function getMemberStatusLabel(member: CircleMemberStatus) {
 
   if (member.state === 'pending') {
     return 'Needs Tap In';
+  }
+
+  return 'Missed';
+}
+
+function getCompactMemberStatusLabel(member: CircleMemberStatus) {
+  if (member.membershipStatus === 'pending') {
+    return 'Pending';
+  }
+
+  if (member.state === 'done') {
+    return 'Done';
+  }
+
+  if (member.state === 'skipped') {
+    return 'Skipped';
+  }
+
+  if (member.state === 'pending') {
+    return 'Needs';
   }
 
   return 'Missed';
@@ -179,6 +197,8 @@ function MemberStripItem({
 }) {
   const theme = useHoystTheme();
   const statusLabel = getMemberStatusLabel(member);
+  const compactStatusLabel = getCompactMemberStatusLabel(member);
+  const progress = getMemberProgressConfig(member, theme);
   const isViewer = Boolean(viewerUid && member.id === viewerUid);
   const displayName = isViewer ? `${member.name} · You` : member.name;
   const selectedSurfaceStyle = isSelected
@@ -207,6 +227,12 @@ function MemberStripItem({
         <MemberAvatar member={member} />
         <HoystText numberOfLines={1} style={styles.memberName}>
           {isViewer ? 'You' : member.name}
+        </HoystText>
+        <HoystText
+          numberOfLines={1}
+          style={[styles.memberStatus, {color: progress.labelColor}]}
+          variant="tiny">
+          {compactStatusLabel}
         </HoystText>
       </View>
     </Pressable>
@@ -237,7 +263,12 @@ function InviteStripItem({inviteAction}: {inviteAction: MemberInviteAction}) {
       testID="circle-member-strip-invite">
       <View style={styles.memberItem}>
         <View style={[styles.inviteAvatar, inviteSurfaceStyle]}>
-          <UserPlus color={theme.textMuted} size={22} strokeWidth={2.3} />
+          <UserPlus
+            color={theme.textMuted}
+            opacity={0.72}
+            size={18}
+            strokeWidth={2}
+          />
         </View>
         <HoystText numberOfLines={1} style={styles.memberName}>
           Invite
@@ -330,22 +361,20 @@ function SelectedMemberAction({
 
 export function CircleMemberStrip({
   action,
+  belowStripAction,
   inviteAction,
   members,
   onSelectMember,
   selectedMemberId,
   subtitle,
-  title = 'Circle Members',
+  title = 'Circle members',
   viewerUid,
 }: CircleMemberStripProps): React.JSX.Element {
   const selectedMember = members.find(member => member.id === selectedMemberId);
 
   return (
     <View style={styles.section}>
-      <View style={styles.header}>
-        <SectionEyebrow>{title}</SectionEyebrow>
-        <SectionEyebrowTrailing>{subtitle}</SectionEyebrowTrailing>
-      </View>
+      <DSSectionHeading subtitle={subtitle} title={title} />
       {members.length > 0 ? (
         <ScrollView
           horizontal
@@ -371,6 +400,13 @@ export function CircleMemberStrip({
           Members will appear here once people join this Circle.
         </HoystText>
       )}
+      {belowStripAction ? (
+        <View
+          style={styles.belowStripAction}
+          testID="circle-member-strip-below-action">
+          {belowStripAction}
+        </View>
+      ) : null}
       {selectedMember ? (
         <SelectedMemberAction
           action={action}
@@ -395,12 +431,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  header: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: 12,
-    justifyContent: 'space-between',
-  },
+  belowStripAction: {width: '100%'},
   inviteAvatar: {
     alignItems: 'center',
     borderRadius: (RING_SIZE + 4) / 2,
@@ -413,17 +444,24 @@ const styles = StyleSheet.create({
   memberItem: {
     alignItems: 'center',
     borderRadius: radius.md,
-    gap: 4,
+    gap: 2,
     paddingHorizontal: 4,
     paddingVertical: 5,
-    width: 76,
+    width: 68,
   },
   memberName: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '700',
     letterSpacing: 0,
-    lineHeight: 15,
-    maxWidth: 70,
+    lineHeight: 14,
+    maxWidth: 62,
+    textAlign: 'center',
+  },
+  memberStatus: {
+    fontSize: 10,
+    fontWeight: '600',
+    lineHeight: 13,
+    maxWidth: 64,
     textAlign: 'center',
   },
   memberPressable: {

@@ -2,6 +2,8 @@ import React from 'react';
 import {Alert, Clipboard, NativeModules, View} from 'react-native';
 import renderer, {act} from 'react-test-renderer';
 
+import {BrandMark} from '../src/design/components/BrandMark';
+import {HoystText} from '../src/design/components/HoystText';
 import {TapInStoryTemplateCard} from '../src/features/check-in/components/TapInStoryShareCard';
 import {TapInStoryShareScreen} from '../src/features/check-in/screens/TapInStoryShareScreen';
 import {setTapInStoryShareNativeModuleAvailabilityForTests} from '../src/features/check-in/services/tap-in-story-share';
@@ -13,6 +15,10 @@ const mockShareOpen = jest.fn();
 const mockShareSingle = jest.fn();
 const mockCopyImage = jest.fn();
 const mockGetProfileSummary = jest.fn();
+const mockSubscribeToMemberCircleDetail = jest.fn();
+let mockSessionState: {status: string; user?: {uid: string}} = {
+  status: 'signedOut',
+};
 
 jest.mock('react-native-config', () => ({
   __esModule: true,
@@ -48,6 +54,21 @@ jest.mock('react-native-share', () => ({
 
 jest.mock('../src/features/profile/services/profile-summary-service', () => ({
   getProfileSummary: () => mockGetProfileSummary(),
+}));
+
+jest.mock('../src/features/home/services/home-data-service', () => ({
+  subscribeToMemberCircleDetail: (...args: unknown[]) =>
+    mockSubscribeToMemberCircleDetail(...args),
+}));
+
+jest.mock('../src/store/session-store', () => ({
+  useSessionStore: (selector: (state: unknown) => unknown) =>
+    selector(mockSessionState),
+}));
+
+jest.mock('../src/store/profile-store', () => ({
+  useUserProfileStore: (selector: (state: unknown) => unknown) =>
+    selector({profile: undefined}),
 }));
 
 jest.mock('react-native-safe-area-context', () => {
@@ -134,6 +155,9 @@ describe('TapInStoryShareScreen', () => {
     mockShareSingle.mockReset();
     mockCopyImage.mockReset();
     mockGetProfileSummary.mockReset();
+    mockSubscribeToMemberCircleDetail.mockReset();
+    mockSubscribeToMemberCircleDetail.mockReturnValue(jest.fn());
+    mockSessionState = {status: 'signedOut'};
     mockCaptureRef.mockResolvedValue('file:///tmp/hoyst-story.png');
     mockShareOpen.mockResolvedValue({message: 'shared', success: true});
     mockShareSingle.mockResolvedValue({message: 'shared', success: true});
@@ -163,7 +187,7 @@ describe('TapInStoryShareScreen', () => {
     jest.restoreAllMocks();
   });
 
-  it('hides the photo overlay option when no Tap In photo exists', async () => {
+  it('shows the same two-card carousel when no Tap In photo exists', async () => {
     const tree = await renderStoryShareScreen();
 
     const templateIds = tree.root
@@ -171,10 +195,78 @@ describe('TapInStoryShareScreen', () => {
       .map(node => node.props.templateId);
 
     expect(templateIds).toEqual([
-      'designedPost',
-      'designedPost',
-      'transparentStats',
+      'tapInMoment',
+      'tapInMoment',
+      'transparentOverlay',
     ]);
+  });
+
+  it('centers each export as one group with an inline Hoyst wordmark CTA', async () => {
+    const tree = await renderStoryShareScreen();
+
+    expect(
+      tree.root.findAll(
+        node =>
+          node.type === View &&
+          node.props.testID === 'tap-in-story-content-group',
+      ),
+    ).toHaveLength(3);
+    expect(
+      tree.root.findAll(
+        node => node.type === View && node.props.testID === 'tap-in-story-cta',
+      ),
+    ).toHaveLength(3);
+    expect(
+      tree.root.findAll(
+        node =>
+          node.type === View &&
+          node.props.testID === 'tap-in-story-title-group',
+      ),
+    ).toHaveLength(3);
+
+    const wordmarks = tree.root.findAllByType(BrandMark);
+    expect(wordmarks).toHaveLength(3);
+    expect(wordmarks.map(node => node.props.kind)).toEqual([
+      'logo',
+      'logo',
+      'logo',
+    ]);
+    expect(wordmarks.map(node => node.props.isDark)).toEqual([
+      false,
+      false,
+      true,
+    ]);
+    expect(wordmarks.map(node => node.props.style)).toEqual([
+      {height: 18, transform: [{translateY: -1}], width: 44},
+      {height: 18, transform: [{translateY: -1}], width: 44},
+      {height: 18, transform: [{translateY: -1}], width: 44},
+    ]);
+
+    const titles = tree.root.findAll(
+      node =>
+        node.type === HoystText && node.props.testID === 'tap-in-story-title',
+    );
+    expect(titles).toHaveLength(3);
+    expect(titles.map(node => node.props.children)).toEqual([
+      'Morning Movers',
+      'Morning Movers',
+      'Morning Movers',
+    ]);
+    const eyebrows = tree.root.findAll(
+      node =>
+        node.type === HoystText && node.props.testID === 'tap-in-story-eyebrow',
+    );
+    expect(eyebrows).toHaveLength(3);
+    expect(eyebrows.map(node => node.props.children)).toEqual([
+      'ACCOUNTABILITY CIRCLE',
+      'ACCOUNTABILITY CIRCLE',
+      'ACCOUNTABILITY CIRCLE',
+    ]);
+    expect(
+      tree.root.findAll(
+        node => node.type === HoystText && node.props.children === 'Circle',
+      ),
+    ).toHaveLength(0);
   });
 
   it('renders refreshed personal stats with the circle member count', async () => {
@@ -184,7 +276,8 @@ describe('TapInStoryShareScreen', () => {
       streakDays: 0,
     });
 
-    const story = tree.root.findAllByType(TapInStoryTemplateCard)[0].props.story;
+    const story = tree.root.findAllByType(TapInStoryTemplateCard)[0].props
+      .story;
 
     expect(mockGetProfileSummary).toHaveBeenCalledTimes(1);
     expect(story).toEqual(
@@ -196,7 +289,54 @@ describe('TapInStoryShareScreen', () => {
     );
   });
 
-  it('includes the photo overlay option when a Tap In photo exists', async () => {
+  it('replaces route fallbacks with local Circle share context when available', async () => {
+    mockSessionState = {status: 'authenticatedReady', user: {uid: 'viewer-1'}};
+    mockSubscribeToMemberCircleDetail.mockImplementation(
+      ({onDetail}: {onDetail: (detail: unknown) => void}) => {
+        onDetail({
+          category: 'Fitness',
+          commitment: 'Walk outdoors for 20 minutes',
+          commitmentType: 'avoid',
+          memberCount: 5,
+          members: [
+            {id: 'a', initials: 'A', name: 'Avery', state: 'done'},
+            {
+              id: 'b',
+              initials: 'B',
+              membershipStatus: 'pending',
+              name: 'Blair',
+              state: 'pending',
+            },
+            {id: 'c', initials: 'C', name: 'Casey', state: 'done'},
+          ],
+          title: 'Lunch Walkers',
+        });
+        return jest.fn();
+      },
+    );
+
+    const tree = await renderStoryShareScreen();
+    const story = tree.root.findAllByType(TapInStoryTemplateCard)[0].props
+      .story;
+
+    expect(mockSubscribeToMemberCircleDetail).toHaveBeenCalledWith(
+      expect.objectContaining({circleId: 'circle-1', uid: 'viewer-1'}),
+    );
+    expect(story).toEqual(
+      expect.objectContaining({
+        category: 'Fitness',
+        circleTitle: 'Lunch Walkers',
+        commitmentType: 'avoid',
+        memberCount: 5,
+        members: [
+          expect.objectContaining({id: 'a'}),
+          expect.objectContaining({id: 'c'}),
+        ],
+      }),
+    );
+  });
+
+  it('keeps the two-card carousel when a proof photo exists', async () => {
     const tree = await renderStoryShareScreen({
       photoUri: 'file:///tmp/proof.jpg',
     });
@@ -205,7 +345,11 @@ describe('TapInStoryShareScreen', () => {
       .findAllByType(TapInStoryTemplateCard)
       .map(node => node.props.templateId);
 
-    expect(templateIds).toContain('photoOverlay');
+    expect(templateIds).toEqual([
+      'tapInMoment',
+      'tapInMoment',
+      'transparentOverlay',
+    ]);
   });
 
   it('copies invite links and story images from the destination actions', async () => {

@@ -1,10 +1,14 @@
 import React from 'react';
-import {Alert, Pressable, ScrollView, StyleSheet, Text} from 'react-native';
+import {
+  ActivityIndicator,
+  Alert,
+  ScrollView,
+  StyleSheet,
+  Text,
+} from 'react-native';
 import renderer, {act, type ReactTestInstance} from 'react-test-renderer';
 
-import {SectionEyebrowTrailing} from '../src/design/components/SectionEyebrow';
 import {TapInPulseButton} from '../src/design/components/TapInPulseButton';
-import {WeekProgressStrip} from '../src/design/components/WeekProgressStrip';
 import {CircleDetailScreen} from '../src/features/circles/screens/CircleDetailScreen';
 import type {CircleDetailModel, CircleThreadItem} from '../src/types/models';
 
@@ -55,7 +59,7 @@ jest.mock('react-native-safe-area-context', () => {
   return {
     SafeAreaView: ({children, ...props}: {children?: React.ReactNode}) =>
       MockReact.createElement(MockView, props, children),
-    useSafeAreaInsets: () => ({bottom: 0, left: 0, right: 0, top: 0}),
+    useSafeAreaInsets: () => ({bottom: 0, left: 0, right: 0, top: 59}),
   };
 });
 
@@ -390,23 +394,72 @@ describe('CircleDetailScreen reference redesign', () => {
           .style,
       ),
     ).toEqual(expect.objectContaining({backgroundColor: '#FAFAF7'}));
+    const heroTintRegion = tree.root.findByProps({
+      testID: 'circle-detail-hero-tint-region',
+    });
+    act(() => {
+      heroTintRegion.props.onLayout({nativeEvent: {layout: {height: 241}}});
+    });
     expect(
       tree.root.findByProps({testID: 'circle-detail-top-tint'}).props.colors,
-    ).toEqual(['#FAFAF7', '#10B96724', '#10B96724', '#FAFAF7']);
+    ).toEqual(['#10B96724', '#FAFAF7']);
     expect(
       tree.root.findByProps({testID: 'circle-detail-top-tint'}).props.locations,
-    ).toEqual([0, 0.18, 0.72, 1]);
+    ).toEqual([0, 1]);
     expect(
       StyleSheet.flatten(
-        tree.root.findByProps({testID: 'circle-detail-top-tint'}).props.style,
+        tree.root.findByProps({testID: 'circle-detail-top-tint-frame'}).props
+          .style,
       ),
     ).toEqual(expect.objectContaining({height: 300, top: 0}));
+    expect(
+      tree.root.findByProps({testID: 'circle-detail-background'}),
+    ).toBeTruthy();
+    expect(
+      tree.root
+        .findByProps({testID: 'circle-detail-background'})
+        .findAllByProps({testID: 'circle-detail-top-tint-frame'}),
+    ).not.toHaveLength(0);
+    expect(
+      heroTintRegion.findAllByProps({testID: 'circle-detail-top-tint'}),
+    ).toHaveLength(0);
+    expect(
+      tree.root.findAllByProps({testID: 'circle-detail-safe-area-tint'}),
+    ).toHaveLength(0);
+    expect(
+      heroTintRegion.findAllByProps({
+        testID: 'circle-detail-hero-primary-action',
+      }),
+    ).toHaveLength(0);
+    expect(
+      tree.root.findByProps({testID: 'circle-detail-hero-primary-action'})
+        .parent,
+    ).toBe(
+      tree.root.findByProps({testID: 'circle-detail-hero-tint-region'}).parent,
+    );
     expect(
       StyleSheet.flatten(
         tree.root.findByProps({testID: 'circle-detail-hero-content'}).props
           .style,
       ),
     ).toEqual(expect.objectContaining({gap: 10}));
+    expect(StyleSheet.flatten(heroTintRegion.props.style)).toEqual(
+      expect.objectContaining({paddingBottom: 8}),
+    );
+    const primaryAction = tree.root.findByProps({
+      testID: 'circle-detail-hero-primary-action',
+    });
+    expect(StyleSheet.flatten(primaryAction.props.style)).toEqual(
+      expect.not.objectContaining({marginTop: expect.anything()}),
+    );
+    expect(StyleSheet.flatten(primaryAction.parent?.props.style)).toEqual(
+      expect.objectContaining({gap: 4}),
+    );
+    expect(
+      StyleSheet.flatten(
+        tree.root.findByProps({testID: 'circle-detail-body-stack'}).props.style,
+      ),
+    ).toEqual(expect.objectContaining({paddingTop: 20}));
     expect(
       tree.root.findAllByProps({testID: 'circle-detail-hero-surface'}),
     ).toHaveLength(0);
@@ -415,39 +468,78 @@ describe('CircleDetailScreen reference redesign', () => {
         tree.root.findByProps({testID: 'circle-detail-stats-content'}).props
           .style,
       ),
-    ).toEqual(expect.objectContaining({gap: 14}));
+    ).toEqual(expect.objectContaining({gap: 8}));
     expect(
       tree.root.findAllByProps({testID: 'circle-detail-stats-surface'}),
     ).toHaveLength(0);
-    expect(tree.root.findByType(WeekProgressStrip).props).toEqual(
-      expect.objectContaining({
-        compact: true,
-        showStreak: false,
-        weekdayLabelLength: 3,
-      }),
-    );
+    expect(
+      tree.root.findByProps({testID: 'circle-group-week-path'}),
+    ).toBeTruthy();
     const taskDescription = tree.root
       .findAllByType(Text)
       .find(node => textContent(node) === 'Move for 30 minutes');
     expect(StyleSheet.flatten(taskDescription?.props.style)).toEqual(
       expect.objectContaining({
-        fontSize: 15,
+        fontSize: 14,
+        fontWeight: '400',
         lineHeight: 20,
+      }),
+    );
+    const circleTitle = tree.root
+      .findAllByType(Text)
+      .find(node => textContent(node) === 'Morning Movers');
+    expect(StyleSheet.flatten(circleTitle?.props.style)).toEqual(
+      expect.objectContaining({
+        fontSize: 24,
+        fontWeight: '600',
+        lineHeight: 29,
+      }),
+    );
+    const navigationTitle = tree.root
+      .findAllByType(Text)
+      .find(node => textContent(node) === 'Circle');
+    expect(StyleSheet.flatten(navigationTitle?.props.style)).toEqual(
+      expect.objectContaining({
+        fontSize: 17,
+        fontWeight: '600',
+        lineHeight: 21,
+      }),
+    );
+    const categoryLabel = tree.root
+      .findAllByType(Text)
+      .find(node => textContent(node) === 'FITNESS');
+    expect(StyleSheet.flatten(categoryLabel?.props.style)).toEqual(
+      expect.objectContaining({
+        fontSize: 11,
+        fontWeight: '600',
+        lineHeight: 15,
       }),
     );
     const publicMeta = tree.root
       .findAllByType(Text)
       .find(node => textContent(node) === 'Public');
     expect(StyleSheet.flatten(publicMeta?.props.style)).toEqual(
-      expect.objectContaining({color: '#4D5873', fontWeight: '500'}),
+      expect.objectContaining({
+        color: '#4D5873',
+        fontSize: 12,
+        fontWeight: '400',
+        lineHeight: 16,
+      }),
     );
     const membersMeta = tree.root
       .findAllByType(Text)
       .find(node => textContent(node) === '5/8');
     expect(StyleSheet.flatten(membersMeta?.props.style)).toEqual(
-      expect.objectContaining({fontWeight: '500'}),
+      expect.objectContaining({
+        fontSize: 12,
+        fontWeight: '400',
+        lineHeight: 16,
+      }),
     );
-    expect(output).toContain('Daily Pace');
+    expect(
+      tree.root.findAllByProps({testID: 'circle-detail-meta-divider'}),
+    ).toHaveLength(6);
+    expect(output).toContain('Daily pace');
     expect(output).toContain('Move for 30 minutes');
     expect(output.indexOf('Morning Movers')).toBeLessThan(
       output.indexOf('FITNESS'),
@@ -456,14 +548,15 @@ describe('CircleDetailScreen reference redesign', () => {
       output.indexOf('Move for 30 minutes'),
     );
     expect(output.indexOf('Move for 30 minutes')).toBeLessThan(
-      output.indexOf('Daily Pace'),
+      output.indexOf('Daily pace'),
     );
-    expect(output).toContain('Needs your Tap In');
-    expect(output).toContain('Circle Members');
+    expect(output).not.toContain('Needs your Tap In');
+    expect(output).toContain('Circle members');
+    expect(output).toContain('5 members total');
     expect(output).toContain('Circle Feed');
-    expect(output).toContain('1/4 members tapped in');
+    expect(output).toContain('1 of 4 members tapped in today');
     expect(output).not.toContain('Circle Progress');
-    expect(output).toContain("Today's Progress");
+    expect(output).toContain('Group progress');
     expect(output).toContain('Kelvin');
     expect(output).toContain('Ari');
     expect(output).toContain('Sky');
@@ -471,27 +564,26 @@ describe('CircleDetailScreen reference redesign', () => {
     expect(output).toContain('Penny');
     expect(output).not.toContain('Review');
     expect(output).toContain('Tap In');
-    expect(output).toContain('Log Progress for this Cycle');
-    expect(output.indexOf('Log Progress for this Cycle')).toBeLessThan(
-      output.indexOf("Today's Progress"),
+    expect(output).toContain('Log Progress for this Circle');
+    expect(output.indexOf('Log Progress for this Circle')).toBeLessThan(
+      output.indexOf('Group progress'),
     );
-    expect(tree.root.findByProps({testID: 'circle-member-strip'})).toBeTruthy();
+    expect(
+      tree.root.findByProps({testID: 'circle-member-strip'}).props.horizontal,
+    ).toBe(true);
     expect(
       tree.root.findAllByProps({testID: 'circle-member-strip-selected-action'}),
     ).toHaveLength(0);
-    expect(output.indexOf("Today's Progress")).toBeLessThan(
+    expect(output.indexOf('Group progress')).toBeLessThan(
+      output.indexOf('1 of 4 members tapped in today'),
+    );
+    expect(output.indexOf('1 of 4 members tapped in today')).toBeLessThan(
       output.indexOf('3 days'),
     );
-    expect(output.indexOf('3 days')).toBeLessThan(
-      output.indexOf('1/4 members tapped in'),
+    expect(output.indexOf('1 of 4 members tapped in today')).toBeLessThan(
+      output.indexOf('Circle members'),
     );
-    expect(output.indexOf('1/4 members tapped in')).toBeLessThan(
-      output.indexOf('LAST 7 DAYS'),
-    );
-    expect(output.indexOf('LAST 7 DAYS')).toBeLessThan(
-      output.indexOf('Circle Members'),
-    );
-    expect(output).toContain('LAST 7 DAYS');
+    expect(output).not.toContain('Last 7 days');
     expect(
       StyleSheet.flatten(
         tree.root.findByProps({testID: 'circle-detail-week-history'}).props
@@ -500,22 +592,22 @@ describe('CircleDetailScreen reference redesign', () => {
     ).toEqual(expect.objectContaining({paddingTop: 8}));
     expect(output).not.toContain('This week');
     expect(output).not.toContain('Completion');
-    expect(output).toContain('Circle Members');
+    expect(output).toContain('Circle members');
     expect(output).not.toContain('Your last 7 days');
     expect(output).toContain('partial, 2 of 5 completed');
     expect(output).toContain('complete, 5 of 5 completed');
     expect(output).toContain('empty, 0 of 5 completed');
     expect(
       tree.root.findByProps({
-        testID: 'week-progress-2026-05-24-partial-ring',
+        testID: 'circle-group-week-partial-2026-05-24',
       }),
     ).toBeTruthy();
     expect(
       StyleSheet.flatten(
-        tree.root.findByProps({testID: 'week-progress-2026-05-25-chip'}).props
-          .style,
+        tree.root.findByProps({testID: 'circle-group-week-node-2026-05-25'})
+          .props.style,
       ),
-    ).toEqual(expect.objectContaining({backgroundColor: '#22A565'}));
+    ).toEqual(expect.objectContaining({backgroundColor: '#10B967'}));
     expect(output).not.toContain('M13 2L4 13.5h5.5L9 22l9-12h-6z');
     expect(output).not.toContain('M7 7 17 17M17 7 7 17');
     expect(
@@ -541,15 +633,9 @@ describe('CircleDetailScreen reference redesign', () => {
       StyleSheet.flatten(
         tree.root.findByProps({testID: 'circle-detail-body-stack'}).props.style,
       ),
-    ).toEqual(expect.objectContaining({paddingTop: 12}));
-    const trailingLabels = tree.root
-      .findAllByType(SectionEyebrowTrailing)
-      .map(textContent);
-
-    expect(trailingLabels).toEqual(
-      expect.arrayContaining(['1/4 members tapped in']),
-    );
-    expect(trailingLabels).not.toContain('This week');
+    ).toEqual(expect.objectContaining({paddingTop: 20}));
+    expect(output).toContain('Needs Tap In');
+    expect(output).toContain('Tapped in');
   });
 
   it('embeds Circle Feed below the Member grid without navigation', () => {
@@ -557,7 +643,7 @@ describe('CircleDetailScreen reference redesign', () => {
     const output = outputOf(tree);
     const sectionProps = mockCircleThreadSection.mock.calls.at(-1)?.[0];
 
-    expect(output.indexOf('Circle Members')).toBeLessThan(
+    expect(output.indexOf('Circle members')).toBeLessThan(
       output.indexOf('Circle Feed'),
     );
     expect(
@@ -645,7 +731,7 @@ describe('CircleDetailScreen reference redesign', () => {
     );
   });
 
-  it('keeps the nudge directly above the embedded chat', () => {
+  it('keeps the Home-style Nudge all row below members and above the feed', () => {
     mockMemberDetail = detail({
       members: [
         {
@@ -666,20 +752,29 @@ describe('CircleDetailScreen reference redesign', () => {
 
     const {tree} = renderScreen();
     const output = outputOf(tree);
-    const actionStackStyle = StyleSheet.flatten(
-      tree.root.findByProps({testID: 'circle-detail-member-actions'}).props
-        .style,
-    );
-    const nudgeFrameStyle = StyleSheet.flatten(
-      tree.root.findByProps({testID: 'circle-detail-nudge-panel-frame'}).props
-        .style,
-    );
+    const nudgeButton = tree.root
+      .findAllByProps({testID: 'circle-nudge-all-action'})
+      .find(node => node.props.style);
 
-    expect(output.indexOf('Send a Nudge')).toBeLessThan(
+    expect(output).toContain('5 members total');
+    expect(output).toContain('Remind everyone who still needs to Tap In');
+    expect(output.indexOf('Ari')).toBeLessThan(output.indexOf('Nudge all'));
+    expect(output.indexOf('Nudge all')).toBeLessThan(
       output.indexOf('Circle Feed'),
     );
-    expect(actionStackStyle).toEqual(expect.objectContaining({gap: 10}));
-    expect(nudgeFrameStyle).toEqual(expect.objectContaining({minHeight: 54}));
+    expect(StyleSheet.flatten(nudgeButton?.props.style)).toEqual(
+      expect.objectContaining({
+        flexDirection: 'row',
+        gap: 12,
+        minHeight: 44,
+      }),
+    );
+    expect(StyleSheet.flatten(nudgeButton?.parent?.props.style)).toEqual(
+      expect.objectContaining({borderBottomWidth: StyleSheet.hairlineWidth}),
+    );
+    expect(
+      tree.root.findByProps({testID: 'circle-nudge-all-action-chevron'}),
+    ).toBeTruthy();
   });
 
   it('marks chat visible and requests pagination from outer page scrolling', () => {
@@ -767,14 +862,41 @@ describe('CircleDetailScreen reference redesign', () => {
 
     expect(output).toContain('View Today');
     expect(output).toContain('Remove Tap In');
-    expect(output).toContain('Tapped in today');
+    expect(output).not.toContain('Tapped in today');
     expect(output).not.toContain('Circle Tools');
-    expect(output.indexOf("Today's Progress")).toBeLessThan(
+    expect(output.indexOf('Group progress')).toBeLessThan(
       output.indexOf('Remove Tap In'),
     );
     expect(output.indexOf('Remove Tap In')).toBeLessThan(
       output.indexOf('Circle Feed'),
     );
+    const removeButton = tree.root
+      .findAllByProps({testID: 'circle-remove-tap-in-action'})
+      .find(node => node.props.style);
+    const removeIconTile = tree.root.findByProps({
+      testID: 'circle-remove-tap-in-icon-tile',
+    });
+
+    expect(StyleSheet.flatten(removeButton?.props.style)).toEqual(
+      expect.objectContaining({
+        flexDirection: 'row',
+        gap: 12,
+        minHeight: 44,
+      }),
+    );
+    expect(StyleSheet.flatten(removeButton?.parent?.props.style)).toEqual(
+      expect.objectContaining({borderBottomWidth: StyleSheet.hairlineWidth}),
+    );
+    expect(StyleSheet.flatten(removeIconTile.props.style)).toEqual(
+      expect.objectContaining({
+        backgroundColor: '#D21F181A',
+        height: 32,
+        width: 32,
+      }),
+    );
+    expect(
+      tree.root.findByProps({testID: 'circle-remove-tap-in-action-chevron'}),
+    ).toBeTruthy();
   });
 
   it('shows remove alongside Update Tap In for saved quantity circles', async () => {
@@ -808,8 +930,8 @@ describe('CircleDetailScreen reference redesign', () => {
     expect(output).not.toContain('View Today');
 
     const removeButton = tree.root
-      .findAllByType(Pressable)
-      .find(node => textContent(node).includes('Remove Tap In'));
+      .findAllByProps({testID: 'circle-remove-tap-in-action'})
+      .find(node => node.props.style);
 
     if (!removeButton) {
       throw new Error('Remove Tap In button was not found');
@@ -857,10 +979,9 @@ describe('CircleDetailScreen reference redesign', () => {
     const output = outputOf(tree);
 
     expect(output).not.toContain('Circle Tools');
-    expect(output).toContain('Circle Members');
-    expect(output).toContain('0/0 members tapped in');
+    expect(output).toContain('Circle members');
     expect(output).toContain('Invite Members');
-    expect(output).not.toContain('Circle Members · 0/0 members tapped in');
+    expect(output).toContain('0 of 0 members tapped in today');
     expect(output).not.toContain('Leaderboard');
     expect(output).not.toContain('Goals');
     expect(output).not.toContain('Review');
@@ -974,7 +1095,8 @@ describe('CircleDetailScreen reference redesign', () => {
     });
   });
 
-  it('shows secondary nudge action only when targets exist', () => {
+  it('shows the Nudge all row only when targets exist', async () => {
+    let finishNudge!: () => void;
     mockMemberDetail = detail({
       members: [
         {
@@ -992,63 +1114,54 @@ describe('CircleDetailScreen reference redesign', () => {
       ],
       nudgeTargetCount: 1,
     });
+    mockNudgeCircleMembers.mockImplementationOnce(
+      () =>
+        new Promise(resolve => {
+          finishNudge = () => resolve({sentCount: 1});
+        }),
+    );
 
     const {tree} = renderScreen();
     const output = outputOf(tree);
 
-    expect(output).toContain('Send a Nudge');
-    expect(output).toContain('1 Member to nudge');
-    const nudgeButton = tree.root.findByProps({
-      accessibilityLabel: 'Send a Nudge. 1 Member to nudge',
-    });
-    const nudgeFrameStyle = StyleSheet.flatten(
-      tree.root.findByProps({testID: 'circle-detail-nudge-panel-frame'}).props
-        .style,
-    );
-    const nudgeIconStyle = StyleSheet.flatten(
-      tree.root.findByProps({testID: 'circle-detail-nudge-icon'}).props.style,
-    );
-    const nudgeActionStyle = StyleSheet.flatten(
-      tree.root.findByProps({testID: 'circle-detail-nudge-action'}).props.style,
-    );
-    const nudgeTitle = tree.root
-      .findAllByType(Text)
-      .find(node => textContent(node) === 'Send a Nudge');
-    const nudgeSubtitle = tree.root
-      .findAllByType(Text)
-      .find(node => textContent(node) === '1 Member to nudge');
+    expect(output).toContain('Nudge all');
+    const nudgeButton = tree.root
+      .findAllByProps({testID: 'circle-nudge-all-action'})
+      .find(node => node.props.style);
 
-    expect(
-      StyleSheet.flatten(nudgeButton.props.style({pressed: false})),
-    ).toEqual(expect.objectContaining({borderRadius: 20}));
-    expect(nudgeFrameStyle).toEqual(
-      expect.objectContaining({
-        borderWidth: 1,
-        minHeight: 54,
-        paddingHorizontal: 12,
-        paddingVertical: 6,
-      }),
+    expect(StyleSheet.flatten(nudgeButton?.props.style)).toEqual(
+      expect.objectContaining({minHeight: 44}),
     );
-    expect(nudgeIconStyle).toEqual(
-      expect.objectContaining({height: 36, width: 36}),
+    expect(output.indexOf('Group progress')).toBeLessThan(
+      output.indexOf('Circle members'),
     );
-    expect(nudgeActionStyle).toEqual(
-      expect.objectContaining({height: 28, width: 28}),
+    expect(output.indexOf('Circle members')).toBeLessThan(
+      output.indexOf('Nudge all'),
     );
-    expect(StyleSheet.flatten(nudgeTitle?.props.style)).toEqual(
-      expect.objectContaining({fontSize: 15, lineHeight: 19}),
-    );
-    expect(StyleSheet.flatten(nudgeSubtitle?.props.style)).toEqual(
-      expect.objectContaining({fontSize: 13, lineHeight: 17}),
-    );
-    expect(output.indexOf("Today's Progress")).toBeLessThan(
-      output.indexOf('Circle Members'),
-    );
-    expect(output.indexOf('Circle Members')).toBeLessThan(
-      output.indexOf('Send a Nudge'),
-    );
-    expect(output).not.toContain('Send Nudge');
+    expect(output).not.toContain('Send a Nudge');
     expect(output).not.toContain('Invite');
+
+    act(() => {
+      nudgeButton?.props.onPress();
+    });
+    expect(
+      tree.root.findByProps({
+        accessibilityLabel: 'Sending nudge to 1 member',
+      }),
+    ).toBeTruthy();
+    expect(outputOf(tree)).toContain('Sending to 1 member...');
+    expect(tree.root.findAllByType(ActivityIndicator)).not.toHaveLength(0);
+
+    await act(async () => {
+      finishNudge();
+      await Promise.resolve();
+    });
+
+    expect(mockNudgeCircleMembers).toHaveBeenCalledWith('circle-1');
+    expect(
+      tree.root.findByProps({accessibilityLabel: 'Nudge sent to 1 member'}),
+    ).toBeTruthy();
+    expect(outputOf(tree)).toContain('Sent to 1 member');
   });
 
   it('targets a single member from the selected member action row', async () => {
@@ -1076,11 +1189,8 @@ describe('CircleDetailScreen reference redesign', () => {
       accessibilityLabel: 'Nudge Ari',
     });
 
-    act(() => {
-      nudgeButton.props.onPress();
-    });
     await act(async () => {
-      await Promise.resolve();
+      await nudgeButton.props.onPress();
     });
 
     expect(mockNudgeCircleMembers).toHaveBeenCalledWith('circle-1', 'user-2');
@@ -1131,24 +1241,72 @@ describe('CircleDetailScreen reference redesign', () => {
   it('renders member-first group progress and the compact streak header', () => {
     const {tree} = renderScreen();
     const output = outputOf(tree);
+    const heading = tree.root
+      .findAllByType(Text)
+      .find(node => textContent(node) === 'Group progress');
+    const progressLabel = tree.root
+      .findAllByType(Text)
+      .find(node => textContent(node) === '1 of 4 members tapped in today');
+    const streakCaption = tree.root
+      .findAllByType(Text)
+      .find(node => textContent(node) === 'Current streak');
+    const streakValue = tree.root.findByProps({
+      testID: 'circle-stats-streak-label',
+    });
     const progressFillStyle = StyleSheet.flatten(
       tree.root.findByProps({testID: 'circle-stats-progress-fill'}).props.style,
     );
+    const progressTrackStyle = StyleSheet.flatten(
+      tree.root.findByProps({testID: 'circle-stats-progress-track'}).props
+        .style,
+    );
 
-    expect(output).toContain("Today's Progress");
-    expect(output).toContain('1/4 members tapped in');
+    expect(output).toContain('Group progress');
+    expect(heading?.props.accessibilityRole).toBe('header');
+    expect(StyleSheet.flatten(heading?.props.style)).toEqual(
+      expect.objectContaining({
+        fontSize: 18,
+        fontWeight: '600',
+        lineHeight: 23,
+      }),
+    );
+    expect(StyleSheet.flatten(streakValue.props.style)).toEqual(
+      expect.objectContaining({
+        fontSize: 18,
+        fontWeight: '600',
+        lineHeight: 22,
+      }),
+    );
+    expect(StyleSheet.flatten(streakCaption?.props.style)).toEqual(
+      expect.objectContaining({
+        fontSize: 11,
+        fontWeight: '400',
+        lineHeight: 15,
+      }),
+    );
+    expect(StyleSheet.flatten(progressLabel?.props.style)).toEqual(
+      expect.objectContaining({
+        fontSize: 12,
+        fontWeight: '400',
+        lineHeight: 16,
+      }),
+    );
+    expect(progressTrackStyle).toEqual(
+      expect.objectContaining({backgroundColor: '#E9E9ED', height: 5}),
+    );
+    expect(output).toContain('1 of 4 members tapped in today');
     expect(
       tree.root.findAllByProps({testID: 'circle-stats-progress-value'}),
     ).toHaveLength(0);
     expect(progressFillStyle).toEqual(
       expect.objectContaining({
-        height: 10,
+        height: 5,
         width: '60%',
       }),
     );
     expect(output).toContain('3 days');
     expect(output).not.toContain('Completion');
-    expect(output).toContain('Circle Members');
+    expect(output).toContain('Circle members');
     expect(output).not.toContain('This week');
   });
 
@@ -1196,23 +1354,21 @@ describe('CircleDetailScreen reference redesign', () => {
     const output = outputOf(tree);
 
     expect(output).toContain('Personal Commitment');
-    expect(output).toContain('Personal commitment');
-    expect(output).toContain('Personal Progress');
+    expect(output).toContain('Personal');
+    expect(output).toContain('Personal progress');
     expect(
       textContent(
         tree.root.findByProps({testID: 'circle-stats-progress-value'}),
       ),
     ).toBe('60%');
-    expect(output.indexOf("Today's Progress")).toBeLessThan(
+    expect(output.indexOf('Personal progress')).toBeLessThan(
       output.indexOf('3 days'),
     );
-    expect(output.indexOf('3 days')).toBeLessThan(
-      output.indexOf('Personal Progress'),
+    expect(output.lastIndexOf('Personal progress')).toBeLessThan(
+      output.indexOf('3 days'),
     );
-    expect(output.indexOf('Personal Progress')).toBeLessThan(
-      output.indexOf('LAST 7 DAYS'),
-    );
-    expect(output).not.toContain('Circle Members');
+    expect(output).not.toContain('Last 7 days');
+    expect(output).not.toContain('Circle members');
     expect(output).not.toContain('Circle Feed');
     expect(output).not.toContain('Completion');
     expect(output).not.toContain('Members');
@@ -1240,7 +1396,7 @@ describe('CircleDetailScreen reference redesign', () => {
     expect(output).toContain('Archived Aug 4, 2026');
     expect(output).toContain('Circle Feed');
     expect(output).not.toContain('Log your progress for today');
-    expect(output).not.toContain('Send a Nudge');
+    expect(output).not.toContain('Nudge');
     expect(output).not.toContain('Invite Members');
     expect(tree.root.findAllByType(TapInPulseButton)).toHaveLength(0);
     expect(mockCircleThreadSection.mock.calls.at(-1)?.[0].isArchived).toBe(

@@ -19,6 +19,15 @@ import {TapInActionButton} from '../../../design/components/TapInActionButton';
 import {actionMotion} from '../../../design/tokens/actions';
 import {radius} from '../../../design/tokens/radius';
 import {useHoystTheme} from '../../../design/theme/useHoystTheme';
+import {
+  DSButton,
+  DSIconButton,
+  DSInput,
+  DSText,
+  useSystemTheme,
+  type CategoryTone,
+} from '../../../design/system';
+import {ComposerDisclosure} from './TapInComposerPresentation';
 import {getPhotoUploadErrorMessage} from '../../../lib/firebase/storage-error';
 import {useSessionStore} from '../../../store/session-store';
 import {
@@ -39,12 +48,15 @@ export type TapInDetailsSaveState = {
 };
 
 type Props = {
+  presentation?: 'legacy' | 'composer';
+  category?: CategoryTone;
   autoSaveInitialPhoto?: boolean;
   circleId: string;
   dateKey: string;
   initialNote?: string;
   initialPhotoUrl?: string;
   onDirtyChange?: (isDirty: boolean) => void;
+  onExpansionChange?: (isExpanded: boolean) => void;
   onSavePendingDetailsReady?: (
     savePendingDetails: (() => void) | undefined,
   ) => void;
@@ -57,12 +69,15 @@ function isRemotePhoto(value?: string) {
 }
 
 export function TapInDetailsSection({
+  presentation = 'legacy',
+  category = 'neutral',
   autoSaveInitialPhoto = false,
   circleId,
   dateKey,
   initialNote,
   initialPhotoUrl,
   onDirtyChange,
+  onExpansionChange,
   onSavePendingDetailsReady,
   onSaveStateChange,
   onSaved,
@@ -71,6 +86,7 @@ export function TapInDetailsSection({
   const user = useSessionStore(state => state.user);
   const [isExpanded, setIsExpanded] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const saveLock = useRef(false);
   const [saveError, setSaveError] = useState<string>();
   const [persistedNote, setPersistedNote] = useState(initialNote ?? '');
   const [persistedPhotoUrl, setPersistedPhotoUrl] = useState(
@@ -93,6 +109,7 @@ export function TapInDetailsSection({
     (isPhotoRemoved && Boolean(savedPhotoUrl));
   const isDirtyRef = useRef(isDirty);
   const isExpandedRef = useRef(isExpanded);
+  const reportedExpansionRef = useRef(isExpanded);
   const autoSaveAttemptedPhotoRef = useRef<string | undefined>(undefined);
 
   isDirtyRef.current = isDirty;
@@ -114,6 +131,15 @@ export function TapInDetailsSection({
     onSaveStateChange,
     saveError,
   ]);
+
+  useEffect(() => {
+    if (reportedExpansionRef.current === isExpanded) {
+      return;
+    }
+
+    reportedExpansionRef.current = isExpanded;
+    onExpansionChange?.(isExpanded);
+  }, [isExpanded, onExpansionChange]);
 
   useEffect(
     () => () => {
@@ -202,6 +228,19 @@ export function TapInDetailsSection({
       setSaveError(undefined);
     }
   };
+  const openPhotoPicker = () => {
+    Alert.alert('Add Photo', 'Choose a photo source.', [
+      {
+        onPress: () => takePhoto().catch(() => undefined),
+        text: 'Take Photo',
+      },
+      {
+        onPress: () => choosePhoto().catch(() => undefined),
+        text: 'Choose from Library',
+      },
+      {style: 'cancel', text: 'Cancel'},
+    ]);
+  };
 
   const saveDetails = useCallback(
     async ({
@@ -211,6 +250,9 @@ export function TapInDetailsSection({
       collapseOnSuccess?: boolean;
       showAlertOnError?: boolean;
     } = {}) => {
+      if (saveLock.current) {
+        return;
+      }
       if (!user?.uid) {
         const message = 'Sign in before saving Tap In details.';
 
@@ -221,6 +263,7 @@ export function TapInDetailsSection({
         return;
       }
 
+      saveLock.current = true;
       setIsSaving(true);
       setSaveError(undefined);
       try {
@@ -265,6 +308,7 @@ export function TapInDetailsSection({
           Alert.alert('Could not save details', message);
         }
       } finally {
+        saveLock.current = false;
         setIsSaving(false);
       }
     },
@@ -339,6 +383,35 @@ export function TapInDetailsSection({
 
     setIsExpanded(true);
   };
+
+  if (presentation === 'composer') {
+    return (
+      <ComposerDetailsPresentation
+        {...{
+          category,
+          isExpanded,
+          isSaving,
+          isDirty,
+          hasSavedDetails,
+          disclosureTitle,
+          disclosureSubtitle,
+          noteDraft,
+          visiblePhotoUri,
+          saveError,
+        }}
+        onOpen={openDetails}
+        onClose={closeEditor}
+        onNote={setNoteDraft}
+        onAddPhoto={openPhotoPicker}
+        onSave={() => saveDetails().catch(() => undefined)}
+        onRemovePhoto={() => {
+          setLocalPhotoUri(undefined);
+          setIsPhotoRemoved(true);
+          setSaveError(undefined);
+        }}
+      />
+    );
+  }
 
   if (!isExpanded) {
     return (
@@ -604,6 +677,10 @@ const styles = StyleSheet.create({
   editorPanel: {
     gap: 16,
   },
+  composerEditor: {
+    gap: 16,
+    paddingTop: 4,
+  },
   editorTitle: {
     fontSize: 17,
     fontWeight: '800',
@@ -663,3 +740,129 @@ const styles = StyleSheet.create({
     width: 32,
   },
 });
+
+export function ComposerDetailsPresentation({
+  category,
+  isExpanded,
+  isSaving,
+  isDirty,
+  hasSavedDetails,
+  disclosureTitle,
+  disclosureSubtitle,
+  noteDraft,
+  visiblePhotoUri,
+  saveError,
+  onOpen,
+  onClose,
+  onNote,
+  onAddPhoto,
+  onSave,
+  onRemovePhoto,
+}: {
+  category: CategoryTone;
+  isExpanded: boolean;
+  isSaving: boolean;
+  isDirty: boolean;
+  hasSavedDetails: boolean;
+  disclosureTitle: string;
+  disclosureSubtitle: string;
+  noteDraft: string;
+  visiblePhotoUri?: string;
+  saveError?: string;
+  onOpen: () => void;
+  onClose: () => void;
+  onNote: (text: string) => void;
+  onAddPhoto: () => void;
+  onSave: () => void;
+  onRemovePhoto: () => void;
+}) {
+  const theme = useSystemTheme();
+  if (!isExpanded) {
+    return (
+      <ComposerDisclosure
+        title={disclosureTitle}
+        subtitle={disclosureSubtitle}
+        onPress={onOpen}
+        disabled={isSaving}
+        testID="tap-in-details-disclosure"
+        leading={<Pencil size={20} color={theme.muted} />}
+      />
+    );
+  }
+  return (
+    <View style={styles.composerEditor}>
+      <View style={styles.editorHeader}>
+        <View style={styles.editorHeaderCopy}>
+          <DSText variant="title">
+            {hasSavedDetails ? 'Edit Tap In details' : 'Add Tap In details'}
+          </DSText>
+          <DSText variant="secondary" tone="muted">
+            Add context now or update it later today.
+          </DSText>
+        </View>
+        <DSIconButton
+          label="Close details editor"
+          disabled={isSaving}
+          onPress={onClose}
+          icon={<ChevronUp size={20} color={theme.muted} />}
+        />
+      </View>
+      <DSInput
+        label="Optional Note"
+        value={noteDraft}
+        onChangeText={onNote}
+        maxLength={1000}
+        multiline
+        numberOfLines={4}
+        editable={!isSaving}
+        placeholder="Share what you did, how it went, or what your Circle should know."
+        style={{minHeight: 108}}
+        textAlignVertical="top"
+      />
+      <ComposerDisclosure
+        title={visiblePhotoUri ? 'Change photo' : 'Add photo'}
+        subtitle="Optional proof for your Circle"
+        onPress={onAddPhoto}
+        disabled={isSaving}
+        testID="tap-in-details-photo-picker"
+        leading={<Camera size={20} color={theme.muted} />}
+      />
+      {visiblePhotoUri ? (
+        <>
+          <Image
+            source={{uri: visiblePhotoUri}}
+            style={{width: '100%', height: 156, borderRadius: 12}}
+            resizeMode="cover"
+            testID="tap-in-details-photo-preview"
+            accessibilityLabel="Tap In photo"
+          />
+          <DSButton
+            label="Remove photo"
+            variant="quiet"
+            disabled={isSaving}
+            onPress={onRemovePhoto}
+          />
+        </>
+      ) : null}
+      {saveError ? (
+        <DSText
+          tone="danger"
+          variant="secondary"
+          accessibilityLiveRegion="polite">
+          {saveError}
+        </DSText>
+      ) : null}
+      {isDirty || isSaving ? (
+        <DSButton
+          label={isSaving ? 'Saving Details...' : 'Save Details'}
+          busy={isSaving}
+          category={category}
+          variant="primary"
+          disabled={isSaving}
+          onPress={onSave}
+          testID="tap-in-details-save"
+        />
+      ) : null}
+    </View>
+  );
+}

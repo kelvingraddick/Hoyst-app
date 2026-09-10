@@ -5,6 +5,7 @@ import renderer, {act} from 'react-test-renderer';
 import {HomeActivityRow} from '../src/features/home/components/HomeSurfaces';
 import {HomeButton as HoystButton} from '../src/features/home/components/HomeSurfaces';
 import {WeekProgressStrip} from '../src/design/components/WeekProgressStrip';
+import {brandColors} from '../src/design/tokens/colors';
 import {HomeScreen} from '../src/features/home/screens/HomeScreen';
 import {
   HomeDailyActionProgress,
@@ -646,6 +647,20 @@ describe('HomeScreen Circle activity updates', () => {
     expect(output).toContain('Morning Movers');
     expect(startButton).toBeTruthy();
     expect(starterArtwork.props.accessible).toBe(false);
+    expect(
+      tree.root.findAllByProps({
+        testID: 'home-hero-hoy-orb-getting_started-image',
+      }),
+    ).not.toHaveLength(0);
+    expect(
+      tree.root.findByProps({testID: 'home-hero-hoy-action'}).props
+        .accessibilityLabel,
+    ).toContain('Hoy, Getting started.');
+    expect(
+      tree.root.findAllByProps({
+        testID: 'home-hoy-decoration-getting_started',
+      }),
+    ).not.toHaveLength(0);
 
     act(() => {
       startButton.props.onPress();
@@ -847,7 +862,7 @@ describe('HomeScreen Circle activity updates', () => {
     ).not.toHaveLength(0);
     expect(
       tree.root.findAllByProps({
-        testID: 'home-hero-hoy-orb-locked-image',
+        testID: 'home-hero-hoy-orb-getting_started-image',
       }),
     ).toHaveLength(0);
     expect(output).not.toContain('Start making Progress');
@@ -883,7 +898,7 @@ describe('HomeScreen Circle activity updates', () => {
     ).toHaveLength(0);
     expect(
       tree!.root.findAllByProps({
-        testID: 'home-hero-hoy-orb-locked-image',
+        testID: 'home-hero-hoy-orb-getting_started-image',
       }),
     ).toHaveLength(0);
   });
@@ -1288,6 +1303,11 @@ describe('HomeScreen Circle activity updates', () => {
       testID: 'home-daily-action-progress',
     });
     expect(progress.props.accessibilityValue).toMatchObject({now: 0, max: 1});
+    expect(
+      StyleSheet.flatten(
+        tree.root.findByProps({testID: 'home-momentum-bar'}).props.style,
+      )?.backgroundColor,
+    ).toBe('#FFFFFF');
     act(() =>
       tree.root.findByProps({testID: 'home-momentum-bar'}).props.onPress(),
     );
@@ -1321,6 +1341,13 @@ describe('HomeScreen Circle activity updates', () => {
         testID: 'home-daily-action-progress-track',
       }).length,
     ).toBeGreaterThan(0);
+    expect(
+      StyleSheet.flatten(
+        dailyProgress.findByProps({
+          testID: 'home-daily-action-progress-fill',
+        }).props.style,
+      )?.backgroundColor,
+    ).toBe(brandColors.blue);
     const output = JSON.stringify(tree.toJSON());
     expect(output).not.toContain('Tap In remaining');
     expect(output).not.toContain('Tap Ins remaining');

@@ -21,7 +21,7 @@ const baseInput: HoyStateInput = {
 
 describe('getHoyState', () => {
   it.each([
-    ['locked', {isAuthenticatedHome: false}],
+    ['getting_started', {isAuthenticatedHome: false}],
     ['thinking', {isLoadingHomeData: true}],
     ['celebrating', {isCelebrating: true}],
     ['risk_attention', {hasUnrecoveredMiss: true}],
@@ -69,14 +69,16 @@ describe('getHoyState', () => {
     ).toBe('risk_attention');
   });
 
-  it('locks guests, incomplete profiles, and pending-only memberships', () => {
+  it('starts guests, incomplete profiles, and pending-only memberships optimistically', () => {
     expect(getHoyState({...baseInput, isAuthenticatedHome: false})).toBe(
-      'locked',
+      'getting_started',
     );
     expect(getHoyState({...baseInput, isIncompleteProfile: true})).toBe(
-      'locked',
+      'getting_started',
     );
-    expect(getHoyState({...baseInput, pendingCount: 2})).toBe('locked');
+    expect(getHoyState({...baseInput, pendingCount: 2})).toBe(
+      'getting_started',
+    );
   });
 
   it('keeps an authenticated zero-Circle Home in the calm building state', () => {
@@ -94,7 +96,7 @@ describe('getStableHoyDisplayState', () => {
     ).toBeUndefined();
     expect(
       getStableHoyDisplayState({
-        candidateState: 'locked',
+        candidateState: 'getting_started',
         isSessionResolving: true,
       }),
     ).toBeUndefined();
@@ -110,7 +112,7 @@ describe('getStableHoyDisplayState', () => {
     ).toBe('risk_attention');
     expect(
       getStableHoyDisplayState({
-        candidateState: 'locked',
+        candidateState: 'getting_started',
         isSessionResolving: true,
         previousResolvedState: 'momentum_strong',
       }),

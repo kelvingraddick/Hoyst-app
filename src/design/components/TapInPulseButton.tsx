@@ -103,22 +103,16 @@ export function TapInPulseButton({
   const hasSupportingText = Boolean(supportingText);
   const isHeroVariant = variant === 'hero';
   const frameBackgroundColor = isHeroVariant
-    ? theme.isDark
-      ? 'rgba(8,10,16,0.96)'
-      : '#15171D'
+    ? theme.accentTertiaryForeground
     : theme.isDark
     ? 'rgba(17, 20, 32, 0.9)'
     : 'rgba(255, 255, 255, 0.96)';
   const frameBorderColor = isHeroVariant
-    ? theme.isDark
-      ? 'rgba(255,255,255,0.08)'
-      : '#15171D'
+    ? theme.accentTertiaryForeground
     : theme.actionBorder;
   const labelColor = isHeroVariant ? '#FFFFFF' : theme.actionForeground;
   const supportingTextColor = isHeroVariant
-    ? theme.isDark
-      ? '#AEB4C2'
-      : '#A9ADB7'
+    ? 'rgba(255,255,255,0.78)'
     : theme.textMuted;
   const frameBorderRadius = isHeroVariant ? radius.md : radius.pill;
 

@@ -4,16 +4,12 @@ import {
   Alert,
   InteractionManager,
   StyleSheet,
-  View,
 } from 'react-native';
 import renderer, {act} from 'react-test-renderer';
 
-import {HoystButton} from '../src/design/components/HoystButton';
-import {HoystInput} from '../src/design/components/HoystInput';
 import {HoystTapInMark} from '../src/design/components/HoystTapInMark';
-import {TapInActionButton} from '../src/design/components/TapInActionButton';
-import {CommitmentTypePill} from '../src/design/components/CommitmentTypeVisual';
 import {TapInRingMark} from '../src/design/components/TapInRingMark';
+import {DSButton, DSInput} from '../src/design/system';
 import {TapInCompleteScreen} from '../src/features/check-in/screens/TapInCompleteScreen';
 import type {RootStackParamList} from '../src/navigation/types';
 
@@ -24,6 +20,7 @@ const mockUpdateTapInDetails = jest.fn();
 const mockUploadTapInPhoto = jest.fn();
 const mockLaunchCamera = jest.fn();
 const mockLaunchImageLibrary = jest.fn();
+let mockAppearance: 'light' | 'dark' = 'light';
 
 jest.mock('react-native-image-picker', () => ({
   launchCamera: (...args: unknown[]) => mockLaunchCamera(...args),
@@ -64,8 +61,9 @@ jest.mock('react-native-safe-area-context', () => {
 });
 
 jest.mock('../src/store/settings-store', () => ({
-  useSettingsStore: (selector: (state: {appearance: 'light'}) => unknown) =>
-    selector({appearance: 'light'}),
+  useSettingsStore: (
+    selector: (state: {appearance: 'light' | 'dark'}) => unknown,
+  ) => selector({appearance: mockAppearance}),
 }));
 
 jest.mock('../src/store/session-store', () => ({
@@ -145,9 +143,9 @@ async function renderReadyCompleteScreen(
     tree = renderCompleteScreen(params);
   });
 
-  const layoutTarget = tree!.root
-    .findAllByType(View)
-    .find(node => typeof node.props.onLayout === 'function');
+  const layoutTarget = tree!.root.findByProps({
+    testID: 'tap-in-complete-content',
+  });
 
   await act(async () => {
     layoutTarget!.props.onLayout();
@@ -158,6 +156,7 @@ async function renderReadyCompleteScreen(
 
 describe('TapInCompleteScreen', () => {
   beforeEach(() => {
+    mockAppearance = 'light';
     mockSubscribeToMemberCircleDetail.mockClear();
     mockUpdateTapInDetails.mockReset();
     mockUploadTapInPhoto.mockReset();
@@ -197,9 +196,9 @@ describe('TapInCompleteScreen', () => {
 
     expect(mockSubscribeToMemberCircleDetail).toHaveBeenCalledTimes(1);
 
-    const layoutTarget = tree!.root
-      .findAllByType(View)
-      .find(node => typeof node.props.onLayout === 'function');
+    const layoutTarget = tree!.root.findByProps({
+      testID: 'tap-in-complete-content',
+    });
 
     await act(async () => {
       layoutTarget!.props.onLayout();
@@ -207,38 +206,70 @@ describe('TapInCompleteScreen', () => {
 
     const output = JSON.stringify(tree!.toJSON());
 
-    expect(output).toContain('Tap In Complete');
+    expect(output).toContain('Tap In complete');
     expect(output).toContain('+1 day streak');
     expect(output).toContain('6 now');
     expect(output).toContain('Move for 30 minutes');
-    expect(output).toContain('Share Story');
+    expect(output).toContain('Share as story');
     expect(output).toContain('Add details');
     expect(output).toContain('Done');
     expect(output).not.toContain('Finalizing Tap In');
     expect(output).not.toContain('Loading Tap In details');
     expect(output).not.toContain('Loading your circle');
 
+    expect(
+      tree!.root.findByProps({testID: 'tap-in-complete-circle-title'}).props
+        .variant,
+    ).toBe('screenTitle');
+    expect(
+      StyleSheet.flatten(
+        tree!.root.findByProps({testID: 'tap-in-complete-title'}).props.style,
+      ),
+    ).toEqual(expect.objectContaining({fontSize: 26, lineHeight: 31}));
+    expect(
+      tree!.root.findByProps({testID: 'tap-in-complete-status'}).props.variant,
+    ).toBe('secondary');
+    expect(
+      StyleSheet.flatten(
+        tree!.root.findByProps({
+          testID: 'tap-in-complete-share-action-label',
+        }).props.style,
+      ),
+    ).toEqual(
+      expect.objectContaining({
+        fontSize: 16,
+        fontWeight: '600',
+        lineHeight: 21,
+      }),
+    );
+    expect(
+      StyleSheet.flatten(
+        tree!.root.findByProps({
+          testID: 'tap-in-complete-share-action-face',
+        }).props.style,
+      ),
+    ).toEqual(
+      expect.objectContaining({backgroundColor: '#5A1CFF', minHeight: 56}),
+    );
+    expect(
+      tree!.root.findByProps({testID: 'tap-in-complete-commitment'}).props
+        .variant,
+    ).toBe('body');
+
     const disclosure = tree!.root.findByProps({
       testID: 'tap-in-details-disclosure',
     });
-    expect(
-      StyleSheet.flatten(disclosure.props.style({pressed: false})),
-    ).toEqual(
-      expect.objectContaining({
-        alignSelf: 'stretch',
-      }),
-    );
+    expect(disclosure.props.title).toBe('Add details');
+    expect(disclosure.props.subtitle).toBe('Optional note or photo');
 
-    const disclosureSurface = tree!.root.findByProps({
-      testID: 'tap-in-details-disclosure-surface',
+    expect(
+      tree!.root.findByProps({testID: 'tap-in-complete-category-fade'}),
+    ).toBeTruthy();
+    const dock = tree!.root.findByProps({
+      testID: 'tap-in-complete-action-dock',
     });
-    expect(StyleSheet.flatten(disclosureSurface.props.style)).toEqual(
-      expect.objectContaining({
-        backgroundColor: '#FFFFFF',
-        flexDirection: 'row',
-        gap: 12,
-        minHeight: 72,
-      }),
+    expect(StyleSheet.flatten(dock.props.style)).toEqual(
+      expect.objectContaining({paddingBottom: 16, paddingHorizontal: 22}),
     );
   });
 
@@ -256,6 +287,15 @@ describe('TapInCompleteScreen', () => {
     expect(tree!.root.findAllByType(TapInRingMark)).toHaveLength(0);
   });
 
+  it('uses the selected dark canvas for the local completion presentation', async () => {
+    mockAppearance = 'dark';
+    const tree = await renderReadyCompleteScreen();
+
+    expect(JSON.stringify(tree.toJSON())).toContain(
+      '"backgroundColor":"#121212"',
+    );
+  });
+
   it('renders covered Build quantity completion context', async () => {
     const tree = await renderReadyCompleteScreen({
       commitmentType: 'build',
@@ -268,14 +308,18 @@ describe('TapInCompleteScreen', () => {
 
     const output = JSON.stringify(tree.toJSON());
 
-    expect(output).toContain('Tap In Complete');
+    expect(output).toContain('Tap In complete');
     expect(output).toContain('Goal covered');
     expect(output).toContain('5 pages logged');
     expect(output).toContain('Goal 5 pages');
-    expect(output).toContain('Share Story');
-    expect(tree.root.findByType(CommitmentTypePill).props.commitmentType).toBe(
-      'build',
-    );
+    expect(output).toContain('Share as story');
+    expect(
+      tree.root.findByProps({testID: 'tap-in-complete-commitment-type'}).props
+        .children,
+    ).toBe(' · BUILD');
+    expect(
+      tree.root.findByProps({testID: 'tap-in-complete-particles'}),
+    ).toBeTruthy();
   });
 
   it('renders partial Build quantity completion context', async () => {
@@ -295,10 +339,14 @@ describe('TapInCompleteScreen', () => {
     expect(output).toContain('3 pages logged');
     expect(output).toContain('Goal 5 pages');
     expect(output).toContain('No note added. Your Progress was saved.');
-    expect(output).toContain('Share Story');
-    expect(tree.root.findByType(CommitmentTypePill).props.commitmentType).toBe(
-      'build',
-    );
+    expect(output).toContain('Share as story');
+    expect(
+      tree.root.findByProps({testID: 'tap-in-complete-commitment-type'}).props
+        .children,
+    ).toBe(' · BUILD');
+    expect(
+      tree.root.findAllByProps({testID: 'tap-in-complete-particles'}),
+    ).toHaveLength(0);
   });
 
   it('renders failed Limit quantity completion context with story sharing', async () => {
@@ -319,22 +367,26 @@ describe('TapInCompleteScreen', () => {
     expect(output).toContain('8 servings logged');
     expect(output).toContain('Goal range 2 to 6 servings');
     expect(output).toContain('No note added. Your Tap In was saved.');
-    expect(output).toContain('Share Story');
-    expect(tree.root.findByType(CommitmentTypePill).props.commitmentType).toBe(
-      'limit',
-    );
+    expect(output).toContain('Share as story');
+    expect(
+      tree.root.findByProps({testID: 'tap-in-complete-commitment-type'}).props
+        .children,
+    ).toBe(' · LIMIT');
+    expect(
+      tree.root.findAllByProps({testID: 'tap-in-complete-particles'}),
+    ).toHaveLength(0);
   });
 
-  it('opens the dedicated story share screen from Share Story', async () => {
+  it('opens the dedicated story share screen from Share as story', async () => {
     let tree: renderer.ReactTestRenderer | undefined;
 
     await act(async () => {
       tree = renderCompleteScreen();
     });
 
-    const layoutTarget = tree!.root
-      .findAllByType(View)
-      .find(node => typeof node.props.onLayout === 'function');
+    const layoutTarget = tree!.root.findByProps({
+      testID: 'tap-in-complete-content',
+    });
 
     await act(async () => {
       layoutTarget!.props.onLayout();
@@ -342,9 +394,9 @@ describe('TapInCompleteScreen', () => {
 
     const navigation =
       tree!.root.findByType(TapInCompleteScreen).props.navigation;
-    const shareButton = tree!.root
-      .findAllByType(HoystButton)
-      .find(button => button.props.label === 'Share Story');
+    const shareButton = tree!.root.findByProps({
+      testID: 'tap-in-complete-share-action',
+    });
 
     await act(async () => {
       shareButton!.props.onPress();
@@ -375,14 +427,14 @@ describe('TapInCompleteScreen', () => {
         .props.onPress();
     });
 
-    const noteInput = tree.root.findByType(HoystInput);
+    const noteInput = tree.root.findByType(DSInput);
 
     await act(async () => {
       noteInput.props.onChangeText('Saved after the Tap In.');
     });
 
     const saveButton = tree.root
-      .findAllByType(TapInActionButton)
+      .findAllByType(DSButton)
       .find(button => button.props.label === 'Save Details');
 
     await act(async () => {
@@ -401,9 +453,9 @@ describe('TapInCompleteScreen', () => {
 
     const navigation =
       tree.root.findByType(TapInCompleteScreen).props.navigation;
-    const shareButton = tree.root
-      .findAllByType(HoystButton)
-      .find(button => button.props.label === 'Share Story');
+    const shareButton = tree.root.findByProps({
+      testID: 'tap-in-complete-share-action',
+    });
 
     await act(async () => {
       shareButton!.props.onPress();
@@ -469,17 +521,12 @@ describe('TapInCompleteScreen', () => {
 
     await act(async () => {
       tree.root
-        .findAllByType(HoystButton)
-        .find(button => button.props.label === 'Done')
-        ?.props.onPress();
+        .findByProps({testID: 'tap-in-complete-done-action'})
+        .props.onPress();
     });
 
     expect(navigation.goBack).not.toHaveBeenCalled();
-    expect(
-      tree.root
-        .findAllByType(HoystButton)
-        .some(button => button.props.label === 'Saving Photo...'),
-    ).toBe(true);
+    expect(JSON.stringify(tree.toJSON())).toContain('Saving Photo...');
 
     await act(async () => {
       resolveUpload?.('https://example.com/done-proof.jpg');
@@ -491,7 +538,7 @@ describe('TapInCompleteScreen', () => {
     expect(navigation.goBack).toHaveBeenCalledTimes(1);
   });
 
-  it('waits for an active photo save before opening Share Story', async () => {
+  it('waits for an active photo save before opening Share as story', async () => {
     let resolveUpload: ((photoUrl: string) => void) | undefined;
     mockUploadTapInPhoto.mockImplementationOnce(
       () =>
@@ -512,9 +559,8 @@ describe('TapInCompleteScreen', () => {
 
     await act(async () => {
       tree.root
-        .findAllByType(HoystButton)
-        .find(button => button.props.label === 'Share Story')
-        ?.props.onPress();
+        .findByProps({testID: 'tap-in-complete-share-action'})
+        .props.onPress();
     });
 
     expect(navigation.navigate).not.toHaveBeenCalled();
@@ -555,10 +601,13 @@ describe('TapInCompleteScreen', () => {
 
     expect(JSON.stringify(tree.toJSON())).toContain('Retry photo upload');
     expect(JSON.stringify(tree.toJSON())).toContain('file:///proof.jpg');
+    expect(
+      tree.root.findByProps({testID: 'tap-in-details-disclosure'}).props.title,
+    ).toBe('Retry photo upload');
 
     await act(async () => {
       tree.root
-        .findByProps({accessibilityLabel: 'Retry photo upload'})
+        .findByProps({testID: 'tap-in-details-disclosure'})
         .props.onPress();
       await Promise.resolve();
       await Promise.resolve();
@@ -601,9 +650,8 @@ describe('TapInCompleteScreen', () => {
 
     await act(async () => {
       tree.root
-        .findAllByType(HoystButton)
-        .find(button => button.props.label === 'Done')
-        ?.props.onPress();
+        .findByProps({testID: 'tap-in-complete-done-action'})
+        .props.onPress();
     });
 
     const firstButtons = alertSpy.mock.calls.at(-1)?.[2] as
@@ -666,14 +714,20 @@ describe('TapInCompleteScreen', () => {
         .props.onPress();
     });
     await act(async () => {
-      tree.root.findByProps({accessibilityLabel: 'Take photo'}).props.onPress();
+      tree.root
+        .findByProps({testID: 'tap-in-details-photo-picker'})
+        .props.onPress();
+      const photoActions = alertSpy.mock.calls.at(-1)?.[2] as
+        | Array<{onPress?: () => void; text?: string}>
+        | undefined;
+      photoActions?.find(button => button.text === 'Take Photo')?.onPress?.();
       await Promise.resolve();
       await Promise.resolve();
     });
 
     await act(async () => {
       tree.root
-        .findAllByType(TapInActionButton)
+        .findAllByType(DSButton)
         .find(button => button.props.label === 'Save Details')
         ?.props.onPress();
       await Promise.resolve();
@@ -710,14 +764,14 @@ describe('TapInCompleteScreen', () => {
     });
 
     await act(async () => {
-      tree.root.findByType(HoystInput).props.onChangeText('');
+      tree.root.findByType(DSInput).props.onChangeText('');
       tree.root
         .findByProps({accessibilityLabel: 'Remove photo'})
         .props.onPress();
     });
 
     const saveButton = tree.root
-      .findAllByType(TapInActionButton)
+      .findAllByType(DSButton)
       .find(button => button.props.label === 'Save Details');
 
     await act(async () => {
@@ -746,7 +800,7 @@ describe('TapInCompleteScreen', () => {
     });
 
     await act(async () => {
-      tree.root.findByType(HoystInput).props.onChangeText('Unsaved context');
+      tree.root.findByType(DSInput).props.onChangeText('Unsaved context');
     });
 
     const beforeRemove = navigation.addListener.mock.calls
@@ -789,9 +843,9 @@ describe('TapInCompleteScreen', () => {
       });
     });
 
-    const layoutTarget = tree!.root
-      .findAllByType(View)
-      .find(node => typeof node.props.onLayout === 'function');
+    const layoutTarget = tree!.root.findByProps({
+      testID: 'tap-in-complete-content',
+    });
 
     await act(async () => {
       layoutTarget!.props.onLayout();
@@ -803,7 +857,7 @@ describe('TapInCompleteScreen', () => {
     expect(output).toContain('Grace skip used');
     expect(output).toContain('6 days streak held');
     expect(output).toContain('No note added. Your grace skip still counts.');
-    expect(output).not.toContain('Share Story');
+    expect(output).not.toContain('Share as story');
     expect(output).not.toContain('Add details');
   });
 });

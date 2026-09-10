@@ -11,7 +11,6 @@ import {
 import {
   Check,
   CircleAlert,
-  LockKeyhole,
   TriangleAlert,
 } from 'lucide-react-native';
 
@@ -31,7 +30,7 @@ const hoyAssetSources: Record<HoyState, number> = {
   momentum_peak: require('../../assets/hoy/goal-completed.png'),
   thinking: require('../../assets/hoy/thinking.png'),
   celebrating: require('../../assets/hoy/celebrating.png'),
-  locked: require('../../assets/hoy/locked.png'),
+  getting_started: require('../../assets/hoy/default.png'),
   risk_attention: require('../../assets/hoy/risk-attention.png'),
 };
 
@@ -86,14 +85,6 @@ function getGlyph(state: HoyState, size: number) {
     case 'momentum_peak':
       return (
         <Check color={brandColors.green} size={iconSize} strokeWidth={3.2} />
-      );
-    case 'locked':
-      return (
-        <LockKeyhole
-          color={brandColors.blueVivid}
-          size={iconSize}
-          strokeWidth={3}
-        />
       );
     case 'risk_attention':
       return (

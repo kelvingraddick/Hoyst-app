@@ -6,7 +6,7 @@ import {getHoyAssetSource, HoyOrb} from '../src/design/components/HoyOrb';
 import type {HoyState} from '../src/features/home/services/hoy-state';
 
 const allStates: readonly HoyState[] = [
-  'locked',
+  'getting_started',
   'thinking',
   'celebrating',
   'risk_attention',
@@ -50,7 +50,6 @@ describe('HoyOrb', () => {
   });
 
   it.each([
-    'locked',
     'risk_attention',
     'tap_in_needed',
     'momentum_peak',
@@ -63,6 +62,7 @@ describe('HoyOrb', () => {
   });
 
   it.each([
+    'getting_started',
     'thinking',
     'celebrating',
     'momentum_strong',
@@ -72,6 +72,12 @@ describe('HoyOrb', () => {
 
     expect(tree.root.findAllByProps({testID: 'test-hoy-glyph'})).toHaveLength(
       0,
+    );
+  });
+
+  it('uses the smiling default artwork for getting started', () => {
+    expect(getHoyAssetSource('getting_started')).toBe(
+      getHoyAssetSource('momentum_building'),
     );
   });
 

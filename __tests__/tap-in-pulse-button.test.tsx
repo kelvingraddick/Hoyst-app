@@ -148,7 +148,7 @@ describe('TapInPulseButton', () => {
     expect(logoStyle.width).toBe(58);
     expect(frameStyle.height).toBe(70);
     expect(frameStyle.borderRadius).toBe(20);
-    expect(frameStyle.backgroundColor).toBe('#15171D');
+    expect(frameStyle.backgroundColor).toBe('#086CA8');
     expect(markWrapStyle.transform).toEqual([{translateY: 0}]);
   });
 });

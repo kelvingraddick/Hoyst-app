@@ -22,15 +22,29 @@ import {
 } from 'lucide-react-native';
 import LinearGradient from 'react-native-linear-gradient';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
-import Svg, {Circle, Path} from 'react-native-svg';
-
-import {FrostedBackdrop} from '../../../design/components/FrostedBackdrop';
-import {HoystText} from '../../../design/components/HoystText';
-import {brandColors} from '../../../design/tokens/colors';
+import Svg, {
+  Circle,
+  Defs,
+  LinearGradient as SvgLinearGradient,
+  Path,
+  Rect,
+  Stop,
+} from 'react-native-svg';
+import {getCircleCategoryVisual} from '../../../design/components/CircleCategoryIcon';
 import {radius} from '../../../design/tokens/radius';
 import {useHoystTheme} from '../../../design/theme/useHoystTheme';
+import {
+  DesignSystemProvider,
+  DSText,
+  useSystemTheme,
+} from '../../../design/system';
 import {env} from '../../../config/env';
 import type {RootStackParamList} from '../../../navigation/types';
+import type {CircleDetailModel} from '../../../types/models';
+import {useUserProfileStore} from '../../../store/profile-store';
+import {useSessionStore} from '../../../store/session-store';
+import {useSettingsStore} from '../../../store/settings-store';
+import {subscribeToMemberCircleDetail} from '../../home/services/home-data-service';
 import {
   getProfileSummary,
   type ProfileSummary,
@@ -50,23 +64,20 @@ import {
 } from '../services/tap-in-story-share';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'TapInStoryShare'>;
-
 type ShareDestination =
   | 'clipboard'
   | 'instagram'
   | 'link'
   | 'more'
   | 'snapchat';
-
 type DestinationConfig = {
   backgroundColor: string;
   iconColor: string;
   id: ShareDestination;
   label: string;
-  renderIcon?: (color: string) => React.ReactNode;
+  renderIcon?: () => React.ReactNode;
   Icon?: LucideIcon;
 };
-
 const destinationConfigs: DestinationConfig[] = [
   {
     backgroundColor: '#FFE3DC',
@@ -84,7 +95,7 @@ const destinationConfigs: DestinationConfig[] = [
   },
   {
     backgroundColor: '#DFE6FF',
-    iconColor: brandColors.blueVivid,
+    iconColor: '#2878DD',
     id: 'link',
     label: 'Copy Link',
     Icon: Link2,
@@ -98,31 +109,27 @@ const destinationConfigs: DestinationConfig[] = [
   },
   {
     backgroundColor: '#E6E0FF',
-    iconColor: brandColors.purpleBright,
+    iconColor: '#6E3DF3',
     id: 'more',
     label: 'More',
     Icon: MoreHorizontal,
   },
 ];
-
-const HEADER_CONTROL_SIZE = 32;
-const DOTS_BLOCK_HEIGHT = 21;
-const SHARE_BLOCK_FALLBACK_HEIGHT = 112;
-const SCREEN_HORIZONTAL_PADDING = 20;
+const HEADER_CONTROL_SIZE = 44;
+const DOTS_BLOCK_HEIGHT = 27;
+const SHARE_TRAY_HEIGHT = 126;
+const SCREEN_HORIZONTAL_PADDING = 22;
 const MIN_TOP_SAFE_PADDING = Platform.OS === 'ios' ? 44 : 20;
-
 function getShareErrorMessage(error: unknown) {
   return (
     (error as {message?: string}).message ??
     'The story image could not be shared. Try again in a moment.'
   );
 }
-
 function setClipboardString(value: string) {
   const {Clipboard} = require('react-native') as typeof import('react-native');
   Clipboard.setString(value);
 }
-
 function InstagramGlyph() {
   return (
     <LinearGradient
@@ -130,11 +137,10 @@ function InstagramGlyph() {
       end={{x: 1, y: 1}}
       start={{x: 0, y: 0}}
       style={styles.instagramGlyph}>
-      <Instagram color="#FFFFFF" size={23} strokeWidth={2.35} />
+      <Instagram color="#FFFFFF" size={22} strokeWidth={2.3} />
     </LinearGradient>
   );
 }
-
 function SnapchatGlyph() {
   return (
     <Svg height={28} viewBox="0 0 28 28" width={28}>
@@ -149,7 +155,6 @@ function SnapchatGlyph() {
     </Svg>
   );
 }
-
 function DestinationButton({
   config,
   disabled,
@@ -161,9 +166,8 @@ function DestinationButton({
   isBusy: boolean;
   onPress: () => void;
 }) {
+  const systemTheme = useSystemTheme();
   const Icon = config.Icon;
-  const label = isBusy ? 'Working...' : config.label;
-
   return (
     <Pressable
       accessibilityLabel={config.label.replace('\n', ' ')}
@@ -172,10 +176,7 @@ function DestinationButton({
       onPress={onPress}
       style={({pressed}) => [
         styles.destination,
-        {
-          opacity: disabled ? 0.46 : pressed ? 0.86 : 1,
-          transform: [{scale: pressed && !disabled ? 0.97 : 1}],
-        },
+        {opacity: disabled ? 0.42 : pressed ? 0.8 : 1},
       ]}>
       <View
         style={[
@@ -183,38 +184,50 @@ function DestinationButton({
           {backgroundColor: config.backgroundColor},
         ]}>
         {config.renderIcon ? (
-          config.renderIcon(config.iconColor)
+          config.renderIcon()
         ) : Icon ? (
-          <Icon color={config.iconColor} size={25} strokeWidth={2.35} />
+          <Icon color={config.iconColor} size={24} strokeWidth={2.25} />
         ) : null}
       </View>
-      <HoystText numberOfLines={2} style={styles.destinationLabel}>
-        {label}
-      </HoystText>
+      <DSText
+        numberOfLines={2}
+        style={[styles.destinationLabel, {color: systemTheme.muted}]}>
+        {isBusy ? 'Working...' : config.label}
+      </DSText>
     </Pressable>
   );
 }
-
 function getTemplateIndexFromScroll(
   event: NativeSyntheticEvent<NativeScrollEvent>,
   pageWidth: number,
 ) {
-  if (pageWidth <= 0) {
-    return 0;
-  }
-
-  return Math.max(0, Math.round(event.nativeEvent.contentOffset.x / pageWidth));
+  return pageWidth <= 0
+    ? 0
+    : Math.max(0, Math.round(event.nativeEvent.contentOffset.x / pageWidth));
 }
 
-export function TapInStoryShareScreen({
+export function TapInStoryShareScreen(props: Props): React.JSX.Element {
+  const appearance = useSettingsStore(state => state.appearance);
+  return (
+    <DesignSystemProvider scheme={appearance}>
+      <TapInStoryShareController {...props} />
+    </DesignSystemProvider>
+  );
+}
+function TapInStoryShareController({
   navigation,
   route,
 }: Props): React.JSX.Element {
-  const theme = useHoystTheme();
+  const legacyTheme = useHoystTheme();
+  const systemTheme = useSystemTheme();
+  const profile = useUserProfileStore(state => state.profile);
+  const sessionStatus = useSessionStore(state => state.status);
+  const sessionUser = useSessionStore(state => state.user);
   const insets = useSafeAreaInsets();
   const {height, width} = useWindowDimensions();
   const captureRef = useRef<View>(null);
   const carouselRef = useRef<ScrollView>(null);
+  const [detail, setDetail] = useState<CircleDetailModel>();
   const [activeIndex, setActiveIndex] = useState(0);
   const [busyDestination, setBusyDestination] = useState<ShareDestination>();
   const [carouselBlockHeight, setCarouselBlockHeight] = useState(0);
@@ -222,17 +235,32 @@ export function TapInStoryShareScreen({
   const [hasResolvedProfileSummary, setHasResolvedProfileSummary] =
     useState(false);
   const [profileSummary, setProfileSummary] = useState<ProfileSummary>();
-  const safeTopPadding = Math.max(insets.top, MIN_TOP_SAFE_PADDING) + 6;
-  const safeBottomPadding = Math.max(insets.bottom, 14) + 12;
+  const snapshotDetail = useMemo(
+    () => ({
+      commitment: route.params.commitment ?? "Today's Tap In",
+      inviteUrl: route.params.inviteUrl,
+      memberCount: route.params.memberCount,
+      periodTapInCount: route.params.periodTapInCount,
+      progressLabel: route.params.progressLabel,
+      streakDays: route.params.streakDays,
+      streakLabel: route.params.streakLabel,
+      title: route.params.circleTitle ?? 'Hoyst Circle',
+    }),
+    [route.params],
+  );
+  const displayDetail = detail ?? snapshotDetail;
+  const category = getCircleCategoryVisual(detail?.category ?? 'General');
+  const safeTopPadding = Math.max(insets.top, MIN_TOP_SAFE_PADDING) + 4;
+  const safeBottomPadding = Math.max(insets.bottom, 12) + 8;
   const carouselWidth = Math.max(1, width - SCREEN_HORIZONTAL_PADDING * 2);
   const fallbackCarouselHeight = Math.max(
     1,
     height -
       safeTopPadding -
-      safeBottomPadding -
       HEADER_CONTROL_SIZE -
-      SHARE_BLOCK_FALLBACK_HEIGHT -
-      28,
+      SHARE_TRAY_HEIGHT -
+      safeBottomPadding -
+      30,
   );
   const availablePreviewHeight = Math.max(
     1,
@@ -248,102 +276,78 @@ export function TapInStoryShareScreen({
   const storyData = useMemo(
     () =>
       buildTapInStoryShareData({
-        detail: {
-          commitment: route.params.commitment ?? "Today's Tap In",
-          inviteUrl: route.params.inviteUrl,
-          memberCount: route.params.memberCount,
-          periodTapInCount: route.params.periodTapInCount,
-          progressLabel: route.params.progressLabel,
-          streakDays: route.params.streakDays,
-          streakLabel: route.params.streakLabel,
-          title: route.params.circleTitle ?? 'Hoyst Circle',
-        },
+        detail: displayDetail,
         note: route.params.note,
         photoUri: route.params.photoUri,
         profileSummary,
       }),
-    [
-      route.params.circleTitle,
-      route.params.commitment,
-      route.params.inviteUrl,
-      route.params.memberCount,
-      route.params.note,
-      route.params.periodTapInCount,
-      route.params.photoUri,
-      route.params.progressLabel,
-      route.params.streakDays,
-      route.params.streakLabel,
-      profileSummary,
-    ],
+    [displayDetail, profileSummary, route.params.note, route.params.photoUri],
   );
   const templates = useMemo(
     () => getAvailableTapInStoryTemplates(storyData),
     [storyData],
   );
   const activeTemplate: TapInStoryTemplateId =
-    templates[Math.min(activeIndex, templates.length - 1)] ?? 'designedPost';
+    templates[Math.min(activeIndex, templates.length - 1)] ?? 'tapInMoment';
   const requiresPhotoSettled =
-    activeTemplate === 'photoOverlay' && Boolean(storyData.photoUri);
+    activeTemplate === 'tapInMoment' && Boolean(storyData.photoUri);
   const canCapture =
-    hasResolvedProfileSummary &&
-    (!requiresPhotoSettled || isPhotoSettled);
+    hasResolvedProfileSummary && (!requiresPhotoSettled || isPhotoSettled);
   const isBusy = Boolean(busyDestination);
-  const activeDotStyle = useMemo(
-    () => ({backgroundColor: theme.text}),
-    [theme.text],
-  );
-  const previewBackgroundStyle = theme.isDark
-    ? styles.previewBackgroundDark
-    : styles.previewBackgroundLight;
-
+  useEffect(() => {
+    if (sessionStatus !== 'authenticatedReady' || !sessionUser?.uid) {
+      return;
+    }
+    return subscribeToMemberCircleDetail({
+      circleId: route.params.circleId,
+      onDetail: nextDetail => setDetail(nextDetail),
+      onError: () => undefined,
+      timezone: profile?.timezone ?? 'UTC',
+      uid: sessionUser.uid,
+    });
+  }, [
+    profile?.timezone,
+    route.params.circleId,
+    sessionStatus,
+    sessionUser?.uid,
+  ]);
   useEffect(() => {
     if (activeIndex >= templates.length) {
-      setActiveIndex(templates.length - 1);
+      setActiveIndex(Math.max(0, templates.length - 1));
     }
   }, [activeIndex, templates.length]);
-
   useEffect(() => {
-    let isActive = true;
-
+    let active = true;
     setHasResolvedProfileSummary(false);
     getProfileSummary()
       .then(summary => {
-        if (isActive) {
+        if (active) {
           setProfileSummary(summary);
         }
       })
       .catch(() => undefined)
       .finally(() => {
-        if (isActive) {
+        if (active) {
           setHasResolvedProfileSummary(true);
         }
       });
-
     return () => {
-      isActive = false;
+      active = false;
     };
   }, []);
-
   useEffect(() => {
-    setIsPhotoSettled(!storyData.photoUri || activeTemplate !== 'photoOverlay');
+    setIsPhotoSettled(!storyData.photoUri || activeTemplate !== 'tapInMoment');
   }, [activeTemplate, storyData.photoUri]);
-
-  const close = () => {
-    navigation.goBack();
-  };
-
   const assertCaptureReady = () => {
-    if (!captureRef.current || !canCapture) {
-      Alert.alert(
-        'Story is getting ready',
-        'Give the image one more moment, then try sharing again.',
-      );
-      return false;
+    if (captureRef.current && canCapture) {
+      return true;
     }
-
-    return true;
+    Alert.alert(
+      'Story is getting ready',
+      'Give the image one more moment, then try sharing again.',
+    );
+    return false;
   };
-
   const runShareAction = async (
     destination: ShareDestination,
     action: () => Promise<void>,
@@ -351,7 +355,6 @@ export function TapInStoryShareScreen({
     if (isBusy) {
       return;
     }
-
     setBusyDestination(destination);
     try {
       await action();
@@ -361,44 +364,31 @@ export function TapInStoryShareScreen({
       setBusyDestination(undefined);
     }
   };
-
-  const copyInviteLink = () => {
-    if (!storyData.inviteUrl) {
-      Alert.alert(
-        'Circle link unavailable',
-        'This Circle does not have a share link yet.',
-      );
-      return;
-    }
-
-    setClipboardString(storyData.inviteUrl);
-    Alert.alert('Link copied', 'Circle invite link copied to clipboard.');
-  };
-
   const handleDestinationPress = (destination: ShareDestination) => {
     if (destination === 'link') {
-      copyInviteLink();
-      return;
-    }
-
-    if (destination === 'clipboard') {
-      if (!assertCaptureReady()) {
+      if (!storyData.inviteUrl) {
+        Alert.alert(
+          'Circle link unavailable',
+          'This Circle does not have a share link yet.',
+        );
         return;
       }
-
-      runShareAction('clipboard', async () => {
+      setClipboardString(storyData.inviteUrl);
+      Alert.alert('Link copied', 'Circle invite link copied to clipboard.');
+      return;
+    }
+    if (!assertCaptureReady()) {
+      return;
+    }
+    if (destination === 'clipboard') {
+      runShareAction(destination, async () => {
         await copyTapInStoryImageToClipboard(captureRef);
         Alert.alert('Image copied', 'Story image copied to clipboard.');
       }).catch(() => undefined);
       return;
     }
-
-    if (!assertCaptureReady()) {
-      return;
-    }
-
     if (destination === 'instagram') {
-      runShareAction('instagram', () =>
+      runShareAction(destination, () =>
         shareTapInStoryToInstagram({
           appId: env.instagramAppId,
           inviteUrl: storyData.inviteUrl,
@@ -409,9 +399,8 @@ export function TapInStoryShareScreen({
       ).catch(() => undefined);
       return;
     }
-
     if (destination === 'snapchat') {
-      runShareAction('snapchat', () =>
+      runShareAction(destination, () =>
         shareTapInStoryToSnapchat({
           message: storyData.shareMessage,
           storyCardRef: captureRef,
@@ -420,195 +409,196 @@ export function TapInStoryShareScreen({
       ).catch(() => undefined);
       return;
     }
-
-    runShareAction('more', () =>
+    runShareAction(destination, () =>
       shareTapInStoryImage(captureRef, storyData.shareMessage),
     ).catch(() => undefined);
   };
-
-  const handleScrollEnd = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+  const handleScrollEnd = (event: NativeSyntheticEvent<NativeScrollEvent>) =>
     setActiveIndex(
       Math.min(
         templates.length - 1,
         getTemplateIndexFromScroll(event, carouselWidth),
       ),
     );
-  };
-
-  const handleCarouselLayout = (event: LayoutChangeEvent) => {
-    const nextHeight = event.nativeEvent.layout.height;
-    setCarouselBlockHeight(currentHeight =>
-      Math.abs(currentHeight - nextHeight) > 1 ? nextHeight : currentHeight,
+  const handleCarouselLayout = (event: LayoutChangeEvent) =>
+    setCarouselBlockHeight(current =>
+      Math.abs(current - event.nativeEvent.layout.height) > 1
+        ? event.nativeEvent.layout.height
+        : current,
     );
-  };
-
   return (
-    <View style={[styles.screen, {backgroundColor: theme.background}]}>
-      <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-        <FrostedBackdrop />
-      </View>
-      <View style={styles.captureLayer} pointerEvents="none">
-        <View collapsable={false} ref={captureRef} style={styles.captureCard}>
-          <TapInStoryTemplateCard
-            onPhotoSettled={() => {
-              setIsPhotoSettled(true);
-            }}
-            story={storyData}
-            templateId={activeTemplate}
-          />
-        </View>
-      </View>
-
+    <View style={[styles.screen, {backgroundColor: systemTheme.canvas}]}>
+      <Svg
+        height={286}
+        pointerEvents="none"
+        style={styles.categoryFade}
+        width="100%">
+        <Defs>
+          <SvgLinearGradient id="shareCategoryFade" x1="0" x2="0" y1="0" y2="1">
+            <Stop
+              offset="0"
+              stopColor={category.backplateColor}
+              stopOpacity={legacyTheme.isDark ? 0.22 : 0.92}
+            />
+            <Stop offset="1" stopColor={systemTheme.canvas} stopOpacity={0} />
+          </SvgLinearGradient>
+        </Defs>
+        <Rect fill="url(#shareCategoryFade)" height="286" width="100%" />
+      </Svg>
       <View
-        style={[
-          styles.content,
-          {
-            paddingBottom: safeBottomPadding,
-            paddingTop: safeTopPadding,
-          },
-        ]}>
+        collapsable={false}
+        pointerEvents="none"
+        ref={captureRef}
+        style={styles.captureLayer}>
+        <TapInStoryTemplateCard
+          onPhotoSettled={() => setIsPhotoSettled(true)}
+          story={storyData}
+          templateId={activeTemplate}
+        />
+      </View>
+      <View style={[styles.content, {paddingTop: safeTopPadding}]}>
         <View style={styles.headerRow}>
           <Pressable
             accessibilityLabel="Close Share Tap In"
             accessibilityRole="button"
             hitSlop={8}
-            onPress={close}
+            onPress={() => navigation.goBack()}
             style={({pressed}) => [
               styles.closeButton,
               {
-                backgroundColor: theme.surfaceSoft,
-                borderColor: theme.border,
-                opacity: pressed ? 0.92 : 1,
+                backgroundColor: systemTheme.surface,
+                borderColor: systemTheme.border,
+                opacity: pressed ? 0.72 : 1,
               },
             ]}>
-            <X color={theme.text} size={17} strokeWidth={2.35} />
+            <X color={systemTheme.text} size={19} strokeWidth={2.2} />
           </Pressable>
-          <HoystText
+          <DSText
             numberOfLines={1}
-            style={[styles.headerTitle, {color: theme.text}]}>
+            style={[styles.headerTitle, {color: systemTheme.text}]}>
             Share Tap In
-          </HoystText>
+          </DSText>
           <View style={styles.headerSpacer} />
         </View>
-
-        <View style={styles.mainStack}>
-          <View onLayout={handleCarouselLayout} style={styles.carouselBlock}>
-            <ScrollView
-              bounces={false}
-              decelerationRate="fast"
-              horizontal
-              onMomentumScrollEnd={handleScrollEnd}
-              pagingEnabled
-              ref={carouselRef}
-              scrollEventThrottle={16}
-              showsHorizontalScrollIndicator={false}
-              style={[
-                styles.carousel,
-                {height: previewHeight, width: carouselWidth},
-              ]}>
-              {templates.map(templateId => (
+        <View onLayout={handleCarouselLayout} style={styles.carouselBlock}>
+          <ScrollView
+            bounces={false}
+            decelerationRate="fast"
+            horizontal
+            onMomentumScrollEnd={handleScrollEnd}
+            pagingEnabled
+            ref={carouselRef}
+            scrollEventThrottle={16}
+            showsHorizontalScrollIndicator={false}
+            style={[
+              styles.carousel,
+              {height: previewHeight, width: carouselWidth},
+            ]}>
+            {templates.map(templateId => (
+              <View
+                key={templateId}
+                style={[
+                  styles.carouselPage,
+                  {height: previewHeight, width: carouselWidth},
+                ]}>
                 <View
-                  key={templateId}
                   style={[
-                    styles.carouselPage,
-                    {height: previewHeight, width: carouselWidth},
+                    styles.previewFrame,
+                    templateId === 'transparentOverlay'
+                      ? styles.previewBackgroundTransparent
+                      : {backgroundColor: systemTheme.surface},
+                    {height: previewHeight, width: previewWidth},
                   ]}>
                   <View
                     style={[
-                      styles.previewFrame,
-                      templateId === 'transparentStats'
-                        ? styles.previewBackgroundTransparent
-                        : previewBackgroundStyle,
+                      styles.previewScaler,
                       {
-                        height: previewHeight,
-                        width: previewWidth,
+                        left:
+                          -(
+                            tapInStoryShareCardSize.width *
+                            (1 - previewScale)
+                          ) / 2,
+                        top:
+                          -(
+                            tapInStoryShareCardSize.height *
+                            (1 - previewScale)
+                          ) / 2,
+                        transform: [{scale: previewScale}],
                       },
                     ]}>
-                    <View
-                      style={[
-                        styles.previewScaler,
-                        {
-                          left:
-                            -(
-                              tapInStoryShareCardSize.width *
-                              (1 - previewScale)
-                            ) / 2,
-                          top:
-                            -(
-                              tapInStoryShareCardSize.height *
-                              (1 - previewScale)
-                            ) / 2,
-                          transform: [{scale: previewScale}],
-                        },
-                      ]}>
-                      <TapInStoryTemplateCard
-                        showTransparencyGrid={templateId === 'transparentStats'}
-                        story={storyData}
-                        templateId={templateId}
-                      />
-                    </View>
+                    <TapInStoryTemplateCard
+                      showTransparencyGrid={templateId === 'transparentOverlay'}
+                      story={storyData}
+                      templateId={templateId}
+                    />
                   </View>
                 </View>
-              ))}
-            </ScrollView>
-
-            <View style={styles.dotsRow}>
-              {templates.map((templateId, index) => (
-                <Pressable
-                  accessibilityLabel={`Show story option ${index + 1}`}
-                  accessibilityRole="button"
-                  hitSlop={8}
-                  key={templateId}
-                  onPress={() => {
-                    carouselRef.current?.scrollTo({
-                      animated: true,
-                      x: carouselWidth * index,
-                    });
-                    setActiveIndex(index);
-                  }}
-                  style={[
-                    styles.dot,
-                    index === activeIndex ? activeDotStyle : styles.inactiveDot,
-                  ]}
-                />
-              ))}
-            </View>
+              </View>
+            ))}
+          </ScrollView>
+          <View style={styles.dotsRow}>
+            {templates.map((templateId, index) => (
+              <Pressable
+                accessibilityLabel={`Show story option ${index + 1}`}
+                accessibilityRole="button"
+                hitSlop={8}
+                key={templateId}
+                onPress={() => {
+                  carouselRef.current?.scrollTo({
+                    animated: true,
+                    x: carouselWidth * index,
+                  });
+                  setActiveIndex(index);
+                }}
+                style={[
+                  styles.dot,
+                  {
+                    backgroundColor:
+                      index === activeIndex
+                        ? category.accentColor
+                        : systemTheme.border,
+                  },
+                ]}
+              />
+            ))}
           </View>
-
-          <View style={styles.shareBlock}>
-            <HoystText tone="muted" variant="label" style={styles.shareLabel}>
-              Share to
-            </HoystText>
-            <View style={styles.destinationsRow}>
-              {destinationConfigs.map(config => (
-                <DestinationButton
-                  config={config}
-                  disabled={
-                    isBusy ||
-                    ((config.id === 'instagram' ||
-                      config.id === 'snapchat' ||
-                      config.id === 'more' ||
-                      config.id === 'clipboard') &&
-                      !canCapture)
-                  }
-                  isBusy={busyDestination === config.id}
-                  key={config.id}
-                  onPress={() => handleDestinationPress(config.id)}
-                />
-              ))}
-            </View>
-          </View>
+        </View>
+      </View>
+      <View
+        style={[
+          styles.shareTray,
+          {
+            backgroundColor: systemTheme.canvas,
+            borderColor: systemTheme.border,
+            paddingBottom: safeBottomPadding,
+          },
+        ]}>
+        <DSText style={[styles.shareLabel, {color: systemTheme.muted}]}>
+          Share to
+        </DSText>
+        <View style={styles.destinationsRow}>
+          {destinationConfigs.map(config => (
+            <DestinationButton
+              config={config}
+              disabled={
+                isBusy ||
+                ((config.id === 'instagram' ||
+                  config.id === 'snapchat' ||
+                  config.id === 'more' ||
+                  config.id === 'clipboard') &&
+                  !canCapture)
+              }
+              isBusy={busyDestination === config.id}
+              key={config.id}
+              onPress={() => handleDestinationPress(config.id)}
+            />
+          ))}
         </View>
       </View>
     </View>
   );
 }
-
 const styles = StyleSheet.create({
-  captureCard: {
-    height: tapInStoryShareCardSize.height,
-    width: tapInStoryShareCardSize.width,
-  },
   captureLayer: {
     height: tapInStoryShareCardSize.height,
     left: -1200,
@@ -616,19 +606,15 @@ const styles = StyleSheet.create({
     top: 0,
     width: tapInStoryShareCardSize.width,
   },
-  carousel: {
-    flexGrow: 0,
-  },
+  carousel: {flexGrow: 0},
   carouselBlock: {
     alignItems: 'center',
     flex: 1,
     justifyContent: 'center',
     minHeight: 0,
   },
-  carouselPage: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  carouselPage: {alignItems: 'center', justifyContent: 'center'},
+  categoryFade: {left: 0, position: 'absolute', top: 0},
   closeButton: {
     alignItems: 'center',
     borderRadius: radius.pill,
@@ -637,29 +623,20 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     width: HEADER_CONTROL_SIZE,
   },
-  content: {
-    flex: 1,
-    paddingHorizontal: SCREEN_HORIZONTAL_PADDING,
-  },
-  destination: {
-    alignItems: 'center',
-    gap: 7,
-    minWidth: 58,
-  },
+  content: {flex: 1, paddingHorizontal: SCREEN_HORIZONTAL_PADDING},
+  destination: {alignItems: 'center', gap: 6, minWidth: 55},
   destinationIcon: {
     alignItems: 'center',
     borderRadius: 16,
-    height: 52,
+    height: 50,
     justifyContent: 'center',
-    width: 52,
+    width: 50,
   },
   destinationLabel: {
-    color: '#77799A',
-    fontSize: 9.5,
+    fontSize: 10,
     fontWeight: '500',
-    letterSpacing: 0,
-    lineHeight: 11.5,
-    minHeight: 23,
+    lineHeight: 12,
+    minHeight: 24,
     textAlign: 'center',
   },
   destinationsRow: {
@@ -667,78 +644,47 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
   },
-  dot: {
-    borderRadius: radius.pill,
-    height: 7,
-    width: 7,
-  },
+  dot: {borderRadius: radius.pill, height: 7, width: 7},
   dotsRow: {
     alignItems: 'center',
     flexDirection: 'row',
     gap: 7,
+    height: DOTS_BLOCK_HEIGHT,
     justifyContent: 'center',
-    marginTop: 12,
   },
   headerRow: {
     alignItems: 'center',
     flexDirection: 'row',
     minHeight: HEADER_CONTROL_SIZE,
   },
-  headerSpacer: {
-    width: HEADER_CONTROL_SIZE,
-  },
+  headerSpacer: {width: HEADER_CONTROL_SIZE},
   headerTitle: {
     flex: 1,
     fontSize: 16,
-    fontWeight: '800',
-    letterSpacing: 0,
-    lineHeight: 20,
+    fontWeight: '700',
+    lineHeight: 21,
     textAlign: 'center',
   },
   instagramGlyph: {
     alignItems: 'center',
     borderRadius: 9,
-    height: 30,
+    height: 29,
     justifyContent: 'center',
-    width: 30,
+    width: 29,
   },
-  mainStack: {
-    flex: 1,
-    gap: 16,
-    minHeight: 0,
-    paddingTop: 10,
-  },
-  inactiveDot: {
-    backgroundColor: 'rgba(16,24,40,0.18)',
-  },
-  previewBackgroundDark: {
-    backgroundColor: 'rgba(255,255,255,0.08)',
-  },
-  previewBackgroundLight: {
-    backgroundColor: 'rgba(255,255,255,0.62)',
-  },
-  previewBackgroundTransparent: {
-    backgroundColor: '#11131C',
-  },
-  previewFrame: {
-    borderRadius: 20,
-    overflow: 'hidden',
-  },
+  previewBackgroundTransparent: {backgroundColor: '#15161E'},
+  previewFrame: {borderRadius: 20, overflow: 'hidden'},
   previewScaler: {
     height: tapInStoryShareCardSize.height,
     position: 'absolute',
     width: tapInStoryShareCardSize.width,
   },
-  shareBlock: {
-    gap: 9,
-  },
-  shareLabel: {
-    fontSize: 12,
-    fontWeight: '500',
-    letterSpacing: 0,
-    lineHeight: 15,
-  },
-  screen: {
-    flex: 1,
+  screen: {flex: 1},
+  shareLabel: {fontSize: 12, fontWeight: '600', lineHeight: 16},
+  shareTray: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    gap: 10,
+    paddingHorizontal: SCREEN_HORIZONTAL_PADDING,
+    paddingTop: 12,
   },
 });

@@ -1,5 +1,5 @@
 export type HoyState =
-  | 'locked'
+  | 'getting_started'
   | 'thinking'
   | 'celebrating'
   | 'risk_attention'
@@ -26,7 +26,7 @@ export type HoyStateInput = {
 };
 
 export const hoyStateLabels: Record<HoyState, string> = {
-  locked: 'Locked',
+  getting_started: 'Getting started',
   thinking: 'Thinking',
   celebrating: 'Celebrating',
   risk_attention: 'Momentum needs attention',
@@ -49,7 +49,7 @@ export function getHoyState(input: HoyStateInput): HoyState {
     input.isIncompleteProfile ||
     onlyPendingMemberships
   ) {
-    return 'locked';
+    return 'getting_started';
   }
 
   if (input.isLoadingHomeData || input.isGreetingLoading) {

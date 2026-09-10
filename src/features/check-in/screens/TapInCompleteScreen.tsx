@@ -1,4 +1,11 @@
-import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
+import React, {
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import {
   AccessibilityInfo,
   Alert,
@@ -6,20 +13,30 @@ import {
   Easing,
   Image,
   InteractionManager,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
   StyleSheet,
   View,
 } from 'react-native';
-import {Flame, Share2} from 'lucide-react-native';
+import Svg, {Defs, LinearGradient, Rect, Stop} from 'react-native-svg';
+import {Flame} from 'lucide-react-native';
 import type {NativeStackScreenProps} from '@react-navigation/native-stack';
+import {SafeAreaView} from 'react-native-safe-area-context';
 
-import {FrostedBackdrop} from '../../../design/components/FrostedBackdrop';
-import {CommitmentTypePill} from '../../../design/components/CommitmentTypeVisual';
-import {HoystButton} from '../../../design/components/HoystButton';
-import {HoystScreen} from '../../../design/components/HoystScreen';
-import {HoystText} from '../../../design/components/HoystText';
+import {
+  CircleCategoryIcon,
+  getCircleCategoryVisual,
+} from '../../../design/components/CircleCategoryIcon';
 import {HoystTapInMark} from '../../../design/components/HoystTapInMark';
 import {radius} from '../../../design/tokens/radius';
 import {useHoystTheme} from '../../../design/theme/useHoystTheme';
+import {
+  DesignSystemProvider,
+  DSText,
+  useSystemTheme,
+} from '../../../design/system';
 import type {RootStackParamList} from '../../../navigation/types';
 import type {
   CheckInCoverageStatus,
@@ -28,10 +45,12 @@ import type {
 } from '../../../types/models';
 import {useUserProfileStore} from '../../../store/profile-store';
 import {useSessionStore} from '../../../store/session-store';
+import {useSettingsStore} from '../../../store/settings-store';
 import {subscribeToMemberCircleDetail} from '../../home/services/home-data-service';
 import {
   formatQuantityLabel,
   formatQuantityValue,
+  getCommitmentType,
 } from '../../commitments/commitment-logic';
 import {canShareTapInStory} from '../services/tap-in-story-share';
 import {
@@ -50,6 +69,15 @@ type ParticleConfig = {
   travelX: number;
   travelY: number;
   top?: number;
+};
+
+type CompletionDockActionProps = {
+  label: string;
+  backgroundColor: string;
+  textColor: string;
+  disabled?: boolean;
+  onPress: () => void;
+  testID: string;
 };
 
 type CompletionDetailSnapshot = Pick<
@@ -79,6 +107,39 @@ const particleConfigs: ParticleConfig[] = [
 
 const completionMarkSize = 112;
 const completionMarkStageSize = 190;
+
+function CompletionDockAction({
+  label,
+  backgroundColor,
+  textColor,
+  disabled,
+  onPress,
+  testID,
+}: CompletionDockActionProps): React.JSX.Element {
+  return (
+    <Pressable
+      accessibilityLabel={label}
+      accessibilityRole="button"
+      accessibilityState={{disabled: Boolean(disabled)}}
+      disabled={disabled}
+      onPress={onPress}
+      style={({pressed}) => [
+        styles.dockButton,
+        {opacity: disabled ? 0.42 : pressed ? 0.86 : 1},
+      ]}
+      testID={testID}>
+      <View
+        style={[styles.dockButtonFace, {backgroundColor}]}
+        testID={`${testID}-face`}>
+        <DSText
+          style={[styles.dockButtonLabel, {color: textColor}]}
+          testID={`${testID}-label`}>
+          {label}
+        </DSText>
+      </View>
+    </Pressable>
+  );
+}
 
 function cleanOptionalText(value?: string) {
   const trimmed = value?.trim();
@@ -149,7 +210,7 @@ function getQuantityOutcomeCopy({
   }
 
   return {
-    headerTitle: 'Tap In Complete',
+    headerTitle: 'Tap In complete',
     lead: commitmentType === 'limit' ? 'Within Goal range' : 'Goal covered',
     trailing: undefined,
   };
@@ -231,11 +292,21 @@ function getStatusCopy({
   };
 }
 
-export function TapInCompleteScreen({
+export function TapInCompleteScreen(props: Props): React.JSX.Element {
+  const appearance = useSettingsStore(state => state.appearance);
+  return (
+    <DesignSystemProvider scheme={appearance}>
+      <TapInCompleteController {...props} />
+    </DesignSystemProvider>
+  );
+}
+
+function TapInCompleteController({
   navigation,
   route,
 }: Props): React.JSX.Element {
   const theme = useHoystTheme();
+  const systemTheme = useSystemTheme();
   const haloProgress = useRef(new Animated.Value(0)).current;
   const logoProgress = useRef(new Animated.Value(0)).current;
   const logoSpinProgress = useRef(new Animated.Value(0)).current;
@@ -319,6 +390,7 @@ export function TapInCompleteScreen({
     : quantityCoverageStatus === 'partial'
     ? 'partial'
     : 'covered';
+  const showCelebrationParticles = completionTone === 'covered';
   const snapshotDetail = useMemo<CompletionDetailSnapshot | undefined>(() => {
     const title = cleanOptionalText(route.params.circleTitle);
     const commitment = cleanOptionalText(route.params.commitment);
@@ -490,7 +562,9 @@ export function TapInCompleteScreen({
           logoProgress.setValue(1);
           logoSpinProgress.setValue(1);
           contentProgress.setValue(1);
-          particleProgresses.forEach(progress => progress.setValue(1));
+          particleProgresses.forEach(progress =>
+            progress.setValue(showCelebrationParticles ? 1 : 0),
+          );
           return;
         }
 
@@ -522,18 +596,22 @@ export function TapInCompleteScreen({
               toValue: 1,
               useNativeDriver: true,
             }),
-            Animated.stagger(
-              90,
-              particleProgresses.map(progress =>
-                Animated.timing(progress, {
-                  delay: 140,
-                  duration: isSkip ? 2600 : 2900,
-                  easing: Easing.out(Easing.cubic),
-                  toValue: 1,
-                  useNativeDriver: true,
-                }),
-              ),
-            ),
+            ...(showCelebrationParticles
+              ? [
+                  Animated.stagger(
+                    90,
+                    particleProgresses.map(progress =>
+                      Animated.timing(progress, {
+                        delay: 140,
+                        duration: 2900,
+                        easing: Easing.out(Easing.cubic),
+                        toValue: 1,
+                        useNativeDriver: true,
+                      }),
+                    ),
+                  ),
+                ]
+              : []),
           ]),
         ]);
 
@@ -544,7 +622,9 @@ export function TapInCompleteScreen({
         logoProgress.setValue(1);
         logoSpinProgress.setValue(1);
         contentProgress.setValue(1);
-        particleProgresses.forEach(progress => progress.setValue(1));
+        particleProgresses.forEach(progress =>
+          progress.setValue(showCelebrationParticles ? 1 : 0),
+        );
       });
 
     return () => {
@@ -555,10 +635,10 @@ export function TapInCompleteScreen({
     contentProgress,
     haloProgress,
     isReadyForCelebration,
-    isSkip,
     logoProgress,
     logoSpinProgress,
     particleProgresses,
+    showCelebrationParticles,
   ]);
 
   const finish = useCallback(() => {
@@ -729,7 +809,7 @@ export function TapInCompleteScreen({
       ? 'Skip Recorded'
       : quantityOutcomeCopy
       ? quantityOutcomeCopy.headerTitle
-      : 'Tap In Complete'
+      : 'Tap In complete'
     : 'Finalizing Tap In';
   const loadingCopy = hasCompletionContent
     ? 'Getting the screen ready.'
@@ -797,6 +877,11 @@ export function TapInCompleteScreen({
     : quantityCoverageStatus === 'partial'
     ? 'No note added. Your Progress was saved.'
     : 'No note added. Your Tap In still counts.';
+  const category = getCircleCategoryVisual(detail?.category ?? 'General');
+  const commitmentType = detail
+    ? getCommitmentType(detail)
+    : route.params.commitmentType;
+  const fadeId = useId().replace(/:/g, '');
   const haloAnimatedStyle = {
     opacity: haloProgress.interpolate({
       inputRange: [0, 0.18, 0.6, 1],
@@ -846,249 +931,282 @@ export function TapInCompleteScreen({
       };
 
   return (
-    <HoystScreen
-      background={<FrostedBackdrop />}
-      contentContainerStyle={styles.content}>
-      <View
-        onLayout={() => {
-          setHasLaidOut(true);
-        }}
-        style={styles.screenFrame}>
-        <View style={styles.mainStack}>
-          <View style={styles.heroStack}>
-            <View style={styles.markStage}>
-              <Animated.View
-                pointerEvents="none"
-                style={[
-                  styles.halo,
-                  {
-                    backgroundColor: `${outcomeBackgroundColor}20`,
-                    borderColor: `${outcomeForegroundColor}36`,
-                  },
-                  haloAnimatedStyle,
-                ]}
+    <SafeAreaView
+      style={[styles.screen, {backgroundColor: systemTheme.canvas}]}>
+      <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+        <Svg
+          width="100%"
+          height={styles.fade.height}
+          accessible={false}
+          testID="tap-in-complete-category-fade">
+          <Defs>
+            <LinearGradient id={fadeId} x1="0" y1="0" x2="0" y2="1">
+              <Stop
+                offset="0"
+                stopColor={systemTheme.category[category.tone].surface}
               />
-              <View pointerEvents="none" style={styles.markParticleLayer}>
-                {particleConfigs.map((particle, index) => {
-                  const progress = particleProgresses[index];
-                  const particlePositionStyle = {
-                    left: particle.left,
-                    right: particle.right,
-                    top: particle.top,
-                  };
-                  const particleStyle = {
-                    backgroundColor:
-                      particleColors[index % particleColors.length],
-                    height: particle.size,
-                    opacity: progress.interpolate({
-                      inputRange: [0, 0.18, 0.74, 1],
-                      outputRange: [0, 1, 0.92, 0],
-                    }),
-                    transform: [
-                      {
-                        scale: progress.interpolate({
-                          inputRange: [0, 0.28, 1],
-                          outputRange: [0.56, 1.72, 0.84],
-                        }),
-                      },
-                      {
-                        translateX: progress.interpolate({
-                          inputRange: [0, 1],
-                          outputRange: [0, particle.travelX],
-                        }),
-                      },
-                      {
-                        translateY: progress.interpolate({
-                          inputRange: [0, 1],
-                          outputRange: [0, particle.travelY],
-                        }),
-                      },
-                    ],
-                    width: particle.size,
-                  };
-
-                  return (
-                    <Animated.View
-                      key={index}
-                      pointerEvents="none"
-                      style={[
-                        styles.particle,
-                        particlePositionStyle,
-                        particleStyle,
-                      ]}
-                    />
-                  );
-                })}
-              </View>
-              <Animated.View
-                style={[styles.logoWrap, logoAnimatedStyle]}
-                testID="tap-in-complete-logo-wrap">
-                <HoystTapInMark
-                  logoRotation={logoRotation}
-                  size={completionMarkSize}
-                  testID="tap-in-complete-logo"
+              <Stop offset="1" stopColor={systemTheme.canvas} />
+            </LinearGradient>
+          </Defs>
+          <Rect width="100%" height="100%" fill={`url(#${fadeId})`} />
+        </Svg>
+      </View>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={styles.screen}>
+        <ScrollView
+          bounces={false}
+          contentContainerStyle={styles.scrollContent}
+          keyboardDismissMode="interactive"
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}>
+          <View
+            onLayout={() => setHasLaidOut(true)}
+            style={styles.contentFrame}
+            testID="tap-in-complete-content">
+            <View style={styles.heroStack}>
+              <View style={styles.markStage}>
+                <Animated.View
+                  pointerEvents="none"
+                  style={[
+                    styles.halo,
+                    {
+                      backgroundColor: `${outcomeBackgroundColor}20`,
+                      borderColor: `${outcomeForegroundColor}36`,
+                    },
+                    haloAnimatedStyle,
+                  ]}
                 />
+                {showCelebrationParticles ? (
+                  <View
+                    pointerEvents="none"
+                    style={styles.markParticleLayer}
+                    testID="tap-in-complete-particles">
+                    {particleConfigs.map((particle, index) => {
+                      const progress = particleProgresses[index];
+                      const particlePositionStyle = {
+                        left: particle.left,
+                        right: particle.right,
+                        top: particle.top,
+                      };
+                      const particleStyle = {
+                        backgroundColor:
+                          particleColors[index % particleColors.length],
+                        height: particle.size,
+                        opacity: progress.interpolate({
+                          inputRange: [0, 0.18, 0.74, 1],
+                          outputRange: [0, 1, 0.92, 0],
+                        }),
+                        transform: [
+                          {
+                            scale: progress.interpolate({
+                              inputRange: [0, 0.28, 1],
+                              outputRange: [0.56, 1.72, 0.84],
+                            }),
+                          },
+                          {
+                            translateX: progress.interpolate({
+                              inputRange: [0, 1],
+                              outputRange: [0, particle.travelX],
+                            }),
+                          },
+                          {
+                            translateY: progress.interpolate({
+                              inputRange: [0, 1],
+                              outputRange: [0, particle.travelY],
+                            }),
+                          },
+                        ],
+                        width: particle.size,
+                      };
+
+                      return (
+                        <Animated.View
+                          key={index}
+                          pointerEvents="none"
+                          style={[
+                            styles.particle,
+                            particlePositionStyle,
+                            particleStyle,
+                          ]}
+                        />
+                      );
+                    })}
+                  </View>
+                ) : null}
+                <Animated.View
+                  style={[styles.logoWrap, logoAnimatedStyle]}
+                  testID="tap-in-complete-logo-wrap">
+                  <HoystTapInMark
+                    logoRotation={logoRotation}
+                    size={completionMarkSize}
+                    testID="tap-in-complete-logo"
+                  />
+                </Animated.View>
+              </View>
+              <Animated.View style={[styles.titleBlock, contentAnimatedStyle]}>
+                <DSText
+                  variant="screenTitle"
+                  style={styles.completeTitle}
+                  testID="tap-in-complete-title">
+                  {headerTitle}
+                </DSText>
+                {isReadyForCelebration ? (
+                  <View style={styles.statusRow}>
+                    <Flame
+                      color={statusIconColor}
+                      size={15}
+                      strokeWidth={2.7}
+                    />
+                    <DSText
+                      style={{color: statusLeadColor}}
+                      testID="tap-in-complete-status"
+                      variant="secondary">
+                      {statusCopy.lead}
+                    </DSText>
+                    {statusCopy.trailing ? (
+                      <>
+                        <View
+                          style={[
+                            styles.statusDot,
+                            {backgroundColor: statusDotColor},
+                          ]}
+                        />
+                        <DSText
+                          style={{color: statusTrailingColor}}
+                          testID="tap-in-complete-status-trailing"
+                          variant="secondary">
+                          {statusCopy.trailing}
+                        </DSText>
+                      </>
+                    ) : null}
+                  </View>
+                ) : (
+                  <DSText tone="muted" variant="body">
+                    {loadingCopy}
+                  </DSText>
+                )}
               </Animated.View>
             </View>
 
-            <Animated.View style={[styles.titleBlock, contentAnimatedStyle]}>
-              <HoystText
-                numberOfLines={1}
-                style={styles.completeTitle}
-                variant="headline">
-                {headerTitle}
-              </HoystText>
-              {isReadyForCelebration ? (
-                <View style={styles.statusRow}>
-                  <Flame color={statusIconColor} size={16} strokeWidth={2.7} />
-                  <HoystText
-                    numberOfLines={1}
-                    style={[styles.statusLead, {color: statusLeadColor}]}>
-                    {statusCopy.lead}
-                  </HoystText>
-                  {statusCopy.trailing ? (
-                    <>
-                      <View
-                        style={[
-                          styles.statusDot,
-                          {backgroundColor: statusDotColor},
-                        ]}
-                      />
-                      <HoystText
-                        numberOfLines={1}
-                        style={[
-                          styles.statusTrailing,
-                          {color: statusTrailingColor},
-                        ]}>
-                        {statusCopy.trailing}
-                      </HoystText>
-                    </>
-                  ) : null}
+            <Animated.View style={[styles.detailsStack, contentAnimatedStyle]}>
+              <View style={styles.commitmentRow}>
+                <CircleCategoryIcon
+                  category={detail?.category ?? 'General'}
+                  showBackplate={false}
+                  size={34}
+                />
+                <View style={styles.commitmentCopy}>
+                  <DSText
+                    variant="screenTitle"
+                    testID="tap-in-complete-circle-title">
+                    {displayDetail?.title ?? 'Hoyst Circle'}
+                  </DSText>
+                  <View style={styles.categoryMetadata}>
+                    <DSText
+                      testID="tap-in-complete-category-label"
+                      variant="category"
+                      style={{
+                        color: systemTheme.category[category.tone].foreground,
+                      }}>
+                      {category.label.toUpperCase()}
+                    </DSText>
+                    {commitmentType ? (
+                      <DSText
+                        testID="tap-in-complete-commitment-type"
+                        tone="muted"
+                        variant="category">
+                        {` · ${commitmentType.toUpperCase()}`}
+                      </DSText>
+                    ) : null}
+                  </View>
                 </View>
-              ) : (
-                <HoystText style={styles.centerText} tone="muted">
-                  {loadingCopy}
-                </HoystText>
-              )}
-            </Animated.View>
-          </View>
-
-          <Animated.View style={[styles.bodyStack, contentAnimatedStyle]}>
-            <View
-              style={[
-                styles.summaryCard,
-                {
-                  backgroundColor: theme.isDark
-                    ? 'rgba(17,20,32,0.76)'
-                    : 'rgba(255,255,255,0.58)',
-                  borderColor: theme.glassBorder,
-                },
-              ]}>
-              <View style={styles.summaryHeader}>
-                <HoystText tone="muted" variant="label">
-                  Circle Commitment
-                </HoystText>
-                {route.params.commitmentType ? (
-                  <CommitmentTypePill
-                    commitmentType={route.params.commitmentType}
-                    density="compact"
-                    uppercase
-                  />
-                ) : null}
               </View>
-              <HoystText numberOfLines={2} style={styles.summaryTitle}>
+              <DSText
+                testID="tap-in-complete-commitment"
+                tone="muted"
+                variant="body">
                 {commitment}
-              </HoystText>
+              </DSText>
               {quantitySummaryCopy ? (
                 <View style={styles.quantitySummary}>
-                  <HoystText
-                    numberOfLines={1}
-                    style={styles.quantitySummaryValue}>
-                    {quantitySummaryCopy}
-                  </HoystText>
+                  <DSText variant="title">{quantitySummaryCopy}</DSText>
                   {quantityContextCopy ? (
-                    <HoystText tone="muted" variant="caption">
+                    <DSText tone="muted" variant="secondary">
                       {quantityContextCopy}
-                    </HoystText>
+                    </DSText>
                   ) : null}
                 </View>
               ) : null}
-              <HoystText
-                style={styles.summaryNote}
-                tone={hasNote ? 'primary' : 'muted'}>
+              {isReadyForCelebration ? (
+                <DSText
+                  tone={
+                    completionTone === 'failed'
+                      ? 'danger'
+                      : completionTone === 'partial' ||
+                        completionTone === 'skip'
+                      ? 'warning'
+                      : 'success'
+                  }
+                  variant="secondary">
+                  {statusCopy.lead}
+                </DSText>
+              ) : null}
+              <DSText tone={hasNote ? 'text' : 'muted'} variant="body">
                 {hasNote ? note : emptyNoteCopy}
-              </HoystText>
+              </DSText>
               {visiblePhotoUri ? (
                 <Image
                   resizeMode="cover"
                   source={{uri: visiblePhotoUri}}
                   style={styles.summaryImage}
+                  testID="tap-in-complete-photo"
                 />
               ) : null}
-            </View>
-
-            {!isSkip ? (
-              <TapInDetailsSection
-                autoSaveInitialPhoto={Boolean(pendingPhotoUri)}
-                circleId={route.params.circleId}
-                dateKey={route.params.dateKey}
-                initialNote={savedDetails.note}
-                initialPhotoUrl={visiblePhotoUri}
-                onSavePendingDetailsReady={handleSavePendingDetailsReady}
-                onSaveStateChange={setDetailsSaveState}
-                onSaved={handleDetailsSaved}
-              />
-            ) : null}
-
-            {canShowStoryShare ? (
-              <HoystButton
-                borderColor={
-                  isReadyForCelebration
-                    ? `${theme.accentSecondary}55`
-                    : theme.borderStrong
-                }
-                backgroundColor={
-                  theme.isDark
-                    ? 'rgba(122,85,255,0.14)'
-                    : 'rgba(122,85,255,0.12)'
-                }
-                disabled={
-                  !isReadyForCelebration || Boolean(pendingCompletionAction)
-                }
-                icon={
-                  <Share2
-                    color={
-                      isReadyForCelebration
-                        ? theme.accentSecondaryForeground
-                        : theme.textMuted
-                    }
-                    size={19}
-                    strokeWidth={2.45}
-                  />
-                }
-                label={
-                  pendingCompletionAction === 'share' &&
-                  detailsSaveState.isSaving
-                    ? 'Saving Photo...'
-                    : 'Share Story'
-                }
-                onPress={() => requestCompletionAction('share')}
-                style={styles.shareButton}
-                textColor={
-                  isReadyForCelebration
-                    ? theme.accentSecondaryForeground
-                    : theme.textMuted
-                }
-                variant="outline"
-              />
-            ) : null}
-          </Animated.View>
-        </View>
-
-        <View style={styles.bottomAction}>
-          <HoystButton
-            backgroundColor={theme.isDark ? theme.actionSurface : '#15171D'}
-            borderColor="transparent"
+              {!isSkip ? (
+                <TapInDetailsSection
+                  autoSaveInitialPhoto={Boolean(pendingPhotoUri)}
+                  category={category.tone}
+                  circleId={route.params.circleId}
+                  dateKey={route.params.dateKey}
+                  initialNote={savedDetails.note}
+                  initialPhotoUrl={visiblePhotoUri}
+                  onSavePendingDetailsReady={handleSavePendingDetailsReady}
+                  onSaveStateChange={setDetailsSaveState}
+                  onSaved={handleDetailsSaved}
+                  presentation="composer"
+                />
+              ) : null}
+            </Animated.View>
+          </View>
+        </ScrollView>
+        <View
+          style={[
+            styles.actionDock,
+            {
+              backgroundColor: systemTheme.canvas,
+              borderTopColor: systemTheme.border,
+            },
+          ]}
+          testID="tap-in-complete-action-dock">
+          {canShowStoryShare ? (
+            <CompletionDockAction
+              backgroundColor={systemTheme.category.purple.foreground}
+              disabled={
+                !isReadyForCelebration || Boolean(pendingCompletionAction)
+              }
+              label={
+                pendingCompletionAction === 'share' && detailsSaveState.isSaving
+                  ? 'Saving Photo...'
+                  : 'Share as story'
+              }
+              onPress={() => requestCompletionAction('share')}
+              testID="tap-in-complete-share-action"
+              textColor={systemTheme.onAction}
+            />
+          ) : null}
+          <CompletionDockAction
+            backgroundColor={systemTheme.isDark ? '#FFFFFF' : '#15171D'}
             disabled={Boolean(pendingCompletionAction)}
             label={
               pendingCompletionAction === 'done' && detailsSaveState.isSaving
@@ -1096,42 +1214,55 @@ export function TapInCompleteScreen({
                 : 'Done'
             }
             onPress={() => requestCompletionAction('done')}
-            style={styles.doneButton}
-            textColor="#FFFFFF"
+            testID="tap-in-complete-done-action"
+            textColor={systemTheme.isDark ? '#15171D' : '#FFFFFF'}
           />
         </View>
-      </View>
-    </HoystScreen>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  bodyStack: {
-    alignSelf: 'stretch',
-    gap: 18,
+  actionDock: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    gap: 8,
+    paddingHorizontal: 22,
+    paddingTop: 12,
+    paddingBottom: 16,
   },
-  bottomAction: {
-    alignSelf: 'stretch',
-    paddingTop: 18,
-  },
-  centerText: {
-    textAlign: 'center',
-  },
+  categoryMetadata: {flexDirection: 'row', flexWrap: 'wrap'},
   completeTitle: {
-    fontSize: 28,
-    fontWeight: '800',
-    letterSpacing: 0,
-    lineHeight: 32,
+    fontSize: 26,
+    lineHeight: 31,
     textAlign: 'center',
   },
-  content: {
-    flexGrow: 1,
-    minHeight: '100%',
-    paddingBottom: 24,
-    paddingTop: 8,
+  commitmentCopy: {flex: 1, gap: 2, minWidth: 0},
+  commitmentRow: {alignItems: 'flex-start', flexDirection: 'row', gap: 10},
+  contentFrame: {gap: 24},
+  detailsStack: {gap: 12},
+  dockButton: {
+    minHeight: 56,
+    width: '100%',
   },
-  doneButton: {
-    minHeight: 58,
+  dockButtonFace: {
+    alignItems: 'center',
+    borderRadius: radius.pill,
+    justifyContent: 'center',
+    minHeight: 56,
+    paddingHorizontal: 22,
+    width: '100%',
+  },
+  dockButtonLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    lineHeight: 21,
+  },
+  fade: {height: 560},
+  heroStack: {
+    alignItems: 'center',
+    gap: 16,
+    paddingTop: 32,
   },
   halo: {
     borderRadius: 78,
@@ -1140,22 +1271,10 @@ const styles = StyleSheet.create({
     position: 'absolute',
     width: 156,
   },
-  heroStack: {
-    alignItems: 'center',
-    gap: 16,
-  },
   logoWrap: {
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 2,
-  },
-  mainStack: {
-    alignSelf: 'stretch',
-    flexGrow: 1,
-    gap: 28,
-    justifyContent: 'center',
-    paddingBottom: 20,
-    paddingTop: 56,
   },
   markParticleLayer: {
     height: completionMarkStageSize,
@@ -1176,84 +1295,32 @@ const styles = StyleSheet.create({
     position: 'absolute',
   },
   quantitySummary: {
-    gap: 3,
+    gap: 4,
   },
-  quantitySummaryValue: {
-    fontSize: 16,
-    fontWeight: '800',
-    letterSpacing: 0,
-    lineHeight: 20,
-  },
-  screenFrame: {
-    justifyContent: 'space-between',
-    minHeight: '100%',
-    overflow: 'visible',
-    width: '100%',
-  },
-  shareButton: {
-    minHeight: 58,
-  },
+  screen: {flex: 1},
+  scrollContent: {paddingHorizontal: 22, paddingBottom: 24},
   titleBlock: {
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
+    marginTop: -8,
   },
   statusDot: {
     borderRadius: radius.pill,
     height: 3,
     width: 3,
   },
-  statusLead: {
-    flexShrink: 1,
-    fontSize: 15,
-    fontWeight: '800',
-    letterSpacing: 0,
-    lineHeight: 19,
-  },
   statusRow: {
     alignItems: 'center',
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
+    gap: 6,
     justifyContent: 'center',
     maxWidth: 320,
-  },
-  statusTrailing: {
-    flexShrink: 1,
-    fontSize: 15,
-    fontWeight: '800',
-    letterSpacing: 0,
-    lineHeight: 19,
-  },
-  summaryCard: {
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    gap: 12,
-    paddingHorizontal: 24,
-    paddingVertical: 22,
   },
   summaryImage: {
     borderRadius: radius.md,
     height: 168,
     marginTop: 4,
     width: '100%',
-  },
-  summaryHeader: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-    justifyContent: 'space-between',
-  },
-  summaryNote: {
-    fontSize: 14,
-    fontWeight: '600',
-    letterSpacing: 0,
-    lineHeight: 19,
-  },
-  summaryTitle: {
-    fontSize: 18,
-    fontWeight: '800',
-    letterSpacing: 0,
-    lineHeight: 22,
   },
 });
