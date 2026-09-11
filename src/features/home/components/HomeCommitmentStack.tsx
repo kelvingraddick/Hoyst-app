@@ -13,6 +13,7 @@ import {
   ChevronRight,
   Clock3,
   Minus,
+  Target,
 } from 'lucide-react-native';
 import type {CircleManagementCard} from '../../../types/models';
 import {useHoystTheme} from '../../../design/theme/useHoystTheme';
@@ -25,6 +26,7 @@ import {HoystText} from '../../../design/components/HoystText';
 import {LayeredAvatar} from '../../../design/components/LayeredAvatar';
 import {homeTypography} from '../../../design/tokens/home';
 import {getHomeDailyAction} from '../services/home-daily-actions';
+import {getCommitmentGoalPresentation} from '../../commitments/commitment-goal-label';
 
 export const HOME_ROW_ICON_SIZE = 32;
 export const HOME_ROW_GAP = 12;
@@ -199,6 +201,7 @@ export function HomeCommitmentStack({
         const visual = getCircleCategoryVisual(card.category);
         const action = getHomeDailyAction(card);
         const actionable = action === 'tap_in' || action === 'nudge';
+        const goal = getCommitmentGoalPresentation(card);
         if (isFocused) {
           return (
             <TouchableWithoutFeedback
@@ -245,9 +248,35 @@ export function HomeCommitmentStack({
                     </HoystText>
                   </View>
                 </Pressable>
-                <HoystText style={styles.description} tone="muted">
-                  {card.commitment}
-                </HoystText>
+                <View style={styles.descriptionGroup}>
+                  <HoystText style={styles.description} tone="muted">
+                    {card.commitment}
+                  </HoystText>
+                  {goal ? (
+                    <View
+                      style={styles.goalLine}
+                      testID={`home-commitment-goal-${card.id}`}>
+                      <Target
+                        accessible={false}
+                        color={theme.textMuted}
+                        size={14}
+                        strokeWidth={2.2}
+                        style={styles.goalIcon}
+                      />
+                      <HoystText style={styles.meta} tone="muted">
+                        {goal.label}
+                      </HoystText>
+                      <HoystText style={styles.meta} tone="muted">
+                        {goal.label === 'Goal' ? ': ' : ' · '}
+                      </HoystText>
+                      <HoystText
+                        style={[styles.meta, styles.goalValue]}
+                        tone="muted">
+                        {goal.value}
+                      </HoystText>
+                    </View>
+                  ) : null}
+                </View>
                 {!actionable && (
                   <HoystText style={styles.meta} tone="muted">
                     {statusCopy(card)}
@@ -350,6 +379,14 @@ const styles = StyleSheet.create({
   title: homeTypography.title,
   category: {...homeTypography.category, letterSpacing: 0.5},
   description: homeTypography.body,
+  descriptionGroup: {gap: 4},
+  goalLine: {alignItems: 'center', flexDirection: 'row', flexWrap: 'wrap'},
+  goalIcon: {marginRight: 3},
+  // Keep the Home exception optically consistent with the selector at 12 points.
+  goalValue: {
+    fontStyle: 'italic',
+    transform: [{skewX: '-8deg'}],
+  },
   footer: {
     flexDirection: 'row',
     alignItems: 'center',

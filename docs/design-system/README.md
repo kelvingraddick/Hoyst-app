@@ -6,16 +6,17 @@ Version **1.2.0**, established September 8, 2026. Approved Home source revision:
 
 ## Start here
 
-| Artifact | Purpose |
-| --- | --- |
-| [Foundations](foundations.md) | Typography, spacing, theme roles, surfaces, accessibility, motion |
-| [Component guide](components.md) | APIs, anatomy, states, reusable recipes and migration example |
-| [Home reference](reference/README.md) | Current screenshots, observed values, approved refinements and specialist patterns |
-| [App migration inventory](migration.md) | Every route and known modal, ordered delivery stages, behavior gates |
-| [Contribution and validation](validation.md) | Acceptance checklist, exact checks, current evidence and remaining device work |
-| [Typed implementation](../../src/design/system/index.ts) | Opt-in public barrel, tokens and primitives |
-| [Native gallery](../../src/design/system/DesignSystemGallery.tsx) | Live examples with local fixtures and theme controls |
-| [Tap In composer](tap-in-composer.md) | Scoped category fade, glowing action, quantity controls and native validation |
+| Artifact                                                          | Purpose                                                                            |
+| ----------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| [Foundations](foundations.md)                                     | Typography, spacing, theme roles, surfaces, accessibility, motion                  |
+| [Component guide](components.md)                                  | APIs, anatomy, states, reusable recipes and migration example                      |
+| [Home reference](reference/README.md)                             | Current screenshots, observed values, approved refinements and specialist patterns |
+| [App migration inventory](migration.md)                           | Every route and known modal, ordered delivery stages, behavior gates               |
+| [Contribution and validation](validation.md)                      | Acceptance checklist, exact checks, current evidence and remaining device work     |
+| [Typed implementation](../../src/design/system/index.ts)          | Opt-in public barrel, tokens and primitives                                        |
+| [Native gallery](../../src/design/system/DesignSystemGallery.tsx) | Live examples with local fixtures and theme controls                               |
+| [Tap In composer](tap-in-composer.md)                             | Scoped category fade, glowing action, quantity controls and native validation      |
+| [Tap In selector](tap-in-selector.md)                             | Featured card, compact rows and the approved Home goal-line exception              |
 
 ## Open the gallery
 
@@ -35,6 +36,7 @@ The gallery integration remains a development-only host in `App.tsx`; release bu
 
 ## Decision log
 
+- **2026-09-11:** The Tap In selector adopts a local neutral canvas, featured category card and compact utility rows. The user explicitly approved adding the same quantity goal line below Home's focused commitment description. This is a narrow Home exception; all other frozen defaults and tab-bar treatment remain unchanged by this work.
 - **2026-09-08:** Home is approved and excluded from every migration stage, including indirect changes.
 - **2026-09-08:** Deliver docs, typed tokens/components and a native developer gallery before migrating production screens.
 - **2026-09-08:** Support iOS and Android with native fonts and a compact base. Allow documented exceptions for onboarding art, important metrics, charts and celebrations.

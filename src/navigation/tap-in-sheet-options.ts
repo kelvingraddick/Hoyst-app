@@ -36,3 +36,14 @@ export function getTapInComposerScreenOptions(
     sheetLargestUndimmedDetentIndex: 'none',
   };
 }
+
+export function getTapInPickerScreenOptions(
+  backgroundColor: string,
+): NativeStackNavigationOptions {
+  return {
+    ...getTapInComposerScreenOptions(backgroundColor, [0.8, 0.92]),
+    // The selector's list scroll must not hand off to the sheet pan gesture.
+    // The grabber still provides native swipe dismissal.
+    sheetExpandsWhenScrolledToEdge: false,
+  };
+}

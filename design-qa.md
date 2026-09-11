@@ -165,3 +165,28 @@ Status: **Passed** on September 8, 2026.
 Android native rendering, a physical-device pass, maximum accessibility text sizes and live VoiceOver/TalkBack traversal were unavailable for this pass. Component fixtures cover long-copy wrapping, and focused Circles tests cover loading/error/empty states, status filtering and action-state behavior. These do not replace the remaining device checks.
 
 final result: passed
+
+
+## Tap In selector and Home goal line, September 11, 2026
+
+This additive review preserves the earlier Home review above.
+
+Source visual truth: the approved three-state selector mockups in `/Users/kelvin/.codex/generated_images/01a08418-fe88-75b1-907d-160a309c9728/`, especially `exec-c20bed09-e8dc-47f9-9629-2bef8615c3fc.png` (mixed state, 850 × 1848 px). The user's subsequent instruction moves goal guidance below the description and adds that detail to Home.
+
+Implementation: `/Users/kelvin/Code/Hoyst-app/docs/design-system/reference/tap-in-selector/mixed-light.png`, with several-due, covered, Home and dark/narrow captures in the same directory. Native captures are 1206 × 2622 px, 3x, a 402 × 874-point viewport. The generated source is approximately 2.114x the same logical width. The native OS area and existing modal inset differ intentionally from the app-content-only mockup. Review compares app-owned content below the modal edge; no pixel-perfect OS chrome match is claimed.
+
+Full-view evidence: source mixed-state image and native mixed-state screenshot were opened together in one comparison input. Full native several-due and covered views were also inspected. The description/goal group and Home's focused card were inspected at readable full-image resolution; no separate magnified crop was needed.
+
+Findings and intentional adaptations:
+
+- Typography: native system text follows the actual Home/guide scale: 16/21 titles, 14/20 descriptions, 12/16 goal/status, 11/15 metadata. It wraps naturally; the source's raster font rendering is not copied.
+- Spacing: 22-point gutters, 16-point sections and 18-point focused-card inset/radius follow Home. Goal copy is 4 points below the description as requested. Native 48-point featured actions are taller than the generated pill. More due rows require scrolling after descriptions are added; utility actions are not collapsed.
+- Colors: neutral canvas and paired category surfaces/foregrounds are taken from the opt-in design system. Type metadata stays gray. Limit state is written without a positive progress arc.
+- Assets: the actual floating Hoyst mark and category artwork are reused, including the existing shadow. Utility rows use existing Lucide action icons, avoiding the generated mockup's mismatched shoe/moon illustrations.
+- Copy: goal text is separate from saved progress. The native all-covered message says no Tap Ins are due, which also accommodates scheduled or skipped days. No new links or destinations were added.
+
+Comparison history: native inspection exposed the custom phrase `Hours of sleep` becoming `Hours of sleeps`. The local display formatter now preserves multiword unit labels, with a regression case and a post-fix Home screenshot (`home-goal-light.png`). The mixed-state post-fix view retains the goal/status separation.
+
+No actionable P0/P1/P2 visual differences in the accepted light-mode layouts. Dark/narrow copy and surfaces were inspected; the preview theme does not override the unchanged mark's real app preference, so dark mark asset verification is excluded. Touch scrolling, enlarged Dynamic Type, assistive-technology traversal and Android remain validation gaps, not recorded passes. See `docs/design-system/tap-in-selector.md` for checks and evidence.
+
+final result: passed

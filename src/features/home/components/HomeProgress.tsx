@@ -263,7 +263,7 @@ const styles = StyleSheet.create({
     gap: 12,
     minHeight: 56,
     paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingVertical: 10,
     borderRadius: 14,
     shadowOffset: {width: 0, height: 6},
     shadowOpacity: 0.1,

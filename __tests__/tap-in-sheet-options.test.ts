@@ -1,5 +1,6 @@
 import {
   getTapInComposerScreenOptions,
+  getTapInPickerScreenOptions,
   getTapInSheetDetents,
 } from '../src/navigation/tap-in-sheet-options';
 
@@ -17,6 +18,17 @@ describe('Tap In composer sheet options', () => {
       sheetInitialDetentIndex: 0,
       sheetLargestUndimmedDetentIndex: 'none',
     });
+  });
+});
+
+it('opens the selector as the same native form sheet at a list-friendly stop', () => {
+  expect(getTapInPickerScreenOptions('#F4F3FB')).toMatchObject({
+    contentStyle: {backgroundColor: '#F4F3FB'},
+    gestureEnabled: true,
+    presentation: 'formSheet',
+    sheetAllowedDetents: [0.8, 0.92],
+    sheetInitialDetentIndex: 0,
+    sheetExpandsWhenScrolledToEdge: false,
   });
 });
 

@@ -1306,8 +1306,8 @@ describe('HomeScreen Circle activity updates', () => {
     expect(
       StyleSheet.flatten(
         tree.root.findByProps({testID: 'home-momentum-bar'}).props.style,
-      )?.backgroundColor,
-    ).toBe('#FFFFFF');
+      ),
+    ).toMatchObject({backgroundColor: '#FFFFFF', paddingVertical: 10});
     act(() =>
       tree.root.findByProps({testID: 'home-momentum-bar'}).props.onPress(),
     );

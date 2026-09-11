@@ -25,7 +25,10 @@ import {AuthStackNavigator} from './AuthStackNavigator';
 import {getRootNavigatorMode, shouldRegisterAccountRoutes} from './root-mode';
 import type {RootStackParamList} from './types';
 import {useHoystTheme} from '../design/theme/useHoystTheme';
-import {getTapInComposerScreenOptions} from './tap-in-sheet-options';
+import {
+  getTapInComposerScreenOptions,
+  getTapInPickerScreenOptions,
+} from './tap-in-sheet-options';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -94,11 +97,7 @@ export function RootNavigator(): React.JSX.Element {
       <Stack.Screen
         component={TapInPickerScreen}
         name="TapInPicker"
-        options={{
-          animation: 'slide_from_bottom',
-          headerShown: false,
-          presentation: 'modal',
-        }}
+        options={getTapInPickerScreenOptions(theme.background)}
       />
       <Stack.Screen
         component={InboxScreen}

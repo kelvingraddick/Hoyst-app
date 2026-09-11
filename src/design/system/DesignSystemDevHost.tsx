@@ -10,6 +10,7 @@ import {DesignSystemGallery} from './DesignSystemGallery';
 export function DesignSystemDevHost() {
   const [visible, setVisible] = useState(false);
   const [tapInVisible, setTapInVisible] = useState(false);
+  const [pickerVisible, setPickerVisible] = useState(false);
   useEffect(() => {
     if (!__DEV__) {
       return;
@@ -26,25 +27,37 @@ export function DesignSystemDevHost() {
         setTapInVisible(true);
       }
     });
+    DevSettings.addMenuItem('Tap In selector previews', () => {
+      if (mounted) {
+        setPickerVisible(true);
+      }
+    });
     return () => {
       mounted = false;
     };
   }, []);
-  if (!__DEV__ || (!visible && !tapInVisible)) {
+  if (!__DEV__ || (!visible && !tapInVisible && !pickerVisible)) {
     return null;
   }
-  if (tapInVisible) {
+  if (tapInVisible || pickerVisible) {
     const {GestureHandlerRootView} = require('react-native-gesture-handler');
     const {
       TapInComposerPreview,
     } = require('../../features/check-in/components/TapInComposerPreview');
+    const {
+      TapInPickerPreview,
+    } = require('../../features/check-in/components/TapInPickerPreview');
     return (
       <View
         accessibilityViewIsModal
         style={{position: 'absolute', top: 0, right: 0, bottom: 0, left: 0}}>
         <GestureHandlerRootView style={{flex: 1}}>
           <SafeAreaProvider initialMetrics={initialWindowMetrics}>
-            <TapInComposerPreview onClose={() => setTapInVisible(false)} />
+            {pickerVisible ? (
+              <TapInPickerPreview onClose={() => setPickerVisible(false)} />
+            ) : (
+              <TapInComposerPreview onClose={() => setTapInVisible(false)} />
+            )}
           </SafeAreaProvider>
         </GestureHandlerRootView>
       </View>

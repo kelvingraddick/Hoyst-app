@@ -18,7 +18,7 @@ Captured September 8, 2026 from the running iPhone 17 Pro Simulator, iOS 26.5, l
 - Getting started: guests, incomplete profiles and pending-only memberships use the smiling Hoy with a pale lavender tint, sparkle and short rays. This approved exception replaces the former locked presentation while preserving each state’s copy and action.
 - Today: Hoyst blue on the node, weekday, date and Today label. Preserve the staggered seven-column path and dashed connectors.
 - Statistics: 18/22 values, 11/15 captions, 16-point flame and momentum trend icon. Icon/value alignment is centered; captions align with values. Equal columns have 12-point padding beside the centered divider.
-- Statistics surface: same color as the canvas, radius 14, padding 12 horizontal/6 vertical, minimum height 56, same shadow as the message bubble. The older filled gray-container plan is superseded.
+- Statistics surface: same color as the canvas, radius 14, padding 12 horizontal/10 vertical, minimum height 56, same shadow as the message bubble. The older filled gray-container plan is superseded.
 - Daily progress: the live remaining-action label and thin track sit beneath Your commitments. They measure daily actions, not momentum. The earlier checklist icon design is superseded.
 - Focused commitment: category surface with bubble shadow, upper-right northeast details arrow and direct primary action. Current rendered card uses radius 18, horizontal padding 18 and vertical padding 12. Record these as Home-specific values rather than changing them to the reusable default.
 - Compact rows: category backplates, wrapping title/status, a separate direct action and right chevron. Row content/chevron expands, rather than submitting an action.

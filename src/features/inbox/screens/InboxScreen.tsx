@@ -2,17 +2,21 @@ import React, {useCallback, useEffect, useRef, useState} from 'react';
 import {Image, Pressable, StyleSheet, View} from 'react-native';
 import type {NativeStackScreenProps} from '@react-navigation/native-stack';
 import {useFocusEffect} from '@react-navigation/native';
-import {ArrowLeft} from 'lucide-react-native';
+import {ArrowLeft, ChevronRight} from 'lucide-react-native';
 
-import {GlassPanel} from '../../../design/components/GlassPanel';
-import {HoystAvatar} from '../../../design/components/HoystAvatar';
-import {HoystChip} from '../../../design/components/HoystChip';
-import {HoystScreen} from '../../../design/components/HoystScreen';
-import {HoystText} from '../../../design/components/HoystText';
-import {brandColors} from '../../../design/tokens/colors';
-import {useHoystTheme} from '../../../design/theme/useHoystTheme';
+import {
+  DesignSystemProvider,
+  DSIconButton,
+  DSScreen,
+  DSSurface,
+  DSText,
+  space,
+  useSystemTheme,
+  type SemanticTone,
+} from '../../../design/system';
 import {clearDeliveredNotifications} from '../../../lib/notifications';
 import type {RootStackParamList} from '../../../navigation/types';
+import {useSettingsStore} from '../../../store/settings-store';
 import {useSessionStore} from '../../../store/session-store';
 import {
   legacyCircleActivityEventTypes,
@@ -25,13 +29,8 @@ import {
 } from '../../settings/services/notification-settings-service';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Inbox'>;
-type HoystChipTone = React.ComponentProps<typeof HoystChip>['tone'];
-type HoystAvatarTone = React.ComponentProps<typeof HoystAvatar>['tone'];
 type InboxVisual = {
-  avatarTone: HoystAvatarTone;
-  chipTone: HoystChipTone;
-  foregroundColor: string;
-  useBrandRing?: boolean;
+  messageTone: SemanticTone;
 };
 
 function getInitials(name: string) {
@@ -72,32 +71,22 @@ function isAlertEvent(event: InboxEvent) {
   return false;
 }
 
-function getInboxVisual(
-  event: InboxEvent,
-  theme: ReturnType<typeof useHoystTheme>,
-): InboxVisual {
+function getInboxVisual(event: InboxEvent): InboxVisual {
   if (isSuccessEvent(event)) {
     return {
-      avatarTone: 'green',
-      chipTone: 'green',
-      foregroundColor: theme.successForeground,
-      useBrandRing: true,
+      messageTone: 'success',
     };
   }
 
   if (isAlertEvent(event)) {
     return {
-      avatarTone: 'muted',
-      chipTone: 'orange',
-      foregroundColor: theme.warningForeground,
+      messageTone: 'warning',
     };
   }
 
   if (event.type === 'tap_in_midday_reminder') {
     return {
-      avatarTone: 'muted',
-      chipTone: 'yellow',
-      foregroundColor: theme.isDark ? brandColors.spectrumYellow : '#7A5C00',
+      messageTone: 'warning',
     };
   }
 
@@ -106,9 +95,7 @@ function getInboxVisual(
     event.type === 'evening_summary'
   ) {
     return {
-      avatarTone: 'muted',
-      chipTone: 'blue',
-      foregroundColor: theme.accentTertiaryForeground,
+      messageTone: 'action',
     };
   }
 
@@ -119,80 +106,13 @@ function getInboxVisual(
     event.type === 'circle_nudge_prompt'
   ) {
     return {
-      avatarTone: 'purple',
-      chipTone: 'purple',
-      foregroundColor: theme.accentSecondaryForeground,
+      messageTone: 'progress',
     };
   }
 
   return {
-    avatarTone: 'muted',
-    chipTone: 'neutral',
-    foregroundColor: theme.textMuted,
+    messageTone: 'muted',
   };
-}
-
-function getActionLabel(event: InboxEvent) {
-  if (event.type === 'tap_in_midday_reminder') {
-    return 'Reminder';
-  }
-  if (event.type === 'tap_in_final_warning') {
-    return 'Last call';
-  }
-  if (event.type === 'member_due_prompt') {
-    return 'Tap In';
-  }
-  if (event.type === 'join_request') {
-    return 'Review';
-  }
-  if (event.type === 'nudge') {
-    return 'Nudge';
-  }
-  if (event.type === 'circle_nudge_prompt') {
-    return 'Nudge';
-  }
-  if (event.type === 'circle_at_risk') {
-    return 'At risk';
-  }
-  if (event.type === 'circle_complete') {
-    return 'Complete';
-  }
-  if (event.type === 'circle_archived') {
-    return 'Archived';
-  }
-  if (event.type === 'circle_restored') {
-    return 'Restored';
-  }
-  if (event.type === legacyCircleActivityEventTypes.achievementUnlocked) {
-    return 'Unlocked';
-  }
-  if (event.type === legacyCircleActivityEventTypes.circleCreated) {
-    return 'Created';
-  }
-  if (event.type === legacyCircleActivityEventTypes.circleJoined) {
-    return 'Joined';
-  }
-  if (event.type === legacyCircleActivityEventTypes.momentumLevelUp) {
-    return 'Level up';
-  }
-  if (event.type === legacyCircleActivityEventTypes.skipped) {
-    return 'Skip';
-  }
-  if (event.type === legacyCircleActivityEventTypes.streakMilestone) {
-    return 'Streak';
-  }
-  if (event.type === legacyCircleActivityEventTypes.tappedIn) {
-    return 'Tapped in';
-  }
-  if (event.type === 'circle_discovery_suggestion') {
-    return 'Explore';
-  }
-  if (event.type === 'evening_summary') {
-    return 'Recap';
-  }
-  return event.type === 'join_approved' || event.type === 'member_joined'
-    ? 'Joined'
-    : 'Update';
 }
 
 function getEventLead(event: InboxEvent) {
@@ -216,6 +136,32 @@ function getUnreadEventIds(events: readonly InboxEvent[]) {
   return events.filter(event => !event.isRead).map(event => event.id);
 }
 
+function InboxAvatar({name, uri}: {name: string; uri?: string}) {
+  const theme = useSystemTheme();
+  const [failedUri, setFailedUri] = useState<string>();
+  const backgroundColor = theme.isDark ? '#151827' : '#FFFFFF';
+
+  return (
+    <View style={[styles.avatarFace, {backgroundColor}]}>
+      {uri && failedUri !== uri ? (
+        <Image
+          source={{uri}}
+          resizeMode="cover"
+          accessibilityIgnoresInvertColors
+          accessible={false}
+          onError={() => setFailedUri(uri)}
+          style={styles.avatarImage}
+          testID="inbox-avatar-image"
+        />
+      ) : (
+        <DSText allowFontScaling={false} style={styles.avatarInitials}>
+          {getInitials(name) || 'HO'}
+        </DSText>
+      )}
+    </View>
+  );
+}
+
 function InboxEventRow({
   event,
   isUnread,
@@ -225,10 +171,14 @@ function InboxEventRow({
   isUnread: boolean;
   onPress: () => void;
 }): React.JSX.Element {
-  const theme = useHoystTheme();
-  const visual = getInboxVisual(event, theme);
+  const theme = useSystemTheme();
+  const visual = getInboxVisual(event);
   const lead = getEventLead(event);
   const message = getEventMessage(event);
+  const [pressed, setPressed] = useState(false);
+  const borderBottomColor = theme.isDark
+    ? 'rgba(255,255,255,0.10)'
+    : 'rgba(16,24,40,0.08)';
 
   return (
     <Pressable
@@ -237,75 +187,74 @@ function InboxEventRow({
       }
       accessibilityRole="button"
       onPress={onPress}
-      style={({pressed}) => ({opacity: pressed ? 0.9 : 1})}>
-      <GlassPanel padding="compact">
-        <View style={styles.notificationRow}>
-          <HoystAvatar
-            initials={getInitials(lead) || 'HO'}
-            imageUrl={event.actor?.avatarUrl}
-            size={34}
-            tone={visual.avatarTone}
-            useBrandRing={visual.useBrandRing}
-          />
-          <View style={styles.notificationUnreadSlot}>
-            {isUnread ? (
-              <View
-                style={[
-                  styles.notificationUnreadDot,
-                  {backgroundColor: visual.foregroundColor},
-                ]}
-                testID="inbox-unread-dot"
-              />
-            ) : null}
-          </View>
-          <View style={styles.notificationCopy}>
-            <HoystText style={styles.notificationCopyText}>
-              <HoystText
-                style={[styles.notificationCopyText, styles.notificationLead]}>
-                {lead}{' '}
-              </HoystText>
-              <HoystText
-                style={[
-                  styles.notificationCopyText,
-                  {color: visual.foregroundColor},
-                  isUnread ? styles.notificationMessageUnread : undefined,
-                ]}>
-                {message}
-              </HoystText>
-            </HoystText>
-            <HoystText
+      onPressIn={() => setPressed(true)}
+      onPressOut={() => setPressed(false)}
+      // NativeWind interop drops functional styles. Keep layout and feedback explicit.
+      style={[
+        styles.notificationRow,
+        {borderBottomColor},
+        pressed ? styles.notificationPressed : undefined,
+      ]}
+      testID={`inbox-event-row-${event.id}`}>
+      <View style={styles.notificationAvatarSlot} testID="inbox-avatar">
+        <InboxAvatar
+          key={event.actor?.avatarUrl}
+          name={lead}
+          uri={event.actor?.avatarUrl}
+        />
+        <View style={styles.notificationUnreadSlot}>
+          {isUnread ? (
+            <View
               style={[
-                styles.notificationTimestamp,
-                isUnread ? styles.notificationTimestampUnread : undefined,
-                isUnread ? {color: theme.text} : undefined,
+                styles.notificationUnreadDot,
+                {backgroundColor: theme[visual.messageTone]},
               ]}
-              tone="muted"
-              variant="caption">
-              {event.createdAtLabel}
-            </HoystText>
-            {event.mediaImageUrl ? (
-              <Image
-                resizeMode="cover"
-                source={{uri: event.mediaImageUrl}}
-                style={styles.notificationMediaImage}
-                testID="inbox-media-image"
-              />
-            ) : null}
-          </View>
-          <HoystChip
-            density="compact"
-            label={getActionLabel(event)}
-            style={styles.notificationChip}
-            tone={visual.chipTone}
-          />
+              testID="inbox-unread-dot"
+            />
+          ) : null}
         </View>
-      </GlassPanel>
+      </View>
+      <View style={styles.notificationCopy} testID="inbox-event-copy">
+        <DSText variant="body" style={styles.notificationCopyText}>
+          <DSText
+            variant="body"
+            style={isUnread ? styles.notificationMessageUnread : undefined}>
+            {lead}{' '}
+          </DSText>
+          <DSText
+            variant="body"
+            tone={visual.messageTone}
+            style={isUnread ? styles.notificationMessageUnread : undefined}>
+            {message}
+          </DSText>
+        </DSText>
+        <DSText
+          variant="secondary"
+          tone={isUnread ? 'text' : 'muted'}
+          style={isUnread ? styles.notificationTimestampUnread : undefined}>
+          {event.createdAtLabel}
+        </DSText>
+      </View>
+      {event.mediaImageUrl ? (
+        <Image
+          resizeMode="cover"
+          source={{uri: event.mediaImageUrl}}
+          accessibilityLabel="Activity photo"
+          style={styles.notificationMediaImage}
+          testID="inbox-media-image"
+        />
+      ) : null}
+      <ChevronRight
+        color={theme.muted}
+        size={18}
+        testID="inbox-event-chevron"
+      />
     </Pressable>
   );
 }
 
-export function InboxScreen({navigation}: Props): React.JSX.Element {
-  const theme = useHoystTheme();
+function InboxScreenContent({navigation}: Props): React.JSX.Element {
+  const theme = useSystemTheme();
   const user = useSessionStore(state => state.user);
   const status = useSessionStore(state => state.status);
   const [events, setEvents] = useState<InboxEvent[]>([]);
@@ -473,35 +422,30 @@ export function InboxScreen({navigation}: Props): React.JSX.Element {
   };
 
   return (
-    <HoystScreen contentContainerStyle={styles.content}>
-      <View style={styles.header}>
-        <Pressable
-          accessibilityLabel="Back"
-          accessibilityRole="button"
-          hitSlop={8}
-          onPress={navigateBack}
-          style={({pressed}) => [
-            styles.backButton,
-            {
-              backgroundColor: theme.surfaceSoft,
-              borderColor: theme.border,
-              opacity: pressed ? 0.92 : 1,
-            },
-          ]}>
-          <ArrowLeft color={theme.text} size={22} strokeWidth={2.3} />
-        </Pressable>
-        <HoystText variant="headline">Inbox</HoystText>
+    <DSScreen contentContainerStyle={styles.content}>
+      <View style={styles.header} testID="inbox-header">
+        <View style={styles.headerSide}>
+          <DSIconButton
+            label="Back"
+            onPress={navigateBack}
+            icon={<ArrowLeft color={theme.text} size={22} strokeWidth={2.3} />}
+          />
+        </View>
+        <DSText accessibilityRole="header" style={styles.headerTitle}>
+          Inbox
+        </DSText>
+        <View style={styles.headerSide} />
       </View>
       {hasInboxError && events.length === 0 ? (
-        <GlassPanel>
+        <DSSurface kind="quiet">
           <View style={styles.emptyState}>
-            <HoystText variant="title">Could not load Inbox</HoystText>
-            <HoystText tone="muted">
+            <DSText variant="title">Could not load Inbox</DSText>
+            <DSText tone="muted">
               Your account is connected, but Hoyst could not load your latest
               updates.
-            </HoystText>
+            </DSText>
           </View>
-        </GlassPanel>
+        </DSSurface>
       ) : events.length > 0 ? (
         <View style={styles.notificationList}>
           {events.map(event => (
@@ -514,87 +458,114 @@ export function InboxScreen({navigation}: Props): React.JSX.Element {
           ))}
         </View>
       ) : (
-        <GlassPanel>
+        <DSSurface kind="quiet">
           <View style={styles.emptyState}>
-            <HoystText variant="title">No updates yet</HoystText>
-            <HoystText tone="muted">
+            <DSText variant="title">No updates yet</DSText>
+            <DSText tone="muted">
               Circle requests, reminders, nudges, discovery, and streak alerts
               will show up here.
-            </HoystText>
+            </DSText>
           </View>
-        </GlassPanel>
+        </DSSurface>
       )}
-    </HoystScreen>
+    </DSScreen>
+  );
+}
+
+export function InboxScreen(props: Props): React.JSX.Element {
+  const appearance = useSettingsStore(state => state.appearance);
+
+  return (
+    <DesignSystemProvider scheme={appearance}>
+      <InboxScreenContent {...props} />
+    </DesignSystemProvider>
   );
 }
 
 const styles = StyleSheet.create({
+  avatarFace: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    overflow: 'hidden',
+  },
+  avatarImage: {width: 28, height: 28},
+  avatarInitials: {fontSize: 11, lineHeight: 15, fontWeight: '600'},
   content: {
     paddingBottom: 168,
   },
-  backButton: {
-    alignItems: 'center',
-    borderRadius: 16,
-    borderWidth: 1,
-    height: 44,
-    justifyContent: 'center',
-    width: 44,
-  },
   emptyState: {
-    gap: 8,
+    gap: space.sm,
   },
   header: {
     alignItems: 'center',
     flexDirection: 'row',
-    gap: 12,
+    minHeight: 44,
   },
-  notificationChip: {
-    marginLeft: 10,
+  headerSide: {
+    alignItems: 'flex-start',
+    flexShrink: 0,
+    width: 84,
+  },
+  headerTitle: {
+    flex: 1,
+    fontSize: 17,
+    fontWeight: '600',
+    lineHeight: 21,
+    textAlign: 'center',
   },
   notificationCopy: {
     flex: 1,
-    gap: 4,
+    flexShrink: 1,
+    gap: space.xs,
     minWidth: 0,
   },
   notificationCopyText: {
-    fontSize: 14,
-    lineHeight: 19,
-  },
-  notificationLead: {
-    fontWeight: '800',
+    flexShrink: 1,
   },
   notificationList: {
-    gap: 10,
+    gap: 0,
   },
   notificationMediaImage: {
-    borderRadius: 16,
-    height: 112,
-    marginTop: 6,
-    width: '100%',
+    borderRadius: 8,
+    flexShrink: 0,
+    height: 32,
+    width: 32,
   },
   notificationMessageUnread: {
     fontWeight: '700',
   },
+  notificationPressed: {opacity: 0.72},
   notificationRow: {
-    alignItems: 'flex-start',
+    alignItems: 'center',
     flexDirection: 'row',
-    gap: 10,
+    gap: space.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    minHeight: 56,
+    opacity: 1,
+    paddingVertical: space.sm,
   },
   notificationTimestampUnread: {
     fontWeight: '700',
   },
-  notificationTimestamp: {
-    fontSize: 12,
-    lineHeight: 15,
-  },
   notificationUnreadDot: {
-    borderRadius: 4,
-    height: 8,
-    width: 8,
+    borderRadius: 3,
+    height: 6,
+    width: 6,
   },
   notificationUnreadSlot: {
     alignItems: 'center',
-    paddingTop: 13,
-    width: 8,
+    position: 'absolute',
+    right: -2,
+    top: -2,
+  },
+  notificationAvatarSlot: {
+    alignSelf: 'flex-start',
+    flexShrink: 0,
+    height: 28,
+    position: 'relative',
+    width: 28,
   },
 });

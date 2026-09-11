@@ -1,4 +1,6 @@
 import React from 'react';
+import {Alert, Share} from 'react-native';
+import {nudgeCircleMembers} from '../src/features/circles/services/circle-service';
 import renderer, {act} from 'react-test-renderer';
 
 import {HoystTapInMark} from '../src/design/components/HoystTapInMark';
@@ -32,6 +34,7 @@ jest.mock('react-native-safe-area-context', () => {
   const {View} = require('react-native');
 
   return {
+    useSafeAreaInsets: () => ({bottom: 0, left: 0, right: 0, top: 0}),
     SafeAreaView: ({children, ...props}: {children?: React.ReactNode}) =>
       MockReact.createElement(View, props, children),
   };
@@ -66,24 +69,24 @@ jest.mock('../src/store/session-store', () => ({
 }));
 
 jest.mock('../src/features/home/services/home-data-service', () => {
-  function needsTapInToday(circle: CircleManagementCard) {
+  function needsTapInToday(candidate: CircleManagementCard) {
     return (
-      circle.viewerMembershipStatus === 'active' &&
-      (!circle.viewerHasTappedInToday ||
-        circle.viewerTodayStatus === 'partial' ||
-        circle.viewerTodayStatus === 'failed')
+      candidate.viewerMembershipStatus === 'active' &&
+      (!candidate.viewerHasTappedInToday ||
+        candidate.viewerTodayStatus === 'partial' ||
+        candidate.viewerTodayStatus === 'failed')
     );
   }
 
-  function urgencyRank(circle: CircleManagementCard) {
-    if (circle.viewerMembershipStatus === 'pending') {
+  function urgencyRank(candidate: CircleManagementCard) {
+    if (candidate.viewerMembershipStatus === 'pending') {
       return 6;
     }
 
-    const needsViewer = needsTapInToday(circle);
-    const isAtRisk = circle.state === 'risk';
+    const needsViewer = needsTapInToday(candidate);
+    const isAtRisk = candidate.state === 'risk';
     const hasPendingToday =
-      circle.state !== 'done' && circle.remainingCheckIns > 0;
+      candidate.state !== 'done' && candidate.remainingCheckIns > 0;
 
     if (needsViewer && isAtRisk) {
       return 0;
@@ -97,7 +100,7 @@ jest.mock('../src/features/home/services/home-data-service', () => {
     if (hasPendingToday) {
       return 3;
     }
-    if (circle.state === 'done') {
+    if (candidate.state === 'done') {
       return 5;
     }
     return 4;
@@ -258,7 +261,7 @@ describe('TapInPickerScreen', () => {
     jest.clearAllMocks();
   });
 
-  it('renders the refreshed hero, priority section, and remaining Tap Today cards', () => {
+  it('renders a compact hero, divided due-card stack and visible utilities', () => {
     mockHomeData = homeData([
       circle({
         category: 'Deep Work',
@@ -309,16 +312,29 @@ describe('TapInPickerScreen', () => {
       HoystTapInMark,
     );
     expect(output).toContain('1 of 3 tapped in');
-    expect(output).toContain('2 TAP TODAY');
-    expect(output).toContain('1 AT RISK');
-    expect(output).toContain('1 COVERED');
-    expect(output).toContain('DO THIS FIRST');
+    expect(
+      tree.root.findByProps({testID: 'tap-in-picker-logo'}).props.size,
+    ).toBe(52);
+    expect(output).not.toContain('DO THIS FIRST');
+    expect(output).not.toContain('AT RISK');
     expect(output).toContain('Building Hoyst');
-    expect(output).toContain('1 Member tapped in');
-    expect(output).toContain('TAP TODAY');
     expect(output).not.toContain('2 due');
     expect(output).toContain('Sleep 8 Hours');
-    expect(output).toContain('STILL USEFUL TODAY');
+    expect(
+      tree.root.findByProps({testID: 'tap-in-picker-due-stack'}),
+    ).toBeTruthy();
+    expect(
+      tree.root.findByProps({
+        testID: 'tap-in-priority-card-building-hoyst',
+      }).props.style,
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          borderBottomWidth: expect.any(Number),
+        }),
+      ]),
+    );
+    expect(output).toContain('Also today');
     expect(output).toContain('Hydration');
   });
 
@@ -383,7 +399,6 @@ describe('TapInPickerScreen', () => {
 
     expect(output).toContain('Read every day');
     expect(output).toContain('Personal');
-    expect(output).toContain('Private personal commitment');
     expect(output).not.toContain('1/1 Members');
   });
 
@@ -490,10 +505,14 @@ describe('TapInPickerScreen', () => {
     const {tree} = renderScreen();
     const output = getTextOutput(tree.toJSON());
 
-    expect(output).toContain('2 TAP TODAY');
     expect(output).toContain('Build Partial');
+    expect(output).toContain('Goal: 5 pages');
+    expect(output).toContain('Progress saved · 2 pages remaining');
+    expect(output).toContain('Allowed range · 2 to 6 servings');
+    expect(output).toContain('8 servings logged · Above range');
+    expect(output).toContain('Update Tap In');
     expect(output).toContain('Limit Failed');
-    expect(output).toContain('STILL USEFUL TODAY');
+    expect(output).toContain('Also today');
     expect(output).toContain('Build Covered');
     expect(output).toContain('Limit Covered');
     expect(
@@ -524,7 +543,158 @@ describe('TapInPickerScreen', () => {
     const output = getTextOutput(tree.toJSON());
 
     expect(output).toContain('Nothing else needs you');
-    expect(output).toContain('0 active');
+  });
+
+  it('keeps Share, View and dismissal wired to their existing destinations', async () => {
+    const share = jest
+      .spyOn(Share, 'share')
+      .mockResolvedValue({action: Share.sharedAction});
+    mockHomeData = homeData([
+      circle({id: 'share', viewerHasTappedInToday: true}),
+      circle({id: 'view', inviteUrl: undefined, viewerHasTappedInToday: true}),
+    ]);
+    const {tree, navigation} = renderScreen();
+    await act(async () =>
+      tree.root
+        .findByProps({testID: 'tap-in-picker-utility-share'})
+        .props.onPress(),
+    );
+    expect(share).toHaveBeenCalledWith({
+      title: 'Join Morning Movers on Hoyst',
+      message: 'Join Morning Movers on Hoyst: https://example.com/invite',
+      url: 'https://example.com/invite',
+    });
+    act(() =>
+      tree.root
+        .findByProps({testID: 'tap-in-picker-utility-view'})
+        .props.onPress(),
+    );
+    expect(navigation.navigate).toHaveBeenCalledWith('CircleDetail', {
+      circleId: 'view',
+    });
+    act(() =>
+      tree.root.findByProps({label: 'Close Tap In picker'}).props.onPress(),
+    );
+    expect(navigation.goBack).toHaveBeenCalled();
+    share.mockRestore();
+  });
+
+  it('prevents duplicate pending nudges, disables sent nudges and allows retry after failure', async () => {
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    let reject!: (error: Error) => void;
+    jest.mocked(nudgeCircleMembers).mockImplementationOnce(
+      () =>
+        new Promise((_, fail) => {
+          reject = fail;
+        }),
+    );
+    mockHomeData = homeData([
+      circle({id: 'nudge', nudgeTargetCount: 2, viewerHasTappedInToday: true}),
+    ]);
+    const {tree} = renderScreen();
+    const getAction = () =>
+      tree.root.findByProps({testID: 'tap-in-picker-utility-nudge'});
+    act(() => {
+      getAction().props.onPress();
+      getAction().props.onPress();
+    });
+    expect(nudgeCircleMembers).toHaveBeenCalledTimes(1);
+    expect(getAction().props.busy).toBe(true);
+    await act(async () => reject(new Error('Try again')));
+    expect(getAction().props.busy).toBe(false);
+    expect(alert).toHaveBeenCalledWith('Nudge failed', 'Try again');
+    jest.mocked(nudgeCircleMembers).mockResolvedValueOnce({nudged: 2} as never);
+    await act(async () => getAction().props.onPress());
+    expect(getAction().props.disabled).toBe(true);
+    expect(getAction().props.label).toBe('Nudged');
+    alert.mockRestore();
+  });
+
+  it.each([
+    {
+      minimumValue: undefined,
+      maximumValue: 2,
+      currentValue: 3,
+      expected: 'Above limit',
+    },
+    {
+      minimumValue: 2,
+      maximumValue: 6,
+      currentValue: 1,
+      expected: 'Below range',
+    },
+  ])(
+    'keeps failed Limit feedback separate from its description and goal: %p',
+    data => {
+      mockHomeData = homeData([
+        circle({
+          commitmentType: 'limit',
+          unitLabel: 'hours',
+          viewerHasTappedInToday: true,
+          viewerCanUpdateTapIn: true,
+          viewerTodayStatus: 'failed',
+          ...data,
+        }),
+      ]);
+      const {tree} = renderScreen();
+      const output = getTextOutput(tree.toJSON());
+      expect(output).toContain(data.expected);
+      const goal = tree.root.findByProps({
+        testID: 'tap-in-picker-goal-circle-1',
+      });
+      const descriptionGroup = goal.parent!;
+      expect(
+        getTextOutput(
+          descriptionGroup
+            .findAllByType(require('react-native').Text)
+            .map(text => text.props.children),
+        ),
+      ).toContain('Move for 30 minutes');
+      expect(output).not.toContain('Goal covered');
+    },
+  );
+
+  it('does not claim Limit compliance before a value is logged or resolved', () => {
+    for (const viewerHasTappedInToday of [false, true]) {
+      mockHomeData = homeData([
+        circle({
+          commitmentType: 'limit',
+          maximumValue: 0,
+          unitLabel: 'servings',
+          viewerHasTappedInToday,
+          viewerTodayStatus: 'partial',
+          currentValue: undefined,
+        }),
+      ]);
+      const {tree} = renderScreen();
+      const output = getTextOutput(tree.toJSON());
+      expect(output).toContain('Maximum · 0 servings');
+      expect(output).not.toContain('Within limit');
+      expect(output).not.toContain('Above limit');
+    }
+  });
+
+  it('keeps skipped-day utility feedback and excludes pending memberships', () => {
+    mockHomeData = homeData([
+      circle({
+        id: 'skipped',
+        viewerHasTappedInToday: true,
+        viewerTodayStatus: 'skip',
+      }),
+      circle({
+        id: 'pending',
+        title: 'Pending circle',
+        viewerMembershipStatus: 'pending',
+      }),
+    ]);
+    const {tree} = renderScreen();
+    const output = getTextOutput(tree.toJSON());
+    expect(output).toContain('Grace skip used today');
+    expect(output).not.toContain('Pending circle');
+    expect(output).toContain('1 of 1 tapped in');
+    expect(
+      tree.root.findByProps({testID: 'tap-in-picker-utility-skipped'}),
+    ).toBeTruthy();
   });
 
   it('renders loading, error, no-active, and all-covered states', () => {

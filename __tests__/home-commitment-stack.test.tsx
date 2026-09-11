@@ -79,6 +79,55 @@ describe('Home commitment actions', () => {
   beforeEach(() => {
     mockAppearance = 'light';
   });
+  it.each([
+    {
+      commitmentType: 'build' as const,
+      targetValue: 20,
+      unitLabel: 'minutes',
+      expected: 'Goal: 20 minutes',
+    },
+    {
+      commitmentType: 'limit' as const,
+      maximumValue: 2,
+      unitLabel: 'hours',
+      expected: 'Maximum: 2 hours',
+    },
+    {
+      commitmentType: 'limit' as const,
+      minimumValue: 2,
+      maximumValue: 6,
+      unitLabel: 'cups',
+      expected: 'Allowed range: 2 to 6 cups',
+    },
+  ])('shows the goal beneath the focused description: %p', data => {
+    const {tree} = renderCards([circle(data)]);
+    const goal = tree.root.findByProps({
+      testID: 'home-commitment-goal-circle-1',
+    });
+    expect(
+      goal
+        .findAllByType(require('../src/design/components/HoystText').HoystText)
+        .map(node => node.props.children)
+        .join(''),
+    ).toBe(
+      data.expected.startsWith('Goal:')
+        ? data.expected
+        : data.expected.replace(': ', ' · '),
+    );
+    expect(
+      goal.parent!.findAllByType(
+        require('../src/design/components/HoystText').HoystText,
+      )[0].props.children,
+    ).toBe('Move for 30 minutes');
+  });
+  it('does not add a quantity goal to simple or Avoid commitments', () => {
+    for (const commitmentType of ['build', 'avoid'] as const) {
+      const {tree} = renderCards([circle({commitmentType})]);
+      expect(
+        tree.root.findAllByProps({testID: 'home-commitment-goal-circle-1'}),
+      ).toHaveLength(0);
+    }
+  });
   it('offers direct actions on expanded and compact rows without recording completion', () => {
     const first = circle();
     const second = circle({id: 'second'});
