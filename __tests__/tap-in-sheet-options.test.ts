@@ -26,7 +26,7 @@ it('opens the selector as the same native form sheet at a list-friendly stop', (
     contentStyle: {backgroundColor: '#F4F3FB'},
     gestureEnabled: true,
     presentation: 'formSheet',
-    sheetAllowedDetents: [0.8, 0.92],
+    sheetAllowedDetents: [0.92],
     sheetInitialDetentIndex: 0,
     sheetExpandsWhenScrolledToEdge: false,
   });

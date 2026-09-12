@@ -242,9 +242,7 @@ export function HomeCommitmentStack({
                   <View style={styles.copy}>
                     <HoystText style={styles.title}>{card.title}</HoystText>
                     <HoystText style={[styles.category, {color}]}>
-                      {card.circleMode === 'personal'
-                        ? 'PERSONAL COMMITMENT'
-                        : visual.label.toUpperCase()}
+                      {visual.label.toUpperCase()}
                     </HoystText>
                   </View>
                 </Pressable>

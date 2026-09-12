@@ -1,6 +1,7 @@
 import React from 'react';
 import {Image, Pressable, StyleSheet} from 'react-native';
 import RNHapticFeedback from 'react-native-haptic-feedback';
+import {Check, ChevronRight} from 'lucide-react-native';
 import {Ellipse} from 'react-native-svg';
 import renderer, {act} from 'react-test-renderer';
 
@@ -138,6 +139,9 @@ describe('TapInPulseButton', () => {
     const logo = tree!.root.findByProps({
       testID: 'tap-in-pulse-button-hero-logo',
     });
+    const trailing = tree!.root.findByProps({
+      testID: 'tap-in-pulse-button-hero-trailing',
+    });
     const frameStyle = StyleSheet.flatten(frame.props.style);
     const markWrapStyle = StyleSheet.flatten(markWrap.props.style);
     const logoStyle = StyleSheet.flatten(logo.props.style);
@@ -150,5 +154,74 @@ describe('TapInPulseButton', () => {
     expect(frameStyle.borderRadius).toBe(20);
     expect(frameStyle.backgroundColor).toBe('#086CA8');
     expect(markWrapStyle.transform).toEqual([{translateY: 0}]);
+    expect(StyleSheet.flatten(trailing.props.style)).toEqual(
+      expect.objectContaining({backgroundColor: 'rgba(255,255,255,0.14)'}),
+    );
+    expect(tree!.root.findByType(ChevronRight).props.color).toBe('#FFFFFF');
+  });
+
+  it('uses a supplied palette for a hero without changing the default palette', () => {
+    let tree: renderer.ReactTestRenderer | undefined;
+
+    act(() => {
+      tree = renderer.create(
+        <TapInPulseButton
+          heroPalette={{
+            backgroundColor: '#07763E',
+            chevronBackgroundColor: 'rgba(7,11,26,0.14)',
+            foregroundColor: '#070B1A',
+            supportingTextColor: 'rgba(7,11,26,0.72)',
+          }}
+          label="Tap In"
+          supportingText="Log progress for this circle"
+          variant="hero"
+        />,
+      );
+    });
+
+    const frame = tree!.root.findByProps({
+      testID: 'tap-in-pulse-button-frame',
+    });
+    const chevron = tree!.root.findByType(ChevronRight);
+
+    expect(StyleSheet.flatten(frame.props.style)).toEqual(
+      expect.objectContaining({
+        backgroundColor: '#07763E',
+        borderColor: '#07763E',
+      }),
+    );
+    expect(chevron.props.color).toBe('#070B1A');
+  });
+
+  it('renders an opt-in success check in the hero trailing circle', () => {
+    let tree: renderer.ReactTestRenderer | undefined;
+
+    act(() => {
+      tree = renderer.create(
+        <TapInPulseButton
+          heroTrailingState="success"
+          label="Review Tap In"
+          supportingText="Review or share today's Tap In"
+          variant="hero"
+        />,
+      );
+    });
+
+    const trailing = tree!.root.findByProps({
+      testID: 'tap-in-pulse-button-hero-trailing',
+    });
+    const check = tree!.root.findByType(Check);
+
+    expect(StyleSheet.flatten(trailing.props.style)).toEqual(
+      expect.objectContaining({
+        backgroundColor: '#10B967',
+        height: 42,
+        width: 42,
+      }),
+    );
+    expect(check.props).toEqual(
+      expect.objectContaining({color: '#FFFFFF', size: 22}),
+    );
+    expect(tree!.root.findAllByType(ChevronRight)).toHaveLength(0);
   });
 });

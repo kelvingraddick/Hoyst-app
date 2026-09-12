@@ -194,6 +194,13 @@ describe('Home commitment actions', () => {
     expect(onActionPress).toHaveBeenCalledWith(circle());
     expect(onViewDetails).toHaveBeenCalledTimes(2);
   });
+  it("shows a personal commitment's actual category in the focused card", () => {
+    const {tree} = renderCards([circle({circleMode: 'personal'})]);
+    const output = JSON.stringify(tree.toJSON());
+
+    expect(output).toContain('FITNESS');
+    expect(output).not.toContain('PERSONAL COMMITMENT');
+  });
   it.each(['partial', 'failed', 'skip', 'done'] as const)(
     'offers Nudge after a saved %s result',
     status => {

@@ -314,6 +314,7 @@ export type CircleSummary = {
   graceRules?: {
     skip: GraceRule;
   };
+  groupStreakDays?: number;
   streakDays?: number;
   memberCount?: number;
   maxSize?: number;

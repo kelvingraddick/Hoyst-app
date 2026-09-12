@@ -87,8 +87,11 @@ type CompletionDetailSnapshot = Pick<
   Partial<
     Pick<
       CircleDetailModel,
+      | 'category'
+      | 'commitmentType'
       | 'inviteUrl'
       | 'memberCount'
+      | 'members'
       | 'periodTapInCount'
       | 'progressLabel'
       | 'streakDays'
@@ -392,22 +395,26 @@ function TapInCompleteController({
     : 'covered';
   const showCelebrationParticles = completionTone === 'covered';
   const snapshotDetail = useMemo<CompletionDetailSnapshot | undefined>(() => {
+    const category = cleanOptionalText(route.params.category);
     const title = cleanOptionalText(route.params.circleTitle);
     const commitment = cleanOptionalText(route.params.commitment);
     const progressLabel = cleanOptionalText(route.params.progressLabel);
     const streakLabel = cleanOptionalText(route.params.streakLabel);
     const inviteUrl = cleanOptionalText(route.params.inviteUrl);
     const memberCount = route.params.memberCount;
+    const members = route.params.members;
     const periodTapInCount = route.params.periodTapInCount;
     const streakDays = route.params.streakDays;
 
     if (
+      !category &&
       !title &&
       !commitment &&
       !progressLabel &&
       !streakLabel &&
       !inviteUrl &&
       typeof memberCount !== 'number' &&
+      !members &&
       typeof periodTapInCount !== 'number' &&
       typeof streakDays !== 'number'
     ) {
@@ -415,9 +422,14 @@ function TapInCompleteController({
     }
 
     return {
+      ...(category ? {category} : {}),
       commitment: commitment ?? "Today's Tap In",
+      ...(route.params.commitmentType
+        ? {commitmentType: route.params.commitmentType}
+        : {}),
       ...(inviteUrl ? {inviteUrl} : {}),
       ...(typeof memberCount === 'number' ? {memberCount} : {}),
+      ...(members ? {members} : {}),
       ...(typeof periodTapInCount === 'number' ? {periodTapInCount} : {}),
       ...(progressLabel ? {progressLabel} : {}),
       ...(typeof streakDays === 'number' ? {streakDays} : {}),
@@ -425,10 +437,13 @@ function TapInCompleteController({
       title: title ?? 'Hoyst Circle',
     };
   }, [
+    route.params.category,
     route.params.circleTitle,
     route.params.commitment,
+    route.params.commitmentType,
     route.params.inviteUrl,
     route.params.memberCount,
+    route.params.members,
     route.params.periodTapInCount,
     route.params.progressLabel,
     route.params.streakDays,
@@ -655,11 +670,15 @@ function TapInCompleteController({
   }, []);
   const shareStory = useCallback(() => {
     navigation.navigate('TapInStoryShare', {
+      category: displayDetail?.category,
       circleId: route.params.circleId,
       circleTitle: displayDetail?.title ?? route.params.circleTitle,
       commitment: displayDetail?.commitment ?? route.params.commitment,
+      commitmentType:
+        displayDetail?.commitmentType ?? route.params.commitmentType,
       inviteUrl: displayDetail?.inviteUrl ?? route.params.inviteUrl,
       memberCount: displayDetail?.memberCount ?? route.params.memberCount,
+      members: displayDetail?.members,
       periodTapInCount:
         displayDetail?.periodTapInCount ?? route.params.periodTapInCount,
       progressLabel: displayDetail?.progressLabel ?? route.params.progressLabel,
@@ -678,6 +697,7 @@ function TapInCompleteController({
     route.params.circleId,
     route.params.circleTitle,
     route.params.commitment,
+    route.params.commitmentType,
     route.params.completionMomentum?.currentStreak,
     route.params.inviteUrl,
     route.params.memberCount,

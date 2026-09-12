@@ -555,69 +555,69 @@ export function CircleThreadSection({
                 testID="circle-thread-composer-input"
                 value={draft}
               />
-              <View
-                style={styles.composerActionCluster}
-                testID="circle-thread-composer-actions">
-                <Pressable
-                  accessibilityLabel="Add image"
-                  accessibilityRole="button"
-                  accessibilityState={{disabled: isSending}}
-                  disabled={isSending}
-                  onPress={() => {
-                    handleChooseImage().catch(() => undefined);
-                  }}
-                  style={({pressed}) => [
-                    styles.composerActionButton,
-                    {
-                      opacity: isSending
-                        ? 0.46
-                        : pressed
-                        ? actionMotion.pressedOpacity
-                        : 1,
-                    },
+            </View>
+            <View
+              style={styles.composerActionCluster}
+              testID="circle-thread-composer-actions">
+              <Pressable
+                accessibilityLabel="Add image"
+                accessibilityRole="button"
+                accessibilityState={{disabled: isSending}}
+                disabled={isSending}
+                onPress={() => {
+                  handleChooseImage().catch(() => undefined);
+                }}
+                style={({pressed}) => [
+                  styles.composerActionButton,
+                  {
+                    opacity: isSending
+                      ? 0.46
+                      : pressed
+                      ? actionMotion.pressedOpacity
+                      : 1,
+                  },
+                ]}>
+                <View
+                  testID="circle-thread-composer-camera-circle"
+                  style={[
+                    styles.composerIconFace,
+                    {backgroundColor: systemTheme.surface},
                   ]}>
-                  <View
-                    testID="circle-thread-composer-camera-circle"
-                    style={[
-                      styles.composerIconFace,
-                      {backgroundColor: systemTheme.surface},
-                    ]}>
-                    <Camera
-                      color={systemTheme.muted}
-                      size={20}
-                      strokeWidth={2.2}
-                    />
-                  </View>
-                </Pressable>
-                <Pressable
-                  accessibilityLabel="Send message"
-                  accessibilityRole="button"
-                  accessibilityState={{disabled: !canSendMessage}}
-                  disabled={!canSendMessage}
-                  onPress={() => {
-                    handleSend().catch(() => undefined);
-                  }}
-                  style={({pressed}) => [
-                    styles.composerActionButton,
-                    {
-                      opacity: !canSendMessage
-                        ? 0.46
-                        : pressed
-                        ? actionMotion.pressedOpacity
-                        : 1,
-                    },
-                  ]}>
-                  <View
-                    style={styles.sendCircle}
-                    testID="circle-thread-composer-send-circle">
-                    <ArrowRight
-                      color={brandColors.white}
-                      size={20}
-                      strokeWidth={2.7}
-                    />
-                  </View>
-                </Pressable>
-              </View>
+                  <Camera
+                    color={systemTheme.muted}
+                    size={20}
+                    strokeWidth={2.2}
+                  />
+                </View>
+              </Pressable>
+              <Pressable
+                accessibilityLabel="Send message"
+                accessibilityRole="button"
+                accessibilityState={{disabled: !canSendMessage}}
+                disabled={!canSendMessage}
+                onPress={() => {
+                  handleSend().catch(() => undefined);
+                }}
+                style={({pressed}) => [
+                  styles.composerActionButton,
+                  {
+                    opacity: !canSendMessage
+                      ? 0.46
+                      : pressed
+                      ? actionMotion.pressedOpacity
+                      : 1,
+                  },
+                ]}>
+                <View
+                  style={styles.sendCircle}
+                  testID="circle-thread-composer-send-circle">
+                  <ArrowRight
+                    color={brandColors.white}
+                    size={20}
+                    strokeWidth={2.7}
+                  />
+                </View>
+              </Pressable>
             </View>
           </View>
 
@@ -776,15 +776,12 @@ const styles = StyleSheet.create({
   archivedFooterTitle: {fontSize: 15, fontWeight: '600', lineHeight: 20},
   composerActionCluster: {
     alignItems: 'center',
+    flexShrink: 0,
     flexDirection: 'row',
     gap: 4,
     height: 44,
     justifyContent: 'flex-end',
-    position: 'absolute',
-    right: 0,
-    top: 2,
     width: 92,
-    zIndex: 1,
   },
   composerActionButton: {
     alignItems: 'center',
@@ -827,7 +824,6 @@ const styles = StyleSheet.create({
     minHeight: 48,
     minWidth: 0,
     paddingHorizontal: 12,
-    paddingRight: 104,
     paddingVertical: 12,
     textAlign: 'left',
     textAlignVertical: 'center',
@@ -838,7 +834,6 @@ const styles = StyleSheet.create({
     minHeight: 48,
     minWidth: 0,
     overflow: 'hidden',
-    position: 'relative',
   },
   composerRow: {
     alignItems: 'center',

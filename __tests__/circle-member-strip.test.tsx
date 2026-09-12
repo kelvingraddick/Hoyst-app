@@ -1,10 +1,14 @@
 import React from 'react';
-import {ScrollView, Text} from 'react-native';
+import {ScrollView, StyleSheet, Text} from 'react-native';
 import {UserPlus} from 'lucide-react-native';
 import renderer, {act, type ReactTestInstance} from 'react-test-renderer';
 
 import {DesignSystemProvider} from '../src/design/system';
-import {CircleMemberStrip} from '../src/features/circles/components/CircleMemberStrip';
+import {
+  CircleMemberStrip,
+  getMemberProgressConfig,
+} from '../src/features/circles/components/CircleMemberStrip';
+import {getHoystThemeColors} from '../src/design/tokens/colors';
 import type {CircleMemberStatus} from '../src/types/models';
 
 jest.mock('../src/store/settings-store', () => ({
@@ -98,10 +102,16 @@ it('uses a subtle Invite icon and places the bulk row before selected-member act
   const selectedAction = tree.root.findByProps({
     testID: 'circle-member-strip-selected-action',
   });
+  const inviteAvatar = tree.root.findByProps({
+    testID: 'circle-member-strip-invite-avatar',
+  });
   const output = JSON.stringify(tree.toJSON());
 
   expect(inviteIcon.props).toEqual(
     expect.objectContaining({opacity: 0.72, size: 18, strokeWidth: 2}),
+  );
+  expect(StyleSheet.flatten(inviteAvatar.props.style)).toEqual(
+    expect.objectContaining({height: 48, width: 48}),
   );
   expect(output.indexOf('circle-member-strip')).toBeLessThan(
     output.indexOf('circle-member-strip-below-action'),
@@ -112,6 +122,21 @@ it('uses a subtle Invite icon and places the bulk row before selected-member act
   expect(strip).toBeTruthy();
   expect(belowAction).toBeTruthy();
   expect(selectedAction).toBeTruthy();
+});
+
+it('matches completed member rings and badges to the completed day green', () => {
+  const theme = getHoystThemeColors('light');
+  const {tree} = renderStrip();
+  const config = getMemberProgressConfig(members[0], theme);
+  const badge = tree.root.findByProps({
+    testID: 'circle-member-strip-status-viewer',
+  });
+
+  expect(config.labelColor).toBe(theme.successForeground);
+  expect(config.ringColor).toBe(theme.success);
+  expect(StyleSheet.flatten(badge.props.style)).toEqual(
+    expect.objectContaining({backgroundColor: theme.success}),
+  );
 });
 
 it('preserves Invite and member selection callbacks', () => {

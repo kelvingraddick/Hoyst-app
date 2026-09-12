@@ -26,6 +26,7 @@ import {
   initialWindowMetrics,
   useSafeAreaInsets,
 } from 'react-native-safe-area-context';
+import {TAP_IN_EXPANDED_DETENT} from '../../../navigation/tap-in-sheet-options';
 import {triggerTapInPressHaptic} from '../../../lib/haptics/tap-in-haptics';
 import type {CircleManagementCard} from '../../../types/models';
 import {
@@ -251,7 +252,9 @@ export function TapInPickerPresentation({
     1,
     height - (initialWindowMetrics?.insets.top ?? insets.top) - 10,
   );
-  const initialSheetHeight = Math.round(maximumSheetHeight * 0.8);
+  const initialSheetHeight = Math.round(
+    maximumSheetHeight * TAP_IN_EXPANDED_DETENT,
+  );
   return (
     <View
       collapsable={false}

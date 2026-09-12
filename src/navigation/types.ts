@@ -1,5 +1,9 @@
 import type {NavigatorScreenParams} from '@react-navigation/native';
-import type {CheckInCoverageStatus, CommitmentType} from '../types/models';
+import type {
+  CheckInCoverageStatus,
+  CircleMemberStatus,
+  CommitmentType,
+} from '../types/models';
 import type {PastCircleSummary} from '../features/circles/services/past-circle-service';
 
 export type AppTabsParamList = {
@@ -55,6 +59,7 @@ export type RootStackParamList = {
   ArchivedCircles: undefined;
   TapInComposer: {circleId: string; source: TapInSource};
   TapInComplete: {
+    category?: string;
     circleId: string;
     dateKey: string;
     circleTitle?: string;
@@ -65,6 +70,7 @@ export type RootStackParamList = {
     inviteUrl?: string;
     maximumValue?: number;
     memberCount?: number;
+    members?: CircleMemberStatus[];
     minimumValue?: number;
     periodTapInCount?: number;
     progressLabel?: string;
@@ -79,11 +85,14 @@ export type RootStackParamList = {
     photoUri?: string;
   };
   TapInStoryShare: {
+    category?: string;
     circleId: string;
     circleTitle?: string;
     commitment?: string;
+    commitmentType?: CommitmentType;
     inviteUrl?: string;
     memberCount?: number;
+    members?: CircleMemberStatus[];
     periodTapInCount?: number;
     progressLabel?: string;
     source: TapInSource;

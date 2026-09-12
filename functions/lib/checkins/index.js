@@ -21,6 +21,7 @@ const profile_1 = require("../profile");
 const thread_1 = require("../thread");
 const notification_plan_1 = require("./notification-plan");
 const details_1 = require("./details");
+const group_streak_1 = require("../circles/group-streak");
 const submitTapInSchema = zod_1.z.object({
     circleId: zod_1.z.string().trim().min(1),
     currentValue: zod_1.z.number().int().min(0).max(100000).optional(),
@@ -868,6 +869,10 @@ exports.processTapInSideEffects = (0, firestore_2.onDocumentWritten)({
     const status = checkIn?.status;
     const wasCovered = (0, commitments_1.isCoveredCheckInData)(priorCheckIn);
     const isCovered = (0, commitments_1.isCoveredCheckInData)(checkIn);
+    const reconcileGroupStreak = () => (0, group_streak_1.reconcileCircleGroupStreak)({
+        circleId: event.params.circleId,
+        dateKey: event.params.dateKey,
+    }).catch(error => console.error('reconcile_circle_group_streak_failed', error));
     if (wasCovered && !isCovered) {
         await retractTapInEffects({
             accountDeletion: priorCheckIn?.deletionReason === 'account',
@@ -875,6 +880,7 @@ exports.processTapInSideEffects = (0, firestore_2.onDocumentWritten)({
             dateKey: event.params.dateKey,
             uid: event.params.uid,
         });
+        await reconcileGroupStreak();
         return;
     }
     if (wasCovered && isCovered && checkIn) {
@@ -892,9 +898,11 @@ exports.processTapInSideEffects = (0, firestore_2.onDocumentWritten)({
                 uid: event.params.uid,
             });
         }
+        await reconcileGroupStreak();
         return;
     }
     if (!checkIn || !isCovered || (status !== 'done' && status !== 'skip')) {
+        await reconcileGroupStreak();
         return;
     }
     await processTapInSideEffectsForCheckIn({
@@ -904,6 +912,7 @@ exports.processTapInSideEffects = (0, firestore_2.onDocumentWritten)({
         status,
         uid: event.params.uid,
     });
+    await reconcileGroupStreak();
 });
 exports.removeTapIn = (0, https_1.onCall)(async (request) => {
     const input = removeTapInSchema.parse(request.data);

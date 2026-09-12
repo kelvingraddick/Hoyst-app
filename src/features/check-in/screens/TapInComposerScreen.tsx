@@ -395,6 +395,7 @@ function TapInComposerController({
       }
 
       navigation.replace('TapInComplete', {
+        category: detail.category,
         circleId: route.params.circleId,
         circleTitle: detail.title,
         commitment: detail.commitment,
@@ -419,6 +420,7 @@ function TapInComposerController({
         dateKey: result.dateKey,
         inviteUrl: detail.inviteUrl,
         memberCount: detail.memberCount,
+        members: detail.members,
         periodTapInCount: detail.periodTapInCount,
         progressLabel: detail.progressLabel,
         source: route.params.source,
@@ -498,11 +500,14 @@ function TapInComposerController({
 
   const shareStory = () => {
     navigation.navigate('TapInStoryShare', {
+      category: detail.category,
       circleId: route.params.circleId,
       circleTitle: detail.title,
       commitment: detail.commitment,
+      commitmentType,
       inviteUrl: detail.inviteUrl,
       memberCount: detail.memberCount,
+      members: detail.members,
       note: viewerTodayNote || undefined,
       periodTapInCount: detail.periodTapInCount,
       photoUri: viewerTodayPhotoUrl,

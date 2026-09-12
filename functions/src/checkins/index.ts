@@ -56,6 +56,7 @@ import {
 import {createCircleThreadActivity, getCircleThreadStreakText} from '../thread';
 import {getCircleCompleteNotificationTargets} from './notification-plan';
 import {getTapInDetailsPatch} from './details';
+import {reconcileCircleGroupStreak} from '../circles/group-streak';
 
 const submitTapInSchema = z.object({
   circleId: z.string().trim().min(1),
@@ -589,10 +590,7 @@ async function processTapInSideEffectsForCheckIn({
   const timezone = asCleanString(circle?.timezone) ?? 'UTC';
   const commitmentPace = getCommitmentPace(circle);
   const requiredTapIns = getRequiredTapIns(circle);
-  const periodDateKeys = getCommitmentPeriodDateKeys(
-    commitmentPace,
-    timezone,
-  );
+  const periodDateKeys = getCommitmentPeriodDateKeys(commitmentPace, timezone);
   const periodCheckInSnapshots = await Promise.all(
     periodDateKeys.map(periodDateKey =>
       circleRef
@@ -789,9 +787,7 @@ async function processTapInSideEffectsForCheckIn({
       sourceKey,
       sourceRevision: coverageRevision,
       targetUid: uid,
-    }).catch(error =>
-      console.error('notify_member_milestones_failed', error),
-    );
+    }).catch(error => console.error('notify_member_milestones_failed', error));
   }
 
   if (!isPersonal && circleCompleteTargetUids.length > 0) {
@@ -1197,6 +1193,13 @@ export const processTapInSideEffects = onDocumentWritten(
 
     const wasCovered = isCoveredCheckInData(priorCheckIn);
     const isCovered = isCoveredCheckInData(checkIn);
+    const reconcileGroupStreak = () =>
+      reconcileCircleGroupStreak({
+        circleId: event.params.circleId,
+        dateKey: event.params.dateKey,
+      }).catch(error =>
+        console.error('reconcile_circle_group_streak_failed', error),
+      );
 
     if (wasCovered && !isCovered) {
       await retractTapInEffects({
@@ -1205,6 +1208,7 @@ export const processTapInSideEffects = onDocumentWritten(
         dateKey: event.params.dateKey,
         uid: event.params.uid,
       });
+      await reconcileGroupStreak();
       return;
     }
 
@@ -1225,10 +1229,12 @@ export const processTapInSideEffects = onDocumentWritten(
           uid: event.params.uid,
         });
       }
+      await reconcileGroupStreak();
       return;
     }
 
     if (!checkIn || !isCovered || (status !== 'done' && status !== 'skip')) {
+      await reconcileGroupStreak();
       return;
     }
 
@@ -1239,6 +1245,7 @@ export const processTapInSideEffects = onDocumentWritten(
       status,
       uid: event.params.uid,
     });
+    await reconcileGroupStreak();
   },
 );
 

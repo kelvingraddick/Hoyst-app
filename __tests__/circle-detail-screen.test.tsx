@@ -23,6 +23,8 @@ const mockRequireAccount = jest.fn(
 
 let mockMemberDetail: CircleDetailModel | undefined;
 let mockPublicDetail: CircleDetailModel | undefined;
+let mockPersistedGroupStreakDays = 3;
+let mockAppearance: 'dark' | 'light' = 'light';
 let mockSessionState: {
   status: 'authenticatedReady' | 'guest';
   user?: {providerIds: string[]; uid: string};
@@ -68,8 +70,9 @@ jest.mock('react-native-haptic-feedback', () => ({
 }));
 
 jest.mock('../src/store/settings-store', () => ({
-  useSettingsStore: (selector: (state: {appearance: 'light'}) => unknown) =>
-    selector({appearance: 'light'}),
+  useSettingsStore: (
+    selector: (state: {appearance: 'dark' | 'light'}) => unknown,
+  ) => selector({appearance: mockAppearance}),
 }));
 
 jest.mock('../src/store/session-store', () => ({
@@ -136,6 +139,25 @@ jest.mock('../src/features/circles/services/public-circle-service', () => ({
       return jest.fn();
     },
   ),
+}));
+
+jest.mock('../src/lib/firebase/firestore', () => ({
+  firebaseFirestore: () => ({
+    collection: () => ({
+      doc: () => ({
+        onSnapshot: (
+          onSnapshot: (snapshot: {
+            data: () => {groupStreakDays: number};
+          }) => void,
+        ) => {
+          onSnapshot({
+            data: () => ({groupStreakDays: mockPersistedGroupStreakDays}),
+          });
+          return jest.fn();
+        },
+      }),
+    }),
+  }),
 }));
 
 jest.mock('../src/features/home/services/home-data-service', () => ({
@@ -265,6 +287,7 @@ function detail(overrides: Partial<CircleDetailModel> = {}): CircleDetailModel {
     progressPercent: 60,
     remainingCheckIns: 1,
     state: 'active',
+    groupStreakDays: 3,
     streakDays: 3,
     streakLabel: '3d streak',
     title: 'Morning Movers',
@@ -303,6 +326,18 @@ function renderScreen() {
   });
 
   return {navigation, tree: tree!};
+}
+
+function getHeroTapInButton(tree: renderer.ReactTestRenderer) {
+  const button = tree.root
+    .findAllByType(TapInPulseButton)
+    .find(candidate => candidate.props.variant === 'hero');
+
+  if (!button) {
+    throw new Error('Circle Detail hero Tap In button was not found');
+  }
+
+  return button;
 }
 
 function outputOf(tree: renderer.ReactTestRenderer) {
@@ -357,6 +392,8 @@ function selectMember(tree: renderer.ReactTestRenderer, memberId: string) {
 
 describe('CircleDetailScreen reference redesign', () => {
   beforeEach(() => {
+    mockAppearance = 'light';
+    mockPersistedGroupStreakDays = 3;
     alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
     mockMemberDetail = detail();
     mockPublicDetail = undefined;
@@ -564,8 +601,8 @@ describe('CircleDetailScreen reference redesign', () => {
     expect(output).toContain('Penny');
     expect(output).not.toContain('Review');
     expect(output).toContain('Tap In');
-    expect(output).toContain('Log Progress for this Circle');
-    expect(output.indexOf('Log Progress for this Circle')).toBeLessThan(
+    expect(output).toContain('Log progress for this circle');
+    expect(output.indexOf('Log progress for this circle')).toBeLessThan(
       output.indexOf('Group progress'),
     );
     expect(
@@ -636,6 +673,44 @@ describe('CircleDetailScreen reference redesign', () => {
     ).toEqual(expect.objectContaining({paddingTop: 20}));
     expect(output).toContain('Needs Tap In');
     expect(output).toContain('Tapped in');
+  });
+
+  it('derives the hero Tap In palette from every Circle category in both themes', () => {
+    const categories = [
+      {category: 'Deep Work', light: '#086CA8', dark: '#8FE2FF'},
+      {category: 'Writing', light: '#086CA8', dark: '#8FE2FF'},
+      {category: 'Fitness', light: '#07763E', dark: '#70E2A3'},
+      {category: 'Sobriety', light: '#A83A00', dark: '#FFB36B'},
+      {category: 'Wellness', light: '#5A1CFF', dark: '#B8A5FF'},
+      {category: 'Custom', light: '#5A1CFF', dark: '#B8A5FF'},
+      {category: 'General', light: '#4D5873', dark: '#B4BCD1'},
+      {category: 'Unknown category', light: '#4D5873', dark: '#B4BCD1'},
+    ] as const;
+
+    for (const {category, dark, light} of categories) {
+      mockMemberDetail = detail({category});
+      mockAppearance = 'light';
+
+      const lightButton = getHeroTapInButton(renderScreen().tree);
+
+      expect(lightButton.props.heroPalette).toEqual({
+        backgroundColor: light,
+        chevronBackgroundColor: 'rgba(255,255,255,0.14)',
+        foregroundColor: '#FFFFFF',
+        supportingTextColor: 'rgba(255,255,255,0.78)',
+      });
+
+      mockAppearance = 'dark';
+
+      const darkButton = getHeroTapInButton(renderScreen().tree);
+
+      expect(darkButton.props.heroPalette).toEqual({
+        backgroundColor: dark,
+        chevronBackgroundColor: 'rgba(7,11,26,0.14)',
+        foregroundColor: '#070B1A',
+        supportingTextColor: 'rgba(7,11,26,0.72)',
+      });
+    }
   });
 
   it('embeds Circle Feed below the Member grid without navigation', () => {
@@ -843,7 +918,7 @@ describe('CircleDetailScreen reference redesign', () => {
     ).toBe(1);
   });
 
-  it('shows view and remove actions after today is counted', () => {
+  it('shows the completed review action and remove action after today is counted', () => {
     mockMemberDetail = detail({
       completionRate: 100,
       progressLabel: 'Today 100%',
@@ -860,9 +935,11 @@ describe('CircleDetailScreen reference redesign', () => {
     const {tree} = renderScreen();
     const output = outputOf(tree);
 
-    expect(output).toContain('View Today');
+    expect(output).toContain('Review Tap In');
+    expect(output).toContain("Review or share today's Tap In");
     expect(output).toContain('Remove Tap In');
     expect(output).not.toContain('Tapped in today');
+    expect(output).not.toContain('View Today');
     expect(output).not.toContain('Circle Tools');
     expect(output.indexOf('Group progress')).toBeLessThan(
       output.indexOf('Remove Tap In'),
@@ -897,6 +974,7 @@ describe('CircleDetailScreen reference redesign', () => {
     expect(
       tree.root.findByProps({testID: 'circle-remove-tap-in-action-chevron'}),
     ).toBeTruthy();
+    expect(getHeroTapInButton(tree).props.heroTrailingState).toBe('success');
   });
 
   it('shows remove alongside Update Tap In for saved quantity circles', async () => {
@@ -928,6 +1006,8 @@ describe('CircleDetailScreen reference redesign', () => {
     expect(output).toContain('Update Tap In');
     expect(output).toContain('Remove Tap In');
     expect(output).not.toContain('View Today');
+    expect(output).not.toContain('Review Tap In');
+    expect(getHeroTapInButton(tree).props.heroTrailingState).toBeUndefined();
 
     const removeButton = tree.root
       .findAllByProps({testID: 'circle-remove-tap-in-action'})
@@ -958,6 +1038,56 @@ describe('CircleDetailScreen reference redesign', () => {
     });
 
     expect(mockRemoveTapIn).toHaveBeenCalledWith({circleId: 'circle-1'});
+  });
+
+  it('uses success green for a completed current-day label in both themes', () => {
+    const completedTodayDays = detail().groupProgressDays!.map(
+      (day, index, days) =>
+        index === days.length - 1
+          ? {...day, coveredCount: day.totalCount, state: 'done' as const}
+          : day,
+    );
+
+    for (const {accentForeground, appearance, successForeground} of [
+      {
+        appearance: 'light' as const,
+        accentForeground: '#5A1CFF',
+        successForeground: '#07763E',
+      },
+      {
+        appearance: 'dark' as const,
+        accentForeground: '#7A55FF',
+        successForeground: '#4BE083',
+      },
+    ]) {
+      mockAppearance = appearance;
+      mockMemberDetail = detail({groupProgressDays: completedTodayDays});
+
+      const {tree} = renderScreen();
+
+      for (const label of ['Fri', '29', 'Today']) {
+        const text = tree.root
+          .findAllByType(Text)
+          .find(node => textContent(node) === label);
+
+        expect(StyleSheet.flatten(text?.props.style)).toEqual(
+          expect.objectContaining({color: successForeground}),
+        );
+      }
+
+      mockMemberDetail = detail();
+      const {tree: incompleteTodayTree} = renderScreen();
+
+      for (const label of ['Fri', '29', 'Today']) {
+        const text = incompleteTodayTree.root
+          .findAllByType(Text)
+          .find(node => textContent(node) === label);
+
+        expect(StyleSheet.flatten(text?.props.style)).toEqual(
+          expect.objectContaining({color: accentForeground}),
+        );
+      }
+    }
   });
 
   it('keeps owner settings off the detail body', () => {
@@ -1249,7 +1379,7 @@ describe('CircleDetailScreen reference redesign', () => {
       .find(node => textContent(node) === '1 of 4 members tapped in today');
     const streakCaption = tree.root
       .findAllByType(Text)
-      .find(node => textContent(node) === 'Current streak');
+      .find(node => textContent(node) === 'Group streak');
     const streakValue = tree.root.findByProps({
       testID: 'circle-stats-streak-label',
     });
@@ -1314,19 +1444,38 @@ describe('CircleDetailScreen reference redesign', () => {
     [0, '0 days'],
     [1, '1 day'],
     [3, '3 days'],
-  ] as const)('formats a %i-day streak as %s', (streakDays, expectedLabel) => {
-    mockMemberDetail = detail({streakDays});
+  ] as const)(
+    'formats a %i-day group streak as %s',
+    (groupStreakDays, expectedLabel) => {
+      mockMemberDetail = detail({groupStreakDays, streakDays: 9});
+      mockPersistedGroupStreakDays = groupStreakDays;
+
+      const {tree} = renderScreen();
+      const streakLabel = tree.root
+        .findAllByProps({testID: 'circle-stats-streak-label'})
+        .find(node => textContent(node) === expectedLabel);
+
+      expect(streakLabel).toBeTruthy();
+      expect(
+        tree.root.findByProps({testID: 'circle-stats-streak-pill'}).props
+          .accessibilityLabel,
+      ).toBe(`Group streak ${expectedLabel}`);
+    },
+  );
+
+  it('uses the persisted group streak instead of the viewer streak data', () => {
+    mockMemberDetail = detail({groupStreakDays: 12, streakDays: 9});
+    mockPersistedGroupStreakDays = 2;
 
     const {tree} = renderScreen();
-    const streakLabel = tree.root
-      .findAllByProps({testID: 'circle-stats-streak-label'})
-      .find(node => textContent(node) === expectedLabel);
 
-    expect(streakLabel).toBeTruthy();
+    expect(
+      textContent(tree.root.findByProps({testID: 'circle-stats-streak-label'})),
+    ).toBe('2 days');
     expect(
       tree.root.findByProps({testID: 'circle-stats-streak-pill'}).props
         .accessibilityLabel,
-    ).toBe(`Streak ${expectedLabel}`);
+    ).toBe('Group streak 2 days');
   });
 
   it('keeps personal commitment details private and free of group surfaces', () => {
@@ -1354,8 +1503,12 @@ describe('CircleDetailScreen reference redesign', () => {
     const output = outputOf(tree);
 
     expect(output).toContain('Personal Commitment');
+    expect(output).toContain('FITNESS');
+    expect(output).not.toContain('PERSONAL COMMITMENT');
     expect(output).toContain('Personal');
     expect(output).toContain('Personal progress');
+    expect(output).toContain('Current streak');
+    expect(output).not.toContain('Group streak');
     expect(
       textContent(
         tree.root.findByProps({testID: 'circle-stats-progress-value'}),

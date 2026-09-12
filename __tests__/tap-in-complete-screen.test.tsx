@@ -110,6 +110,7 @@ function renderCompleteScreen(
           key: 'TapInComplete',
           name: 'TapInComplete',
           params: {
+            category: 'Fitness',
             circleId: 'circle-1',
             dateKey: '2026-05-29',
             circleTitle: 'Morning Movers',
@@ -118,8 +119,10 @@ function renderCompleteScreen(
               streakDelta: 1,
             },
             commitment: 'Move for 30 minutes',
+            commitmentType: 'build',
             inviteUrl: 'https://hoyst.app/join/circle-1',
             memberCount: 4,
+            members: [],
             periodTapInCount: 8,
             progressLabel: 'Week · 50%',
             source: 'home',
@@ -403,11 +406,14 @@ describe('TapInCompleteScreen', () => {
     });
 
     expect(navigation.navigate).toHaveBeenCalledWith('TapInStoryShare', {
+      category: 'Fitness',
       circleId: 'circle-1',
       circleTitle: 'Morning Movers',
       commitment: 'Move for 30 minutes',
+      commitmentType: 'build',
       inviteUrl: 'https://hoyst.app/join/circle-1',
       memberCount: 4,
+      members: [],
       note: undefined,
       periodTapInCount: 8,
       photoUri: undefined,

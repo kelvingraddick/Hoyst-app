@@ -323,6 +323,7 @@ describe('TapInComposerScreen', () => {
     });
 
     expect(navigation.replace).toHaveBeenCalledWith('TapInComplete', {
+      category: 'Fitness',
       circleId: 'circle-1',
       circleTitle: 'Morning Movers',
       completionMomentum: {
@@ -333,6 +334,7 @@ describe('TapInComposerScreen', () => {
       commitmentType: 'build',
       inviteUrl: 'https://hoyst.app/join/circle-1',
       memberCount: 4,
+      members: [],
       dateKey: '2026-05-29',
       periodTapInCount: 8,
       progressLabel: 'Week · 50%',
@@ -1013,11 +1015,14 @@ describe('TapInComposerScreen', () => {
     });
 
     expect(navigation.navigate).toHaveBeenCalledWith('TapInStoryShare', {
+      category: 'Fitness',
       circleId: 'circle-1',
       circleTitle: 'Morning Movers',
       commitment: 'Move for 30 minutes',
+      commitmentType: 'build',
       inviteUrl: 'https://hoyst.app/join/circle-1',
       memberCount: 4,
+      members: [],
       periodTapInCount: 8,
       progressLabel: 'Week · 50%',
       source: 'home',
@@ -1071,11 +1076,14 @@ describe('TapInComposerScreen', () => {
     });
 
     expect(navigation.navigate).toHaveBeenCalledWith('TapInStoryShare', {
+      category: 'Fitness',
       circleId: 'circle-1',
       circleTitle: 'Morning Movers',
       commitment: 'Move for 30 minutes',
+      commitmentType: 'build',
       inviteUrl: 'https://hoyst.app/join/circle-1',
       memberCount: 4,
+      members: [],
       note: 'Slept eight hours and woke up steady.',
       periodTapInCount: 8,
       photoUri: 'https://example.com/proof.jpg',

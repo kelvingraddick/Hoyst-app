@@ -8,7 +8,7 @@ import {
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
-import {ChevronRight} from 'lucide-react-native';
+import {Check, ChevronRight} from 'lucide-react-native';
 
 import {triggerTapInPressHaptic} from '../../lib/haptics/tap-in-haptics';
 import {getBrandIcon} from '../brand/usage';
@@ -21,9 +21,20 @@ import type {PulseRingState} from './pulse-ring-state';
 
 type TapInPulseButtonVariant = 'card' | 'hero' | 'primary' | 'reference';
 
+export type TapInPulseButtonHeroPalette = {
+  backgroundColor: string;
+  chevronBackgroundColor: string;
+  foregroundColor: string;
+  supportingTextColor: string;
+};
+
+export type TapInPulseButtonHeroTrailingState = 'chevron' | 'success';
+
 type TapInPulseButtonProps = {
   accessibilityLabel?: string;
   disabled?: boolean;
+  heroPalette?: TapInPulseButtonHeroPalette;
+  heroTrailingState?: TapInPulseButtonHeroTrailingState;
   label?: string;
   onPress?: (event: GestureResponderEvent) => void;
   ringState?: PulseRingState;
@@ -90,6 +101,8 @@ const variantSpecs = {
 export function TapInPulseButton({
   accessibilityLabel,
   disabled = false,
+  heroPalette,
+  heroTrailingState = 'chevron',
   label = 'Tap In',
   onPress,
   style,
@@ -102,17 +115,25 @@ export function TapInPulseButton({
   const spec = variantSpecs[variant];
   const hasSupportingText = Boolean(supportingText);
   const isHeroVariant = variant === 'hero';
+  const resolvedHeroPalette = heroPalette ?? {
+    backgroundColor: theme.accentTertiaryForeground,
+    chevronBackgroundColor: 'rgba(255,255,255,0.14)',
+    foregroundColor: '#FFFFFF',
+    supportingTextColor: 'rgba(255,255,255,0.78)',
+  };
   const frameBackgroundColor = isHeroVariant
-    ? theme.accentTertiaryForeground
+    ? resolvedHeroPalette.backgroundColor
     : theme.isDark
     ? 'rgba(17, 20, 32, 0.9)'
     : 'rgba(255, 255, 255, 0.96)';
   const frameBorderColor = isHeroVariant
-    ? theme.accentTertiaryForeground
+    ? resolvedHeroPalette.backgroundColor
     : theme.actionBorder;
-  const labelColor = isHeroVariant ? '#FFFFFF' : theme.actionForeground;
+  const labelColor = isHeroVariant
+    ? resolvedHeroPalette.foregroundColor
+    : theme.actionForeground;
   const supportingTextColor = isHeroVariant
-    ? 'rgba(255,255,255,0.78)'
+    ? resolvedHeroPalette.supportingTextColor
     : theme.textMuted;
   const frameBorderRadius = isHeroVariant ? radius.md : radius.pill;
 
@@ -231,8 +252,26 @@ export function TapInPulseButton({
             ) : null}
           </View>
           {isHeroVariant ? (
-            <View style={styles.heroChevron}>
-              <ChevronRight color="#FFFFFF" size={22} strokeWidth={2.6} />
+            <View
+              style={[
+                styles.heroChevron,
+                {
+                  backgroundColor:
+                    heroTrailingState === 'success'
+                      ? theme.success
+                      : resolvedHeroPalette.chevronBackgroundColor,
+                },
+              ]}
+              testID="tap-in-pulse-button-hero-trailing">
+              {heroTrailingState === 'success' ? (
+                <Check color="#FFFFFF" size={22} strokeWidth={2.6} />
+              ) : (
+                <ChevronRight
+                  color={resolvedHeroPalette.foregroundColor}
+                  size={22}
+                  strokeWidth={2.6}
+                />
+              )}
             </View>
           ) : null}
         </View>

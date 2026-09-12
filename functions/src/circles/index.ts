@@ -52,6 +52,7 @@ import {
 import {getLeaveCirclePlan} from './leave-plan';
 import {getNudgeTargetUids} from './nudge-targets';
 import {recordNudgeCompletion} from './nudge-completion';
+import {reconcileCircleGroupStreak} from './group-streak';
 
 const graceRuleSchema = z.object({
   allowance: z.number().int().min(0).max(30),
@@ -625,6 +626,7 @@ export const createCircle = onCall(
       commitmentCadence: commitmentPace,
       commitmentFrequency,
       commitmentType,
+      ...(isPersonal ? {} : {groupStreakDays: 0}),
       graceRules: input.graceRules ?? {
         skip: {
           allowance: 2,
@@ -693,6 +695,7 @@ export const createCircle = onCall(
         commitmentCadence: commitmentPace,
         commitmentFrequency,
         commitmentType,
+        groupStreakDays: 0,
         joinMode,
         lifecycleStatus: 'active',
         ...(typeof quantityConfig.maximumValue === 'number'
@@ -940,6 +943,10 @@ export const joinCircle = onCall(
       await materializeCurrentCircleOpportunities(input.circleId).catch(error =>
         console.error('materialize_joined_circle_opportunities_failed', error),
       );
+      await reconcileCircleGroupStreak({circleId: input.circleId}).catch(
+        error =>
+          console.error('reconcile_joined_circle_group_streak_failed', error),
+      );
     }
 
     if (ownerId && result.status === 'pending' && result.shouldNotifyOwner) {
@@ -1181,6 +1188,10 @@ export const reviewJoinRequest = onCall(
           'materialize_approved_circle_opportunities_failed',
           error,
         ),
+      );
+      await reconcileCircleGroupStreak({circleId: input.circleId}).catch(
+        error =>
+          console.error('reconcile_approved_circle_group_streak_failed', error),
       );
       const circleSnapshot = await circleRef.get();
       const circle = circleSnapshot.data();
@@ -1543,6 +1554,12 @@ export const leaveCircle = onCall(async request => {
     });
   }
 
+  if (status.status === 'left') {
+    await reconcileCircleGroupStreak({circleId: input.circleId}).catch(error =>
+      console.error('reconcile_left_circle_group_streak_failed', error),
+    );
+  }
+
   if (status.shouldBackfillActivity) {
     try {
       await backfillDepartedMemberActivity({circleId: input.circleId, uid});
@@ -1694,6 +1711,7 @@ export const convertPersonalCircle = onCall(async request => {
       circleMode: 'group',
       convertedAt: now,
       convertedFromPersonal: true,
+      groupStreakDays: 0,
       inviteCode,
       joinMode: input.joinMode,
       maxSize: input.maxSize,
@@ -1710,6 +1728,7 @@ export const convertPersonalCircle = onCall(async request => {
         commitmentCadence: commitmentPace,
         commitmentFrequency,
         commitmentType: latestCircle?.commitmentType ?? 'build',
+        groupStreakDays: 0,
         joinMode: input.joinMode,
         lifecycleStatus: 'active',
         ...(typeof latestCircle?.maximumValue === 'number'
@@ -1735,6 +1754,10 @@ export const convertPersonalCircle = onCall(async request => {
 
     return inviteCode;
   });
+
+  await reconcileCircleGroupStreak({circleId: input.circleId}).catch(error =>
+    console.error('reconcile_converted_circle_group_streak_failed', error),
+  );
 
   return {
     circleId: input.circleId,
@@ -1863,6 +1886,7 @@ export const updateCircle = onCall(async request => {
         commitmentCadence: commitmentPace,
         commitmentFrequency,
         commitmentType,
+        groupStreakDays: asNumber(circle?.groupStreakDays, 0),
         joinMode,
         lifecycleStatus: 'active',
         maximumValue:
@@ -1956,7 +1980,10 @@ export const archiveCircle = onCall(
               : transitionDate,
           circleMode: getCircleMode(circle),
           circleTitle: asOptionalString(circle?.title) ?? 'Your Circle',
-          lifecycleRevision: Math.max(1, asNumber(circle?.lifecycleRevision, 1)),
+          lifecycleRevision: Math.max(
+            1,
+            asNumber(circle?.lifecycleRevision, 1),
+          ),
           needsReconciliation:
             circle?.archiveReconciliationStatus !== 'complete',
         };
@@ -2038,9 +2065,7 @@ export const archiveCircle = onCall(
         circleTitle: result.circleTitle,
         lifecycleRevision: result.lifecycleRevision,
         status: 'archived',
-      }).catch(error =>
-        console.error('notify_circle_archived_failed', error),
-      );
+      }).catch(error => console.error('notify_circle_archived_failed', error));
     }
 
     return {
@@ -2196,6 +2221,7 @@ export const unarchiveCircle = onCall(
           commitmentCadence: commitmentPace,
           commitmentFrequency,
           commitmentType: circle?.commitmentType ?? 'build',
+          groupStreakDays: asNumber(circle?.groupStreakDays, 0),
           joinMode: circle?.joinMode ?? 'invite_only',
           lifecycleStatus: 'active',
           ...(typeof circle?.maximumValue === 'number'
@@ -2234,15 +2260,23 @@ export const unarchiveCircle = onCall(
     );
 
     if (result.circleMode === 'group') {
+      await reconcileCircleGroupStreak({circleId: input.circleId}).catch(
+        error =>
+          console.error(
+            'reconcile_unarchived_circle_group_streak_failed',
+            error,
+          ),
+      );
+    }
+
+    if (result.circleMode === 'group') {
       await notifyCircleLifecycleChanged({
         actor: {...profile, uid},
         circleId: input.circleId,
         circleTitle: result.circleTitle,
         lifecycleRevision: result.lifecycleRevision,
         status: 'active',
-      }).catch(error =>
-        console.error('notify_circle_restored_failed', error),
-      );
+      }).catch(error => console.error('notify_circle_restored_failed', error));
     }
 
     return {

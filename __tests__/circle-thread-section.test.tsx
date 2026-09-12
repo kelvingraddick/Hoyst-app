@@ -593,7 +593,7 @@ describe('CircleThreadSection', () => {
         lineHeight: 20,
         maxHeight: 96,
         minHeight: 48,
-        paddingRight: 104,
+        paddingHorizontal: 12,
         textAlign: 'left',
         textAlignVertical: 'center',
       }),
@@ -602,8 +602,8 @@ describe('CircleThreadSection', () => {
     expect(StyleSheet.flatten(composerInputShell.props.style)).toEqual(
       expect.objectContaining({
         borderRadius: 12,
+        flex: 1,
         minHeight: 48,
-        position: 'relative',
       }),
     );
     expect(StyleSheet.flatten(composerRow.props.style)).toEqual(
@@ -618,15 +618,12 @@ describe('CircleThreadSection', () => {
         flexDirection: 'row',
         gap: 4,
         height: 44,
-        position: 'absolute',
-        right: 0,
-        top: 2,
         width: 92,
-        zIndex: 1,
+        flexShrink: 0,
       }),
     );
     expect(composerActions.parent?.props.testID).toBe(
-      'circle-thread-composer-input-shell',
+      'circle-thread-composer-row',
     );
     expect(
       StyleSheet.flatten(imageButton.props.style({pressed: false})),

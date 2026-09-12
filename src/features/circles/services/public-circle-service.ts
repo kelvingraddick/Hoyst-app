@@ -245,10 +245,7 @@ export function mapPublicCircleIndexSnapshot(
     return undefined;
   }
 
-  if (
-    data.circleMode === 'personal' ||
-    data.lifecycleStatus === 'archived'
-  ) {
+  if (data.circleMode === 'personal' || data.lifecycleStatus === 'archived') {
     return undefined;
   }
 
@@ -312,6 +309,7 @@ export function mapPublicCircleIndexSnapshot(
       ...(commitmentPace === 'monthly' ? {opportunitiesPerPeriod} : {}),
       tapInsPerWeek,
     },
+    groupStreakDays: asNumber(data.groupStreakDays, 0),
     id: snapshot.id,
     joinLabel: data.joinMode === 'open' ? 'Open seats' : 'Request to join',
     joinMode:

@@ -45,8 +45,10 @@ import {SectionHeader} from '../../../design/components/SectionHeader';
 import {TapInPulseButton} from '../../../design/components/TapInPulseButton';
 import {NudgeMark} from '../../../design/components/NudgeMark';
 import {getPulseRingStateForCircle} from '../../../design/components/pulse-ring-state';
+import {brandColors} from '../../../design/tokens/colors';
 import {radius} from '../../../design/tokens/radius';
 import {useHoystTheme} from '../../../design/theme/useHoystTheme';
+import {firebaseFirestore} from '../../../lib/firebase/firestore';
 import {
   DesignSystemProvider,
   DSListRow,
@@ -80,6 +82,7 @@ import {
   buildPublicCircleDetail,
   subscribeToMemberCircleDetail,
 } from '../../home/services/home-data-service';
+import {collections} from '../../../types/firestore';
 import type {
   CircleDetailModel,
   CircleMemberStatus,
@@ -572,9 +575,7 @@ function CircleDetailHero({
               <HoystText
                 style={[styles.circleHeroCategory, {color: categoryColor}]}
                 variant="caption">
-                {isPersonal
-                  ? 'PERSONAL COMMITMENT'
-                  : visual.label.toUpperCase()}
+                {visual.label.toUpperCase()}
               </HoystText>
             </View>
           </View>
@@ -700,12 +701,18 @@ function CircleDetailHero({
 }
 
 function TapInReferenceAction({
+  heroPalette,
+  heroTrailingState,
   label,
   onPress,
   ringState,
   supportingText,
   variant = 'reference',
 }: {
+  heroPalette?: React.ComponentProps<typeof TapInPulseButton>['heroPalette'];
+  heroTrailingState?: React.ComponentProps<
+    typeof TapInPulseButton
+  >['heroTrailingState'];
   label: string;
   onPress: () => void;
   ringState: React.ComponentProps<typeof TapInPulseButton>['ringState'];
@@ -714,6 +721,8 @@ function TapInReferenceAction({
 }) {
   return (
     <TapInPulseButton
+      heroPalette={heroPalette}
+      heroTrailingState={heroTrailingState}
       label={label}
       onPress={() => onPress()}
       ringState={ringState}
@@ -729,6 +738,12 @@ function clampProgressPercent(value: number) {
   }
 
   return Math.max(0, Math.min(100, Math.round(value)));
+}
+
+function normalizeGroupStreakDays(value: unknown) {
+  return typeof value === 'number' && Number.isFinite(value)
+    ? Math.max(0, Math.round(value))
+    : 0;
 }
 
 type CircleDetailWeekCell = {
@@ -753,13 +768,14 @@ function CircleStatsSection({
 }) {
   const theme = useHoystTheme();
   const normalizedProgressPercent = clampProgressPercent(progressPercent);
-  const streakSource =
-    detail.streakDays ?? Number.parseInt(detail.streakLabel, 10);
+  const isPersonal = detail.circleMode === 'personal';
+  const streakSource = isPersonal
+    ? detail.streakDays ?? Number.parseInt(detail.streakLabel, 10)
+    : detail.groupStreakDays ?? 0;
   const streakValue = Number.isFinite(streakSource)
     ? Math.max(0, Math.round(streakSource))
     : 0;
   const streakDayLabel = streakValue === 1 ? 'day' : 'days';
-  const isPersonal = detail.circleMode === 'personal';
   const activeMembers = detail.members.filter(
     member => member.membershipStatus !== 'pending',
   );
@@ -797,7 +813,9 @@ function CircleStatsSection({
           </View>
         </View>
         <View
-          accessibilityLabel={`Streak ${streakValue} ${streakDayLabel}`}
+          accessibilityLabel={`${
+            isPersonal ? 'Streak' : 'Group streak'
+          } ${streakValue} ${streakDayLabel}`}
           style={styles.statsStreakPill}
           testID="circle-stats-streak-pill">
           <View style={styles.statsStreakValueRow}>
@@ -816,7 +834,7 @@ function CircleStatsSection({
             </HoystText>
           </View>
           <HoystText style={styles.statsStreakCaption} tone="muted">
-            Current streak
+            {isPersonal ? 'Current streak' : 'Group streak'}
           </HoystText>
         </View>
       </View>
@@ -846,6 +864,7 @@ function CircleDetailScreenContent({
   route,
 }: Props): React.JSX.Element {
   const theme = useHoystTheme();
+  const systemTheme = useSystemTheme();
   const insets = useSafeAreaInsets();
   const navigateBack = useCallback(() => {
     if (navigation.canGoBack()) {
@@ -872,6 +891,7 @@ function CircleDetailScreenContent({
   const [memberCircle, setMemberCircle] = useState<
     CircleDetailModel | undefined
   >();
+  const [groupStreakDays, setGroupStreakDays] = useState(0);
   const [isThreadVisible, setIsThreadVisible] = useState(false);
   const [threadLoadMoreRequestToken, setThreadLoadMoreRequestToken] =
     useState(0);
@@ -896,13 +916,23 @@ function CircleDetailScreenContent({
   const timezone = profile?.timezone ?? 'UTC';
   const canLoadMemberCircle =
     status === 'authenticatedReady' && Boolean(user?.uid);
-  const detail = useMemo(
-    () =>
+  const detail = useMemo(() => {
+    const baseDetail =
       memberCircle ??
       (publicCircle ? buildPublicCircleDetail(publicCircle) : undefined) ??
-      getCircleDetail(route.params.circleId),
-    [memberCircle, publicCircle, route.params.circleId],
-  );
+      getCircleDetail(route.params.circleId);
+
+    if (!baseDetail || baseDetail.circleMode === 'personal') {
+      return baseDetail;
+    }
+
+    return {
+      ...baseDetail,
+      groupStreakDays: memberCircle
+        ? groupStreakDays
+        : publicCircle?.groupStreakDays ?? baseDetail.groupStreakDays ?? 0,
+    };
+  }, [groupStreakDays, memberCircle, publicCircle, route.params.circleId]);
   const canShowThread = Boolean(
     canLoadMemberCircle &&
       user?.uid &&
@@ -1036,6 +1066,25 @@ function CircleDetailScreenContent({
     });
   }, [canLoadMemberCircle, route.params.circleId, timezone, user?.uid]);
 
+  useEffect(() => {
+    if (!canLoadMemberCircle) {
+      setGroupStreakDays(0);
+      return undefined;
+    }
+
+    return firebaseFirestore()
+      .collection(collections.circles)
+      .doc(route.params.circleId)
+      .onSnapshot(
+        snapshot => {
+          setGroupStreakDays(
+            normalizeGroupStreakDays(snapshot.data()?.groupStreakDays),
+          );
+        },
+        () => setGroupStreakDays(0),
+      );
+  }, [canLoadMemberCircle, route.params.circleId]);
+
   const handleJoinCircle = useCallback(async () => {
     if (!detail) {
       return;
@@ -1134,7 +1183,7 @@ function CircleDetailScreenContent({
   const tapInPrimaryActionLabel = canUpdateTodayQuantity
     ? 'Update Tap In'
     : canReviewTodayCheckIn
-    ? 'View Today'
+    ? 'Review Tap In'
     : 'Tap In';
   const tapInPulseRingState = getPulseRingStateForCircle(detail);
   const canReviewJoinRequests =
@@ -1148,13 +1197,26 @@ function CircleDetailScreenContent({
     ? quantityTapInRemoveCopy
     : 'This will undo Progress for this Cycle.';
   const tapInSupportingText = canReviewTodayCheckIn
-    ? "Review today's Tap In"
-    : 'Log Progress for this Circle';
+    ? "Review or share today's Tap In"
+    : 'Log progress for this circle';
   const categoryProgressColor = getCircleCategoryForegroundColor(
     detail.category,
     theme,
   );
   const categoryVisual = getCircleCategoryVisual(detail.category);
+  const categoryAction = systemTheme.category[categoryVisual.tone];
+  const tapInHeroPalette = {
+    backgroundColor: categoryAction.foreground,
+    chevronBackgroundColor: systemTheme.isDark
+      ? 'rgba(7,11,26,0.14)'
+      : 'rgba(255,255,255,0.14)',
+    foregroundColor: systemTheme.isDark
+      ? brandColors.charcoal
+      : brandColors.white,
+    supportingTextColor: systemTheme.isDark
+      ? 'rgba(7,11,26,0.72)'
+      : 'rgba(255,255,255,0.78)',
+  };
   const categoryBackdropAccent = theme.isDark
     ? categoryVisual.accentLight
     : categoryVisual.accentColor;
@@ -1198,11 +1260,14 @@ function CircleDetailScreenContent({
 
   const shareFeedTapIn = (item: CircleThreadItem) => {
     navigation.navigate('TapInStoryShare', {
+      category: detail.category,
       circleId: detail.id,
       circleTitle: detail.title,
       commitment: detail.commitment,
+      commitmentType: detail.commitmentType,
       inviteUrl: detail.inviteUrl,
       memberCount: detail.memberCount,
+      members: detail.members,
       note: item.note,
       periodTapInCount: detail.periodTapInCount,
       photoUri: item.mediaImageUrl,
@@ -1485,6 +1550,10 @@ function CircleDetailScreenContent({
           primaryAction={
             isMemberCircle && !isArchived ? (
               <TapInReferenceAction
+                heroPalette={tapInHeroPalette}
+                heroTrailingState={
+                  canReviewTodayCheckIn ? 'success' : undefined
+                }
                 label={tapInPrimaryActionLabel}
                 onPress={openTapInComposer}
                 ringState={tapInPulseRingState}

@@ -83,7 +83,7 @@ function getCompactMemberStatusLabel(member: CircleMemberStatus) {
   return 'Missed';
 }
 
-function getMemberProgressConfig(
+export function getMemberProgressConfig(
   member: CircleMemberStatus,
   theme: ReturnType<typeof useHoystTheme>,
 ) {
@@ -100,7 +100,7 @@ function getMemberProgressConfig(
     return {
       labelColor: theme.successForeground,
       progress: 1,
-      ringColor: theme.successForeground,
+      ringColor: theme.success,
       trackColor: `${theme.success}14`,
     };
   }
@@ -137,6 +137,7 @@ function StatusBadge({member}: {member: CircleMemberStatus}) {
 
   return (
     <View
+      testID={`circle-member-strip-status-${member.id}`}
       style={[
         styles.statusBadge,
         {
@@ -262,7 +263,9 @@ function InviteStripItem({inviteAction}: {inviteAction: MemberInviteAction}) {
       ]}
       testID="circle-member-strip-invite">
       <View style={styles.memberItem}>
-        <View style={[styles.inviteAvatar, inviteSurfaceStyle]}>
+        <View
+          style={[styles.inviteAvatar, inviteSurfaceStyle]}
+          testID="circle-member-strip-invite-avatar">
           <UserPlus
             color={theme.textMuted}
             opacity={0.72}
@@ -434,12 +437,12 @@ const styles = StyleSheet.create({
   belowStripAction: {width: '100%'},
   inviteAvatar: {
     alignItems: 'center',
-    borderRadius: (RING_SIZE + 4) / 2,
+    borderRadius: RING_SIZE / 2,
     borderStyle: 'dashed',
     borderWidth: 1.5,
-    height: RING_SIZE + 4,
+    height: RING_SIZE,
     justifyContent: 'center',
-    width: RING_SIZE + 4,
+    width: RING_SIZE,
   },
   memberItem: {
     alignItems: 'center',

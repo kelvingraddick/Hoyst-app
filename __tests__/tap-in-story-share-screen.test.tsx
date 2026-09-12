@@ -15,10 +15,6 @@ const mockShareOpen = jest.fn();
 const mockShareSingle = jest.fn();
 const mockCopyImage = jest.fn();
 const mockGetProfileSummary = jest.fn();
-const mockSubscribeToMemberCircleDetail = jest.fn();
-let mockSessionState: {status: string; user?: {uid: string}} = {
-  status: 'signedOut',
-};
 
 jest.mock('react-native-config', () => ({
   __esModule: true,
@@ -56,21 +52,6 @@ jest.mock('../src/features/profile/services/profile-summary-service', () => ({
   getProfileSummary: () => mockGetProfileSummary(),
 }));
 
-jest.mock('../src/features/home/services/home-data-service', () => ({
-  subscribeToMemberCircleDetail: (...args: unknown[]) =>
-    mockSubscribeToMemberCircleDetail(...args),
-}));
-
-jest.mock('../src/store/session-store', () => ({
-  useSessionStore: (selector: (state: unknown) => unknown) =>
-    selector(mockSessionState),
-}));
-
-jest.mock('../src/store/profile-store', () => ({
-  useUserProfileStore: (selector: (state: unknown) => unknown) =>
-    selector({profile: undefined}),
-}));
-
 jest.mock('react-native-safe-area-context', () => {
   const MockReact = require('react');
   const {View: MockView} = require('react-native');
@@ -105,11 +86,14 @@ async function renderStoryShareScreen(
             key: 'TapInStoryShare',
             name: 'TapInStoryShare',
             params: {
+              category: 'Fitness',
               circleId: 'circle-1',
               circleTitle: 'Morning Movers',
               commitment: 'Move for 30 minutes',
+              commitmentType: 'build',
               inviteUrl: 'https://hoyst.app/join/circle-1',
               memberCount: 4,
+              members: [],
               note: 'Finished the set.',
               periodTapInCount: 8,
               progressLabel: 'Week · 50%',
@@ -155,9 +139,6 @@ describe('TapInStoryShareScreen', () => {
     mockShareSingle.mockReset();
     mockCopyImage.mockReset();
     mockGetProfileSummary.mockReset();
-    mockSubscribeToMemberCircleDetail.mockReset();
-    mockSubscribeToMemberCircleDetail.mockReturnValue(jest.fn());
-    mockSessionState = {status: 'signedOut'};
     mockCaptureRef.mockResolvedValue('file:///tmp/hoyst-story.png');
     mockShareOpen.mockResolvedValue({message: 'shared', success: true});
     mockShareSingle.mockResolvedValue({message: 'shared', success: true});
@@ -289,39 +270,28 @@ describe('TapInStoryShareScreen', () => {
     );
   });
 
-  it('replaces route fallbacks with local Circle share context when available', async () => {
-    mockSessionState = {status: 'authenticatedReady', user: {uid: 'viewer-1'}};
-    mockSubscribeToMemberCircleDetail.mockImplementation(
-      ({onDetail}: {onDetail: (detail: unknown) => void}) => {
-        onDetail({
-          category: 'Fitness',
-          commitment: 'Walk outdoors for 20 minutes',
-          commitmentType: 'avoid',
-          memberCount: 5,
-          members: [
-            {id: 'a', initials: 'A', name: 'Avery', state: 'done'},
-            {
-              id: 'b',
-              initials: 'B',
-              membershipStatus: 'pending',
-              name: 'Blair',
-              state: 'pending',
-            },
-            {id: 'c', initials: 'C', name: 'Casey', state: 'done'},
-          ],
-          title: 'Lunch Walkers',
-        });
-        return jest.fn();
-      },
-    );
-
-    const tree = await renderStoryShareScreen();
+  it('uses routed Circle context without starting another live subscription', async () => {
+    const tree = await renderStoryShareScreen({
+      category: 'Fitness',
+      circleTitle: 'Lunch Walkers',
+      commitment: 'Walk outdoors for 20 minutes',
+      commitmentType: 'avoid',
+      memberCount: 5,
+      members: [
+        {id: 'a', initials: 'A', name: 'Avery', state: 'done'},
+        {
+          id: 'b',
+          initials: 'B',
+          membershipStatus: 'pending',
+          name: 'Blair',
+          state: 'pending',
+        },
+        {id: 'c', initials: 'C', name: 'Casey', state: 'done'},
+      ],
+    });
     const story = tree.root.findAllByType(TapInStoryTemplateCard)[0].props
       .story;
 
-    expect(mockSubscribeToMemberCircleDetail).toHaveBeenCalledWith(
-      expect.objectContaining({circleId: 'circle-1', uid: 'viewer-1'}),
-    );
     expect(story).toEqual(
       expect.objectContaining({
         category: 'Fitness',

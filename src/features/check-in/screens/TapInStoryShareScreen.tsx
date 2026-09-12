@@ -40,11 +40,7 @@ import {
 } from '../../../design/system';
 import {env} from '../../../config/env';
 import type {RootStackParamList} from '../../../navigation/types';
-import type {CircleDetailModel} from '../../../types/models';
-import {useUserProfileStore} from '../../../store/profile-store';
-import {useSessionStore} from '../../../store/session-store';
 import {useSettingsStore} from '../../../store/settings-store';
-import {subscribeToMemberCircleDetail} from '../../home/services/home-data-service';
 import {
   getProfileSummary,
   type ProfileSummary,
@@ -220,14 +216,10 @@ function TapInStoryShareController({
 }: Props): React.JSX.Element {
   const legacyTheme = useHoystTheme();
   const systemTheme = useSystemTheme();
-  const profile = useUserProfileStore(state => state.profile);
-  const sessionStatus = useSessionStore(state => state.status);
-  const sessionUser = useSessionStore(state => state.user);
   const insets = useSafeAreaInsets();
   const {height, width} = useWindowDimensions();
   const captureRef = useRef<View>(null);
   const carouselRef = useRef<ScrollView>(null);
-  const [detail, setDetail] = useState<CircleDetailModel>();
   const [activeIndex, setActiveIndex] = useState(0);
   const [busyDestination, setBusyDestination] = useState<ShareDestination>();
   const [carouselBlockHeight, setCarouselBlockHeight] = useState(0);
@@ -237,9 +229,12 @@ function TapInStoryShareController({
   const [profileSummary, setProfileSummary] = useState<ProfileSummary>();
   const snapshotDetail = useMemo(
     () => ({
+      category: route.params.category,
       commitment: route.params.commitment ?? "Today's Tap In",
+      commitmentType: route.params.commitmentType,
       inviteUrl: route.params.inviteUrl,
       memberCount: route.params.memberCount,
+      members: route.params.members,
       periodTapInCount: route.params.periodTapInCount,
       progressLabel: route.params.progressLabel,
       streakDays: route.params.streakDays,
@@ -248,8 +243,9 @@ function TapInStoryShareController({
     }),
     [route.params],
   );
-  const displayDetail = detail ?? snapshotDetail;
-  const category = getCircleCategoryVisual(detail?.category ?? 'General');
+  const category = getCircleCategoryVisual(
+    snapshotDetail.category ?? 'General',
+  );
   const safeTopPadding = Math.max(insets.top, MIN_TOP_SAFE_PADDING) + 4;
   const safeBottomPadding = Math.max(insets.bottom, 12) + 8;
   const carouselWidth = Math.max(1, width - SCREEN_HORIZONTAL_PADDING * 2);
@@ -276,12 +272,12 @@ function TapInStoryShareController({
   const storyData = useMemo(
     () =>
       buildTapInStoryShareData({
-        detail: displayDetail,
+        detail: snapshotDetail,
         note: route.params.note,
         photoUri: route.params.photoUri,
         profileSummary,
       }),
-    [displayDetail, profileSummary, route.params.note, route.params.photoUri],
+    [profileSummary, route.params.note, route.params.photoUri, snapshotDetail],
   );
   const templates = useMemo(
     () => getAvailableTapInStoryTemplates(storyData),
@@ -294,23 +290,6 @@ function TapInStoryShareController({
   const canCapture =
     hasResolvedProfileSummary && (!requiresPhotoSettled || isPhotoSettled);
   const isBusy = Boolean(busyDestination);
-  useEffect(() => {
-    if (sessionStatus !== 'authenticatedReady' || !sessionUser?.uid) {
-      return;
-    }
-    return subscribeToMemberCircleDetail({
-      circleId: route.params.circleId,
-      onDetail: nextDetail => setDetail(nextDetail),
-      onError: () => undefined,
-      timezone: profile?.timezone ?? 'UTC',
-      uid: sessionUser.uid,
-    });
-  }, [
-    profile?.timezone,
-    route.params.circleId,
-    sessionStatus,
-    sessionUser?.uid,
-  ]);
   useEffect(() => {
     if (activeIndex >= templates.length) {
       setActiveIndex(Math.max(0, templates.length - 1));

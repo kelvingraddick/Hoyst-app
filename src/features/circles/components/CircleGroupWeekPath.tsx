@@ -93,6 +93,8 @@ export function CircleGroupWeekPath({
             ? coverage > 0
             : (day.quantityValue ?? 0) > 0);
         const complete = day.state === 'done';
+        const todayLabelColor =
+          today && complete ? theme.successForeground : theme.accentForeground;
         const statusLabel = getStatusLabel(day, partial);
         const coverageLabel =
           day.totalCount !== undefined
@@ -175,7 +177,7 @@ export function CircleGroupWeekPath({
               style={[
                 styles.weekday,
                 {
-                  color: today ? theme.accentForeground : theme.textMuted,
+                  color: today ? todayLabelColor : theme.textMuted,
                   fontSize: 12 * labelScale,
                   lineHeight: 16 * labelScale,
                   marginTop: 26 - offset,
@@ -189,7 +191,7 @@ export function CircleGroupWeekPath({
               style={[
                 styles.date,
                 {
-                  color: today ? theme.accentForeground : theme.text,
+                  color: today ? todayLabelColor : theme.text,
                   fontSize: 14 * labelScale,
                   lineHeight: 20 * labelScale,
                 },
@@ -203,7 +205,7 @@ export function CircleGroupWeekPath({
                 style={[
                   styles.today,
                   {
-                    color: theme.accentForeground,
+                    color: todayLabelColor,
                     fontSize: 12 * labelScale,
                     lineHeight: 16 * labelScale,
                   },

@@ -139,6 +139,46 @@ final result: passed
 
 ---
 
+## Completed Circle Tap In polish, September 12, 2026
+
+This additive review preserves the preceding Circle Detail refinements.
+
+- Final native iPhone 17 Pro capture: `/tmp/hoyst-circle-detail-completed-tap-in-final.png`
+- State: active Deep Work owner, completed non-editable Tap In, light mode, 402 x 874 points at native 3x density.
+- The hero now reads `Review Tap In` with `Review or share today's Tap In`. Its 42-point trailing affordance is a filled `theme.success` green circle with the same white check treatment as a completed group day. It retains the category-derived Deep Work hero surface and press target.
+- The completed current-day weekday, date, and `Today` label use readable success green rather than purple. Incomplete current days retain the existing accent treatment, and past labels are unchanged.
+- Review-only Circle actions use the check treatment. Quantity-editable `Update Tap In` remains unchanged with its chevron. Existing review, sharing, removal, accessibility, group progress, and Home behavior are preserved.
+
+final result: passed
+
+---
+
+## Category-aware Circle Detail Tap In, September 11, 2026
+
+This additive review preserves the preceding Circle Detail review. The supplied mock remains the visual reference, while the written category-palette and sentence-case request governs the action color and supporting copy.
+
+Source and evidence:
+
+- Supplied reference: `/Users/kelvin/Downloads/Codex Image Sep 8, 2026, 10_53_28 PM.png`
+- Final native iPhone 17 Pro capture: `/tmp/hoyst-circle-detail-category-tap-in-final.png`
+- Focused source-to-final comparison: `/tmp/hoyst-circle-detail-category-tap-in-comparison-final.jpg`
+- State: active Deep Work owner in light mode at 402 x 874 points, captured at native 3x density (1206 x 2622 pixels). The focused comparison normalizes each crop to 853 pixels wide, preserving the reference crop's logical width.
+
+Finding and correction:
+
+- [P2] The Circle Detail hero inherited the fixed blue action surface and displayed the ordinary supporting copy as `Log Progress for this Circle`. This obscured category affordance for Fitness, Wellness, Sobriety, General, Custom, and unknown categories, and missed the requested sentence case.
+- Fix: Circle Detail now supplies an opt-in palette to the existing hero button from `systemTheme.category[getCircleCategoryVisual(category).tone]`. In light mode, the paired category foreground uses white action text and chevron. In dark mode, the lighter category foreground uses charcoal text and chevron. The default hero palette remains unchanged for every caller that does not provide a palette.
+
+Post-fix fidelity:
+
+- The final Simulator capture retains the reference's rounded hero action, mark scale, chevron treatment, vertical hierarchy, and action-to-progress spacing. The visible Deep Work surface remains its established blue action tone, while the supporting copy is exactly `Log progress for this circle`.
+- Focused Circle Detail tests exercise Deep Work, Writing, Fitness, Sobriety, Wellness, Custom, General, and unknown-category fallback in light and dark palettes. The shared button suite confirms the prior blue default is preserved without an override. No Home component, category classifier, behavior, navigation, or action state was changed.
+- Remaining visual coverage: the live native comparison covers Deep Work light mode. Other category and dark combinations have automated palette coverage in this pass, but were not individually navigated in the Simulator.
+
+final result: passed
+
+---
+
 # Circles Design-System Migration QA
 
 Status: **Passed** on September 8, 2026.
@@ -165,7 +205,6 @@ Status: **Passed** on September 8, 2026.
 Android native rendering, a physical-device pass, maximum accessibility text sizes and live VoiceOver/TalkBack traversal were unavailable for this pass. Component fixtures cover long-copy wrapping, and focused Circles tests cover loading/error/empty states, status filtering and action-state behavior. These do not replace the remaining device checks.
 
 final result: passed
-
 
 ## Tap In selector and Home goal line, September 11, 2026
 
