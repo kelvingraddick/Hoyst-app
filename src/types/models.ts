@@ -152,6 +152,10 @@ export type CircleMemberStatus = {
   membershipStatus?: CircleMembershipStatus;
   state: CircleMemberState;
   badgeCount?: number;
+  todayStatus?: Exclude<CheckInStatus, 'rest'>;
+  cycleCoveredCount?: number;
+  cycleRequiredCount?: number;
+  cycleGoalMet?: boolean;
 };
 
 export type CircleProgressDay = {
@@ -319,6 +323,10 @@ export type CircleSummary = {
   memberCount?: number;
   maxSize?: number;
   periodTapInCount?: number;
+  cycleCoveredCount?: number;
+  cycleRequiredCount?: number;
+  todayTapInCount?: number;
+  todaySkipCount?: number;
   privacy?: CirclePrivacy;
   joinMode?: CircleJoinMode;
   viewerRole?: MemberRole;
@@ -337,6 +345,8 @@ export type CircleSummary = {
   viewerAvailableSkips?: number;
   viewerRemainingAmount?: number;
   viewerRemainingTapIns?: number;
+  viewerCycleCoveredCount?: number;
+  viewerCycleRequiredCount?: number;
 };
 
 export type TodayCircleCard = CircleSummary & {

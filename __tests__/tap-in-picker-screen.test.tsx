@@ -1,5 +1,5 @@
 import React from 'react';
-import {Alert, Share} from 'react-native';
+import {Alert, Share, StyleSheet, Text} from 'react-native';
 import {nudgeCircleMembers} from '../src/features/circles/services/circle-service';
 import renderer, {act} from 'react-test-renderer';
 
@@ -163,6 +163,8 @@ function circle(
     commitmentCadence: 'daily',
     commitmentFrequency: {tapInsPerWeek: 7},
     completionRate: 100,
+    cycleCoveredCount: 0,
+    cycleRequiredCount: 2,
     id: 'circle-1',
     inviteUrl: 'https://example.com/invite',
     joinMode: 'open',
@@ -267,12 +269,30 @@ describe('TapInPickerScreen', () => {
         category: 'Deep Work',
         commitment: 'One task a day to help build the Hoyst app.',
         completionRate: 20,
+        cycleCoveredCount: 1,
+        cycleRequiredCount: 3,
         id: 'building-hoyst',
         maxSize: 10,
         memberCount: 3,
         members: [
-          member({id: 'member-1', initials: 'KM', state: 'done'}),
-          member({id: 'member-2', initials: 'MJ', state: 'pending'}),
+          member({
+            cycleGoalMet: true,
+            id: 'member-1',
+            initials: 'KM',
+            state: 'done',
+          }),
+          member({
+            cycleGoalMet: false,
+            id: 'member-2',
+            initials: 'MJ',
+            state: 'pending',
+          }),
+          member({
+            cycleGoalMet: false,
+            id: 'member-3',
+            initials: 'AJ',
+            state: 'pending',
+          }),
         ],
         progressLabel: 'Today · 20%',
         progressPercent: 20,
@@ -287,7 +307,14 @@ describe('TapInPickerScreen', () => {
         category: 'Wellness',
         commitment: 'Sleep a full 8 hours in a day',
         completionRate: 62,
+        commitmentCadence: 'weekly',
+        cycleCoveredCount: 2,
+        cycleRequiredCount: 4,
         id: 'sleep-8-hours',
+        members: [
+          member({cycleGoalMet: true, id: 'sleeper-1', state: 'done'}),
+          member({cycleGoalMet: false, id: 'sleeper-2', state: 'pending'}),
+        ],
         progressLabel: 'Week · 62%',
         progressPercent: 62,
         remainingCheckIns: 4,
@@ -297,7 +324,11 @@ describe('TapInPickerScreen', () => {
         viewerRemainingTapIns: 1,
       }),
       circle({
+        circleMode: 'personal',
+        cycleCoveredCount: 1,
+        cycleRequiredCount: 1,
         id: 'hydration',
+        members: [member({cycleGoalMet: true, id: 'hydration', state: 'done'})],
         progressLabel: 'Today · 100%',
         title: 'Hydration',
         viewerHasTappedInToday: true,
@@ -318,8 +349,11 @@ describe('TapInPickerScreen', () => {
     expect(output).not.toContain('DO THIS FIRST');
     expect(output).not.toContain('AT RISK');
     expect(output).toContain('Building Hoyst');
+    expect(output).toContain('Streak at risk');
+    expect(output).toContain('1/3 members met goal today');
     expect(output).not.toContain('2 due');
     expect(output).toContain('Sleep 8 Hours');
+    expect(output).toContain('1/2 members met goal this week');
     expect(
       tree.root.findByProps({testID: 'tap-in-picker-due-stack'}),
     ).toBeTruthy();
@@ -336,6 +370,7 @@ describe('TapInPickerScreen', () => {
     );
     expect(output).toContain('Also today');
     expect(output).toContain('Hydration');
+    expect(output).toContain('Goal met today');
   });
 
   it('opens the composer from the most urgent priority card', () => {
@@ -379,11 +414,16 @@ describe('TapInPickerScreen', () => {
       circle({
         circleMode: 'personal',
         commitment: 'Read every day',
+        cycleCoveredCount: 0,
+        cycleRequiredCount: 1,
         id: 'personal-1',
         inviteUrl: undefined,
         joinMode: 'invite_only',
         maxSize: 1,
         memberCount: 1,
+        members: [
+          member({cycleGoalMet: false, id: 'reader', state: 'pending'}),
+        ],
         privacy: 'private',
         progressPercent: 20,
         state: 'risk',
@@ -399,6 +439,7 @@ describe('TapInPickerScreen', () => {
 
     expect(output).toContain('Read every day');
     expect(output).toContain('Personal');
+    expect(output).toContain('Goal not met today');
     expect(output).not.toContain('1/1 Members');
   });
 
@@ -525,6 +566,33 @@ describe('TapInPickerScreen', () => {
         testID: 'tap-in-picker-due-action-limit-covered',
       }),
     ).toHaveLength(0);
+  });
+
+  it('combines weekly cadence and per-Tap-In quantity in the goal line', () => {
+    mockHomeData = homeData([
+      circle({
+        commitmentCadence: 'weekly',
+        commitmentFrequency: {tapInsPerWeek: 4},
+        commitmentType: 'build',
+        targetValue: 20,
+        unitLabel: 'minutes',
+      }),
+    ]);
+
+    const {tree} = renderScreen();
+    const output = getTextOutput(tree.toJSON());
+    const goal = tree.root.findByProps({
+      testID: 'tap-in-picker-goal-circle-1',
+    });
+
+    expect(output).toContain(
+      'Goal: 4 Tap Ins per week · 20 minutes per Tap In',
+    );
+    expect(
+      goal
+        .findAllByType(Text)
+        .map(node => StyleSheet.flatten(node.props.style).fontWeight),
+    ).toEqual(['600', '600', '600']);
   });
 
   it('keeps the Still Useful empty state when no secondary circles remain', () => {
@@ -677,7 +745,22 @@ describe('TapInPickerScreen', () => {
   it('keeps skipped-day utility feedback and excludes pending memberships', () => {
     mockHomeData = homeData([
       circle({
+        cycleCoveredCount: 1,
+        cycleRequiredCount: 2,
         id: 'skipped',
+        members: [
+          member({
+            cycleGoalMet: true,
+            id: 'skipped-viewer',
+            state: 'skipped',
+            todayStatus: 'skip',
+          }),
+          member({
+            cycleGoalMet: false,
+            id: 'skipped-peer',
+            state: 'pending',
+          }),
+        ],
         viewerHasTappedInToday: true,
         viewerTodayStatus: 'skip',
       }),
@@ -690,12 +773,56 @@ describe('TapInPickerScreen', () => {
     const {tree} = renderScreen();
     const output = getTextOutput(tree.toJSON());
     expect(output).toContain('Grace skip used today');
+    expect(output).toContain('1/2 members met goal today');
     expect(output).not.toContain('Pending circle');
     expect(output).toContain('1 of 1 tapped in');
     expect(
       tree.root.findByProps({testID: 'tap-in-picker-utility-skipped'}),
     ).toBeTruthy();
   });
+
+  it.each([
+    ['weekly', 'Weekly goal met'],
+    ['monthly', 'Monthly goal met'],
+  ] as const)(
+    'shows %s goal completion separately from today',
+    (pace, copy) => {
+      mockHomeData = homeData([
+        circle({
+          commitmentCadence: pace,
+          commitmentFrequency:
+            pace === 'monthly'
+              ? {opportunitiesPerPeriod: 4, tapInsPerWeek: 1}
+              : {tapInsPerWeek: 3},
+          id: `${pace}-complete`,
+          members: [
+            member({
+              cycleGoalMet: true,
+              id: `${pace}-member`,
+              state: 'done',
+            }),
+          ],
+          title: `${pace} complete`,
+          cycleCoveredCount: pace === 'monthly' ? 4 : 3,
+          cycleRequiredCount: pace === 'monthly' ? 4 : 3,
+          viewerCycleCoveredCount: pace === 'monthly' ? 4 : 3,
+          viewerCycleRequiredCount: pace === 'monthly' ? 4 : 3,
+          viewerHasTappedInToday: false,
+        }),
+      ]);
+
+      const {tree} = renderScreen();
+      const output = getTextOutput(tree.toJSON());
+
+      expect(output).toContain(copy);
+      expect(output).toContain(
+        pace === 'monthly'
+          ? '1/1 member met goal this month'
+          : '1/1 member met goal this week',
+      );
+      expect(output).toContain('Today is covered');
+    },
+  );
 
   it('renders loading, error, no-active, and all-covered states', () => {
     mockSubscriptionMode = 'loading';

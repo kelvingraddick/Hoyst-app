@@ -24,7 +24,7 @@ import {
   shouldShowHomeCreateCircleButton,
   shouldShowHomeDataErrorPanel,
 } from '../src/features/home/services/home-data-service';
-import type {CircleManagementCard} from '../src/types/models';
+import type {CheckInStatus, CircleManagementCard} from '../src/types/models';
 
 const circleData = {
   category: 'Fitness',
@@ -656,6 +656,213 @@ describe('home data mapping', () => {
       photoUrl: 'https://example.com/sleep-proof.jpg',
       status: 'done',
     });
+  });
+
+  it.each(['daily', 'weekly', 'monthly'] as const)(
+    'credits today in Circle Detail independently of the %s goal',
+    commitmentCadence => {
+      const membersData = ['user-1', 'user-2'].map(uid => ({
+        displayName: uid,
+        role: 'member',
+        status: 'active',
+        uid,
+      }));
+      const todayStatuses = new Map<string, CheckInStatus>([
+        ['user-1', 'done'],
+        ['user-2', 'done'],
+      ]);
+      const card = mapHomeCircleFromData({
+        circleData: {
+          ...circleData,
+          commitmentCadence,
+          commitmentFrequency: {opportunitiesPerPeriod: 3, tapInsPerWeek: 3},
+        },
+        circleId: 'circle-today-status',
+        membersData,
+        membershipData: membersData[0],
+        periodCheckInStatuses: new Map([['2026-09-17', todayStatuses]]),
+        todayCheckInStatuses: todayStatuses,
+      })!;
+
+      const detail = buildCircleDetailFromHomeCircle(card);
+
+      expect(detail.members.map(member => member.todayStatus)).toEqual([
+        'done',
+        'done',
+      ]);
+      expect(detail.todayTapInCount).toBe(2);
+      expect(detail.todaySkipCount).toBe(0);
+      expect(detail.cycleCoveredCount).toBe(2);
+      expect(detail.cycleRequiredCount).toBe(
+        commitmentCadence === 'daily' ? 2 : 6,
+      );
+      expect(detail.viewerCycleCoveredCount).toBe(1);
+      expect(detail.viewerCycleRequiredCount).toBe(
+        commitmentCadence === 'daily' ? 1 : 3,
+      );
+      expect(detail.viewerHasTappedInToday).toBe(true);
+      expect(detail.progressPercent).toBe(card.progressPercent);
+      expect(detail.viewerRemainingTapIns).toBe(card.viewerRemainingTapIns);
+      expect(card.members.map(member => member.state)).toEqual(
+        commitmentCadence === 'daily'
+          ? ['done', 'done']
+          : ['pending', 'pending'],
+      );
+    },
+  );
+
+  it('counts partial and failed submissions as today activity while showing skips separately', () => {
+    const membersData = [
+      {displayName: 'Goal met', status: 'active', uid: 'goal-met'},
+      {displayName: 'Skipped', status: 'active', uid: 'skipped'},
+      {displayName: 'Partial', status: 'active', uid: 'partial'},
+      {displayName: 'Failed', status: 'active', uid: 'failed'},
+      {displayName: 'Pending approval', status: 'pending', uid: 'pending'},
+    ];
+    const todayStatuses = new Map<string, CheckInStatus>([
+      ['skipped', 'skip'],
+      ['partial', 'partial'],
+      ['failed', 'failed'],
+      ['pending', 'done'],
+    ]);
+    const card = mapHomeCircleFromData({
+      circleData: {
+        ...circleData,
+        commitmentCadence: 'weekly',
+        commitmentFrequency: {tapInsPerWeek: 2},
+      },
+      circleId: 'mixed-today-statuses',
+      membersData,
+      membershipData: membersData[0],
+      periodCheckInStatuses: new Map([
+        ['2026-09-16', new Map([['goal-met', 'done']])],
+        ['2026-09-17', new Map([['goal-met', 'done']])],
+        ['2026-09-18', todayStatuses],
+      ]),
+      todayCheckInStatuses: todayStatuses,
+    });
+    const detail = buildCircleDetailFromHomeCircle(card!);
+
+    expect(detail.todayTapInCount).toBe(2);
+    expect(detail.todaySkipCount).toBe(1);
+    expect(detail.members.map(member => member.state)).toEqual([
+      'done',
+      'skipped',
+      'pending',
+      'pending',
+      'pending',
+    ]);
+  });
+
+  it('caps each member at their weekly target and excludes pending members', () => {
+    const membersData = [
+      {
+        displayName: 'Kelvin North',
+        role: 'owner',
+        status: 'active',
+        uid: 'user-1',
+      },
+      {
+        displayName: 'Ava Stone',
+        role: 'member',
+        status: 'active',
+        uid: 'user-2',
+      },
+      {
+        displayName: 'Pending Person',
+        role: 'member',
+        status: 'pending',
+        uid: 'user-3',
+      },
+    ];
+    const periodCheckInStatuses = new Map<
+      string,
+      ReadonlyMap<string, CheckInStatus>
+    >([
+      [
+        '2026-09-14',
+        new Map([
+          ['user-1', 'done'],
+          ['user-3', 'done'],
+        ]),
+      ],
+      ['2026-09-15', new Map([['user-1', 'done']])],
+      ['2026-09-16', new Map([['user-1', 'skip']])],
+      ['2026-09-17', new Map([['user-1', 'done']])],
+      [
+        '2026-09-18',
+        new Map([
+          ['user-1', 'failed'],
+          ['user-2', 'partial'],
+          ['user-3', 'done'],
+        ]),
+      ],
+    ]);
+    const todayStatuses = periodCheckInStatuses.get('2026-09-18')!;
+    const card = mapHomeCircleFromData({
+      circleData: {
+        ...circleData,
+        commitmentCadence: 'weekly',
+        commitmentFrequency: {tapInsPerWeek: 3},
+      },
+      circleId: 'weekly-per-member-cap',
+      membersData,
+      membershipData: membersData[0],
+      periodCheckInStatuses,
+      todayCheckInStatuses: todayStatuses,
+    });
+
+    expect(card).toMatchObject({
+      cycleCoveredCount: 3,
+      cycleRequiredCount: 6,
+      progressPercent: 50,
+      todaySkipCount: 0,
+      todayTapInCount: 2,
+      viewerCycleCoveredCount: 3,
+      viewerCycleRequiredCount: 3,
+    });
+    expect(card?.members).toEqual([
+      expect.objectContaining({
+        cycleCoveredCount: 3,
+        cycleGoalMet: true,
+        todayStatus: 'failed',
+      }),
+      expect.objectContaining({
+        cycleCoveredCount: 0,
+        cycleGoalMet: false,
+        todayStatus: 'partial',
+      }),
+      expect.objectContaining({
+        cycleCoveredCount: 0,
+        cycleGoalMet: false,
+        membershipStatus: 'pending',
+        todayStatus: 'done',
+      }),
+    ]);
+  });
+
+  it("clears the detail completion when today's Tap In is removed", () => {
+    const member = {
+      displayName: 'Kelvin',
+      status: 'active',
+      uid: 'user-1',
+    };
+    const buildCard = (todayCheckInStatuses: Map<string, CheckInStatus>) =>
+      mapHomeCircleFromData({
+        circleData: {...circleData, commitmentCadence: 'daily'},
+        circleId: 'removed-tap-in',
+        membersData: [member],
+        membershipData: member,
+        todayCheckInStatuses,
+      })!;
+    const completedDetail = buildCircleDetailFromHomeCircle(
+      buildCard(new Map([['user-1', 'done']])),
+    );
+    const removedDetail = buildCircleDetailFromHomeCircle(buildCard(new Map()));
+
+    expect(completedDetail.members[0].state).toBe('done');
+    expect(removedDetail.members[0].state).toBe('pending');
+    expect(removedDetail.todayTapInCount).toBe(0);
   });
 
   it('derives viewer skip availability from loaded grace-window statuses', () => {

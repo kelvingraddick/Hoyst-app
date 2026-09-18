@@ -80,8 +80,8 @@ it('keeps the compact members strip horizontal with its total beneath the headin
   expect(scroller.props.horizontal).toBe(true);
   expect(output).toContain('Circle members');
   expect(output).toContain('2 members total');
-  expect(output).toContain('Done');
-  expect(output).toContain('Needs');
+  expect(output).toContain('TAPPED IN');
+  expect(output).toContain('NEEDS');
 });
 
 it('uses a subtle Invite icon and places the bulk row before selected-member actions', () => {
@@ -151,4 +151,33 @@ it('preserves Invite and member selection callbacks', () => {
 
   expect(onInvite).toHaveBeenCalledTimes(1);
   expect(onSelectMember).toHaveBeenCalledWith(members[1]);
+});
+
+it('prioritizes a weekly goal and announces today activity separately', () => {
+  const {tree} = renderStrip({
+    commitmentCadence: 'weekly',
+    members: [
+      {
+        cycleCoveredCount: 3,
+        cycleGoalMet: true,
+        cycleRequiredCount: 3,
+        id: 'viewer',
+        initials: 'KM',
+        membershipStatus: 'active',
+        name: 'Kelvin',
+        state: 'done',
+        todayStatus: 'done',
+      },
+    ],
+    selectedMemberId: 'viewer',
+  });
+  const output = tree.root.findAllByType(Text).map(textContent).join(' ');
+  const member = tree.root.findByProps({
+    testID: 'circle-member-strip-member-viewer',
+  });
+
+  expect(output).toContain('GOAL MET');
+  expect(member.props.accessibilityLabel).toBe(
+    'Kelvin · You, Weekly goal met, tapped in today',
+  );
 });

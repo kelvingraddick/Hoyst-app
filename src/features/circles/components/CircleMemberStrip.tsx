@@ -2,7 +2,7 @@ import React, {type ReactNode} from 'react';
 import {Pressable, ScrollView, StyleSheet, View} from 'react-native';
 import {ArrowUp, Check, UserPlus} from 'lucide-react-native';
 
-import type {CircleMemberStatus} from '../../../types/models';
+import type {CircleMemberStatus, CommitmentPace} from '../../../types/models';
 import {actionMotion, touchTarget} from '../../../design/tokens/actions';
 import {radius} from '../../../design/tokens/radius';
 import {useHoystTheme} from '../../../design/theme/useHoystTheme';
@@ -28,6 +28,7 @@ export type CircleMemberStripAction = {
 type CircleMemberStripProps = {
   action?: CircleMemberStripAction;
   belowStripAction?: ReactNode;
+  commitmentCadence?: CommitmentPace;
   inviteAction?: MemberInviteAction;
   members: CircleMemberStatus[];
   onSelectMember: (member: CircleMemberStatus) => void;
@@ -43,49 +44,80 @@ const RING_STROKE_WIDTH = 3;
 const NEEDED_RING_COLOR = '#F5A623';
 const NEEDED_LABEL_COLOR = '#C2410C';
 
-function getMemberStatusLabel(member: CircleMemberStatus) {
+function isCycleGoalMet(
+  member: CircleMemberStatus,
+  commitmentCadence?: CommitmentPace,
+) {
+  return commitmentCadence !== 'daily' && member.cycleGoalMet === true;
+}
+
+function hasTappedInToday(member: CircleMemberStatus) {
+  if (member.todayStatus) {
+    return member.todayStatus !== 'skip';
+  }
+
+  return member.cycleGoalMet === undefined && member.state === 'done';
+}
+
+function hasSkippedToday(member: CircleMemberStatus) {
+  return (
+    member.todayStatus === 'skip' ||
+    (member.todayStatus === undefined &&
+      member.cycleGoalMet === undefined &&
+      member.state === 'skipped')
+  );
+}
+
+function getMemberStatusLabel(
+  member: CircleMemberStatus,
+  commitmentCadence?: CommitmentPace,
+) {
   if (member.membershipStatus === 'pending') {
     return 'Pending approval';
   }
 
-  if (member.state === 'done') {
+  if (isCycleGoalMet(member, commitmentCadence)) {
+    return 'Goal met';
+  }
+
+  if (hasTappedInToday(member)) {
     return 'Tapped in';
   }
 
-  if (member.state === 'skipped') {
+  if (hasSkippedToday(member)) {
     return 'Skipped';
   }
 
-  if (member.state === 'pending') {
-    return 'Needs Tap In';
-  }
-
-  return 'Missed';
+  return 'Needs Tap In';
 }
 
-function getCompactMemberStatusLabel(member: CircleMemberStatus) {
+function getCompactMemberStatusLabel(
+  member: CircleMemberStatus,
+  commitmentCadence?: CommitmentPace,
+) {
   if (member.membershipStatus === 'pending') {
     return 'Pending';
   }
 
-  if (member.state === 'done') {
-    return 'Done';
+  if (isCycleGoalMet(member, commitmentCadence)) {
+    return 'GOAL MET';
   }
 
-  if (member.state === 'skipped') {
-    return 'Skipped';
+  if (hasTappedInToday(member)) {
+    return 'TAPPED IN';
   }
 
-  if (member.state === 'pending') {
-    return 'Needs';
+  if (hasSkippedToday(member)) {
+    return 'SKIPPED';
   }
 
-  return 'Missed';
+  return 'NEEDS';
 }
 
 export function getMemberProgressConfig(
   member: CircleMemberStatus,
   theme: ReturnType<typeof useHoystTheme>,
+  commitmentCadence?: CommitmentPace,
 ) {
   if (member.membershipStatus === 'pending') {
     return {
@@ -96,7 +128,7 @@ export function getMemberProgressConfig(
     };
   }
 
-  if (member.state === 'done') {
+  if (isCycleGoalMet(member, commitmentCadence)) {
     return {
       labelColor: theme.successForeground,
       progress: 1,
@@ -105,7 +137,16 @@ export function getMemberProgressConfig(
     };
   }
 
-  if (member.state === 'skipped') {
+  if (hasTappedInToday(member)) {
+    return {
+      labelColor: theme.successForeground,
+      progress: 0.34,
+      ringColor: theme.success,
+      trackColor: `${theme.success}14`,
+    };
+  }
+
+  if (hasSkippedToday(member)) {
     return {
       labelColor: theme.warningForeground,
       progress: 1,
@@ -114,26 +155,26 @@ export function getMemberProgressConfig(
     };
   }
 
-  if (member.state === 'pending') {
-    return {
-      labelColor: NEEDED_LABEL_COLOR,
-      progress: 0.34,
-      ringColor: NEEDED_RING_COLOR,
-      trackColor: 'rgba(245,166,35,0.16)',
-    };
-  }
-
   return {
-    labelColor: theme.dangerForeground,
-    progress: 0.08,
-    ringColor: theme.dangerForeground,
-    trackColor: theme.ring,
+    labelColor: NEEDED_LABEL_COLOR,
+    progress: 0.34,
+    ringColor: NEEDED_RING_COLOR,
+    trackColor: 'rgba(245,166,35,0.16)',
   };
 }
 
-function StatusBadge({member}: {member: CircleMemberStatus}) {
+function StatusBadge({
+  commitmentCadence,
+  member,
+}: {
+  commitmentCadence?: CommitmentPace;
+  member: CircleMemberStatus;
+}) {
   const theme = useHoystTheme();
-  const progress = getMemberProgressConfig(member, theme);
+  const progress = getMemberProgressConfig(member, theme, commitmentCadence);
+  const showsCheck =
+    member.membershipStatus !== 'pending' &&
+    (isCycleGoalMet(member, commitmentCadence) || hasTappedInToday(member));
 
   return (
     <View
@@ -145,9 +186,10 @@ function StatusBadge({member}: {member: CircleMemberStatus}) {
           borderColor: theme.background,
         },
       ]}>
-      {member.state === 'done' && member.membershipStatus !== 'pending' ? (
+      {showsCheck ? (
         <Check color="#FFFFFF" size={11} strokeWidth={3.1} />
-      ) : member.state === 'pending' &&
+      ) : !member.todayStatus &&
+        !hasSkippedToday(member) &&
         member.membershipStatus !== 'pending' ? (
         <ArrowUp color="#FFFFFF" size={12} strokeWidth={3} />
       ) : (
@@ -157,9 +199,15 @@ function StatusBadge({member}: {member: CircleMemberStatus}) {
   );
 }
 
-function MemberAvatar({member}: {member: CircleMemberStatus}) {
+function MemberAvatar({
+  commitmentCadence,
+  member,
+}: {
+  commitmentCadence?: CommitmentPace;
+  member: CircleMemberStatus;
+}) {
   const theme = useHoystTheme();
-  const progress = getMemberProgressConfig(member, theme);
+  const progress = getMemberProgressConfig(member, theme, commitmentCadence);
 
   return (
     <View style={styles.avatarFrame}>
@@ -180,26 +228,31 @@ function MemberAvatar({member}: {member: CircleMemberStatus}) {
           state={member.state}
         />
       </View>
-      <StatusBadge member={member} />
+      <StatusBadge commitmentCadence={commitmentCadence} member={member} />
     </View>
   );
 }
 
 function MemberStripItem({
+  commitmentCadence,
   isSelected,
   member,
   onPress,
   viewerUid,
 }: {
+  commitmentCadence?: CommitmentPace;
   isSelected: boolean;
   member: CircleMemberStatus;
   onPress: () => void;
   viewerUid?: string;
 }) {
   const theme = useHoystTheme();
-  const statusLabel = getMemberStatusLabel(member);
-  const compactStatusLabel = getCompactMemberStatusLabel(member);
-  const progress = getMemberProgressConfig(member, theme);
+  const statusLabel = getMemberStatusLabel(member, commitmentCadence);
+  const compactStatusLabel = getCompactMemberStatusLabel(
+    member,
+    commitmentCadence,
+  );
+  const progress = getMemberProgressConfig(member, theme, commitmentCadence);
   const isViewer = Boolean(viewerUid && member.id === viewerUid);
   const displayName = isViewer ? `${member.name} · You` : member.name;
   const selectedSurfaceStyle = isSelected
@@ -212,7 +265,19 @@ function MemberStripItem({
 
   return (
     <Pressable
-      accessibilityLabel={`${displayName}, ${statusLabel}`}
+      accessibilityLabel={`${displayName}, ${
+        isCycleGoalMet(member, commitmentCadence)
+          ? `${
+              commitmentCadence === 'monthly' ? 'Monthly' : 'Weekly'
+            } goal met${
+              hasTappedInToday(member)
+                ? ', tapped in today'
+                : hasSkippedToday(member)
+                ? ', skipped today'
+                : ''
+            }`
+          : statusLabel
+      }`}
       accessibilityRole="button"
       accessibilityState={{selected: isSelected}}
       onPress={onPress}
@@ -225,7 +290,7 @@ function MemberStripItem({
       ]}
       testID={`circle-member-strip-member-${member.id}`}>
       <View style={[styles.memberItem, selectedSurfaceStyle]}>
-        <MemberAvatar member={member} />
+        <MemberAvatar commitmentCadence={commitmentCadence} member={member} />
         <HoystText numberOfLines={1} style={styles.memberName}>
           {isViewer ? 'You' : member.name}
         </HoystText>
@@ -283,15 +348,17 @@ function InviteStripItem({inviteAction}: {inviteAction: MemberInviteAction}) {
 
 function SelectedMemberAction({
   action,
+  commitmentCadence,
   member,
   viewerUid,
 }: {
   action?: CircleMemberStripAction;
+  commitmentCadence?: CommitmentPace;
   member: CircleMemberStatus;
   viewerUid?: string;
 }) {
   const theme = useHoystTheme();
-  const statusLabel = getMemberStatusLabel(member);
+  const statusLabel = getMemberStatusLabel(member, commitmentCadence);
   const isViewer = Boolean(viewerUid && member.id === viewerUid);
   const accentColor =
     action?.tone === 'nudge'
@@ -365,6 +432,7 @@ function SelectedMemberAction({
 export function CircleMemberStrip({
   action,
   belowStripAction,
+  commitmentCadence,
   inviteAction,
   members,
   onSelectMember,
@@ -387,6 +455,7 @@ export function CircleMemberStrip({
           testID="circle-member-strip">
           {members.map(member => (
             <MemberStripItem
+              commitmentCadence={commitmentCadence}
               isSelected={member.id === selectedMemberId}
               key={member.id}
               member={member}
@@ -413,6 +482,7 @@ export function CircleMemberStrip({
       {selectedMember ? (
         <SelectedMemberAction
           action={action}
+          commitmentCadence={commitmentCadence}
           member={selectedMember}
           viewerUid={viewerUid}
         />

@@ -54,6 +54,8 @@ import {
   type HomeData,
 } from '../../home/services/home-data-service';
 import {nudgeCircleMembers} from '../services/circle-service';
+import {getCircleCycleProgressPresentation} from '../../commitments/cycle-progress-presentation';
+import {getCommitmentGoalPresentation} from '../../commitments/commitment-goal-label';
 import {
   subscribeToPastCircles,
   type PastCircleSummary,
@@ -71,9 +73,21 @@ const FILTERS: readonly StatusFilter[] = [
   'done',
 ];
 
+function hasViewerMetCycleGoal(circle: CircleManagementCard) {
+  return (
+    circle.commitmentCadence !== 'daily' &&
+    (circle.viewerCycleRequiredCount ?? 0) > 0 &&
+    (circle.viewerCycleCoveredCount ?? 0) >=
+      (circle.viewerCycleRequiredCount ?? 0)
+  );
+}
+
 function getCircleStatus(circle: CircleManagementCard): StatusFilter {
   if (circle.viewerMembershipStatus === 'pending') {
     return 'pending';
+  }
+  if (hasViewerMetCycleGoal(circle)) {
+    return 'done';
   }
   if (canTapInToday(circle)) {
     return 'needsYou';
@@ -117,6 +131,9 @@ function canInvite(circle: CircleManagementCard) {
 }
 
 function actionLabel(circle: CircleManagementCard) {
+  if (hasViewerMetCycleGoal(circle)) {
+    return undefined;
+  }
   const variant = getHomeCircleActionVariant(circle);
   if (variant === 'check_in') {
     return circle.viewerCanUpdateTapIn && circle.viewerHasTappedInToday
@@ -135,6 +152,11 @@ function actionLabel(circle: CircleManagementCard) {
 function statusCopy(circle: CircleManagementCard, isNudged: boolean) {
   if (circle.viewerMembershipStatus === 'pending') {
     return 'Pending approval';
+  }
+  if (hasViewerMetCycleGoal(circle)) {
+    return circle.commitmentCadence === 'monthly'
+      ? 'Monthly goal met'
+      : 'Weekly goal met';
   }
   if (canTapInToday(circle)) {
     return 'Needs your Tap In';
@@ -158,14 +180,7 @@ function statusCopy(circle: CircleManagementCard, isNudged: boolean) {
 }
 
 function memberContext(circle: CircleManagementCard) {
-  if (circle.circleMode === 'personal') {
-    return 'Personal · Just you';
-  }
-  const done = circle.members.filter(member => member.state === 'done').length;
-  return `${done}/${Math.max(
-    circle.memberCount,
-    circle.members.length,
-  )} members tapped in`;
+  return getCircleCycleProgressPresentation(circle).listLabel;
 }
 
 function memberSources(circle: CircleManagementCard) {
@@ -184,7 +199,9 @@ function memberSources(circle: CircleManagementCard) {
 function FilterIcon({filter}: {filter: StatusFilter}) {
   const theme = useSystemTheme();
   if (filter === 'needsYou') {
-    return <Zap color={theme.warning} size={layout.statIcon} strokeWidth={2.4} />;
+    return (
+      <Zap color={theme.warning} size={layout.statIcon} strokeWidth={2.4} />
+    );
   }
   if (filter === 'pending') {
     return (
@@ -261,10 +278,7 @@ function CirclesStatusSummary({
               accessibilityRole="button"
               accessibilityState={{selected: isSelected}}
               onPress={() => onSelect(filter)}
-              style={[
-                styles.filterItem,
-                {minHeight: minimumTarget()},
-              ]}>
+              style={[styles.filterItem, {minHeight: minimumTarget()}]}>
               {index > 0 ? (
                 <View
                   style={[
@@ -543,9 +557,7 @@ function CirclesScreenContent({navigation}: Props) {
               busy: isNudging,
               disabled: isNudging,
               variant:
-                label === 'Share'
-                  ? ('outline' as const)
-                  : ('primary' as const),
+                label === 'Share' ? ('outline' as const) : ('primary' as const),
               onPress: () => handleCircleAction(item),
             }
           : undefined;
@@ -556,6 +568,7 @@ function CirclesScreenContent({navigation}: Props) {
           context={memberContext(item)}
           description={item.commitment}
           expanded
+          goal={getCommitmentGoalPresentation(item)}
           members={memberSources(item)}
           onDetails={() => openCircle(item.id)}
           onExpand={() => undefined}
@@ -620,9 +633,7 @@ function CirclesScreenContent({navigation}: Props) {
           counts={counts}
           selected={selectedFilter}
           onSelect={filter =>
-            setSelectedFilter(current =>
-              current === filter ? 'all' : filter,
-            )
+            setSelectedFilter(current => (current === filter ? 'all' : filter))
           }
         />
       ) : null}
@@ -657,54 +668,55 @@ function CirclesScreenContent({navigation}: Props) {
     </View>
   );
 
-  const listEmpty = !canLoad || (!hasResolvedContent && !homeError) ? (
-    <DSFeedback
-      kind="loading"
-      title="Loading commitments"
-      message="Your commitments will appear here when they are ready."
-    />
-  ) : homeError && !hasResolvedContent ? (
-    <DSFeedback
-      kind="error"
-      title="Could not load commitments"
-      message="Check your connection and try again."
-      action={<DSButton label="Retry" onPress={retry} variant="outline" />}
-    />
-  ) : allCommitments.length === 0 ? (
-    <DSFeedback
-      title="No commitments yet"
-      message="Create a commitment or find a circle to get started."
-      action={
-        <View style={styles.emptyActions}>
+  const listEmpty =
+    !canLoad || (!hasResolvedContent && !homeError) ? (
+      <DSFeedback
+        kind="loading"
+        title="Loading commitments"
+        message="Your commitments will appear here when they are ready."
+      />
+    ) : homeError && !hasResolvedContent ? (
+      <DSFeedback
+        kind="error"
+        title="Could not load commitments"
+        message="Check your connection and try again."
+        action={<DSButton label="Retry" onPress={retry} variant="outline" />}
+      />
+    ) : allCommitments.length === 0 ? (
+      <DSFeedback
+        title="No commitments yet"
+        message="Create a commitment or find a circle to get started."
+        action={
+          <View style={styles.emptyActions}>
+            <DSButton
+              label="Create commitment"
+              onPress={() => navigation.navigate('CreateCircle')}
+            />
+            <DSButton
+              label="Find circles"
+              onPress={() =>
+                navigation.navigate('MainTabs', {screen: 'Explore'})
+              }
+              variant="outline"
+            />
+          </View>
+        }
+      />
+    ) : (
+      <DSFeedback
+        title="Nothing here right now"
+        message={`No commitments match ${filterLabel(
+          selectedFilter as StatusFilter,
+        ).toLowerCase()}.`}
+        action={
           <DSButton
-            label="Create commitment"
-            onPress={() => navigation.navigate('CreateCircle')}
-          />
-          <DSButton
-            label="Find circles"
-            onPress={() =>
-              navigation.navigate('MainTabs', {screen: 'Explore'})
-            }
+            label="Clear filter"
+            onPress={() => setSelectedFilter('all')}
             variant="outline"
           />
-        </View>
-      }
-    />
-  ) : (
-    <DSFeedback
-      title="Nothing here right now"
-      message={`No commitments match ${filterLabel(
-        selectedFilter as StatusFilter,
-      ).toLowerCase()}.`}
-      action={
-        <DSButton
-          label="Clear filter"
-          onPress={() => setSelectedFilter('all')}
-          variant="outline"
-        />
-      }
-    />
-  );
+        }
+      />
+    );
 
   const listFooter = hasResolvedContent ? (
     <View style={styles.footerStack}>
@@ -715,7 +727,9 @@ function CirclesScreenContent({navigation}: Props) {
             <DSListRow
               key={circle.id}
               accessibilityLabel={`View past circle ${circle.title}`}
-              leading={<History color={theme.muted} size={layout.controlIcon} />}
+              leading={
+                <History color={theme.muted} size={layout.controlIcon} />
+              }
               onPress={() =>
                 navigation.navigate('PastCircle', {summary: circle})
               }

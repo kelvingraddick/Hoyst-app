@@ -5,7 +5,7 @@ import {
   View,
   type ImageSourcePropType,
 } from 'react-native';
-import {ArrowUpRight} from 'lucide-react-native';
+import {ArrowUpRight, Target} from 'lucide-react-native';
 import {
   CircleCategoryIcon,
   getCircleCategoryVisual,
@@ -27,6 +27,10 @@ export type CommitmentPreviewProps = {
   title: string;
   category: string;
   description: string;
+  goal?: {
+    label: string;
+    value: string;
+  };
   context: string;
   expanded: boolean;
   onExpand: () => void;
@@ -49,6 +53,7 @@ export function DSCommitmentPreview({
   title,
   category,
   description,
+  goal,
   context,
   expanded,
   onExpand,
@@ -121,6 +126,31 @@ export function DSCommitmentPreview({
         onPress={onDetails}
         style={styles.descriptionTarget}>
         <DSText tone="muted">{description}</DSText>
+        {goal ? (
+          <View
+            style={styles.goalLine}
+            testID={`commitment-preview-goal-${title}`}>
+            <Target
+              accessible={false}
+              color={theme.muted}
+              size={14}
+              strokeWidth={2.2}
+              style={styles.goalIcon}
+            />
+            <DSText variant="secondary" tone="muted" style={styles.goalCopy}>
+              {goal.label}
+            </DSText>
+            <DSText variant="secondary" tone="muted" style={styles.goalCopy}>
+              {goal.label === 'Goal' ? ': ' : ' · '}
+            </DSText>
+            <DSText
+              variant="secondary"
+              tone="muted"
+              style={[styles.goalCopy, styles.goalText]}>
+              {goal.value}
+            </DSText>
+          </View>
+        ) : null}
       </Pressable>
       <View style={styles.footer}>
         <Pressable
@@ -205,7 +235,15 @@ const styles = StyleSheet.create({
   },
   detailButton: {position: 'absolute', right: 6, top: 0},
   heading: {flex: 1, gap: space.xs},
-  descriptionTarget: {minHeight: 20},
+  descriptionTarget: {gap: space.xs, minHeight: 20},
+  goalLine: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+  },
+  goalCopy: {fontWeight: '600'},
+  goalIcon: {marginRight: 3},
+  goalText: {flexShrink: 1},
   footer: {
     flexDirection: 'row',
     alignItems: 'center',

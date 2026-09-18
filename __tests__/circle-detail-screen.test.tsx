@@ -182,6 +182,8 @@ function detail(overrides: Partial<CircleDetailModel> = {}): CircleDetailModel {
     commitmentFrequency: {tapInsPerWeek: 7},
     commitmentLabel: 'Commitment: Move for 30 minutes',
     completionRate: 60,
+    cycleCoveredCount: 2,
+    cycleRequiredCount: 4,
     graceRules: {skip: {allowance: 0, windowDays: 7}},
     groupProgressDays: [
       {
@@ -252,12 +254,14 @@ function detail(overrides: Partial<CircleDetailModel> = {}): CircleDetailModel {
         initials: 'AR',
         name: 'Ari',
         state: 'done',
+        todayStatus: 'done',
       },
       {
         id: 'user-3',
         initials: 'SK',
         name: 'Sky',
         state: 'skipped',
+        todayStatus: 'skip',
       },
       {
         id: 'user-4',
@@ -291,10 +295,14 @@ function detail(overrides: Partial<CircleDetailModel> = {}): CircleDetailModel {
     streakDays: 3,
     streakLabel: '3d streak',
     title: 'Morning Movers',
+    todaySkipCount: 1,
+    todayTapInCount: 1,
     viewerHasCheckedIn: false,
     viewerHasTappedInToday: false,
     viewerMembershipStatus: 'active',
     viewerRemainingTapIns: 1,
+    viewerCycleCoveredCount: 0,
+    viewerCycleRequiredCount: 1,
     viewerRole: 'member',
     viewerTodayStatus: 'rest',
     ...overrides,
@@ -591,9 +599,9 @@ describe('CircleDetailScreen reference redesign', () => {
     expect(output).toContain('Circle members');
     expect(output).toContain('5 members total');
     expect(output).toContain('Circle Feed');
-    expect(output).toContain('1 of 4 members tapped in today');
+    expect(output).toContain('2/4 members met goal today');
     expect(output).not.toContain('Circle Progress');
-    expect(output).toContain('Group progress');
+    expect(output).toContain('Today');
     expect(output).toContain('Kelvin');
     expect(output).toContain('Ari');
     expect(output).toContain('Sky');
@@ -603,7 +611,7 @@ describe('CircleDetailScreen reference redesign', () => {
     expect(output).toContain('Tap In');
     expect(output).toContain('Log progress for this circle');
     expect(output.indexOf('Log progress for this circle')).toBeLessThan(
-      output.indexOf('Group progress'),
+      output.indexOf('Today'),
     );
     expect(
       tree.root.findByProps({testID: 'circle-member-strip'}).props.horizontal,
@@ -611,13 +619,13 @@ describe('CircleDetailScreen reference redesign', () => {
     expect(
       tree.root.findAllByProps({testID: 'circle-member-strip-selected-action'}),
     ).toHaveLength(0);
-    expect(output.indexOf('Group progress')).toBeLessThan(
-      output.indexOf('1 of 4 members tapped in today'),
+    expect(output.indexOf('Today')).toBeLessThan(
+      output.indexOf('2/4 members met goal today'),
     );
-    expect(output.indexOf('1 of 4 members tapped in today')).toBeLessThan(
+    expect(output.indexOf('2/4 members met goal today')).toBeLessThan(
       output.indexOf('3 days'),
     );
-    expect(output.indexOf('1 of 4 members tapped in today')).toBeLessThan(
+    expect(output.indexOf('2/4 members met goal today')).toBeLessThan(
       output.indexOf('Circle members'),
     );
     expect(output).not.toContain('Last 7 days');
@@ -655,7 +663,7 @@ describe('CircleDetailScreen reference redesign', () => {
     expect(
       tree.root.findByProps({testID: 'circle-stats-streak-pill'}).props
         .accessibilityLabel,
-    ).toBe('Streak 3 days');
+    ).toBe('Group streak 3 days');
     expect(
       tree.root
         .findAllByProps({testID: 'circle-stats-streak-icon'})
@@ -918,6 +926,222 @@ describe('CircleDetailScreen reference redesign', () => {
     ).toBe(1);
   });
 
+  it("counts today's Tap Ins separately from members who already met the cycle goal", () => {
+    mockMemberDetail = detail({
+      commitmentCadence: 'weekly',
+      cycleCoveredCount: 4,
+      cycleRequiredCount: 12,
+      todaySkipCount: 0,
+      todayTapInCount: 0,
+      viewerCycleCoveredCount: 1,
+      viewerCycleRequiredCount: 3,
+    });
+
+    const {tree} = renderScreen();
+    const output = outputOf(tree);
+
+    expect(output).toContain('1/4 members met goal this week');
+    expect(output).toContain('No Tap Ins yet today');
+  });
+
+  it('shows the cadence and per-Tap-In goal beneath the hero description', () => {
+    mockMemberDetail = detail({
+      commitmentCadence: 'monthly',
+      commitmentFrequency: {
+        opportunitiesPerPeriod: 4,
+        tapInsPerWeek: 4,
+      },
+      commitmentType: 'limit',
+      maximumValue: 2,
+      unitLabel: 'hours',
+    });
+
+    const {tree} = renderScreen();
+    const output = outputOf(tree);
+    const goal = tree.root.findByProps({testID: 'circle-detail-goal'});
+
+    expect(textContent(goal)).toContain(
+      'Goal: 4 Tap Ins per month · Maximum 2 hours per Tap In',
+    );
+    expect(textContent(goal.parent!.findAllByType(Text)[0])).toBe(
+      'Move for 30 minutes',
+    );
+    expect(
+      goal
+        .findAllByType(Text)
+        .map(node => StyleSheet.flatten(node.props.style).fontWeight),
+    ).toEqual(['600', '600', '600']);
+    expect(output).toContain('Monthly pace');
+  });
+
+  it('shows Tap Ins and skips separately in the weekly Today summary', () => {
+    mockMemberDetail = detail({
+      commitmentCadence: 'weekly',
+      cycleCoveredCount: 3,
+      cycleRequiredCount: 6,
+      todaySkipCount: 1,
+      todayTapInCount: 1,
+      viewerCycleCoveredCount: 1,
+      viewerCycleRequiredCount: 3,
+    });
+
+    const {tree} = renderScreen();
+    const output = outputOf(tree);
+    const progressCopy = tree.root
+      .findAllByType(Text)
+      .find(node => textContent(node) === '1/4 members met goal this week');
+    const todayCopy = tree.root
+      .findAllByType(Text)
+      .find(node => textContent(node) === 'Today · 1 tapped in · 1 skipped');
+
+    expect(output).toContain('1/4 members met goal this week');
+    expect(output).toContain('Today · 1 tapped in · 1 skipped');
+    expect(progressCopy?.props.numberOfLines).toBeUndefined();
+    expect(todayCopy?.props.numberOfLines).toBeUndefined();
+  });
+
+  it('shows completed member badges alongside Review Tap In before the weekly goal is met', () => {
+    mockMemberDetail = detail({
+      commitmentCadence: 'weekly',
+      commitmentFrequency: {tapInsPerWeek: 3},
+      cycleCoveredCount: 3,
+      cycleRequiredCount: 6,
+      memberCount: 2,
+      members: [
+        {
+          cycleCoveredCount: 2,
+          cycleGoalMet: false,
+          cycleRequiredCount: 3,
+          id: 'user-1',
+          initials: 'KG',
+          name: 'Kelvin',
+          state: 'pending',
+          todayStatus: 'done',
+        },
+        {
+          cycleCoveredCount: 1,
+          cycleGoalMet: false,
+          cycleRequiredCount: 3,
+          id: 'user-2',
+          initials: 'AJ',
+          name: 'Aaron Jr',
+          state: 'pending',
+          todayStatus: 'done',
+        },
+      ],
+      nudgeTargetCount: 0,
+      progressPercent: 50,
+      todayTapInCount: 2,
+      viewerHasCheckedIn: false,
+      viewerHasTappedInToday: true,
+      viewerRemainingTapIns: 1,
+      viewerCycleCoveredCount: 2,
+      viewerCycleRequiredCount: 3,
+      viewerTodayStatus: 'done',
+    });
+
+    const {tree} = renderScreen();
+    const output = outputOf(tree);
+
+    expect(output).toContain('Review Tap In');
+    expect(output).toContain('0/2 members met goal this week');
+    expect(output).toContain('Today · 2 tapped in');
+    expect(output).toContain('2 of 3 this week · 1 left');
+    expect(
+      StyleSheet.flatten(
+        tree.root.findByProps({testID: 'circle-stats-progress-fill'}).props
+          .style,
+      ),
+    ).toEqual(expect.objectContaining({width: '0%'}));
+    expect(
+      tree.root.findAllByProps({
+        accessibilityLabel: 'Kelvin · You, Tapped in',
+      }).length,
+    ).toBeGreaterThan(0);
+    expect(output).not.toContain('Needs Tap In');
+    expect(output).not.toContain('Nudge all');
+  });
+
+  it('shows a completed weekly goal and today Tap In as separate facts', () => {
+    mockMemberDetail = detail({
+      commitmentCadence: 'weekly',
+      commitmentFrequency: {tapInsPerWeek: 3},
+      cycleCoveredCount: 3,
+      cycleRequiredCount: 3,
+      memberCount: 1,
+      members: [
+        {
+          cycleCoveredCount: 3,
+          cycleGoalMet: true,
+          cycleRequiredCount: 3,
+          id: 'user-1',
+          initials: 'KG',
+          name: 'Kelvin',
+          state: 'done',
+          todayStatus: 'done',
+        },
+      ],
+      progressPercent: 100,
+      todaySkipCount: 0,
+      todayTapInCount: 1,
+      viewerCycleCoveredCount: 3,
+      viewerCycleRequiredCount: 3,
+      viewerHasCheckedIn: true,
+      viewerHasTappedInToday: true,
+      viewerTodayStatus: 'done',
+    });
+
+    const {tree} = renderScreen();
+    const output = outputOf(tree);
+
+    expect(output).toContain('Review Tap In');
+    expect(output).toContain('Weekly goal complete · 3 of 3');
+    expect(output).toContain('GOAL MET');
+    expect(
+      tree.root.findByProps({
+        accessibilityLabel: 'Kelvin · You, Weekly goal met, tapped in today',
+      }),
+    ).toBeTruthy();
+  });
+
+  it('offers an optional monthly Tap In after the goal was met earlier', () => {
+    mockMemberDetail = detail({
+      commitmentCadence: 'monthly',
+      commitmentFrequency: {opportunitiesPerPeriod: 4, tapInsPerWeek: 1},
+      cycleCoveredCount: 4,
+      cycleRequiredCount: 4,
+      memberCount: 1,
+      members: [
+        {
+          cycleCoveredCount: 4,
+          cycleGoalMet: true,
+          cycleRequiredCount: 4,
+          id: 'user-1',
+          initials: 'KG',
+          name: 'Kelvin',
+          state: 'done',
+        },
+      ],
+      progressPercent: 100,
+      todaySkipCount: 0,
+      todayTapInCount: 0,
+      viewerCycleCoveredCount: 4,
+      viewerCycleRequiredCount: 4,
+      viewerHasCheckedIn: true,
+      viewerHasTappedInToday: false,
+      viewerRemainingTapIns: 0,
+      viewerTodayStatus: undefined,
+    });
+
+    const {tree} = renderScreen();
+    const output = outputOf(tree);
+
+    expect(output).toContain('Tap In');
+    expect(output).toContain('Monthly goal complete · Optional extra');
+    expect(output).toContain('1/1 member met goal this month');
+    expect(output).toContain('No Tap Ins yet today');
+  });
+
   it('shows the completed review action and remove action after today is counted', () => {
     mockMemberDetail = detail({
       completionRate: 100,
@@ -941,7 +1165,7 @@ describe('CircleDetailScreen reference redesign', () => {
     expect(output).not.toContain('Tapped in today');
     expect(output).not.toContain('View Today');
     expect(output).not.toContain('Circle Tools');
-    expect(output.indexOf('Group progress')).toBeLessThan(
+    expect(output.indexOf('Today')).toBeLessThan(
       output.indexOf('Remove Tap In'),
     );
     expect(output.indexOf('Remove Tap In')).toBeLessThan(
@@ -1068,7 +1292,8 @@ describe('CircleDetailScreen reference redesign', () => {
       for (const label of ['Fri', '29', 'Today']) {
         const text = tree.root
           .findAllByType(Text)
-          .find(node => textContent(node) === label);
+          .filter(node => textContent(node) === label)
+          .at(-1);
 
         expect(StyleSheet.flatten(text?.props.style)).toEqual(
           expect.objectContaining({color: successForeground}),
@@ -1081,7 +1306,8 @@ describe('CircleDetailScreen reference redesign', () => {
       for (const label of ['Fri', '29', 'Today']) {
         const text = incompleteTodayTree.root
           .findAllByType(Text)
-          .find(node => textContent(node) === label);
+          .filter(node => textContent(node) === label)
+          .at(-1);
 
         expect(StyleSheet.flatten(text?.props.style)).toEqual(
           expect.objectContaining({color: accentForeground}),
@@ -1093,6 +1319,8 @@ describe('CircleDetailScreen reference redesign', () => {
   it('keeps owner settings off the detail body', () => {
     mockMemberDetail = detail({
       commitmentCadence: 'weekly',
+      cycleCoveredCount: 0,
+      cycleRequiredCount: 0,
       members: [
         {
           id: 'requester-1',
@@ -1102,6 +1330,8 @@ describe('CircleDetailScreen reference redesign', () => {
           state: 'pending',
         },
       ],
+      todaySkipCount: 0,
+      todayTapInCount: 0,
       viewerRole: 'owner',
     });
 
@@ -1111,7 +1341,8 @@ describe('CircleDetailScreen reference redesign', () => {
     expect(output).not.toContain('Circle Tools');
     expect(output).toContain('Circle members');
     expect(output).toContain('Invite Members');
-    expect(output).toContain('0 of 0 members tapped in today');
+    expect(output).toContain('0/0 members met goal this week');
+    expect(output).toContain('No Tap Ins yet today');
     expect(output).not.toContain('Leaderboard');
     expect(output).not.toContain('Goals');
     expect(output).not.toContain('Review');
@@ -1262,7 +1493,7 @@ describe('CircleDetailScreen reference redesign', () => {
     expect(StyleSheet.flatten(nudgeButton?.props.style)).toEqual(
       expect.objectContaining({minHeight: 44}),
     );
-    expect(output.indexOf('Group progress')).toBeLessThan(
+    expect(output.indexOf('Today')).toBeLessThan(
       output.indexOf('Circle members'),
     );
     expect(output.indexOf('Circle members')).toBeLessThan(
@@ -1373,10 +1604,10 @@ describe('CircleDetailScreen reference redesign', () => {
     const output = outputOf(tree);
     const heading = tree.root
       .findAllByType(Text)
-      .find(node => textContent(node) === 'Group progress');
+      .find(node => textContent(node) === 'Today');
     const progressLabel = tree.root
       .findAllByType(Text)
-      .find(node => textContent(node) === '1 of 4 members tapped in today');
+      .find(node => textContent(node) === '2/4 members met goal today');
     const streakCaption = tree.root
       .findAllByType(Text)
       .find(node => textContent(node) === 'Group streak');
@@ -1391,7 +1622,7 @@ describe('CircleDetailScreen reference redesign', () => {
         .style,
     );
 
-    expect(output).toContain('Group progress');
+    expect(output).toContain('Today');
     expect(heading?.props.accessibilityRole).toBe('header');
     expect(StyleSheet.flatten(heading?.props.style)).toEqual(
       expect.objectContaining({
@@ -1424,14 +1655,19 @@ describe('CircleDetailScreen reference redesign', () => {
     expect(progressTrackStyle).toEqual(
       expect.objectContaining({backgroundColor: '#E9E9ED', height: 5}),
     );
-    expect(output).toContain('1 of 4 members tapped in today');
+    expect(output).toContain('2/4 members met goal today');
+    expect(
+      textContent(
+        tree.root.findByProps({testID: 'circle-stats-progress-label'}),
+      ),
+    ).toBe('2/4 members met goal today');
     expect(
       tree.root.findAllByProps({testID: 'circle-stats-progress-value'}),
     ).toHaveLength(0);
     expect(progressFillStyle).toEqual(
       expect.objectContaining({
         height: 5,
-        width: '60%',
+        width: '50%',
       }),
     );
     expect(output).toContain('3 days');
@@ -1482,11 +1718,14 @@ describe('CircleDetailScreen reference redesign', () => {
     mockMemberDetail = detail({
       circleMode: 'personal',
       commitment: 'Move for 30 minutes',
+      cycleCoveredCount: 1,
+      cycleRequiredCount: 1,
       inviteUrl: undefined,
       maxSize: 1,
       memberCount: 1,
       members: [
         {
+          cycleGoalMet: true,
           id: 'user-1',
           initials: 'KM',
           name: 'Kelvin',
@@ -1506,20 +1745,18 @@ describe('CircleDetailScreen reference redesign', () => {
     expect(output).toContain('FITNESS');
     expect(output).not.toContain('PERSONAL COMMITMENT');
     expect(output).toContain('Personal');
-    expect(output).toContain('Personal progress');
+    expect(output).toContain('Today');
     expect(output).toContain('Current streak');
     expect(output).not.toContain('Group streak');
     expect(
       textContent(
-        tree.root.findByProps({testID: 'circle-stats-progress-value'}),
+        tree.root.findByProps({testID: 'circle-stats-progress-label'}),
       ),
-    ).toBe('60%');
-    expect(output.indexOf('Personal progress')).toBeLessThan(
-      output.indexOf('3 days'),
-    );
-    expect(output.lastIndexOf('Personal progress')).toBeLessThan(
-      output.indexOf('3 days'),
-    );
+    ).toBe('Goal met today');
+    expect(
+      tree.root.findAllByProps({testID: 'circle-stats-progress-value'}),
+    ).toHaveLength(0);
+    expect(output.indexOf('Today')).toBeLessThan(output.indexOf('3 days'));
     expect(output).not.toContain('Last 7 days');
     expect(output).not.toContain('Circle members');
     expect(output).not.toContain('Circle Feed');

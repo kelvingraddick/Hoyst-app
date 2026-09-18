@@ -112,6 +112,7 @@ function Fixture({route, navigation}: NativeStackScreenProps<Routes, 'Sheet'>) {
   ].map(([id, title, kind, label]) => ({
     circle: circle(id, title),
     kind: kind as PickerUtility['kind'],
+    progress: '1/1 member met goal today',
     label,
     status: 'Covered today',
     onPress: () => setNotice(`${label} preview only`),

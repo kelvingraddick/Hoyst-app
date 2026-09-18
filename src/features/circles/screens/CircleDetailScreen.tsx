@@ -22,6 +22,7 @@ import {
   Globe2,
   Lock,
   Settings2,
+  Target,
   Trash2,
   UserPlus,
   UsersRound,
@@ -82,6 +83,8 @@ import {
   buildPublicCircleDetail,
   subscribeToMemberCircleDetail,
 } from '../../home/services/home-data-service';
+import {getCircleCycleProgressPresentation} from '../../commitments/cycle-progress-presentation';
+import {getCommitmentGoalPresentation} from '../../commitments/commitment-goal-label';
 import {collections} from '../../../types/firestore';
 import type {
   CircleDetailModel,
@@ -530,6 +533,7 @@ function CircleDetailHero({
       : detail.commitmentCadence === 'weekly'
       ? 'Weekly pace'
       : 'Daily pace';
+  const goal = getCommitmentGoalPresentation(detail);
   const previewCopy =
     detail.matchCopy ?? 'Preview the circle before you jump in.';
 
@@ -580,9 +584,42 @@ function CircleDetailHero({
             </View>
           </View>
 
-          <HoystText style={styles.circleHeroCommitment} tone="muted">
-            {detail.commitment}
-          </HoystText>
+          <View style={styles.circleHeroDescriptionGroup}>
+            <HoystText style={styles.circleHeroCommitment} tone="muted">
+              {detail.commitment}
+            </HoystText>
+            {goal ? (
+              <View
+                style={styles.circleHeroGoalLine}
+                testID="circle-detail-goal">
+                <Target
+                  accessible={false}
+                  color={theme.textMuted}
+                  size={14}
+                  strokeWidth={2.2}
+                  style={styles.circleHeroGoalIcon}
+                />
+                <HoystText
+                  style={styles.circleHeroGoalCopy}
+                  tone="muted"
+                  variant="caption">
+                  {goal.label}
+                </HoystText>
+                <HoystText
+                  style={styles.circleHeroGoalCopy}
+                  tone="muted"
+                  variant="caption">
+                  {goal.label === 'Goal' ? ': ' : ' · '}
+                </HoystText>
+                <HoystText
+                  style={[styles.circleHeroGoalCopy, styles.circleHeroGoalText]}
+                  tone="muted"
+                  variant="caption">
+                  {goal.value}
+                </HoystText>
+              </View>
+            ) : null}
+          </View>
 
           <View style={styles.circleHeroMetaRow}>
             <HeroInlineMetaSegment>
@@ -732,14 +769,6 @@ function TapInReferenceAction({
   );
 }
 
-function clampProgressPercent(value: number) {
-  if (!Number.isFinite(value)) {
-    return 0;
-  }
-
-  return Math.max(0, Math.min(100, Math.round(value)));
-}
-
 function normalizeGroupStreakDays(value: unknown) {
   return typeof value === 'number' && Number.isFinite(value)
     ? Math.max(0, Math.round(value))
@@ -758,16 +787,13 @@ type CircleDetailWeekCell = {
 function CircleStatsSection({
   detail,
   progressColor,
-  progressPercent,
   weekCells,
 }: {
   detail: CircleDetailModel;
   progressColor: string;
-  progressPercent: number;
   weekCells: readonly CircleDetailWeekCell[];
 }) {
   const theme = useHoystTheme();
-  const normalizedProgressPercent = clampProgressPercent(progressPercent);
   const isPersonal = detail.circleMode === 'personal';
   const streakSource = isPersonal
     ? detail.streakDays ?? Number.parseInt(detail.streakLabel, 10)
@@ -779,12 +805,36 @@ function CircleStatsSection({
   const activeMembers = detail.members.filter(
     member => member.membershipStatus !== 'pending',
   );
-  const doneCount = activeMembers.filter(
-    member => member.state === 'done',
-  ).length;
-  const progressLabel = isPersonal
-    ? 'Personal progress'
-    : `${doneCount} of ${activeMembers.length} members tapped in today`;
+  const cadence = detail.commitmentCadence ?? 'weekly';
+  const sectionTitle =
+    cadence === 'daily'
+      ? 'Today'
+      : cadence === 'monthly'
+      ? 'This month'
+      : 'This week';
+  const cycleProgress = getCircleCycleProgressPresentation(detail);
+  const todayTapInCount =
+    detail.todayTapInCount ??
+    activeMembers.filter(member =>
+      member.todayStatus
+        ? member.todayStatus !== 'skip'
+        : member.state === 'done',
+    ).length;
+  const todaySkipCount =
+    detail.todaySkipCount ??
+    activeMembers.filter(member =>
+      member.todayStatus
+        ? member.todayStatus === 'skip'
+        : member.state === 'skipped',
+    ).length;
+  const todaySummary =
+    todayTapInCount === 0 && todaySkipCount === 0
+      ? 'No Tap Ins yet today'
+      : [
+          'Today',
+          ...(todayTapInCount > 0 ? [`${todayTapInCount} tapped in`] : []),
+          ...(todaySkipCount > 0 ? [`${todaySkipCount} skipped`] : []),
+        ].join(' · ');
   const progressTrackSurfaceStyle = {
     backgroundColor: theme.isDark ? '#303036' : '#E9E9ED',
   };
@@ -795,21 +845,14 @@ function CircleStatsSection({
         <View
           style={styles.statsProgressSummary}
           testID="circle-stats-progress">
-          <DSSectionHeading
-            title={isPersonal ? 'Personal progress' : 'Group progress'}
-          />
+          <DSSectionHeading title={sectionTitle} />
           <View style={styles.statsProgressLabelRow}>
-            <HoystText style={styles.statsProgressLabel} tone="muted">
-              {progressLabel}
+            <HoystText
+              style={styles.statsProgressLabel}
+              testID="circle-stats-progress-label"
+              tone="muted">
+              {cycleProgress.detailLabel}
             </HoystText>
-            {isPersonal ? (
-              <HoystText
-                style={{color: progressColor}}
-                testID="circle-stats-progress-value"
-                variant="caption">
-                {normalizedProgressPercent}%
-              </HoystText>
-            ) : null}
           </View>
         </View>
         <View
@@ -846,12 +889,21 @@ function CircleStatsSection({
             styles.statsProgressFill,
             {
               backgroundColor: progressColor,
-              width: `${Math.max(normalizedProgressPercent, 2)}%`,
+              width: `${cycleProgress.percent}%`,
             },
           ]}
           testID="circle-stats-progress-fill"
         />
       </View>
+      {cadence !== 'daily' ? (
+        <HoystText
+          style={styles.statsTodayLabel}
+          testID="circle-stats-today-summary"
+          tone="muted"
+          variant="caption">
+          {todaySummary}
+        </HoystText>
+      ) : null}
       <View style={styles.statsWeekHistory} testID="circle-detail-week-history">
         <CircleGroupWeekPath days={weekCells} />
       </View>
@@ -1026,8 +1078,9 @@ function CircleDetailScreenContent({
     () =>
       detail?.members.filter(
         member =>
-          member.state === 'pending' &&
           member.membershipStatus !== 'pending' &&
+          member.cycleGoalMet !== true &&
+          !member.todayStatus &&
           member.id !== user?.uid,
       ) ?? [],
     [detail?.members, user?.uid],
@@ -1196,9 +1249,32 @@ function CircleDetailScreenContent({
   const removeProgressCopy = canUpdateTodayQuantity
     ? quantityTapInRemoveCopy
     : 'This will undo Progress for this Cycle.';
-  const tapInSupportingText = canReviewTodayCheckIn
-    ? "Review or share today's Tap In"
-    : 'Log progress for this circle';
+  const viewerCycleRequiredCount = detail.viewerCycleRequiredCount ?? 1;
+  const viewerCycleCoveredCount = Math.min(
+    detail.viewerCycleCoveredCount ?? 0,
+    viewerCycleRequiredCount,
+  );
+  const viewerCycleGoalMet =
+    viewerCycleRequiredCount > 0 &&
+    viewerCycleCoveredCount >= viewerCycleRequiredCount;
+  const cyclePeriodCopy =
+    detail.commitmentCadence === 'monthly' ? 'this month' : 'this week';
+  const cycleGoalCopy =
+    detail.commitmentCadence === 'monthly' ? 'Monthly' : 'Weekly';
+  const tapInSupportingText =
+    detail.commitmentCadence === 'weekly' ||
+    detail.commitmentCadence === 'monthly'
+      ? viewerCycleGoalMet
+        ? detail.viewerHasTappedInToday
+          ? `${cycleGoalCopy} goal complete · ${viewerCycleCoveredCount} of ${viewerCycleRequiredCount}`
+          : `${cycleGoalCopy} goal complete · Optional extra`
+        : `${viewerCycleCoveredCount} of ${viewerCycleRequiredCount} ${cyclePeriodCopy} · ${Math.max(
+            viewerCycleRequiredCount - viewerCycleCoveredCount,
+            0,
+          )} left`
+      : canReviewTodayCheckIn
+      ? "Review or share today's Tap In"
+      : 'Log progress for this circle';
   const categoryProgressColor = getCircleCategoryForegroundColor(
     detail.category,
     theme,
@@ -1220,8 +1296,6 @@ function CircleDetailScreenContent({
   const categoryBackdropAccent = theme.isDark
     ? categoryVisual.accentLight
     : categoryVisual.accentColor;
-  const circleProgressPercent =
-    detail.progressPercent ?? detail.completionRate ?? 0;
   const weekCells =
     detail.groupProgressDays && detail.groupProgressDays.length > 0
       ? detail.groupProgressDays
@@ -1499,8 +1573,9 @@ function CircleDetailScreenContent({
             tone: 'review',
           }
         : isMemberCircle &&
-          selectedMember.state === 'pending' &&
           selectedMember.membershipStatus !== 'pending' &&
+          selectedMember.cycleGoalMet !== true &&
+          !selectedMember.todayStatus &&
           selectedMember.id !== user?.uid
         ? {
             accessibilityLabel: nudgingMemberIds.has(selectedMember.id)
@@ -1596,7 +1671,6 @@ function CircleDetailScreenContent({
           <CircleStatsSection
             detail={detail}
             progressColor={categoryProgressColor}
-            progressPercent={circleProgressPercent}
             weekCells={weekCells}
           />
 
@@ -1605,6 +1679,7 @@ function CircleDetailScreenContent({
               <CircleMemberStrip
                 action={selectedMemberAction}
                 belowStripAction={memberBelowStripAction}
+                commitmentCadence={detail.commitmentCadence}
                 inviteAction={
                   !isArchived && canInvite
                     ? {
@@ -1759,6 +1834,15 @@ const styles = StyleSheet.create({
     fontWeight: '400',
     lineHeight: 20,
   },
+  circleHeroDescriptionGroup: {gap: 4},
+  circleHeroGoalLine: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+  },
+  circleHeroGoalCopy: {fontWeight: '600'},
+  circleHeroGoalIcon: {marginRight: 3},
+  circleHeroGoalText: {flexShrink: 1},
   circleHeroIdentityCopy: {
     flex: 1,
     gap: 2,
@@ -1909,6 +1993,10 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     height: 5,
     overflow: 'hidden',
+  },
+  statsTodayLabel: {
+    fontSize: 12,
+    lineHeight: 17,
   },
   statsStreakPill: {
     alignItems: 'flex-start',

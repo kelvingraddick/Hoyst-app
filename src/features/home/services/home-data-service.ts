@@ -582,6 +582,15 @@ function mapMemberStatus(
   }
 
   const avatarUrl = getMemberAvatarUrl(memberData);
+  const rawTodayStatus = todayCheckInStatuses.get(uid);
+  const todayStatus =
+    rawTodayStatus && rawTodayStatus !== 'rest' ? rawTodayStatus : undefined;
+  const cycleCoveredCount = Math.min(
+    status === 'active' ? memberCoveredCounts.get(uid) ?? 0 : 0,
+    requiredTapIns,
+  );
+  const cycleGoalMet =
+    status === 'active' && cycleCoveredCount >= requiredTapIns;
 
   return {
     ...(avatarUrl ? {avatarUrl} : {}),
@@ -589,6 +598,10 @@ function mapMemberStatus(
     initials: getInitials(name),
     membershipStatus: status,
     name,
+    ...(todayStatus ? {todayStatus} : {}),
+    cycleCoveredCount,
+    cycleRequiredCount: requiredTapIns,
+    cycleGoalMet,
     state: getMemberState(
       memberData,
       memberCoveredCounts,
@@ -1407,7 +1420,7 @@ function getNudgeTargetCount({
       return total;
     }
 
-    if (isCoveredCheckInStatus(todayCheckInStatuses.get(uid))) {
+    if (normalizeCheckInStatus(todayCheckInStatuses.get(uid))) {
       return total;
     }
 
@@ -1514,13 +1527,13 @@ export function mapHomeCircleFromData({
     circleData.memberCount,
     Math.max(memberRecords.length, visibleMembers.length),
   );
-  const fallbackProgressBase =
-    Math.max(activeMemberCount, isPending ? 0 : memberCount) * requiredTapIns;
+  const cycleRequiredCount = activeMemberCount * requiredTapIns;
   const fallbackPeriodCoveredCount = getPeriodCoveredTotal(
     memberRecords,
     memberCoveredCounts,
     requiredTapIns,
   );
+  const cycleCoveredCount = fallbackPeriodCoveredCount;
   const canonicalExpectedCount = asNumber(
     periodOpportunityData?.expectedOpportunityCount,
     -1,
@@ -1530,11 +1543,9 @@ export function mapHomeCircleFromData({
     -1,
   );
   const progressBase =
-    canonicalExpectedCount >= 0 ? canonicalExpectedCount : fallbackProgressBase;
+    canonicalExpectedCount >= 0 ? canonicalExpectedCount : cycleRequiredCount;
   const periodCoveredCount =
-    canonicalCoveredCount >= 0
-      ? canonicalCoveredCount
-      : fallbackPeriodCoveredCount;
+    canonicalCoveredCount >= 0 ? canonicalCoveredCount : cycleCoveredCount;
   const progressPercent =
     progressBase > 0
       ? Math.min(100, Math.round((periodCoveredCount / progressBase) * 100))
@@ -1554,6 +1565,17 @@ export function mapHomeCircleFromData({
       ? viewerTodayCheckIn
       : undefined;
   const viewerCoveredCount = uid ? memberCoveredCounts.get(uid) ?? 0 : 0;
+  const cappedViewerCoveredCount = Math.min(viewerCoveredCount, requiredTapIns);
+  const todayTapInCount = visibleMembers.filter(
+    member =>
+      member.membershipStatus === 'active' &&
+      Boolean(member.todayStatus) &&
+      member.todayStatus !== 'skip',
+  ).length;
+  const todaySkipCount = visibleMembers.filter(
+    member =>
+      member.membershipStatus === 'active' && member.todayStatus === 'skip',
+  ).length;
   const viewerHasTappedInToday = Boolean(
     visibleViewerTodayCheckIn ?? viewerTodayStatus,
   );
@@ -1641,6 +1663,10 @@ export function mapHomeCircleFromData({
       asString(circleData.timezone, 'UTC'),
     ),
     periodTapInCount: periodCoveredCount,
+    cycleCoveredCount,
+    cycleRequiredCount,
+    todayTapInCount,
+    todaySkipCount,
     privacy: normalizePrivacy(circleData.privacy),
     ...(quantityLabel ? {quantityLabel} : {}),
     completionLabel: isPending ? 'Pending approval' : progressLabel,
@@ -1677,6 +1703,8 @@ export function mapHomeCircleFromData({
       ? {viewerRemainingAmount}
       : {}),
     viewerRemainingTapIns,
+    viewerCycleCoveredCount: cappedViewerCoveredCount,
+    viewerCycleRequiredCount: requiredTapIns,
     viewerRole: normalizeMemberRole(membershipData.role),
     ...(visibleViewerTodayCheckIn
       ? {viewerTodayCheckIn: visibleViewerTodayCheckIn}
@@ -2035,7 +2063,7 @@ function clearMemberProfileListeners(state: CircleSubscriptionState) {
   state.memberProfiles.clear();
 }
 
-function getCoveredStatusesFromSnapshot(
+function getCheckInStatusesFromSnapshot(
   snapshot: FirebaseFirestoreTypes.QuerySnapshot,
 ) {
   return new Map(
@@ -2044,14 +2072,7 @@ function getCoveredStatusesFromSnapshot(
         const data = doc.data();
         const uidValue = asString(doc.data().uid, doc.id);
         const status = normalizeCheckInStatus(data.status) ?? 'done';
-        const checkIn = {
-          coverageStatus: normalizeCoverageStatus(data.coverageStatus),
-          status,
-        };
-
-        return uidValue && isCoveredCheckInData(checkIn)
-          ? ([uidValue, status] as const)
-          : undefined;
+        return uidValue ? ([uidValue, status] as const) : undefined;
       })
       .filter((entry): entry is readonly [string, CheckInStatus] =>
         Boolean(entry),
@@ -2176,7 +2197,7 @@ function syncPeriodCheckInListeners({
         .doc(dateKey)
         .collection('checkIns')
         .onSnapshot(snapshot => {
-          const dayStatuses = getCoveredStatusesFromSnapshot(snapshot);
+          const dayStatuses = getCheckInStatusesFromSnapshot(snapshot);
 
           state.periodCheckInStatuses.set(dateKey, dayStatuses);
           state.periodCheckInLoadedDateKeys.add(dateKey);
@@ -2290,7 +2311,7 @@ function syncRecentGroupCheckInListeners({
 
           state.recentGroupCheckInStatuses.set(
             dateKey,
-            getCoveredStatusesFromSnapshot(snapshot),
+            getCheckInStatusesFromSnapshot(snapshot),
           );
           if (quantityMarker) {
             quantityMarkers.set(dateKey, quantityMarker);
@@ -2865,7 +2886,6 @@ export function buildCircleDetailFromHomeCircle(
     day: index + 1,
     state: index === 6 ? 'today' : 'future',
   })) satisfies CircleProgressDay[];
-
   return {
     ...circle,
     activity: [],
@@ -2873,6 +2893,7 @@ export function buildCircleDetailFromHomeCircle(
     commitmentLabel: `Commitment: ${circle.commitment}`,
     ...(groupProgressDays ? {groupProgressDays} : {}),
     memberCount: circle.memberCount,
+    members: circle.members,
     monthProgress,
     maxSize: circle.maxSize,
   };

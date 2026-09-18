@@ -1033,6 +1033,36 @@ describe('TapInComposerScreen', () => {
     });
   });
 
+  it.each([
+    ['weekly', 3, 'Weekly goal met'],
+    ['monthly', 4, 'Monthly goal met'],
+  ] as const)(
+    'shows %s goal completion in the composer',
+    async (pace, required, copy) => {
+      mockDetail = {
+        ...baseMockDetail,
+        commitmentCadence: pace,
+        commitmentFrequency:
+          pace === 'monthly'
+            ? {opportunitiesPerPeriod: required, tapInsPerWeek: 1}
+            : {tapInsPerWeek: required},
+        viewerCycleCoveredCount: required,
+        viewerCycleRequiredCount: required,
+        viewerHasCheckedIn: true,
+        viewerHasTappedInToday: false,
+        viewerRemainingTapIns: 0,
+        viewerTodayStatus: undefined,
+      };
+      let tree: renderer.ReactTestRenderer | undefined;
+
+      await act(async () => {
+        tree = renderComposerScreen();
+      });
+
+      expect(JSON.stringify(tree!.toJSON())).toContain(copy);
+    },
+  );
+
   it('renders the saved Tap In photo and note in the review state', async () => {
     mockDetail = {
       ...baseMockDetail,

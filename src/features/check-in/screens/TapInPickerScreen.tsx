@@ -16,6 +16,7 @@ import {
   type HomeData,
 } from '../../home/services/home-data-service';
 import {nudgeCircleMembers} from '../../circles/services/circle-service';
+import {getCircleCycleProgressPresentation} from '../../commitments/cycle-progress-presentation';
 import {
   TapInPickerPresentation,
   type PickerUtility,
@@ -40,6 +41,26 @@ function getRemainingTapInsLabel(
   return count === 1
     ? `1 Tap In left ${periodCopy}`
     : `${count} Tap Ins left ${periodCopy}`;
+}
+
+function getGoalMetLabel(circle: CircleManagementCard) {
+  const required = circle.viewerCycleRequiredCount ?? 0;
+  const covered = circle.viewerCycleCoveredCount ?? 0;
+  if (
+    circle.commitmentCadence === 'monthly' &&
+    required > 0 &&
+    covered >= required
+  ) {
+    return 'Monthly goal met';
+  }
+  if (
+    circle.commitmentCadence === 'weekly' &&
+    required > 0 &&
+    covered >= required
+  ) {
+    return 'Weekly goal met';
+  }
+  return undefined;
 }
 
 function getPriorityDeadlineLabel(
@@ -128,10 +149,14 @@ function TapInPickerController({navigation}: Props): React.JSX.Element {
       circle => circle.viewerMembershipStatus !== 'pending',
     ),
   );
-  const dueCircles = sortHomeCircles(activeCircles.filter(canTapInToday));
+  const dueCircles = sortHomeCircles(
+    activeCircles.filter(
+      circle => canTapInToday(circle) && !getGoalMetLabel(circle),
+    ),
+  );
   const priorityCircle = dueCircles[0];
   const secondaryCircles = sortHomeCircles(
-    activeCircles.filter(circle => !canTapInToday(circle)),
+    activeCircles.filter(circle => !dueCircles.includes(circle)),
   );
   const coveredCount = activeCircles.filter(
     circle => circle.viewerHasTappedInToday,
@@ -230,6 +255,7 @@ function TapInPickerController({navigation}: Props): React.JSX.Element {
     const canShare = !canNudge && Boolean(circle.inviteUrl);
     const busy = nudgingCircleIds.has(circle.id);
     const sent = nudgedCircleIds.has(circle.id);
+    const goalMetLabel = getGoalMetLabel(circle);
     return {
       circle,
       kind: canNudge ? 'nudge' : canShare ? 'share' : 'view',
@@ -242,11 +268,14 @@ function TapInPickerController({navigation}: Props): React.JSX.Element {
         : canShare
         ? 'Share'
         : 'View',
-      status: canNudge
+      status: goalMetLabel
+        ? goalMetLabel
+        : canNudge
         ? getRemainingTapInsLabel(circle, circle.remainingCheckIns)
         : circle.viewerTodayStatus === 'skip'
         ? 'Grace skip used today'
         : 'Covered today',
+      progress: getCircleCycleProgressPresentation(circle).listLabel,
       busy,
       disabled: canNudge && sent,
       onPress: () =>

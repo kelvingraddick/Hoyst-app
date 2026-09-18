@@ -27,6 +27,8 @@ function circle(
     commitmentCadence: 'daily',
     commitmentFrequency: {tapInsPerWeek: 7},
     completionRate: 0,
+    cycleCoveredCount: 0,
+    cycleRequiredCount: 1,
     id: 'circle-1',
     inviteUrl: undefined,
     joinMode: 'invite_only',
@@ -99,6 +101,14 @@ describe('Home commitment actions', () => {
       unitLabel: 'cups',
       expected: 'Allowed range: 2 to 6 cups',
     },
+    {
+      commitmentCadence: 'weekly' as const,
+      commitmentFrequency: {tapInsPerWeek: 4},
+      commitmentType: 'build' as const,
+      targetValue: 20,
+      unitLabel: 'minutes',
+      expected: 'Goal: 4 Tap Ins per week · 20 minutes per Tap In',
+    },
   ])('shows the goal beneath the focused description: %p', data => {
     const {tree} = renderCards([circle(data)]);
     const goal = tree.root.findByProps({
@@ -115,6 +125,11 @@ describe('Home commitment actions', () => {
         : data.expected.replace(': ', ' · '),
     );
     expect(
+      goal
+        .findAllByType(require('../src/design/components/HoystText').HoystText)
+        .map(node => StyleSheet.flatten(node.props.style).fontWeight),
+    ).toEqual(['600', '600', '600']);
+    expect(
       goal.parent!.findAllByType(
         require('../src/design/components/HoystText').HoystText,
       )[0].props.children,
@@ -127,6 +142,27 @@ describe('Home commitment actions', () => {
         tree.root.findAllByProps({testID: 'home-commitment-goal-circle-1'}),
       ).toHaveLength(0);
     }
+  });
+  it('shows a cadence goal for a simple monthly commitment', () => {
+    const {tree} = renderCards([
+      circle({
+        commitmentCadence: 'monthly',
+        commitmentFrequency: {
+          opportunitiesPerPeriod: 4,
+          tapInsPerWeek: 4,
+        },
+        commitmentType: 'avoid',
+      }),
+    ]);
+    const goal = tree.root.findByProps({
+      testID: 'home-commitment-goal-circle-1',
+    });
+    expect(
+      goal
+        .findAllByType(require('../src/design/components/HoystText').HoystText)
+        .map(node => node.props.children)
+        .join(''),
+    ).toBe('Goal: 4 Tap Ins per month');
   });
   it('offers direct actions on expanded and compact rows without recording completion', () => {
     const first = circle();
@@ -142,6 +178,50 @@ describe('Home commitment actions', () => {
     expect(
       tree.root.findAllByProps({testID: 'home-commitment-done-second'}),
     ).toHaveLength(0);
+  });
+  it('shows cycle progress on the expanded card without changing collapsed cards', () => {
+    const {tree} = renderCards([
+      circle({
+        commitmentCadence: 'weekly',
+        cycleCoveredCount: 5,
+        cycleRequiredCount: 6,
+        id: 'weekly-group',
+        members: [
+          {
+            cycleGoalMet: true,
+            id: 'member-1',
+            initials: 'M1',
+            name: 'Member One',
+            state: 'done',
+          },
+          {
+            cycleGoalMet: false,
+            id: 'member-2',
+            initials: 'M2',
+            name: 'Member Two',
+            state: 'pending',
+          },
+        ],
+        title: 'Weekly Group',
+      }),
+      circle({
+        circleMode: 'personal',
+        cycleCoveredCount: 0,
+        cycleRequiredCount: 1,
+        id: 'daily-personal',
+        title: 'Daily Personal',
+      }),
+    ]);
+    const output = JSON.stringify(tree.toJSON());
+
+    expect(output).toContain('1/2 members met goal this week');
+    expect(output).not.toContain('Goal not met today');
+    expect(output).toContain('Needs your Tap In');
+    expect(
+      tree.root.findByProps({
+        testID: 'home-commitment-collapsed-daily-personal',
+      }).props.accessibilityLabel,
+    ).toBe('Expand Daily Personal. Needs your Tap In');
   });
   it('keeps focus and detail navigation separate from submitting an action', () => {
     const second = circle({id: 'second'});

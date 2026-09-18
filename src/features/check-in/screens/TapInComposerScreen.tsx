@@ -234,10 +234,24 @@ function TapInComposerController({
       ? 'Log Progress'
       : 'Tap In';
   const remainingPeriodCopy =
-    detail.commitmentCadence === 'daily' ? 'today' : 'this week';
+    detail.commitmentCadence === 'daily'
+      ? 'today'
+      : detail.commitmentCadence === 'monthly'
+      ? 'this month'
+      : 'this week';
+  const viewerCycleRequiredCount = detail.viewerCycleRequiredCount ?? 0;
+  const viewerCycleCoveredCount = detail.viewerCycleCoveredCount ?? 0;
+  const cycleGoalMet =
+    detail.commitmentCadence !== 'daily' &&
+    viewerCycleRequiredCount > 0 &&
+    viewerCycleCoveredCount >= viewerCycleRequiredCount;
   const statusLabel =
     detail.state === 'risk'
       ? 'Streak at risk'
+      : cycleGoalMet
+      ? detail.commitmentCadence === 'monthly'
+        ? 'Monthly goal met'
+        : 'Weekly goal met'
       : detail.viewerTodayStatus === 'skip'
       ? 'Skipped today'
       : detail.viewerHasTappedInToday

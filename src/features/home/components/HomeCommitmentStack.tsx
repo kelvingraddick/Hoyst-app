@@ -27,6 +27,7 @@ import {LayeredAvatar} from '../../../design/components/LayeredAvatar';
 import {homeTypography} from '../../../design/tokens/home';
 import {getHomeDailyAction} from '../services/home-daily-actions';
 import {getCommitmentGoalPresentation} from '../../commitments/commitment-goal-label';
+import {getCircleCycleProgressPresentation} from '../../commitments/cycle-progress-presentation';
 
 export const HOME_ROW_ICON_SIZE = 32;
 export const HOME_ROW_GAP = 12;
@@ -143,7 +144,7 @@ function Action({
 }
 
 function Members({card}: {card: CircleManagementCard}) {
-  const done = card.members.filter(member => member.state === 'done').length;
+  const progress = getCircleCycleProgressPresentation(card);
   return (
     <View style={styles.members}>
       {card.circleMode !== 'personal' && (
@@ -163,12 +164,7 @@ function Members({card}: {card: CircleManagementCard}) {
         </View>
       )}
       <HoystText style={styles.meta} tone="muted">
-        {card.circleMode === 'personal'
-          ? 'Personal commitment'
-          : `${done}/${Math.max(
-              card.memberCount,
-              card.members.length,
-            )} members tapped in`}
+        {progress.listLabel}
       </HoystText>
     </View>
   );
@@ -261,14 +257,18 @@ export function HomeCommitmentStack({
                         strokeWidth={2.2}
                         style={styles.goalIcon}
                       />
-                      <HoystText style={styles.meta} tone="muted">
+                      <HoystText
+                        style={[styles.meta, styles.goalText]}
+                        tone="muted">
                         {goal.label}
                       </HoystText>
-                      <HoystText style={styles.meta} tone="muted">
+                      <HoystText
+                        style={[styles.meta, styles.goalText]}
+                        tone="muted">
                         {goal.label === 'Goal' ? ': ' : ' · '}
                       </HoystText>
                       <HoystText
-                        style={[styles.meta, styles.goalValue]}
+                        style={[styles.meta, styles.goalText, styles.goalValue]}
                         tone="muted">
                         {goal.value}
                       </HoystText>
@@ -380,6 +380,7 @@ const styles = StyleSheet.create({
   descriptionGroup: {gap: 4},
   goalLine: {alignItems: 'center', flexDirection: 'row', flexWrap: 'wrap'},
   goalIcon: {marginRight: 3},
+  goalText: {fontWeight: '600'},
   // Keep the Home exception optically consistent with the selector at 12 points.
   goalValue: {
     fontStyle: 'italic',

@@ -39,10 +39,12 @@ import {
   getCoverageStatusForValue,
   getQuantityConfig,
 } from '../../commitments/commitment-logic';
+import {getCircleCycleProgressPresentation} from '../../commitments/cycle-progress-presentation';
 
 export type PickerUtility = {
   circle: CircleManagementCard;
   label: string;
+  progress: string;
   status: string;
   kind: 'nudge' | 'share' | 'view';
   busy?: boolean;
@@ -108,6 +110,7 @@ function Commitment({
   const update = circle.viewerCanUpdateTapIn && circle.viewerHasTappedInToday;
   const label = update ? 'Update Tap In' : 'Tap In';
   const stackAction = fontScale >= 1.5 || width < 375;
+  const cycleProgress = getCircleCycleProgressPresentation(circle);
   const status =
     savedQuantityStatus(circle) ??
     (circle.viewerHasTappedInToday
@@ -162,13 +165,16 @@ function Commitment({
               strokeWidth={2.2}
               style={styles.goalIcon}
             />
-            <DSText variant="secondary" tone="muted">
+            <DSText variant="secondary" tone="muted" style={styles.goalText}>
               {goal.label}
             </DSText>
-            <DSText variant="secondary" tone="muted">
+            <DSText variant="secondary" tone="muted" style={styles.goalText}>
               {goal.label === 'Goal' ? ': ' : ' · '}
             </DSText>
-            <DSText variant="secondary" tone="muted" style={styles.goalValue}>
+            <DSText
+              variant="secondary"
+              tone="muted"
+              style={[styles.goalText, styles.goalValue]}>
               {goal.value}
             </DSText>
           </View>
@@ -197,6 +203,9 @@ function Commitment({
               ) : null}
             </DSText>
           </View>
+          <DSText variant="secondary" tone="muted">
+            {cycleProgress.listLabel}
+          </DSText>
           {circle.circleMode === 'personal' ? (
             <DSText variant="secondary" tone="muted">
               Personal commitment
@@ -351,7 +360,7 @@ export function TapInPickerPresentation({
                   <DSListRow
                     key={utility.circle.id}
                     title={utility.circle.title}
-                    subtitle={utility.status}
+                    subtitle={`${utility.status}\n${utility.progress}`}
                     leading={<Icon color={theme.muted} size={22} />}
                     action={
                       <DSButton
@@ -404,6 +413,7 @@ const styles = StyleSheet.create({
   description: {gap: 4},
   goalLine: {alignItems: 'center', flexDirection: 'row', flexWrap: 'wrap'},
   goalIcon: {marginRight: 3},
+  goalText: {fontWeight: '600'},
   // The native italic face is too subtle at 12 points on the selector.
   goalValue: {
     fontStyle: 'italic',

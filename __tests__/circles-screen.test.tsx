@@ -169,6 +169,16 @@ function makeCircle(
   };
 }
 
+function makeMember(id: string, cycleGoalMet: boolean) {
+  return {
+    cycleGoalMet,
+    id,
+    initials: id.slice(0, 2).toUpperCase(),
+    name: id,
+    state: cycleGoalMet ? ('done' as const) : ('pending' as const),
+  };
+}
+
 function homeData(circles: CircleManagementCard[]): HomeData {
   return {
     circles,
@@ -266,11 +276,15 @@ describe('CirclesScreen render paths', () => {
       makeCircle({
         circleMode: 'personal',
         commitment: 'Read every day',
+        commitmentCadence: 'weekly',
+        cycleCoveredCount: 2,
+        cycleRequiredCount: 3,
         id: 'personal-1',
         inviteUrl: undefined,
         joinMode: 'invite_only',
         maxSize: 1,
         memberCount: 1,
+        members: [makeMember('reader', false)],
         privacy: 'private',
         title: 'Read every day',
       }),
@@ -279,7 +293,88 @@ describe('CirclesScreen render paths', () => {
     const output = renderScreen();
 
     expect(output).toContain('Read every day');
-    expect(output).toContain('Personal · Just you');
+    expect(output).toContain('Goal not met this week');
+  });
+
+  it('shows cadence progress for daily and monthly Circle cards', () => {
+    mockHomeData = homeData([
+      makeCircle({
+        cycleCoveredCount: 2,
+        cycleRequiredCount: 4,
+        id: 'daily-group',
+        members: [
+          makeMember('daily-1', true),
+          makeMember('daily-2', true),
+          makeMember('daily-3', false),
+          makeMember('daily-4', false),
+        ],
+        title: 'Daily Group',
+      }),
+      makeCircle({
+        commitmentCadence: 'monthly',
+        cycleCoveredCount: 7,
+        cycleRequiredCount: 10,
+        id: 'monthly-group',
+        members: [
+          makeMember('monthly-1', true),
+          makeMember('monthly-2', true),
+          makeMember('monthly-3', false),
+        ],
+        title: 'Monthly Group',
+      }),
+      makeCircle({
+        circleMode: 'personal',
+        commitmentCadence: 'monthly',
+        cycleCoveredCount: 3,
+        cycleRequiredCount: 4,
+        id: 'monthly-personal',
+        members: [makeMember('monthly-personal', false)],
+        title: 'Monthly Personal',
+      }),
+    ]);
+
+    const output = renderScreen();
+
+    expect(output).toContain('2/4 members met goal today');
+    expect(output).toContain('2/3 members met goal this month');
+    expect(output).toContain('Goal not met this month');
+  });
+
+  it('shows the cadence and per-Tap-In goal beneath a Circle card description', () => {
+    mockHomeData = homeData([
+      makeCircle({
+        commitmentCadence: 'weekly',
+        commitmentFrequency: {tapInsPerWeek: 4},
+        commitmentType: 'build',
+        targetValue: 20,
+        unitLabel: 'minutes',
+      }),
+    ]);
+
+    const {screen} = renderScreenWithNavigation();
+    const goal = screen.root.findByProps({
+      testID: 'commitment-preview-goal-Morning Movers',
+    });
+    const goalText = goal
+      .findAllByType(Text)
+      .map(node => textContent(node.props.children))
+      .join('');
+
+    expect(goal).toBeTruthy();
+    expect(goalText).toBe('Goal: 4 Tap Ins per week · 20 minutes per Tap In');
+    expect(
+      textContent(goal.parent!.findAllByType(Text)[0].props.children),
+    ).toBe('Move for 30 minutes');
+    const goalValue = goal.findAllByType(Text).at(-1)!;
+    expect(goalValue.props.numberOfLines).toBeUndefined();
+    expect(StyleSheet.flatten(goalValue.props.style)).toEqual(
+      expect.objectContaining({flexShrink: 1, fontWeight: '600'}),
+    );
+    expect(
+      goal
+        .findAllByType(Text)
+        .map(node => StyleSheet.flatten(node.props.style).fontWeight),
+    ).toEqual(['600', '600', '600']);
   });
 
   it('includes personal commitments in status counts and filters', () => {
@@ -438,16 +533,24 @@ describe('CirclesScreen render paths', () => {
     expect(subscribeToHomeData).toHaveBeenCalledTimes(2);
   });
 
-  it('opens Tap In for a completed weekly commitment without today coverage', () => {
+  it('shows a completed weekly goal without treating an optional extra as due', () => {
     mockHomeData = homeData([
       makeCircle({
         commitmentCadence: 'weekly',
         commitmentFrequency: {tapInsPerWeek: 2},
+        cycleCoveredCount: 4,
+        cycleRequiredCount: 6,
         id: 'weekly-complete-new-day',
+        members: [
+          makeMember('weekly-complete', true),
+          makeMember('weekly-incomplete', false),
+        ],
         progressPercent: 100,
         remainingCheckIns: 0,
         state: 'done',
         title: 'Weekly Complete New Day',
+        viewerCycleCoveredCount: 2,
+        viewerCycleRequiredCount: 2,
         viewerHasCheckedIn: true,
         viewerHasTappedInToday: false,
         viewerRemainingTapIns: 0,
@@ -456,17 +559,25 @@ describe('CirclesScreen render paths', () => {
     ]);
 
     const {rootNavigate, screen} = renderScreenWithNavigation();
-    const tapInButton = screen.root.findByProps({
-      accessibilityLabel: 'Tap In for Weekly Complete New Day',
-    });
+    expect(renderedText(screen)).toContain('Weekly goal met');
+    expect(renderedText(screen)).toContain('1/2 members met goal this week');
+    expect(
+      screen.root.findAllByProps({
+        accessibilityLabel: 'Tap In for Weekly Complete New Day',
+      }),
+    ).toHaveLength(0);
+    const detailsButton = screen.root
+      .findAllByProps({
+        accessibilityLabel: 'View details for Weekly Complete New Day',
+      })
+      .find(node => typeof node.props.onPress === 'function')!;
 
     act(() => {
-      tapInButton.props.onPress();
+      detailsButton.props.onPress();
     });
 
-    expect(rootNavigate).toHaveBeenCalledWith('TapInComposer', {
+    expect(rootNavigate).toHaveBeenCalledWith('CircleDetail', {
       circleId: 'weekly-complete-new-day',
-      source: 'tap_in',
     });
   });
 
@@ -483,9 +594,11 @@ describe('CirclesScreen render paths', () => {
     const {rootNavigate, screen} = renderScreenWithNavigation();
 
     act(() =>
-      screen.root.findByProps({
-        accessibilityLabel: 'Update Tap In for Partial Circle',
-      }).props.onPress(),
+      screen.root
+        .findByProps({
+          accessibilityLabel: 'Update Tap In for Partial Circle',
+        })
+        .props.onPress(),
     );
 
     expect(rootNavigate).toHaveBeenCalledWith('TapInComposer', {
@@ -513,7 +626,8 @@ describe('CirclesScreen render paths', () => {
     const {screen} = renderScreenWithNavigation();
 
     act(() =>
-      screen.root.findByProps({accessibilityLabel: 'Nudge for Nudge Circle'})
+      screen.root
+        .findByProps({accessibilityLabel: 'Nudge for Nudge Circle'})
         .props.onPress(),
     );
 
@@ -543,7 +657,8 @@ describe('CirclesScreen render paths', () => {
     const {rootNavigate, screen} = renderScreenWithNavigation();
 
     await act(async () =>
-      screen.root.findByProps({accessibilityLabel: 'Share for Share Circle'})
+      screen.root
+        .findByProps({accessibilityLabel: 'Share for Share Circle'})
         .props.onPress(),
     );
 
@@ -686,9 +801,11 @@ describe('CirclesScreen render paths', () => {
     const {rootNavigate, screen} = renderScreenWithNavigation();
 
     act(() =>
-      screen.root.findAllByProps({
-        accessibilityLabel: 'View details for Morning Movers',
-      })[0].props.onPress(),
+      screen.root
+        .findAllByProps({
+          accessibilityLabel: 'View details for Morning Movers',
+        })[0]
+        .props.onPress(),
     );
 
     expect(rootNavigate).toHaveBeenCalledWith('CircleDetail', {
@@ -803,8 +920,9 @@ describe('CirclesScreen render paths', () => {
 
     act(() => sortControl.props.onPress());
     act(() =>
-      screen.root.findAllByProps({accessibilityLabel: 'Sort by Name'})[0].props
-        .onPress(),
+      screen.root
+        .findAllByProps({accessibilityLabel: 'Sort by Name'})[0]
+        .props.onPress(),
     );
     let output = renderedText(screen);
     expect(output.indexOf('Alpha')).toBeLessThan(output.indexOf('Zeta'));
@@ -815,9 +933,11 @@ describe('CirclesScreen render paths', () => {
         .props.onPress(),
     );
     act(() =>
-      screen.root.findAllByProps({
-        accessibilityLabel: 'Sort by Progress',
-      })[0].props.onPress(),
+      screen.root
+        .findAllByProps({
+          accessibilityLabel: 'Sort by Progress',
+        })[0]
+        .props.onPress(),
     );
     output = renderedText(screen);
     expect(output.indexOf('Zeta')).toBeLessThan(output.indexOf('Alpha'));
