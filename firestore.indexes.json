@@ -1,5 +1,128 @@
 {
-  "indexes": [],
+  "indexes": [
+    {
+      "collectionGroup": "publicCircleIndex",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "circleMode",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "lifecycleStatus",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "updatedAt",
+          "order": "DESCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "publicCircleIndex",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "circleMode",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "lifecycleStatus",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "searchTokens",
+          "arrayConfig": "CONTAINS"
+        },
+        {
+          "fieldPath": "updatedAt",
+          "order": "DESCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "publicCircleIndex",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "circleMode",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "lifecycleStatus",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "category",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "updatedAt",
+          "order": "DESCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "publicCircleIndex",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "circleMode",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "lifecycleStatus",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "category",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "searchTokens",
+          "arrayConfig": "CONTAINS"
+        },
+        {
+          "fieldPath": "updatedAt",
+          "order": "DESCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "publicCircleIndex",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "circleMode",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "lifecycleStatus",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "category",
+          "order": "ASCENDING"
+        }
+      ]
+    }
+  ],
   "fieldOverrides": [
     {
       "collectionGroup": "members",
@@ -55,6 +178,20 @@
       "collectionGroup": "membershipHistory",
       "fieldPath": "uid",
       "indexes": [
+        {
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION_GROUP"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "publicTapInCandidates",
+      "fieldPath": "uid",
+      "indexes": [
+        {
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION"
+        },
         {
           "order": "ASCENDING",
           "queryScope": "COLLECTION_GROUP"

@@ -1,3 +1,5 @@
+import {randomUUID} from 'node:crypto';
+import {activityEpoch, canPublishNewTapIn} from '../discovery/model';
 import {
   FieldPath,
   FieldValue,
@@ -846,10 +848,13 @@ async function submitTapInHandler(request: CallableRequest) {
   const now = FieldValue.serverTimestamp();
 
   const result = await db.runTransaction(async transaction => {
-    const [circleSnapshot, memberSnapshot] = await Promise.all([
-      transaction.get(circleRef),
-      transaction.get(memberRef),
-    ]);
+    const [circleSnapshot, memberSnapshot, discoveryConfig] = await Promise.all(
+      [
+        transaction.get(circleRef),
+        transaction.get(memberRef),
+        transaction.get(db.collection('serverConfig').doc('publicDiscovery')),
+      ],
+    );
 
     if (!circleSnapshot.exists) {
       throw new HttpsError('not-found', 'Circle not found.');
@@ -994,6 +999,24 @@ async function submitTapInHandler(request: CallableRequest) {
       updatedAt: now,
     };
 
+    // Eligibility is recorded at the successful transition, never by a historical backfill.
+    if (
+      canPublishNewTapIn({
+        circle,
+        before: existingCheckIn,
+        nextStatus,
+        activatedAt: discoveryConfig.data()?.activityActivatedAt,
+        now: Date.now(),
+      })
+    ) {
+      checkInPayload.publicTapIn = {
+        eventId: `${dateKey}_${uid}_${randomUUID()}`,
+        epoch: activityEpoch(circle!),
+        occurredAt: now,
+      };
+    } else if (nextStatus !== 'done') {
+      checkInPayload.publicTapIn = FieldValue.delete();
+    }
     if (!checkInSnapshot.exists) {
       checkInPayload.createdAt = now;
     }

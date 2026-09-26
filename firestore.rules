@@ -131,6 +131,10 @@ service cloud.firestore {
         allow write: if false;
       }
 
+      match /publicTapInCandidates/{eventId} {
+        allow read, write: if false;
+      }
+
       match /feedItems/{itemId} {
         allow read: if isActiveMember(circleId) && isGroupCircle(circleId);
         allow write: if false;

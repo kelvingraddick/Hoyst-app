@@ -52,3 +52,12 @@ export const healthcheck = onRequest((request, response) => {
     timestamp: new Date().toISOString(),
   });
 });
+
+export {
+  searchPublicCircles,
+  maintainPublicCircleSearch,
+  projectPublicTapIn,
+  refreshPublicActivityMembership,
+  refreshPublicActivityCircle,
+  refreshPublicActivityProfile,
+} from './discovery';

@@ -140,7 +140,7 @@ export const categoryOptions: SetupOption<string>[] = [
 
 export const privacyOptions: SetupOption<CirclePrivacyMode>[] = [
   {
-    description: 'Discoverable in Explore with your chosen join rule.',
+    description: 'Discoverable in Explore. New Tap Ins may show your member name, profile avatar, and timestamp publicly. Notes and photos stay in the circle.',
     icon: Globe2,
     id: 'public',
     label: 'Public',

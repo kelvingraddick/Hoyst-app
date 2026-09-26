@@ -1839,6 +1839,7 @@ export const updateCircle = onCall(async request => {
   const commitmentType = getCommitmentType(input);
   const quantityConfig = getQuantityConfig(input);
   const circleUpdate = {
+    ...(privacy !== circle?.privacy ? {publicActivityEpoch: now} : {}),
     category: input.category,
     circleMode,
     commitment: input.commitment,
@@ -1999,6 +2000,7 @@ export const archiveCircle = onCall(
         lastLifecycleTransition: 'archive',
         lifecycleRevision,
         lifecycleStatus: 'archived',
+        publicActivityEpoch: transitionAt,
         opportunitiesResumeAfterDateKey: FieldValue.delete(),
         unarchivedAt: FieldValue.delete(),
         unarchivedBy: FieldValue.delete(),

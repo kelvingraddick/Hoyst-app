@@ -1,10 +1,5 @@
 import React from 'react';
-import {
-  Image,
-  StyleSheet,
-  type ImageStyle,
-  type StyleProp,
-} from 'react-native';
+import {Image, StyleSheet, type ImageStyle, type StyleProp} from 'react-native';
 
 import {getBrandIcon, getBrandLogo, getBrandRing} from '../brand/usage';
 
@@ -22,10 +17,16 @@ export function BrandMark({
   style,
 }: BrandMarkProps): React.JSX.Element {
   const source =
-    kind === 'logo' ? getBrandLogo(isDark) : kind === 'ring' ? getBrandRing() : getBrandIcon(isDark);
+    kind === 'logo'
+      ? getBrandLogo(isDark)
+      : kind === 'ring'
+      ? getBrandRing()
+      : getBrandIcon(isDark);
 
   return (
     <Image
+      accessibilityIgnoresInvertColors
+      key={kind === 'ring' ? 'ring' : `${kind}-${isDark ? 'dark' : 'light'}`}
       resizeMode="contain"
       source={source}
       style={[kind === 'logo' ? styles.logo : undefined, style]}

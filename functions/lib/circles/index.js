@@ -1347,6 +1347,7 @@ exports.updateCircle = (0, https_1.onCall)(async (request) => {
     const commitmentType = (0, commitments_1.getCommitmentType)(input);
     const quantityConfig = (0, commitments_1.getQuantityConfig)(input);
     const circleUpdate = {
+        ...(privacy !== circle?.privacy ? { publicActivityEpoch: now } : {}),
         category: input.category,
         circleMode,
         commitment: input.commitment,
@@ -1467,6 +1468,7 @@ exports.archiveCircle = (0, https_1.onCall)({ secrets: [notifications_1.oneSigna
             lastLifecycleTransition: 'archive',
             lifecycleRevision,
             lifecycleStatus: 'archived',
+            publicActivityEpoch: transitionAt,
             opportunitiesResumeAfterDateKey: firestore_1.FieldValue.delete(),
             unarchivedAt: firestore_1.FieldValue.delete(),
             unarchivedBy: firestore_1.FieldValue.delete(),

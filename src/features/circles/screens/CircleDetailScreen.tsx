@@ -968,6 +968,9 @@ function CircleDetailScreenContent({
   const timezone = profile?.timezone ?? 'UTC';
   const canLoadMemberCircle =
     status === 'authenticatedReady' && Boolean(user?.uid);
+  const [memberCircleResolved, setMemberCircleResolved] = useState(
+    !canLoadMemberCircle,
+  );
   const detail = useMemo(() => {
     const baseDetail =
       memberCircle ??
@@ -1107,13 +1110,21 @@ function CircleDetailScreenContent({
   useEffect(() => {
     if (!canLoadMemberCircle || !user?.uid) {
       setMemberCircle(undefined);
+      setMemberCircleResolved(true);
       return undefined;
     }
 
+    setMemberCircleResolved(false);
     return subscribeToMemberCircleDetail({
       circleId: route.params.circleId,
-      onDetail: setMemberCircle,
-      onError: () => setMemberCircle(undefined),
+      onDetail: nextDetail => {
+        setMemberCircle(nextDetail);
+        setMemberCircleResolved(true);
+      },
+      onError: () => {
+        setMemberCircle(undefined);
+        setMemberCircleResolved(true);
+      },
       timezone,
       uid: user.uid,
     });
@@ -1166,6 +1177,9 @@ function CircleDetailScreenContent({
   useEffect(() => {
     if (
       detail &&
+      memberCircleResolved &&
+      !detail.viewerRole &&
+      detail.viewerMembershipStatus !== 'pending' &&
       route.params.resumeAction === 'join' &&
       !joinRequested &&
       !isJoining
@@ -1177,6 +1191,7 @@ function CircleDetailScreenContent({
     handleJoinCircle,
     isJoining,
     joinRequested,
+    memberCircleResolved,
     route.params.resumeAction,
   ]);
 
@@ -1752,6 +1767,11 @@ function CircleDetailScreenContent({
                     ? `${detail.maxSize - detail.memberCount} seats open today`
                     : 'The circle owner will review your request.'}
                 </HoystText>
+                {detail.privacy === 'public' ? (
+                  <HoystText tone="muted" variant="caption">
+                    New Tap Ins in this public circle may show your name, profile avatar, and timestamp in Explore. Notes and photos stay in the circle.
+                  </HoystText>
+                ) : null}
               </View>
             )
           ) : null}

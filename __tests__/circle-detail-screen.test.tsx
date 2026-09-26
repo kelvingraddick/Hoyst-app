@@ -163,10 +163,12 @@ jest.mock('../src/lib/firebase/firestore', () => ({
 jest.mock('../src/features/home/services/home-data-service', () => ({
   buildPublicCircleDetail: jest.fn(() => mockPublicDetail),
   subscribeToMemberCircleDetail: jest.fn(
-    ({onDetail}: {onDetail: (detail: CircleDetailModel) => void}) => {
-      if (mockMemberDetail) {
-        onDetail(mockMemberDetail);
-      }
+    ({
+      onDetail,
+    }: {
+      onDetail: (detail: CircleDetailModel | undefined) => void;
+    }) => {
+      onDetail(mockMemberDetail);
 
       return jest.fn();
     },
@@ -309,7 +311,7 @@ function detail(overrides: Partial<CircleDetailModel> = {}): CircleDetailModel {
   };
 }
 
-function renderScreen() {
+function renderScreen(resumeAction?: 'join') {
   const navigation = {
     canGoBack: jest.fn(() => false),
     goBack: jest.fn(),
@@ -326,7 +328,7 @@ function renderScreen() {
           {
             key: 'CircleDetail',
             name: 'CircleDetail',
-            params: {circleId: 'circle-1'},
+            params: {circleId: 'circle-1', resumeAction},
           } as never
         }
       />,
@@ -1597,6 +1599,17 @@ describe('CircleDetailScreen reference redesign', () => {
     expect(output).not.toContain('Needs You');
     expect(output).not.toContain('Circle Feed');
     expect(mockCircleThreadSection).not.toHaveBeenCalled();
+  });
+
+  it('does not auto-join an owner while resuming a public join action', () => {
+    const ownerDetail = detail({viewerRole: 'owner'});
+    mockMemberDetail = ownerDetail;
+
+    const {tree} = renderScreen('join');
+
+    expect(mockJoinCircle).not.toHaveBeenCalled();
+    expect(outputOf(tree)).not.toContain('Join Circle');
+    expect(outputOf(tree)).toContain('Owner');
   });
 
   it('renders member-first group progress and the compact streak header', () => {

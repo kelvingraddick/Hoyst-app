@@ -49,15 +49,16 @@ final result: passed
 
 # Launch Screen Light and Dark QA
 
-Status: **Passed** on September 9, 2026.
+Status: **Passed** on September 18, 2026 after the launch-art sharpness follow-up.
 
 ## Compared reference and implementation
 
 - Source visual truth: `/Users/kelvin/Downloads/exec-75afb1ff-4676-409f-b5b6-a065164e1048.png`
-- Final light implementation: `/tmp/hoyst-launch-final-light-clean.png`
-- Final dark implementation: `/tmp/hoyst-launch-final-dark-clean.png`
+- Final light implementation: `/tmp/hoyst-launch-quality-light.png`
+- Final dark implementation: `/tmp/hoyst-launch-quality-dark.png`
+- 2x iPad rendition check: `/tmp/hoyst-launch-quality-ipad.png`
 - Viewport: iPhone 17 Pro simulator, iOS 26.5, 402 x 874 points at native 3x density
-- Pixels and density: the supplied 853 x 1844-pixel reference represents the requested 390 x 844 composition. The implementation captures are 1206 x 2622 pixels at 3x. The full-view comparison used normalized screen proportions because the source and implementation have matching aspect ratios but different pixel density and point size. No CSS viewport applies to this native launch storyboard.
+- Pixels and density: the supplied 853 x 1844-pixel reference represents the requested 390 x 844 composition. The iPhone implementation captures are 1206 x 2622 pixels at 3x. `HoyPeek` now provides 263 x 520, 526 x 1040 and 789 x 1560 renditions for 1x, 2x and 3x displays. The full-view comparison used normalized screen proportions because the source and implementation have matching aspect ratios but different pixel density and point size. No CSS viewport applies to this native launch storyboard.
 - State: the same launch composition was rendered in system light and dark appearances.
 
 ## Findings
@@ -66,10 +67,10 @@ Status: **Passed** on September 9, 2026.
 - Fonts and typography passed. The existing adaptive Hoyst wordmark asset is used without recreating or altering its lettering. The black light-mode and white dark-mode variants retain the multicolor ring and internal proportions.
 - Spacing and layout rhythm passed. The wordmark is geometrically centered and matches the selected larger reference scale. Hoy retains the reference crop and normalized upper-right position without covering the wordmark.
 - Colors and visual tokens passed. The storyboard uses the existing adaptive `LaunchBackground` color asset, resolving to `#F5F5F7` in light mode and `#0E0E0E` in dark mode. Only the background and wordmark foreground change between appearances.
-- Image quality and asset fidelity passed. Hoy is a transparent 263 x 520 raster cutout derived from the approved source, so facial construction, highlights, scale, and edge crop remain identical in both themes. The cutout is sharp, has a real alpha channel, and shows no visible light fringe on the dark canvas.
+- Image quality and asset fidelity passed. Hoy uses deterministic high-quality resampling of the approved 263 x 520 transparent source rather than a regenerated character. Facial construction, highlights, scale, silhouette and edge crop remain identical in both themes. All three renditions have real alpha channels, and native 100 percent crops show no visible fringe on the light or dark canvas. The compiled iPhone asset catalog selected the 789 x 1560 3x rendition; the compiled iPad asset catalog selected the 526 x 1040 2x rendition.
 - Copy and content passed. The only app-provided visible content is the Hoyst wordmark and Hoy. The previous decorative launch rings, system status-bar indicators, and all additional launch copy or controls are absent.
 - Full-view comparison passed. The supplied reference and final light render were opened together. Their normalized Hoy top edge, right crop, wordmark center, and wordmark width align visually.
-- A separate focused crop was not needed because the wordmark and Hoy are large, isolated elements with ample negative space and were legible at full native resolution. Asset-level inspection additionally verified the Hoy cutout alpha and both adaptive wordmark renditions.
+- Focused native-resolution Hoy crops were inspected on both backgrounds to verify facial detail, edge antialiasing and the absence of a light or dark fringe. Asset-level inspection additionally verified the Hoy cutout alpha and both adaptive wordmark renditions.
 
 ## Comparison history
 
@@ -81,10 +82,10 @@ Status: **Passed** on September 9, 2026.
 
 - Adaptive launch background verified in light and dark.
 - Existing adaptive Hoyst wordmark verified at the selected larger size.
-- Shared Hoy cutout verified at the same right-edge crop in both appearances.
+- Shared Hoy cutout verified at the same right-edge crop in both appearances, with density-correct 1x, 2x and 3x renditions.
 - Launch-only status-bar suppression verified. React Native restores the existing status bar after the app mounts.
 - Interface Builder validation completed with zero errors, warnings, or notices.
-- iPhone 17 Pro simulator build completed successfully.
+- iPhone 17 Pro and iPad Pro simulator builds completed successfully. Native cold-launch video frames verified both 3x phone appearances and the 2x iPad rendition.
 
 Residual coverage: Android has no existing custom launch-screen layout in this project and was not changed. A physical-device launch capture was not performed.
 

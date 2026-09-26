@@ -8,7 +8,7 @@ import {
   TextInput,
 } from 'react-native';
 import renderer, {act, type ReactTestInstance} from 'react-test-renderer';
-import {ArrowRight, Camera} from 'lucide-react-native';
+import {ArrowRight, Camera, Heart} from 'lucide-react-native';
 
 import {DesignSystemProvider} from '../src/design/system';
 import {CircleThreadSection} from '../src/features/circles/components/CircleThreadSection';
@@ -204,6 +204,25 @@ function textContent(node: ReactTestInstance): string {
 
 function findTextNode(tree: renderer.ReactTestRenderer, text: string) {
   return tree.root.findAllByType(Text).find(node => textContent(node) === text);
+}
+
+function likeButton(tree: renderer.ReactTestRenderer, itemId: string) {
+  return tree.root
+    .findByProps({testID: `circle-thread-activity-like-row-${itemId}`})
+    .findByType(Pressable);
+}
+
+function deferredLike() {
+  let resolve!: (value: {liked: boolean; likeCount: number}) => void;
+  let reject!: (reason: Error) => void;
+  const promise = new Promise<{liked: boolean; likeCount: number}>(
+    (resolvePromise, rejectPromise) => {
+      resolve = resolvePromise;
+      reject = rejectPromise;
+    },
+  );
+
+  return {promise, reject, resolve};
 }
 
 function getDayMarkerIds(tree: renderer.ReactTestRenderer) {
@@ -707,13 +726,13 @@ describe('CircleThreadSection', () => {
       text: 'Making steady progress',
     });
 
-    const likeButton = tree.root
+    const activityLikeButton = tree.root
       .findAllByType(Pressable)
       .find(node => node.props.accessibilityLabel === 'Like activity');
 
-    expect(likeButton).toBeTruthy();
+    expect(activityLikeButton).toBeTruthy();
     await act(async () => {
-      likeButton?.props.onPress();
+      activityLikeButton?.props.onPress();
       await Promise.resolve();
     });
 
@@ -721,6 +740,206 @@ describe('CircleThreadSection', () => {
       circleId: 'circle-1',
       itemId: 'activity-2',
     });
+  });
+
+  it('fills an activity heart immediately and preserves other members likes while pending', async () => {
+    const request = deferredLike();
+    mockToggleCircleThreadItemLike.mockReturnValueOnce(request.promise);
+    const {tree} = renderSection();
+    const subscription = mockSubscribeToCircleThreadItems.mock.calls[0][0];
+
+    expect(likeButton(tree, 'activity-2').props.accessibilityState).toEqual({
+      disabled: false,
+      selected: false,
+    });
+
+    act(() => {
+      likeButton(tree, 'activity-2').props.onPress();
+    });
+
+    expect(likeButton(tree, 'activity-2').props.accessibilityLabel).toBe(
+      'Unlike activity',
+    );
+    expect(likeButton(tree, 'activity-2').props.accessibilityState).toEqual({
+      disabled: true,
+      selected: true,
+    });
+    expect(likeButton(tree, 'activity-2').findByType(Heart).props.fill).toBe(
+      '#D21F18',
+    );
+    expect(textContent(likeButton(tree, 'activity-2'))).toBe('1');
+    expect(likeButton(tree, 'activity-2').props.onPress).toBeUndefined();
+    expect(mockToggleCircleThreadItemLike).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      subscription.onItems({hasMore: false, items: threadItems()});
+    });
+    expect(
+      likeButton(tree, 'activity-2').props.accessibilityState.selected,
+    ).toBe(true);
+    expect(textContent(likeButton(tree, 'activity-2'))).toBe('1');
+
+    act(() => {
+      subscription.onItems({
+        hasMore: false,
+        items: threadItems().map(item =>
+          item.id === 'activity-2' ? {...item, likeCount: 1} : item,
+        ),
+      });
+    });
+    expect(textContent(likeButton(tree, 'activity-2'))).toBe('2');
+
+    await act(async () => {
+      request.resolve({liked: true, likeCount: 2});
+      await Promise.resolve();
+    });
+    expect(likeButton(tree, 'activity-2').props.accessibilityState).toEqual({
+      disabled: false,
+      selected: true,
+    });
+    expect(textContent(likeButton(tree, 'activity-2'))).toBe('2');
+
+    act(() => {
+      subscription.onItems({
+        hasMore: false,
+        items: threadItems().map(item =>
+          item.id === 'activity-2'
+            ? {...item, isLikedByViewer: true, likeCount: 2}
+            : item,
+        ),
+      });
+    });
+    expect(likeButton(tree, 'activity-2').props.accessibilityState).toEqual({
+      disabled: false,
+      selected: true,
+    });
+    expect(textContent(likeButton(tree, 'activity-2'))).toBe('2');
+  });
+
+  it('optimistically unlikes a message and ignores repeat taps while saving', async () => {
+    const request = deferredLike();
+    mockToggleCircleThreadItemLike.mockReturnValueOnce(request.promise);
+    mockThreadItems = threadItems().map(item =>
+      item.id === 'message-2'
+        ? {...item, isLikedByViewer: true, likeCount: 1}
+        : item,
+    );
+    const {tree} = renderSection();
+
+    act(() => {
+      likeButton(tree, 'message-2').props.onPress();
+    });
+    expect(likeButton(tree, 'message-2').props.accessibilityLabel).toBe(
+      'Like message',
+    );
+    expect(likeButton(tree, 'message-2').props.accessibilityState).toEqual({
+      disabled: true,
+      selected: false,
+    });
+    expect(likeButton(tree, 'message-2').findByType(Heart).props.fill).toBe(
+      'transparent',
+    );
+    expect(textContent(likeButton(tree, 'message-2'))).toBe('');
+    expect(likeButton(tree, 'message-2').props.onPress).toBeUndefined();
+    expect(mockToggleCircleThreadItemLike).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      request.resolve({liked: false, likeCount: 0});
+      await Promise.resolve();
+    });
+    expect(likeButton(tree, 'message-2').props.disabled).toBe(false);
+    expect(
+      likeButton(tree, 'message-2').props.accessibilityState.selected,
+    ).toBe(false);
+  });
+
+  it('allows another toggle after success while the feed snapshot is still stale', async () => {
+    const firstRequest = deferredLike();
+    const secondRequest = deferredLike();
+    mockToggleCircleThreadItemLike
+      .mockReturnValueOnce(firstRequest.promise)
+      .mockReturnValueOnce(secondRequest.promise);
+    const {tree} = renderSection();
+
+    act(() => {
+      likeButton(tree, 'activity-2').props.onPress();
+    });
+    await act(async () => {
+      firstRequest.resolve({liked: true, likeCount: 1});
+      await Promise.resolve();
+    });
+    expect(likeButton(tree, 'activity-2').props.accessibilityState).toEqual({
+      disabled: false,
+      selected: true,
+    });
+
+    act(() => {
+      likeButton(tree, 'activity-2').props.onPress();
+    });
+    expect(mockToggleCircleThreadItemLike).toHaveBeenCalledTimes(2);
+    expect(likeButton(tree, 'activity-2').props.accessibilityState).toEqual({
+      disabled: true,
+      selected: false,
+    });
+    expect(textContent(likeButton(tree, 'activity-2'))).toBe('');
+
+    await act(async () => {
+      secondRequest.resolve({liked: false, likeCount: 0});
+      await Promise.resolve();
+    });
+    expect(likeButton(tree, 'activity-2').props.accessibilityState).toEqual({
+      disabled: false,
+      selected: false,
+    });
+  });
+
+  it('keeps read-only and own items non-interactive', () => {
+    mockThreadItems = threadItems().map(item =>
+      item.id === 'activity-2'
+        ? {...item, likeCount: 1, readOnly: true}
+        : item.id === 'message-1'
+        ? {...item, likeCount: 1}
+        : item,
+    );
+    const {tree} = renderSection();
+
+    expect(likeButton(tree, 'activity-2').props.disabled).toBe(true);
+    expect(likeButton(tree, 'activity-2').props.onPress).toBeUndefined();
+    expect(likeButton(tree, 'message-1').props.disabled).toBe(true);
+    expect(likeButton(tree, 'message-1').props.onPress).toBeUndefined();
+    expect(mockToggleCircleThreadItemLike).not.toHaveBeenCalled();
+  });
+
+  it('uses the latest feed state after a failed like', async () => {
+    const request = deferredLike();
+    mockToggleCircleThreadItemLike.mockReturnValueOnce(request.promise);
+    const {tree} = renderSection();
+    const subscription = mockSubscribeToCircleThreadItems.mock.calls[0][0];
+
+    act(() => {
+      likeButton(tree, 'activity-2').props.onPress();
+      subscription.onItems({
+        hasMore: false,
+        items: threadItems().map(item =>
+          item.id === 'activity-2' ? {...item, likeCount: 1} : item,
+        ),
+      });
+    });
+
+    await act(async () => {
+      request.reject(new Error('Connection lost'));
+      await Promise.resolve();
+    });
+
+    expect(likeButton(tree, 'activity-2').props.accessibilityState).toEqual({
+      disabled: false,
+      selected: false,
+    });
+    expect(likeButton(tree, 'activity-2').findByType(Heart).props.fill).toBe(
+      'transparent',
+    );
+    expect(textContent(likeButton(tree, 'activity-2'))).toBe('1');
+    expect(alertSpy).toHaveBeenCalledWith('Like failed', 'Connection lost');
   });
 
   it('keeps a failed message photo retryable without exposing Storage codes', async () => {
@@ -814,12 +1033,11 @@ describe('CircleThreadSection', () => {
       }),
     );
 
-    const likeButton = tree.root
-      .findAllByType(Pressable)
-      .find(node => node.props.accessibilityLabel === 'Like activity');
+    const archivedLikeButton = likeButton(tree, 'activity-1');
 
-    expect(likeButton?.props.disabled).toBe(true);
-    expect(likeButton?.props.onPress).toBeUndefined();
+    expect(archivedLikeButton.props.accessibilityLabel).toBe('Unlike activity');
+    expect(archivedLikeButton.props.disabled).toBe(true);
+    expect(archivedLikeButton.props.onPress).toBeUndefined();
     expect(mockToggleCircleThreadItemLike).not.toHaveBeenCalled();
   });
 

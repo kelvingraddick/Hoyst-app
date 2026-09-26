@@ -85,14 +85,17 @@ function LikeButton({
   disabled,
   item,
   onPress,
+  pending,
 }: {
   disabled?: boolean;
   item: CircleThreadItem;
   onPress: () => void;
+  pending?: boolean;
 }) {
   const theme = useHoystTheme();
   const showCount = item.likeCount > 0;
   const showButton = !disabled || showCount;
+  const isDisabled = Boolean(disabled || pending);
 
   if (!showButton) {
     return null;
@@ -100,10 +103,16 @@ function LikeButton({
 
   return (
     <Pressable
-      accessibilityLabel={`Like ${item.kind}`}
+      accessibilityLabel={`${item.isLikedByViewer ? 'Unlike' : 'Like'} ${
+        item.kind
+      }`}
       accessibilityRole="button"
-      disabled={disabled}
-      onPress={disabled ? undefined : onPress}
+      accessibilityState={{
+        disabled: isDisabled,
+        selected: item.isLikedByViewer,
+      }}
+      disabled={isDisabled}
+      onPress={isDisabled ? undefined : onPress}
       style={({pressed}) => [
         styles.likeButton,
         {
@@ -158,12 +167,14 @@ function ShareTapInButton({onPress}: {onPress: () => void}) {
 
 function ThreadRow({
   item,
+  likePending,
   onLike,
   readOnly,
   onShareTapIn,
   viewerUid,
 }: {
   item: CircleThreadItem;
+  likePending?: boolean;
   onLike: (item: CircleThreadItem) => void;
   readOnly?: boolean;
   onShareTapIn?: (item: CircleThreadItem) => void;
@@ -250,6 +261,7 @@ function ThreadRow({
             disabled={isLikeDisabled}
             item={item}
             onPress={() => onLike(item)}
+            pending={likePending}
           />
           {canShare ? (
             <ShareTapInButton onPress={() => onShareTapIn?.(item)} />
@@ -262,12 +274,14 @@ function ThreadRow({
 
 function ThreadItem({
   item,
+  likePending,
   onLike,
   readOnly,
   onShareTapIn,
   viewerUid,
 }: {
   item: CircleThreadItem;
+  likePending?: boolean;
   onLike: (item: CircleThreadItem) => void;
   readOnly?: boolean;
   onShareTapIn?: (item: CircleThreadItem) => void;
@@ -276,6 +290,7 @@ function ThreadItem({
   return (
     <ThreadRow
       item={item}
+      likePending={likePending}
       onLike={onLike}
       readOnly={readOnly}
       onShareTapIn={onShareTapIn}
@@ -293,6 +308,35 @@ function mergeThreadItems(
   return [...nextItems, ...currentItems.filter(item => !nextIds.has(item.id))];
 }
 
+type LikeOverride = {
+  liked: boolean;
+  likeCount: number;
+  pending: boolean;
+  requestId: number;
+  scope: string;
+  useSnapshotCount: boolean;
+};
+
+function displayLike(item: CircleThreadItem, override?: LikeOverride) {
+  if (!override) {
+    return item;
+  }
+
+  return {
+    ...item,
+    isLikedByViewer: override.liked,
+    likeCount:
+      override.pending && override.useSnapshotCount
+        ? Math.max(
+            0,
+            item.likeCount +
+              Number(override.liked) -
+              Number(item.isLikedByViewer),
+          )
+        : override.likeCount,
+  };
+}
+
 export function CircleThreadSection({
   circleId,
   isArchived,
@@ -307,6 +351,9 @@ export function CircleThreadSection({
   const theme = useHoystTheme();
   const systemTheme = useSystemTheme();
   const [items, setItems] = useState<CircleThreadItem[]>([]);
+  const [likeOverrides, setLikeOverrides] = useState<
+    Record<string, LikeOverride>
+  >({});
   const [hasMore, setHasMore] = useState(false);
   const [threadError, setThreadError] = useState<Error>();
   const [requestedLimit, setRequestedLimit] = useState(THREAD_PAGE_SIZE);
@@ -320,10 +367,36 @@ export function CircleThreadSection({
   const lastHandledLoadRequestRef = useRef(0);
   const lastMarkedItemIdRef = useRef<string | undefined>(undefined);
   const pendingMarkedItemIdRef = useRef<string | undefined>(undefined);
-  const daySections = useMemo(
-    () => buildCircleThreadDaySections({items, timezone}),
-    [items, timezone],
+  const serverItemsRef = useRef<CircleThreadItem[]>([]);
+  const likeOverridesRef = useRef(likeOverrides);
+  const likeRequestIdRef = useRef(0);
+  const likeScope = `${circleId}:${viewerUid}`;
+  const likeScopeRef = useRef(likeScope);
+  likeScopeRef.current = likeScope;
+  const updateLikeOverrides = (next: Record<string, LikeOverride>) => {
+    likeOverridesRef.current = next;
+    setLikeOverrides(next);
+  };
+  const displayedItems = useMemo(
+    () =>
+      items.map(item => {
+        const override = likeOverrides[item.id];
+        return displayLike(
+          item,
+          override?.scope === likeScope ? override : undefined,
+        );
+      }),
+    [items, likeOverrides, likeScope],
   );
+  const daySections = useMemo(
+    () => buildCircleThreadDaySections({items: displayedItems, timezone}),
+    [displayedItems, timezone],
+  );
+
+  useEffect(() => {
+    serverItemsRef.current = [];
+    updateLikeOverrides({});
+  }, [circleId, viewerUid]);
 
   useEffect(() => {
     return subscribeToCircleThreadItems({
@@ -335,7 +408,30 @@ export function CircleThreadSection({
         setIsLoadingMore(false);
       },
       onItems: result => {
-        setItems(currentItems => mergeThreadItems(currentItems, result.items));
+        const mergedItems = mergeThreadItems(
+          serverItemsRef.current,
+          result.items,
+        );
+        serverItemsRef.current = mergedItems;
+        setItems(mergedItems);
+        const nextOverrides = {...likeOverridesRef.current};
+        let changed = false;
+
+        for (const item of result.items) {
+          const override = nextOverrides[item.id];
+          if (
+            override?.scope === likeScope &&
+            !override.pending &&
+            item.isLikedByViewer === override.liked
+          ) {
+            delete nextOverrides[item.id];
+            changed = true;
+          }
+        }
+
+        if (changed) {
+          updateLikeOverrides(nextOverrides);
+        }
         setHasMore(result.hasMore);
         setThreadError(undefined);
         setIsInitialLoading(false);
@@ -343,7 +439,7 @@ export function CircleThreadSection({
       },
       uid: viewerUid,
     });
-  }, [circleId, requestedLimit, retryKey, viewerUid]);
+  }, [circleId, likeScope, requestedLimit, retryKey, viewerUid]);
 
   useEffect(() => {
     if (
@@ -443,19 +539,83 @@ export function CircleThreadSection({
   };
 
   const handleLike = (item: CircleThreadItem) => {
-    if (isArchived || item.actor.uid === viewerUid) {
+    if (
+      isArchived ||
+      item.readOnly ||
+      !viewerUid ||
+      item.actor.uid === viewerUid ||
+      (likeOverridesRef.current[item.id]?.scope === likeScope &&
+        likeOverridesRef.current[item.id]?.pending)
+    ) {
       return;
     }
+
+    const requestId = ++likeRequestIdRef.current;
+    const serverItem = serverItemsRef.current.find(
+      current => current.id === item.id,
+    );
+    updateLikeOverrides({
+      ...likeOverridesRef.current,
+      [item.id]: {
+        liked: !item.isLikedByViewer,
+        likeCount: Math.max(
+          0,
+          item.likeCount + (item.isLikedByViewer ? -1 : 1),
+        ),
+        pending: true,
+        requestId,
+        scope: likeScope,
+        useSnapshotCount: serverItem?.isLikedByViewer === item.isLikedByViewer,
+      },
+    });
 
     toggleCircleThreadItemLike({
       circleId,
       itemId: item.id,
-    }).catch(error => {
-      Alert.alert(
-        'Like failed',
-        (error as {message?: string}).message ?? 'Could not update the like.',
-      );
-    });
+    })
+      .then(result => {
+        const override = likeOverridesRef.current[item.id];
+        if (
+          override?.requestId !== requestId ||
+          likeScopeRef.current !== likeScope
+        ) {
+          return;
+        }
+
+        const latestServerItem = serverItemsRef.current.find(
+          current => current.id === item.id,
+        );
+        const nextOverrides = {...likeOverridesRef.current};
+        if (latestServerItem?.isLikedByViewer === result.liked) {
+          delete nextOverrides[item.id];
+        } else {
+          nextOverrides[item.id] = {
+            liked: result.liked,
+            likeCount: result.likeCount,
+            pending: false,
+            requestId,
+            scope: likeScope,
+            useSnapshotCount: false,
+          };
+        }
+        updateLikeOverrides(nextOverrides);
+      })
+      .catch(error => {
+        if (
+          likeOverridesRef.current[item.id]?.requestId !== requestId ||
+          likeScopeRef.current !== likeScope
+        ) {
+          return;
+        }
+
+        const nextOverrides = {...likeOverridesRef.current};
+        delete nextOverrides[item.id];
+        updateLikeOverrides(nextOverrides);
+        Alert.alert(
+          'Like failed',
+          (error as {message?: string}).message ?? 'Could not update the like.',
+        );
+      });
   };
   const handleRetry = () => {
     setThreadError(undefined);
@@ -708,6 +868,10 @@ export function CircleThreadSection({
                 <ThreadItem
                   item={item}
                   key={item.id}
+                  likePending={
+                    likeOverrides[item.id]?.scope === likeScope &&
+                    likeOverrides[item.id]?.pending
+                  }
                   onLike={handleLike}
                   readOnly={isArchived}
                   onShareTapIn={onShareTapIn}

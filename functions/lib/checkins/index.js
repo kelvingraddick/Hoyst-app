@@ -1,6 +1,8 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.removeTapIn = exports.processTapInSideEffects = exports.updateTapInDetails = exports.submitTapIn = void 0;
+const node_crypto_1 = require("node:crypto");
+const model_1 = require("../discovery/model");
 const firestore_1 = require("firebase-admin/firestore");
 const auth_1 = require("firebase-admin/auth");
 const storage_1 = require("firebase-admin/storage");
@@ -591,9 +593,10 @@ async function submitTapInHandler(request) {
     const memberRef = circleRef.collection('members').doc(uid);
     const now = firestore_1.FieldValue.serverTimestamp();
     const result = await firebase_1.db.runTransaction(async (transaction) => {
-        const [circleSnapshot, memberSnapshot] = await Promise.all([
+        const [circleSnapshot, memberSnapshot, discoveryConfig] = await Promise.all([
             transaction.get(circleRef),
             transaction.get(memberRef),
+            transaction.get(firebase_1.db.collection('serverConfig').doc('publicDiscovery')),
         ]);
         if (!circleSnapshot.exists) {
             throw new https_1.HttpsError('not-found', 'Circle not found.');
@@ -709,6 +712,23 @@ async function submitTapInHandler(request) {
             uid,
             updatedAt: now,
         };
+        // Eligibility is recorded at the successful transition, never by a historical backfill.
+        if ((0, model_1.canPublishNewTapIn)({
+            circle,
+            before: existingCheckIn,
+            nextStatus,
+            activatedAt: discoveryConfig.data()?.activityActivatedAt,
+            now: Date.now(),
+        })) {
+            checkInPayload.publicTapIn = {
+                eventId: `${dateKey}_${uid}_${(0, node_crypto_1.randomUUID)()}`,
+                epoch: (0, model_1.activityEpoch)(circle),
+                occurredAt: now,
+            };
+        }
+        else if (nextStatus !== 'done') {
+            checkInPayload.publicTapIn = firestore_1.FieldValue.delete();
+        }
         if (!checkInSnapshot.exists) {
             checkInPayload.createdAt = now;
         }

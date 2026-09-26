@@ -259,6 +259,7 @@ export function HoystTapInMark({
         testID="hoyst-tap-in-mark-logo">
         <Image
           accessibilityIgnoresInvertColors
+          key={theme.isDark ? 'dark' : 'light'}
           resizeMode="contain"
           source={getBrandIcon(theme.isDark)}
           style={{height: size, width: size}}
