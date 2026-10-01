@@ -78,17 +78,17 @@ export function ExploreSearchingHoy({
           <RadialGradient id={shadowId} cx="50%" cy="50%" rx="50%" ry="50%">
             <Stop
               offset="0"
-              stopColor={dark ? '#000000' : '#6B5128'}
+              stopColor={dark ? '#000000' : '#284D68'}
               stopOpacity={dark ? 0.5 : 0.34}
             />
             <Stop
               offset="0.45"
-              stopColor={dark ? '#000000' : '#6B5128'}
+              stopColor={dark ? '#000000' : '#284D68'}
               stopOpacity={dark ? 0.25 : 0.16}
             />
             <Stop
               offset="1"
-              stopColor={dark ? '#000000' : '#6B5128'}
+              stopColor={dark ? '#000000' : '#284D68'}
               stopOpacity={0}
             />
           </RadialGradient>
@@ -106,7 +106,7 @@ export function ExploreSearchingHoy({
         accessible={false}
         accessibilityElementsHidden
         importantForAccessibility="no-hide-descendants"
-        source={require('../../../assets/hoy/explore-searching.png')}
+        source={require('../../../assets/hoy/explore-searching-blue.png')}
         resizeMode="contain"
         style={[
           styles.hoy,

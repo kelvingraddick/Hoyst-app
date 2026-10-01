@@ -46,6 +46,8 @@ export type RollingMomentumSummary = {
   windowDays: number;
 };
 
+export type ProfileTint = 'green' | 'blue' | 'purple' | 'orange' | 'gold';
+
 export type UserProfile = {
   id: string;
   handle: string;
@@ -55,6 +57,7 @@ export type UserProfile = {
   bio?: string;
   timezone: string;
   onboardingStatus?: 'complete';
+  profileTint?: ProfileTint;
 };
 
 export type GraceRule = {
@@ -177,8 +180,10 @@ export type CircleActivityItem = {
   id: string;
   actorName: string;
   actorInitials: string;
+  actorDisplayName?: string;
   actorAvatarImage?: ImageSourcePropType;
   actorAvatarUrl?: string;
+  eventType?: InboxEventType;
   tone: CircleActivityTone;
   message: string;
   timestamp: string;
@@ -239,6 +244,7 @@ export type InboxEventType =
   | 'circle_discovery_suggestion'
   | 'circle_nudge_prompt'
   | 'circle_restored'
+  | 'streak_restored'
   | LegacyCircleActivityEventType
   | 'evening_summary'
   | 'join_approved'

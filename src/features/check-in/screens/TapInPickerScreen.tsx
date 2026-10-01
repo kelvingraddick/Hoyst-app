@@ -1,5 +1,6 @@
+import {shareCircleInvitation} from '../../progress/services/progress-service';
 import React, {useEffect, useRef, useState} from 'react';
-import {Alert, Share} from 'react-native';
+import {Alert} from 'react-native';
 import {DateTime} from 'luxon';
 import type {NativeStackScreenProps} from '@react-navigation/native-stack';
 import {DesignSystemProvider} from '../../../design/system';
@@ -188,7 +189,7 @@ function TapInPickerController({navigation}: Props): React.JSX.Element {
       return;
     }
 
-    Share.share({
+    shareCircleInvitation(circle.id, {
       title: `Join ${circle.title} on Hoyst`,
       message: `Join ${circle.title} on Hoyst: ${circle.inviteUrl}`,
       url: circle.inviteUrl,
@@ -273,7 +274,7 @@ function TapInPickerController({navigation}: Props): React.JSX.Element {
         : canNudge
         ? getRemainingTapInsLabel(circle, circle.remainingCheckIns)
         : circle.viewerTodayStatus === 'skip'
-        ? 'Grace skip used today'
+        ? 'Skip used today'
         : 'Covered today',
       progress: getCircleCycleProgressPresentation(circle).listLabel,
       busy,
@@ -322,6 +323,7 @@ function TapInPickerController({navigation}: Props): React.JSX.Element {
       }
       message={message}
       onClose={() => navigation.goBack()}
+      onCreateCircle={() => navigation.navigate('CreateCircle')}
       onTapIn={openTapIn}
     />
   );

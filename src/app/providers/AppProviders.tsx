@@ -5,6 +5,7 @@ import {GestureHandlerRootView} from 'react-native-gesture-handler';
 import {SafeAreaProvider} from 'react-native-safe-area-context';
 import {QueryClient, QueryClientProvider} from '@tanstack/react-query';
 
+import {ProgressPurchaseRecovery} from '../../features/progress/components/ProgressPurchaseRecovery';
 import {AuthStateProvider} from '../../features/auth/providers/AuthStateProvider';
 import {OnboardingSetupFinalizer} from '../../features/auth/providers/OnboardingSetupFinalizer';
 
@@ -17,15 +18,14 @@ const queryClient = new QueryClient({
   },
 });
 
-export function AppProviders({
-  children,
-}: PropsWithChildren): React.JSX.Element {
+export function AppProviders({children}: PropsWithChildren): React.JSX.Element {
   return (
     <GestureHandlerRootView style={styles.root}>
       <SafeAreaProvider>
         <QueryClientProvider client={queryClient}>
           <AuthStateProvider>
             <OnboardingSetupFinalizer />
+            <ProgressPurchaseRecovery />
             {children}
           </AuthStateProvider>
         </QueryClientProvider>

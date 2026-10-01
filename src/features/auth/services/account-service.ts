@@ -5,8 +5,10 @@ import {firebaseAuth} from '../../../lib/firebase/auth';
 import {firebaseFirestore} from '../../../lib/firebase/firestore';
 import {firebaseFunctions} from '../../../lib/firebase/functions';
 import {firebaseStorage} from '../../../lib/firebase/storage';
+import {normalizeProfileTint} from '../../profile/services/profile-personalization';
+import {authenticatedCallable} from '../../../lib/firebase/authenticated-callable';
 import {collections} from '../../../types/firestore';
-import type {UserProfile} from '../../../types/models';
+import type {ProfileTint, UserProfile} from '../../../types/models';
 import type {CreateCircleInput} from '../../circles/services/circle-service';
 import type {OnboardingPreferences} from './onboarding-options';
 
@@ -55,6 +57,7 @@ export function mapUserProfileSnapshot(
     handle: data.handle,
     id: snapshot.id,
     name: data.displayName,
+    profileTint: normalizeProfileTint(data.profileTint),
     onboardingStatus: data.onboardingStatus,
     timezone: data.timezone ?? 'UTC',
   };
@@ -84,11 +87,17 @@ export async function completeProfile(input: CompleteProfileInput) {
 export async function uploadProfileAvatar({
   uid,
   uri,
+  versioned = false,
 }: {
   uid: string;
   uri: string;
+  versioned?: boolean;
 }) {
-  const reference = firebaseStorage().ref(`users/${uid}/avatar/profile.jpg`);
+  // A failed profile transaction must not overwrite the currently published photo.
+  const fileName = versioned
+    ? `profile-${Date.now()}-${Math.random().toString(36).slice(2)}.jpg`
+    : 'profile.jpg';
+  const reference = firebaseStorage().ref(`users/${uid}/avatar/${fileName}`);
 
   await reference.putFile(uri);
 
@@ -102,33 +111,30 @@ export async function deleteAccount() {
   return result.data as {deleted: true};
 }
 
+export async function checkProfileUsername(handle: string) {
+  return authenticatedCallable<{handle: string; available: boolean}>(
+    'checkProfileUsername',
+    {handle},
+  );
+}
+
 export async function updateProfileFields(input: {
-  avatarUrl?: string;
-  bio?: string;
-  displayName: string;
+  avatarUrl?: string | null;
+  bio?: string | null;
+  displayName?: string;
+  handle?: string;
+  profileTint?: ProfileTint;
   timezone?: string;
 }) {
-  const uid = firebaseAuth().currentUser?.uid;
-
-  if (!uid) {
-    throw new Error('Sign in is required.');
-  }
-
-  const updates: Record<string, unknown> = {
-    avatarUrl: input.avatarUrl ?? null,
-    bio: input.bio ?? null,
-    displayName: input.displayName,
-    updatedAt: firestore.FieldValue.serverTimestamp(),
+  const result = await authenticatedCallable<{profile: UserProfile}>(
+    'updateProfile',
+    input,
+  );
+  return {
+    ...result.profile,
+    bio: result.profile.bio || undefined,
+    avatarUrl: result.profile.avatarUrl || undefined,
   };
-
-  if (input.timezone !== undefined) {
-    updates.timezone = input.timezone.trim() || 'UTC';
-  }
-
-  await firebaseFirestore()
-    .collection(collections.users)
-    .doc(uid)
-    .update(updates);
 }
 
 export async function updateProfileAvatarUrlFromAuth(avatarUrl: string) {

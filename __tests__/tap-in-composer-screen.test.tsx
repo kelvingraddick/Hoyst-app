@@ -48,6 +48,13 @@ const baseMockDetail: CircleDetailModel = {
   viewerRemainingTapIns: 2,
   viewerTodayStatus: 'rest',
 };
+let mockProgress: {
+  loading: boolean;
+  summary?: {
+    inventory: {skips: number; restores: number};
+    flags: {inventory: boolean};
+  };
+};
 let mockLoadMode: 'ready' | 'loading' | 'error' = 'ready';
 let mockDetail: CircleDetailModel = {...baseMockDetail};
 
@@ -194,6 +201,10 @@ function findPressableContainingText(
 
 describe('TapInComposerScreen', () => {
   beforeEach(() => {
+    mockProgress = {
+      loading: false,
+      summary: {inventory: {skips: 3, restores: 1}, flags: {inventory: true}},
+    };
     useHoyFeedbackStore.setState({pendingTapInCelebration: undefined});
     mockLoadMode = 'ready';
     mockDetail = {...baseMockDetail};
@@ -895,7 +906,8 @@ describe('TapInComposerScreen', () => {
     alertSpy.mockRestore();
   });
 
-  it('keeps skip disabled until grace availability is loaded', async () => {
+  it('keeps skip disabled until shared inventory is loaded', async () => {
+    mockProgress = {loading: true};
     mockDetail = {
       ...baseMockDetail,
       graceRules: {skip: {allowance: 1, windowDays: 7}},
@@ -907,13 +919,14 @@ describe('TapInComposerScreen', () => {
     });
 
     const output = JSON.stringify(tree!.toJSON());
-    const skipButton = findPressableContainingText(tree!, 'Checking skips');
+    const skipButton = findPressableContainingText(tree!, 'Loading your skips');
 
-    expect(output).toContain('Checking skips (1 per 7 days)');
+    expect(output).toContain('Loading your skips');
     expect(skipButton?.props.disabled).toBe(true);
   });
 
-  it('disables skip when the grace allowance is exhausted', async () => {
+  it('disables skip when shared inventory is exhausted', async () => {
+    mockProgress.summary!.inventory.skips = 0;
     mockDetail = {
       ...baseMockDetail,
       graceRules: {skip: {allowance: 1, windowDays: 7}},
@@ -928,11 +941,12 @@ describe('TapInComposerScreen', () => {
     const output = JSON.stringify(tree!.toJSON());
     const skipButton = findPressableContainingText(tree!, 'No skips left');
 
-    expect(output).toContain('No skips left (1 per 7 days)');
+    expect(output).toContain('No skips left');
     expect(skipButton?.props.disabled).toBe(true);
   });
 
-  it('submits a skip when grace availability is positive', async () => {
+  it('submits a skip when shared inventory is positive', async () => {
+    mockProgress.summary!.inventory.skips = 1;
     mockDetail = {
       ...baseMockDetail,
       graceRules: {skip: {allowance: 1, windowDays: 7}},
@@ -1211,3 +1225,8 @@ describe('TapInComposerScreen', () => {
     alertSpy.mockRestore();
   });
 });
+
+// The server-backed wallet is a separate tested subscription boundary.
+jest.mock('../src/features/progress/hooks/useProgress', () => ({
+  useProgress: () => mockProgress,
+}));

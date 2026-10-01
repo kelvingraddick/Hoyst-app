@@ -333,6 +333,10 @@ const notificationCopyCatalog = {
         body: `Nudge ${context.targetCount ?? 1} ${(context.targetCount ?? 1) === 1 ? 'Member' : 'Members'} in ${getCircleTitle(context)}.`,
         title: 'Nudge prompt',
     }),
+    streak_restored: context => ({
+        body: `A missed opportunity in ${getCircleTitle(context)} has protected coverage.`,
+        title: 'Streak restored',
+    }),
     circle_restored: context => ({
         body: `${getCircleTitle(context)} was restored. New Tap Ins resume at the next opening.`,
         title: 'Circle restored',
@@ -1613,10 +1617,7 @@ function getReminderEligibility({ pace, circleId, dateKey, kind, memberStatus, n
         return { eligible: false, reason: 'preference-disabled' };
     }
     return {
-        dedupeKey: pace &&
-            pace !== 'daily' &&
-            periodKey &&
-            typeof slotIndex === 'number'
+        dedupeKey: pace && pace !== 'daily' && periodKey && typeof slotIndex === 'number'
             ? `tap_in_${kind}_${circleId}_${periodKey}_${slotIndex}_${uid}`
             : `tap_in_${kind}_${circleId}_${dateKey}_${uid}`,
         eligible: true,
@@ -1849,8 +1850,7 @@ function compareCircleNudgePromptCandidates(left, right) {
     if (deadlineComparison !== 0) {
         return deadlineComparison;
     }
-    const riskShareComparison = right.behindCount * left.activeCount -
-        left.behindCount * right.activeCount;
+    const riskShareComparison = right.behindCount * left.activeCount - left.behindCount * right.activeCount;
     if (riskShareComparison !== 0) {
         return riskShareComparison;
     }
@@ -2288,8 +2288,14 @@ exports.updateNotificationSettings = (0, https_1.onCall)(async (request) => {
     }
     const input = updateNotificationSettingsSchema.parse(request.data);
     const uid = request.auth.uid;
-    await firebase_1.db.collection('userPrivate').doc(uid).set({
+    await firebase_1.db
+        .collection('userPrivate')
+        .doc(uid)
+        .set({
         notificationSettings: input.notificationSettings,
+        ...(typeof input.notificationSettings.tapInReminders === 'boolean'
+            ? { reminderPreferenceSavedAt: firestore_1.FieldValue.serverTimestamp() }
+            : {}),
         updatedAt: firestore_1.FieldValue.serverTimestamp(),
     }, { merge: true });
     return { notificationSettings: input.notificationSettings };

@@ -1454,6 +1454,8 @@ PODS:
     - OneSignalXCFramework/OneSignalNotifications
     - OneSignalXCFramework/OneSignalOSCore
     - OneSignalXCFramework/OneSignalOutcomes
+  - PurchasesHybridCommon (19.3.1):
+    - RevenueCat (= 5.90.2)
   - RCT-Folly (2024.11.18.00):
     - boost
     - DoubleConversion
@@ -2799,7 +2801,7 @@ PODS:
     - ReactCommon/turbomodule/bridging
     - ReactCommon/turbomodule/core
     - Yoga
-  - react-native-view-shot (5.1.0):
+  - react-native-view-shot (5.1.1):
     - DoubleConversion
     - glog
     - hermes-engine
@@ -3108,6 +3110,7 @@ PODS:
     - React-perflogger (= 0.78.3)
     - React-utils (= 0.78.3)
   - RecaptchaInterop (101.0.0)
+  - RevenueCat (5.90.2)
   - RNAppleAuthentication (2.4.1):
     - React-Core
   - RNCAsyncStorage (2.2.0):
@@ -3289,6 +3292,9 @@ PODS:
     - ReactCommon/turbomodule/bridging
     - ReactCommon/turbomodule/core
     - Yoga
+  - RNPurchases (10.10.2):
+    - PurchasesHybridCommon (= 19.3.1)
+    - React-Core
   - RNReactNativeHapticFeedback (3.0.0):
     - DoubleConversion
     - glog
@@ -3650,6 +3656,7 @@ DEPENDENCIES:
   - "RNFBStorage (from `../node_modules/@react-native-firebase/storage`)"
   - RNGestureHandler (from `../node_modules/react-native-gesture-handler`)
   - "RNGoogleSignin (from `../node_modules/@react-native-google-signin/google-signin`)"
+  - RNPurchases (from `../node_modules/react-native-purchases`)
   - RNReactNativeHapticFeedback (from `../node_modules/react-native-haptic-feedback`)
   - RNReanimated (from `../node_modules/react-native-reanimated`)
   - RNScreens (from `../node_modules/react-native-screens`)
@@ -3685,7 +3692,9 @@ SPEC REPOS:
     - leveldb-library
     - nanopb
     - OneSignalXCFramework
+    - PurchasesHybridCommon
     - RecaptchaInterop
+    - RevenueCat
     - Sentry
     - SocketRocket
 
@@ -3853,6 +3862,8 @@ EXTERNAL SOURCES:
     :path: "../node_modules/react-native-gesture-handler"
   RNGoogleSignin:
     :path: "../node_modules/@react-native-google-signin/google-signin"
+  RNPurchases:
+    :path: "../node_modules/react-native-purchases"
   RNReactNativeHapticFeedback:
     :path: "../node_modules/react-native-haptic-feedback"
   RNReanimated:
@@ -3902,6 +3913,7 @@ SPEC CHECKSUMS:
   leveldb-library: cc8b8f8e013647a295ad3f8cd2ddf49a6f19be19
   nanopb: fad817b59e0457d11a5dfbde799381cd727c1275
   OneSignalXCFramework: 6a06ab8a3e44370cb70c6ef31c472b271cdaa7aa
+  PurchasesHybridCommon: c364d4198150bf4027b00fcada9b4ddc280df108
   RCT-Folly: e78785aa9ba2ed998ea4151e314036f6c49e6d82
   RCTDeprecation: cf39863b43871c2031050605fb884019b6193910
   RCTRequired: 8fdd66f4a97f352b66f38cfef13fc11b12d2c884
@@ -3937,7 +3949,7 @@ SPEC CHECKSUMS:
   react-native-image-picker: 5f9867b6a223594dbfdb456428638daef42e6e6c
   react-native-onesignal: a8e7e5c9fc9a973befdbd38aa23f1e54fd364a8b
   react-native-safe-area-context: 0257d12123e63462a95dda636010156d03806233
-  react-native-view-shot: 25f46c66ab1da1e5366326e12f5201589cee6b6d
+  react-native-view-shot: 49335c269e77a91478940a49f6bdd4bac85e296a
   React-NativeModulesApple: 7a9ec626a1852d444d0e699b016dc55a064b7569
   React-perflogger: d06f0fd0727356651a5535f6d717130187aeb667
   React-performancetimeline: c397114f2c025aa73412a9f21e021b08127fe820
@@ -3967,6 +3979,7 @@ SPEC CHECKSUMS:
   ReactCodegen: 0c213020a601c6adda74f8826629bff9c6c408d3
   ReactCommon: 7f90ec8358d94ec2a078e11990f6e78542957b11
   RecaptchaInterop: 11e0b637842dfb48308d242afc3f448062325aba
+  RevenueCat: c44e15b3ee88506da1fdf537c62a6c239cc41b21
   RNAppleAuthentication: c3dddf5918126c9aae85dc2e2ce9fb87835e9e04
   RNCAsyncStorage: 6a8127b6987dc9fbce778669b252b14c8355c7ce
   RNFBApp: 8ad0979e32796a993e5552cce016f5ae2ddbb76f
@@ -3976,8 +3989,9 @@ SPEC CHECKSUMS:
   RNFBStorage: 02f49b076938853b4421c22f98f0b9bb349c0787
   RNGestureHandler: 96fc2de36a25cf6bece93e030c2ed9a5e95d33dd
   RNGoogleSignin: 1373968a801693a97333896150a578eac17ef2ff
+  RNPurchases: 28391e533798d316c8ffeada5c8dbc59768d6d0c
   RNReactNativeHapticFeedback: c1cb0e85225e8735def7ee3ad3a9c652d675c0df
-  RNReanimated: 4826ef20aad94d8ece55cb84db3c356ed7989af9
+  RNReanimated: ae8c2382eee517fb0b9eaf98d53f24948d90d9a0
   RNScreens: 04304337930029a5d0db297b22eb0f07adc31a2c
   RNSentry: 6092028c8588b03eccfbf84bbb9c1ca1be17b5af
   RNShare: 59594766a79b2a33f74aa7657201f1f4f41dbd29

@@ -1,15 +1,23 @@
 import React from 'react';
-import {AccessibilityInfo, TextInput} from 'react-native';
+import {
+  AccessibilityInfo,
+  Alert,
+  FlatList,
+  StyleSheet,
+  TextInput,
+} from 'react-native';
 import renderer, {act} from 'react-test-renderer';
 import {ExploreScreen} from '../src/features/explore/screens/ExploreScreen';
 import {DSButton} from '../src/design/system';
 import {ExploreSearchingHoy} from '../src/features/explore/components/ExploreSearchingHoy';
 import {
   searchPublicCircles,
+  formatPublicTapInTime,
   type ExplorePage,
 } from '../src/features/explore/services/explore-service';
 
 let mockFocused = true;
+let mockAppearance = 'light';
 jest.mock('@react-navigation/native', () => ({
   useIsFocused: () => mockFocused,
 }));
@@ -19,12 +27,12 @@ jest.mock('react-native-safe-area-context', () => {
   return {
     SafeAreaView: ({children, ...props}: {children?: React.ReactNode}) =>
       ReactModule.createElement(View, props, children),
-    useSafeAreaInsets: () => ({bottom: 34, top: 0, left: 0, right: 0}),
+    useSafeAreaInsets: () => ({bottom: 34, top: 59, left: 0, right: 0}),
   };
 });
 jest.mock('../src/store/settings-store', () => ({
   useSettingsStore: (select: (state: {appearance: string}) => unknown) =>
-    select({appearance: 'light'}),
+    select({appearance: mockAppearance}),
 }));
 jest.mock('../src/features/explore/services/explore-service', () => ({
   ...jest.requireActual('../src/features/explore/services/explore-service'),
@@ -87,6 +95,7 @@ function button(label: string) {
 beforeEach(() => {
   jest.useFakeTimers();
   mockFocused = true;
+  mockAppearance = 'light';
   jest
     .spyOn(AccessibilityInfo, 'isReduceMotionEnabled')
     .mockResolvedValue(true);
@@ -110,9 +119,48 @@ it('renders all public results with real facts and details navigation', async ()
   expect(output()).not.toContain('FOR YOU');
   act(() => screen.root.findByType(DSButton).props.onPress());
   expect(navigate).toHaveBeenCalledWith('CircleDetail', {circleId: 'one'});
-  act(() => button('Create a circle').props.onClick());
-  expect(navigate).toHaveBeenCalledWith('CreateCircle');
+  expect(button('Create a circle')).toBeUndefined();
 });
+
+it('shows a coming soon alert from the icon-only Friends button', async () => {
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+  await mount();
+  expect(output()).not.toContain('Friends');
+  act(() => button('Friends').props.onClick());
+  expect(alert).toHaveBeenCalledWith('Friends', 'Coming soon', [{text: 'OK'}]);
+  expect(navigate).not.toHaveBeenCalled();
+});
+
+it.each([
+  ['light', '#18B9FF80'],
+  ['dark', '#18B9FF38'],
+])(
+  'keeps the %s tint behind the full scroll viewport with one top inset',
+  async (appearance, color) => {
+    mockAppearance = appearance;
+    await mount();
+    const tint = screen.root.findByProps({testID: 'explore-top-tint'});
+    expect(tint.props.colors).toEqual([color, '#18B9FF00']);
+    expect(tint.props.pointerEvents).toBe('none');
+    expect(StyleSheet.flatten(tint.props.style)).toMatchObject({
+      position: 'absolute',
+      top: 0,
+      height: 240,
+    });
+    const list = screen.root.findByType(FlatList);
+    expect(
+      StyleSheet.flatten(list.props.contentContainerStyle).paddingTop,
+    ).toBe(75);
+    expect(list.props.contentInsetAdjustmentBehavior).toBe('never');
+    expect(list.props.automaticallyAdjustContentInsets).toBe(false);
+    expect(list.props.scrollIndicatorInsets.top).toBe(59);
+    expect(list.props.progressViewOffset).toBe(59);
+    const safeArea = screen.root.findByType(
+      require('react-native-safe-area-context').SafeAreaView,
+    );
+    expect(safeArea.props.edges).toEqual(['left', 'right']);
+  },
+);
 
 it('moves Hoy only for active requests and stops for errors and navigation away', async () => {
   await mount();
@@ -153,11 +201,17 @@ it('moves Hoy during pagination and stops when the page arrives', async () => {
     () => new Promise(resolveRequest => (resolve = resolveRequest)),
   );
   act(() =>
-    screen.root.findByType(require('react-native').FlatList).props.onEndReached(),
+    screen.root
+      .findByType(require('react-native').FlatList)
+      .props.onEndReached(),
   );
-  expect(screen.root.findByType(ExploreSearchingHoy).props.searching).toBe(true);
+  expect(screen.root.findByType(ExploreSearchingHoy).props.searching).toBe(
+    true,
+  );
   await act(async () => resolve(result));
-  expect(screen.root.findByType(ExploreSearchingHoy).props.searching).toBe(false);
+  expect(screen.root.findByType(ExploreSearchingHoy).props.searching).toBe(
+    false,
+  );
 });
 it('debounces search and passes category selection to the full-index service', async () => {
   await mount();
@@ -205,7 +259,8 @@ it('shows truthful empty and error states without sample circles', async () => {
   expect(output()).not.toContain('Builders');
   expect(screen.root.findByType(DSButton).props.label).toBe('Try again');
 });
-it('shows only the explicit public event and its absolute time', async () => {
+it('shows only the explicit public event with relative time in text and accessibility', async () => {
+  jest.setSystemTime(new Date('2026-09-26T14:00:00Z'));
   search.mockResolvedValueOnce({
     ...result,
     circles: [
@@ -223,8 +278,38 @@ it('shows only the explicit public event and its absolute time', async () => {
   await mount();
   expect(output()).toContain('Ava');
   expect(output()).toContain('tapped in');
-  expect(output()).toContain('2026');
-  expect(output()).not.toContain('ago');
+  expect(output()).toContain('2 hours ago');
+  expect(output()).not.toContain('2026');
+  expect(
+    screen.root.findAllByProps({
+      accessibilityLabel: 'Ava tapped in, 2 hours ago',
+    }).length,
+  ).toBeGreaterThan(0);
+});
+
+it('formats actual elapsed time with singular/plural units and safe timestamp fallbacks', () => {
+  const now = Date.parse('2026-09-29T22:00:00Z');
+  const examples: [number, string][] = [
+    [0, 'Just now'],
+    [59, 'Just now'],
+    [60, '1 minute ago'],
+    [120, '2 minutes ago'],
+    [3600, '1 hour ago'],
+    [86400, '1 day ago'],
+    [2 * 86400, '2 days ago'],
+    [7 * 86400, '1 week ago'],
+    [30 * 86400, '1 month ago'],
+    [365 * 86400, '1 year ago'],
+  ];
+  for (const [seconds, expected] of examples) {
+    expect(
+      formatPublicTapInTime(new Date(now - seconds * 1000).toISOString(), now),
+    ).toBe(expected);
+  }
+  expect(formatPublicTapInTime('invalid', now)).toBe('');
+  expect(formatPublicTapInTime(new Date(now + 60_000).toISOString(), now)).toBe(
+    'Just now',
+  );
 });
 it('appends another page and retains existing cards when loading more fails', async () => {
   search.mockResolvedValueOnce({...result, total: 22, nextCursor: 'page-two'});

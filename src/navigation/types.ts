@@ -10,7 +10,7 @@ export type AppTabsParamList = {
   Home: undefined;
   Explore: undefined;
   TapIn: undefined;
-  Momentum: undefined;
+  Progress: undefined;
   Profile: undefined;
 };
 
@@ -38,13 +38,27 @@ export type TapInCompletionMomentum = {
 export type TapInCompletionStatus = 'done' | 'skip' | 'partial' | 'failed';
 
 export type RootStackParamList = {
+  ProgressDetails: {
+    section: import('../features/progress/screens/ProgressScreen').ProgressSection;
+    packType?: 'skips' | 'restores';
+    dateKey?: string;
+    activityId?: string;
+    ownerUid?: string;
+  };
   Loading: undefined;
   MainTabs: NavigatorScreenParams<AppTabsParamList> | undefined;
   Auth: NavigatorScreenParams<AuthStackParamList> | undefined;
   CircleInvite: {inviteCode: string};
   Circles: undefined;
   Inbox: undefined;
-  EditProfile: undefined;
+  EditProfile: {focusPhoto?: boolean} | undefined;
+  ProfileShare: undefined;
+  ProfileMilestones: undefined;
+  Settings: undefined;
+  AccountSettings: undefined;
+  NotificationSettings: undefined;
+  AppearanceSettings: undefined;
+  AboutHoyst: undefined;
   EditCircle: {circleId: string};
   CircleTools: {circleId: string};
   ConvertPersonalCircle: {circleId: string};
@@ -81,6 +95,10 @@ export type RootStackParamList = {
     targetValue?: number;
     unitLabel?: string;
     completionMomentum?: TapInCompletionMomentum;
+    completionProgress?: {
+      xpEarned: number;
+      rewards: {skips: number; restores: number};
+    };
     note?: string;
     photoUri?: string;
   };

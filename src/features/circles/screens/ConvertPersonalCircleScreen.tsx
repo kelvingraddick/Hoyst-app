@@ -1,5 +1,6 @@
+import {shareCircleInvitation} from '../../progress/services/progress-service';
 import React, {useEffect, useMemo, useRef, useState} from 'react';
-import {Alert, Share, StyleSheet, View} from 'react-native';
+import {Alert, StyleSheet, View} from 'react-native';
 import {Check, Info, Share2} from 'lucide-react-native';
 import type {NativeStackScreenProps} from '@react-navigation/native-stack';
 
@@ -144,7 +145,7 @@ export function ConvertPersonalCircleScreen({
       return;
     }
 
-    await Share.share({
+    await shareCircleInvitation(route.params.circleId, {
       message: `Join ${title.trim()} on Hoyst: ${convertedCircle.inviteUrl}`,
       title: `Join ${title.trim()} on Hoyst`,
       url: convertedCircle.inviteUrl,

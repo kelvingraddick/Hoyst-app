@@ -3,7 +3,7 @@ import {create} from 'zustand';
 import type {UserProfile} from '../types/models';
 
 type EditableProfileFields = Pick<UserProfile, 'avatarUrl' | 'bio' | 'name'> &
-  Partial<Pick<UserProfile, 'timezone'>>;
+  Partial<Pick<UserProfile, 'timezone' | 'handle' | 'profileTint'>>;
 
 type UserProfileState = {
   profile?: UserProfile;

@@ -1,7 +1,6 @@
 import React from 'react';
 import {Pressable, StyleSheet, useWindowDimensions, View} from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
-import LinearGradient from 'react-native-linear-gradient';
 import {
   Bell,
   Clock3,
@@ -64,6 +63,8 @@ export function HomeHeroHeader({
   isHoyActionDisabled = false,
   onHoyActionPress,
   notification,
+  onLayout,
+  topInsetApplied = false,
   surfaceColor: _surfaceColor,
 }: {
   bubbleText?: string;
@@ -74,6 +75,8 @@ export function HomeHeroHeader({
   isHoyActionDisabled?: boolean;
   onHoyActionPress: () => void;
   notification?: React.ReactNode;
+  topInsetApplied?: boolean;
+  onLayout?: React.ComponentProps<typeof View>['onLayout'];
   surfaceColor: string;
 }) {
   const theme = useHoystTheme();
@@ -88,16 +91,12 @@ export function HomeHeroHeader({
   const messageOpacity = isHoyActionDisabled ? 0.8 : 1;
   const bubbleShadow = theme.isDark ? '#000000' : '#92723E';
   return (
-    <View style={[styles.header, {paddingTop: insets.top + 4}]}>
-      <LinearGradient
-        pointerEvents="none"
-        colors={[
-          `${visual.tint}${theme.isDark ? '26' : 'A6'}`,
-          `${visual.tint}00`,
-        ]}
-        style={StyleSheet.absoluteFill}
-        testID="home-hoy-context-tint"
-      />
+    <View
+      onLayout={onLayout}
+      style={[
+        styles.header,
+        {paddingTop: (topInsetApplied ? 0 : insets.top) + 4},
+      ]}>
       <View style={styles.topRow}>
         <BrandMark isDark={theme.isDark} kind="logo" style={styles.logo} />
         {notification}

@@ -2,7 +2,10 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.removeTapIn = exports.processTapInSideEffects = exports.updateTapInDetails = exports.submitTapIn = void 0;
 const node_crypto_1 = require("node:crypto");
-const model_1 = require("../discovery/model");
+const ledger_1 = require("../progress/ledger");
+const model_1 = require("../progress/model");
+const progress_1 = require("../progress");
+const model_2 = require("../discovery/model");
 const firestore_1 = require("firebase-admin/firestore");
 const auth_1 = require("firebase-admin/auth");
 const storage_1 = require("firebase-admin/storage");
@@ -23,9 +26,11 @@ const profile_1 = require("../profile");
 const thread_1 = require("../thread");
 const notification_plan_1 = require("./notification-plan");
 const details_1 = require("./details");
+const publication_only_1 = require("./publication-only");
 const group_streak_1 = require("../circles/group-streak");
 const submitTapInSchema = zod_1.z.object({
     circleId: zod_1.z.string().trim().min(1),
+    progressVersion: zod_1.z.literal(1).optional(),
     currentValue: zod_1.z.number().int().min(0).max(100000).optional(),
     note: zod_1.z.string().trim().max(1000).optional(),
     photoUrl: zod_1.z.string().trim().max(2048).optional(),
@@ -587,11 +592,14 @@ async function processTapInSideEffectsForCheckIn({ checkIn, circleId, dateKey, s
     ]);
 }
 async function submitTapInHandler(request) {
-    const { profile, uid } = await requireCompletedProfile(request.auth?.uid);
+    const { profile, uid } = await requireCompletedProfile(request.auth?.uid, request.data?.idToken);
     const input = submitTapInSchema.parse(request.data);
+    if (input.status === 'skip')
+        await (0, progress_1.initializeXPBeforeProtection)(uid);
     const circleRef = firebase_1.db.collection('circles').doc(input.circleId);
     const memberRef = circleRef.collection('members').doc(uid);
     const now = firestore_1.FieldValue.serverTimestamp();
+    const progressRequestId = (0, node_crypto_1.randomUUID)();
     const result = await firebase_1.db.runTransaction(async (transaction) => {
         const [circleSnapshot, memberSnapshot, discoveryConfig] = await Promise.all([
             transaction.get(circleRef),
@@ -635,7 +643,10 @@ async function submitTapInHandler(request) {
             !coveredOutcomeUpdateAllowed) {
             throw new https_1.HttpsError('already-exists', 'You already tapped in today.');
         }
-        if (input.status === 'skip') {
+        const economy = await (0, ledger_1.readEconomy)(transaction, uid, profile.timezone || 'UTC');
+        if (input.status === 'skip')
+            (0, ledger_1.requireInventoryVersion)(economy.flags.inventory, input.progressVersion);
+        if (input.status === 'skip' && !economy.flags.inventory) {
             const skipRule = circle?.graceRules?.skip;
             const graceRule = {
                 allowance: typeof skipRule?.allowance === 'number' ? skipRule.allowance : 0,
@@ -674,8 +685,54 @@ async function submitTapInHandler(request) {
         });
         const quantityConfig = (0, commitments_1.getQuantityConfig)(circle);
         const commitmentType = (0, commitments_1.getCommitmentType)(circle);
+        let progress = { xpEarned: 0, rewards: { skips: 0, restores: 0 } };
+        let skipFunding;
+        if (existingCheckIn?.skipFunding && input.status === 'done') {
+            const returned = (0, model_1.refundSpend)(economy.wallet, existingCheckIn.skipFunding, 'skips', economy.wallet.lots[existingCheckIn.skipFunding]?.revoked);
+            if (returned)
+                economy.records.push({
+                    id: 'refund_' + existingCheckIn.skipSpendId,
+                    data: {
+                        kind: 'refund',
+                        reason: 'Skip replaced with Tap In',
+                        skips: 1,
+                        restores: 0,
+                        xp: 0,
+                    },
+                });
+        }
         if (nextCovered && (!existingCovered || coveredOutcomeChanged)) {
             await (0, momentum_1.recordTapInOpportunity)({
+                beforeWrite: async (opportunityId, prior) => {
+                    if (prior?.expiresDateKey < dateKey)
+                        throw new https_1.HttpsError('failed-precondition', 'This Opportunity is closed.');
+                    if (nextStatus === 'skip' && economy.flags.inventory) {
+                        try {
+                            skipFunding = (0, model_1.spend)(economy.wallet, 'skips');
+                        }
+                        catch (error) {
+                            throw new https_1.HttpsError('resource-exhausted', String(error));
+                        }
+                        economy.records.push({
+                            id: 'spend_' + progressRequestId,
+                            data: {
+                                kind: 'spend',
+                                reason: 'Skip used',
+                                opportunityId,
+                                funding: skipFunding,
+                                skips: -1,
+                                restores: 0,
+                                xp: 0,
+                            },
+                        });
+                    }
+                    if (nextStatus === 'done' &&
+                        prior?.status !== 'completed' &&
+                        (!prior?.firstSuccessfulAt ||
+                            prior.firstSuccessfulAt.toMillis() >=
+                                (economy.wallet.earningActivatedAt || economy.now)))
+                        progress = await (0, ledger_1.prepareSuccessfulOpportunity)(transaction, economy, opportunityId, profile.timezone || 'UTC');
+                },
                 checkInId: uid,
                 circle,
                 circleId: input.circleId,
@@ -703,6 +760,7 @@ async function submitTapInHandler(request) {
             avatarUrl: profile.avatarUrl ?? null,
             coverageStatus,
             coverageRevision,
+            ...(nextStatus === 'done' ? { progressEventId: progressRequestId } : {}),
             circleId: input.circleId,
             displayName: profile.displayName,
             handle: profile.handle,
@@ -711,9 +769,15 @@ async function submitTapInHandler(request) {
             status: nextStatus,
             uid,
             updatedAt: now,
+            ...(skipFunding
+                ? { skipFunding, skipSpendId: progressRequestId }
+                : input.status === 'done'
+                    ? { skipFunding: firestore_1.FieldValue.delete(), skipSpendId: firestore_1.FieldValue.delete() }
+                    : {}),
         };
+        (0, ledger_1.writeEconomy)(transaction, economy);
         // Eligibility is recorded at the successful transition, never by a historical backfill.
-        if ((0, model_1.canPublishNewTapIn)({
+        if ((0, model_2.canPublishNewTapIn)({
             circle,
             before: existingCheckIn,
             nextStatus,
@@ -722,7 +786,7 @@ async function submitTapInHandler(request) {
         })) {
             checkInPayload.publicTapIn = {
                 eventId: `${dateKey}_${uid}_${(0, node_crypto_1.randomUUID)()}`,
-                epoch: (0, model_1.activityEpoch)(circle),
+                epoch: (0, model_2.activityEpoch)(circle),
                 occurredAt: now,
             };
         }
@@ -790,6 +854,8 @@ async function submitTapInHandler(request) {
             dateKey,
             coverageRevision,
             checkInPath: checkInRef.path,
+            progress,
+            progressEventId: progressRequestId,
             shouldReportMomentum: nextCovered && !existingCovered,
             status: nextStatus,
         };
@@ -806,7 +872,28 @@ async function submitTapInHandler(request) {
             ...(0, profile_1.getPersonalStreakTransition)({ currentMetrics, priorMetrics }),
         }))
         : undefined;
+    if (result.status === 'done' && result.coverageStatus === 'covered') {
+        try {
+            await (0, momentum_1.recalculateMomentumSummaryForUser)(uid);
+            await (0, progress_1.reconcileProgress)(uid, true, result.progressEventId);
+            const bonuses = await firebase_1.db
+                .collection('userPrivate')
+                .doc(uid)
+                .collection('progressLedger')
+                .where('sourceEventId', '==', result.progressEventId)
+                .get();
+            for (const bonus of bonuses.docs) {
+                result.progress.xpEarned += bonus.data().xp || 0;
+                result.progress.rewards.skips += bonus.data().skips || 0;
+                result.progress.rewards.restores += bonus.data().restores || 0;
+            }
+        }
+        catch {
+            console.error('progress_completion_reconciliation_pending');
+        }
+    }
     return {
+        progress: result.progress,
         checkInId: result.checkInId,
         coverageStatus: result.coverageStatus,
         currentValue: result.currentValue,
@@ -886,6 +973,9 @@ exports.processTapInSideEffects = (0, firestore_2.onDocumentWritten)({
 }, async (event) => {
     const checkIn = event.data?.after.data();
     const priorCheckIn = event.data?.before.data();
+    if ((0, publication_only_1.isPublicationOnlyUpdate)(priorCheckIn, checkIn)) {
+        return;
+    }
     const status = checkIn?.status;
     const wasCovered = (0, commitments_1.isCoveredCheckInData)(priorCheckIn);
     const isCovered = (0, commitments_1.isCoveredCheckInData)(checkIn);
@@ -921,9 +1011,18 @@ exports.processTapInSideEffects = (0, firestore_2.onDocumentWritten)({
         await reconcileGroupStreak();
         return;
     }
+    if (checkIn?.protectionKind === 'restore') {
+        await (0, momentum_1.recalculateMomentumSummaryForUser)(event.params.uid);
+        await reconcileGroupStreak();
+        return;
+    }
     if (!checkIn || !isCovered || (status !== 'done' && status !== 'skip')) {
         await reconcileGroupStreak();
         return;
+    }
+    if (status === 'done') {
+        await (0, momentum_1.recalculateMomentumSummaryForUser)(event.params.uid);
+        await (0, progress_1.reconcileProgress)(event.params.uid, true, checkIn.progressEventId);
     }
     await processTapInSideEffectsForCheckIn({
         checkIn,
@@ -966,6 +1065,21 @@ exports.removeTapIn = (0, https_1.onCall)(async (request) => {
         if (!decision.removed) {
             return { dateKey, removed: false };
         }
+        const economy = await (0, ledger_1.readEconomy)(transaction, uid, profile.timezone || 'UTC');
+        if (checkIn?.skipFunding) {
+            const returned = (0, model_1.refundSpend)(economy.wallet, checkIn.skipFunding, 'skips', economy.wallet.lots[checkIn.skipFunding]?.revoked);
+            if (returned)
+                economy.records.push({
+                    id: 'refund_' + checkIn.skipSpendId,
+                    data: {
+                        kind: 'refund',
+                        reason: 'Open skip removed',
+                        skips: 1,
+                        restores: 0,
+                        xp: 0,
+                    },
+                });
+        }
         if (decision.checkInCountDelta < 0) {
             await (0, momentum_1.removeTapInOpportunity)({
                 circle,
@@ -975,6 +1089,7 @@ exports.removeTapIn = (0, https_1.onCall)(async (request) => {
                 uid,
             });
         }
+        (0, ledger_1.writeEconomy)(transaction, economy);
         transaction.delete(checkInRef);
         transaction.set(circleRef.collection('days').doc(dateKey), {
             checkInCount: firestore_1.FieldValue.increment(decision.checkInCountDelta),

@@ -266,7 +266,7 @@ function getStatusCopy({
     const currentStreak = momentum?.currentStreak ?? 0;
 
     return {
-      lead: 'Grace skip used',
+      lead: 'Skip used',
       trailing:
         currentStreak > 0
           ? `${formatDayCount(currentStreak)} streak held`
@@ -834,6 +834,7 @@ function TapInCompleteController({
   const loadingCopy = hasCompletionContent
     ? 'Getting the screen ready.'
     : 'Loading your circle.';
+  const xpFeedback = route.params.completionProgress;
   const statusCopy =
     quantityOutcomeCopy ??
     getStatusCopy({
@@ -891,7 +892,7 @@ function TapInCompleteController({
       ? theme.accentWarmForeground
       : outcomeForegroundColor;
   const emptyNoteCopy = isSkip
-    ? 'No note added. Your grace skip still counts.'
+    ? 'No note added. Your skip still protects this opportunity.'
     : quantityCoverageStatus === 'failed'
     ? 'No note added. Your Tap In was saved.'
     : quantityCoverageStatus === 'partial'
@@ -1109,6 +1110,7 @@ function TapInCompleteController({
               </Animated.View>
             </View>
 
+            {xpFeedback && xpFeedback.xpEarned > 0 ? <DSText accessibilityLiveRegion="polite" tone="success" variant="title">+{xpFeedback.xpEarned} XP{xpFeedback.rewards.skips ? ` · ${xpFeedback.rewards.skips} skip earned` : ''}{xpFeedback.rewards.restores ? ` · ${xpFeedback.rewards.restores} restore earned` : ''}</DSText> : null}
             <Animated.View style={[styles.detailsStack, contentAnimatedStyle]}>
               <View style={styles.commitmentRow}>
                 <CircleCategoryIcon

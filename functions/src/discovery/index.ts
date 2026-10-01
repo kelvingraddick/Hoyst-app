@@ -45,14 +45,19 @@ export const searchPublicCircles = onCall(async request => {
   const fingerprint = createHash('sha256')
     .update(JSON.stringify([words, input.category]))
     .digest('hex');
-  let cursor: {id: string; time: number; fingerprint: string} | undefined;
+  let cursor:
+    | {id: string; seconds: number; nanoseconds: number; fingerprint: string}
+    | undefined;
   if (input.cursor) {
     try {
       cursor = JSON.parse(Buffer.from(input.cursor, 'base64url').toString());
       if (
         !cursor ||
         typeof cursor.id !== 'string' ||
-        !Number.isFinite(cursor.time) ||
+        !Number.isSafeInteger(cursor.seconds) ||
+        !Number.isInteger(cursor.nanoseconds) ||
+        cursor.nanoseconds < 0 ||
+        cursor.nanoseconds >= 1_000_000_000 ||
         cursor.fingerprint !== fingerprint
       ) {
         throw new Error();
@@ -94,12 +99,16 @@ export const searchPublicCircles = onCall(async request => {
     );
   });
   const remaining = cursor
-    ? matches.filter(
-        doc =>
-          millis(doc.data().updatedAt) < cursor!.time ||
-          (millis(doc.data().updatedAt) === cursor!.time &&
-            doc.id < cursor!.id),
-      )
+    ? matches.filter(doc => {
+        const {seconds, nanoseconds} = doc.data().updatedAt;
+        // Preserve Firestore ordering before applying the document ID tie-break.
+        return (
+          seconds < cursor!.seconds ||
+          (seconds === cursor!.seconds &&
+            (nanoseconds < cursor!.nanoseconds ||
+              (nanoseconds === cursor!.nanoseconds && doc.id < cursor!.id)))
+        );
+      })
     : matches;
   const selected = remaining.slice(0, pageSize);
   // Validate current authority at read time, so delayed cleanup triggers cannot leak withdrawn previews.
@@ -166,7 +175,8 @@ export const searchPublicCircles = onCall(async request => {
           nextCursor: Buffer.from(
             JSON.stringify({
               id: last.id,
-              time: millis(last.data().updatedAt),
+              seconds: last.data().updatedAt.seconds,
+              nanoseconds: last.data().updatedAt.nanoseconds,
               fingerprint,
             }),
           ).toString('base64url'),

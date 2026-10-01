@@ -1,6 +1,7 @@
 import React from 'react';
-import {StyleSheet} from 'react-native';
+import {Image, ScrollView, StyleSheet} from 'react-native';
 import renderer, {act} from 'react-test-renderer';
+import {Bell, Check, Clock3} from 'lucide-react-native';
 
 import {HomeActivityRow} from '../src/features/home/components/HomeSurfaces';
 import {HomeButton as HoystButton} from '../src/features/home/components/HomeSurfaces';
@@ -38,6 +39,7 @@ import {
   subscribeToInboxEvents,
 } from '../src/features/settings/services/notification-settings-service';
 import type {
+  CircleActivityItem,
   CircleManagementCard,
   ExploreCircle,
   InboxEvent,
@@ -59,6 +61,7 @@ let mockInboxEvents: InboxEvent[];
 let mockUnreadInboxCount = 1;
 let mockMomentumSummary: MomentumSummary;
 let mockAppearance: 'dark' | 'light' = 'light';
+let mockInsets = {bottom: 0, left: 0, right: 0, top: 0};
 let mockSessionStatus: AuthSessionStatus = 'authenticatedReady';
 let mockSessionUser: AuthSessionUser | undefined = {
   providerIds: [],
@@ -96,7 +99,7 @@ jest.mock('react-native-safe-area-context', () => {
   return {
     SafeAreaView: ({children, ...props}: {children?: React.ReactNode}) =>
       MockReact.createElement(MockView, props, children),
-    useSafeAreaInsets: () => ({bottom: 0, left: 0, right: 0, top: 0}),
+    useSafeAreaInsets: () => mockInsets,
   };
 });
 
@@ -409,6 +412,21 @@ function inboxEvent(overrides: Partial<InboxEvent> = {}): InboxEvent {
   };
 }
 
+function activityItem(
+  overrides: Partial<CircleActivityItem> = {},
+): CircleActivityItem {
+  return {
+    actorInitials: 'CC',
+    actorName: 'Circle complete',
+    eventType: 'circle_complete',
+    id: 'activity-1',
+    message: 'completed this Cycle.',
+    timestamp: 'Just now',
+    tone: 'success',
+    ...overrides,
+  };
+}
+
 function attentionCircle(
   overrides: Partial<CircleManagementCard> = {},
 ): CircleManagementCard {
@@ -486,6 +504,17 @@ function renderScreen() {
   return JSON.stringify(renderScreenTree().toJSON());
 }
 
+function renderActivityRow(item: CircleActivityItem) {
+  let row: renderer.ReactTestRenderer | undefined;
+
+  act(() => {
+    row = renderer.create(<HomeActivityRow item={item} onPress={jest.fn()} />);
+  });
+
+  mountedScreens.push(row!);
+  return row!;
+}
+
 function setResolvedHoyAction({
   action,
   circle,
@@ -547,6 +576,7 @@ describe('HomeScreen Circle activity updates', () => {
     mockUnreadInboxCount = 1;
     mockMomentumSummary = momentumSummary();
     mockAppearance = 'light';
+    mockInsets = {bottom: 0, left: 0, right: 0, top: 0};
     mockSessionStatus = 'authenticatedReady';
     mockSessionUser = {providerIds: [], uid: 'user-1'};
     mockPendingHoyTapInCelebration = undefined;
@@ -594,6 +624,103 @@ describe('HomeScreen Circle activity updates', () => {
       },
     });
     (shouldShowAuthenticatedHomeEmptyState as jest.Mock).mockReturnValue(false);
+  });
+
+  it.each(['light', 'dark'] as const)(
+    'shows the shared Circle complete check in %s mode',
+    appearance => {
+      mockAppearance = appearance;
+      const tree = renderActivityRow(activityItem());
+      const badge = tree.root.findByProps({
+        testID: 'inbox-circle-complete-icon',
+      });
+
+      expect(StyleSheet.flatten(badge.props.style)).toMatchObject({
+        backgroundColor: appearance === 'light' ? '#E7F8EF' : '#122B1F',
+        height: 28,
+        width: 28,
+      });
+      expect(tree.root.findByType(Check).props).toMatchObject({
+        color: appearance === 'light' ? '#07763E' : '#4BE083',
+        size: 16,
+        strokeWidth: 2.2,
+      });
+    },
+  );
+
+  it('uses meaning icons for actorless Home activity', () => {
+    const reminder = renderActivityRow(
+      activityItem({eventType: 'member_due_prompt', id: 'reminder'}),
+    );
+    const social = renderActivityRow(
+      activityItem({eventType: 'nudge', id: 'social'}),
+    );
+
+    expect(reminder.root.findAllByType(Clock3)).toHaveLength(1);
+    expect(
+      StyleSheet.flatten(
+        reminder.root.findByProps({
+          testID: 'inbox-event-icon',
+        }).props.style,
+      ).backgroundColor,
+    ).toBe('#FFF0E6');
+    expect(social.root.findAllByType(Bell)).toHaveLength(1);
+    expect(
+      StyleSheet.flatten(
+        social.root.findByProps({
+          testID: 'inbox-event-icon',
+        }).props.style,
+      ).backgroundColor,
+    ).toBe('#F0ECFF');
+  });
+
+  it('keeps person photos and falls back to their initials after an image error', () => {
+    const tree = renderActivityRow(
+      activityItem({
+        actorAvatarUrl: 'https://example.com/ari.jpg',
+        actorDisplayName: 'Ari Runner',
+        actorInitials: 'AR',
+        actorName: 'Ari Runner',
+      }),
+    );
+
+    expect(tree.root.findAllByType(Image)).toHaveLength(1);
+    expect(
+      tree.root.findAllByProps({testID: 'inbox-circle-complete-icon'}),
+    ).toHaveLength(0);
+    act(() => tree.root.findByType(Image).props.onError());
+    expect(tree.root.findAllByType(Image)).toHaveLength(0);
+    expect(JSON.stringify(tree.toJSON())).toContain('AR');
+    expect(
+      tree.root.findAllByProps({testID: 'inbox-circle-complete-icon'}),
+    ).toHaveLength(0);
+  });
+
+  it('uses initials for a named person without a photo', () => {
+    const tree = renderActivityRow(
+      activityItem({actorDisplayName: 'Ari Runner', actorInitials: 'AR'}),
+    );
+
+    expect(JSON.stringify(tree.toJSON())).toContain('AR');
+    expect(
+      tree.root.findAllByProps({testID: 'inbox-circle-complete-icon'}),
+    ).toHaveLength(0);
+  });
+
+  it('uses the event badge when an unnamed actor photo fails', () => {
+    const tree = renderActivityRow(
+      activityItem({actorAvatarUrl: 'https://example.com/unnamed.jpg'}),
+    );
+
+    expect(tree.root.findAllByType(Image)).toHaveLength(1);
+    act(() => tree.root.findByType(Image).props.onError());
+    expect(
+      tree.root.findAll(
+        node =>
+          typeof node.type === 'string' &&
+          node.props.testID === 'inbox-circle-complete-icon',
+      ),
+    ).toHaveLength(1);
   });
 
   it('subscribes to inbox events and renders empty Circle activity at the bottom', () => {
@@ -769,6 +896,58 @@ describe('HomeScreen Circle activity updates', () => {
     );
     expect(mockRootNavigate).toHaveBeenCalledWith('Circles');
   });
+
+  it.each(['populated', 'empty', 'loading', 'error'] as const)(
+    'shows Create new commitment beneath All my commitments in the %s state',
+    state => {
+      mockHomeData = {
+        ...homeData(),
+        hasResolvedGreetingContext: true,
+        circles: state === 'populated' ? [attentionCircle()] : [],
+      };
+      if (state === 'empty') {
+        (shouldShowAuthenticatedHomeEmptyState as jest.Mock).mockReturnValue(
+          true,
+        );
+      } else if (state === 'loading') {
+        (subscribeToHomeData as jest.Mock).mockImplementationOnce(() =>
+          jest.fn(),
+        );
+      } else if (state === 'error') {
+        (subscribeToHomeData as jest.Mock).mockImplementationOnce(
+          ({onError}) => {
+            onError();
+            return jest.fn();
+          },
+        );
+      }
+      const tree = renderScreenTree();
+      const all = tree.root.findByProps({testID: 'all-my-commitments-link'});
+      const create = tree.root.findByProps({
+        testID: 'create-new-commitment-link',
+      });
+      const siblings = all.parent!.children;
+      expect(siblings[siblings.indexOf(all) + 1]).toBe(create);
+      expect(create.props.accessibilityLabel).toBe('Create new commitment');
+      const output = JSON.stringify(tree.toJSON());
+      expect(output.indexOf('create-new-commitment-link')).toBeLessThan(
+        output.indexOf('Circle activity'),
+      );
+      act(() => create.props.onPress());
+      expect(mockRootNavigate).toHaveBeenCalledWith('CreateCircle');
+    },
+  );
+
+  it.each(['guest', 'authenticatedIncompleteProfile', 'initializing'] as const)(
+    'keeps the new creation row hidden for %s sessions',
+    status => {
+      mockSessionStatus = status;
+      const tree = renderScreenTree();
+      expect(
+        tree.root.findAllByProps({testID: 'create-new-commitment-link'}),
+      ).toHaveLength(0);
+    },
+  );
 
   it('routes authenticated empty-state circle discovery to Explore', () => {
     (shouldShowAuthenticatedHomeEmptyState as jest.Mock).mockReturnValue(true);
@@ -1198,7 +1377,7 @@ describe('HomeScreen Circle activity updates', () => {
       tree.root.findByProps({testID: 'home-hero-hoy-action'}).props.onPress();
     });
 
-    expect(mockNavigate).toHaveBeenCalledWith('Momentum');
+    expect(mockNavigate).toHaveBeenCalledWith('Progress');
   });
 
   it('does not generate Hoy or offer card actions before greeting context resolves', () => {
@@ -1292,7 +1471,78 @@ describe('HomeScreen Circle activity updates', () => {
     });
   });
 
-  it('uses the Momentum status palette in the full-width Home momentum bar', () => {
+  it('passes actorless Circle complete events through to the shared badge', () => {
+    mockInboxEvents = [
+      inboxEvent({
+        actor: undefined,
+        body: '"Sleep 7 Hours" completed this Cycle.',
+        id: 'complete-1',
+        title: 'Circle complete',
+        type: 'circle_complete',
+      }),
+    ];
+
+    const tree = renderScreenTree();
+    const item = tree.root.findByType(HomeActivityRow).props.item;
+
+    expect(item.eventType).toBe('circle_complete');
+    expect(item.actorDisplayName).toBeUndefined();
+    expect(
+      tree.root.findAll(
+        node =>
+          typeof node.type === 'string' &&
+          node.props.testID === 'inbox-circle-complete-icon',
+      ),
+    ).toHaveLength(1);
+  });
+
+  it('keeps the dynamic Hoy tint outside the scrolling header', () => {
+    const tree = renderScreenTree();
+    const tint = tree.root.findByProps({testID: 'home-hoy-context-tint'});
+    expect(
+      tint.parent?.findAllByProps({testID: 'home-hero-hoy-action'}).length,
+    ).toBeGreaterThan(0);
+    let ancestor = tint.parent;
+    while (ancestor) {
+      expect(ancestor.type).not.toBe(require('react-native').ScrollView);
+      ancestor = ancestor.parent;
+    }
+  });
+
+  it.each(['light', 'dark'] as const)(
+    'scrolls through the top safe area with original header spacing in %s mode',
+    appearance => {
+      mockAppearance = appearance;
+      mockInsets = {top: 62, bottom: 34, left: 0, right: 0};
+      const tree = renderScreenTree();
+      const scroll = tree.root.findByType(ScrollView);
+      expect(StyleSheet.flatten(scroll.props.style)).toEqual({
+        flex: 1,
+        backgroundColor: 'transparent',
+      });
+      expect(StyleSheet.flatten(scroll.props.contentContainerStyle)).toEqual({
+        flexGrow: 1,
+        paddingTop: 62,
+      });
+      expect(scroll.props.contentInsetAdjustmentBehavior).toBe('never');
+      expect(scroll.props.automaticallyAdjustContentInsets).toBe(false);
+      expect(scroll.props.automaticallyAdjustsScrollIndicatorInsets).toBe(
+        false,
+      );
+      const header = tree.root.findByType(
+        require('../src/design/components/HomeHeroHeader').HomeHeroHeader,
+      );
+      expect(header.props.topInsetApplied).toBe(true);
+      act(() => header.props.onLayout({nativeEvent: {layout: {height: 180}}}));
+      expect(
+        StyleSheet.flatten(
+          tree.root.findByProps({testID: 'home-hoy-context-tint'}).props.style,
+        ).height,
+      ).toBe(242);
+    },
+  );
+
+  it('opens the matching progress details from the two Home stat cards', () => {
     mockHomeData = {
       ...homeData(),
       hasResolvedGreetingContext: true,
@@ -1303,15 +1553,18 @@ describe('HomeScreen Circle activity updates', () => {
       testID: 'home-daily-action-progress',
     });
     expect(progress.props.accessibilityValue).toMatchObject({now: 0, max: 1});
-    expect(
-      StyleSheet.flatten(
-        tree.root.findByProps({testID: 'home-momentum-bar'}).props.style,
-      ),
-    ).toMatchObject({backgroundColor: '#FFFFFF', paddingVertical: 10});
     act(() =>
-      tree.root.findByProps({testID: 'home-momentum-bar'}).props.onPress(),
+      tree.root.findByProps({testID: 'home-streak-card'}).props.onPress(),
     );
-    expect(mockNavigate).toHaveBeenCalledWith('Momentum');
+    expect(mockRootNavigate).toHaveBeenLastCalledWith('ProgressDetails', {
+      section: 'streak',
+    });
+    act(() =>
+      tree.root.findByProps({testID: 'home-momentum-card'}).props.onPress(),
+    );
+    expect(mockRootNavigate).toHaveBeenLastCalledWith('ProgressDetails', {
+      section: 'momentum',
+    });
   });
 
   it('places icon-free daily action progress beneath Your commitments', () => {
@@ -1360,7 +1613,7 @@ describe('HomeScreen Circle activity updates', () => {
     } as MomentumSummary;
     const tree = renderScreenTree();
     expect(
-      tree.root.findByProps({testID: 'home-momentum-bar'}).props
+      tree.root.findByProps({testID: 'home-momentum-card'}).props
         .accessibilityLabel,
     ).toContain('30%');
     expect(

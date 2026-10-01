@@ -55,6 +55,7 @@ export type NotificationType =
   | 'circle_discovery_suggestion'
   | 'circle_nudge_prompt'
   | 'circle_restored'
+  | 'streak_restored'
   | LegacyCircleActivityNotificationType
   | 'evening_summary'
   | 'join_approved'
@@ -614,7 +615,9 @@ const notificationCopyCatalog: Record<
   NotificationCopyTemplate
 > = {
   circle_archived: context => ({
-    body: `${getCircleTitle(context)} was archived. History is still available.`,
+    body: `${getCircleTitle(
+      context,
+    )} was archived. History is still available.`,
     title: 'Circle archived',
   }),
   circle_at_risk: context => ({
@@ -637,8 +640,16 @@ const notificationCopyCatalog: Record<
     } in ${getCircleTitle(context)}.`,
     title: 'Nudge prompt',
   }),
+  streak_restored: context => ({
+    body: `A missed opportunity in ${getCircleTitle(
+      context,
+    )} has protected coverage.`,
+    title: 'Streak restored',
+  }),
   circle_restored: context => ({
-    body: `${getCircleTitle(context)} was restored. New Tap Ins resume at the next opening.`,
+    body: `${getCircleTitle(
+      context,
+    )} was restored. New Tap Ins resume at the next opening.`,
     title: 'Circle restored',
   }),
   [legacyCircleActivityNotificationTypes.achievementUnlocked]: context => ({
@@ -2234,7 +2245,9 @@ function getMemberMilestoneContext(
   event: MemberMilestoneEvent,
   actorName: string,
 ): NotificationCopyContext {
-  if (event.type === legacyCircleActivityNotificationTypes.achievementUnlocked) {
+  if (
+    event.type === legacyCircleActivityNotificationTypes.achievementUnlocked
+  ) {
     return {achievementTitle: event.achievementTitle, actorName};
   }
 
@@ -2252,7 +2265,9 @@ function getMemberMilestoneFallback({
   actorName: string;
   event: MemberMilestoneEvent;
 }) {
-  if (event.type === legacyCircleActivityNotificationTypes.achievementUnlocked) {
+  if (
+    event.type === legacyCircleActivityNotificationTypes.achievementUnlocked
+  ) {
     return {
       body: `${actorName} unlocked ${event.achievementTitle}.`,
       title: 'Achievement unlocked',
@@ -2417,7 +2432,9 @@ export async function notifyMemberTappedIn({
   const actorName = notificationActor?.displayName ?? 'Someone';
   const revisionKey =
     typeof sourceRevision === 'number' ? `_r${sourceRevision}` : '';
-  const dedupeKey = `${legacyCircleActivityNotificationTypes.tappedIn}_${circleId}_${dateKey}_${
+  const dedupeKey = `${
+    legacyCircleActivityNotificationTypes.tappedIn
+  }_${circleId}_${dateKey}_${
     notificationActor?.uid ?? 'unknown'
   }_${targetUid}${revisionKey}`;
   const copy = resolveNotificationCopy({
@@ -2729,10 +2746,7 @@ export function getReminderEligibility({
 
   return {
     dedupeKey:
-      pace &&
-      pace !== 'daily' &&
-      periodKey &&
-      typeof slotIndex === 'number'
+      pace && pace !== 'daily' && periodKey && typeof slotIndex === 'number'
         ? `tap_in_${kind}_${circleId}_${periodKey}_${slotIndex}_${uid}`
         : `tap_in_${kind}_${circleId}_${dateKey}_${uid}`,
     eligible: true,
@@ -3105,8 +3119,7 @@ export function compareCircleNudgePromptCandidates(
   }
 
   const riskShareComparison =
-    right.behindCount * left.activeCount -
-    left.behindCount * right.activeCount;
+    right.behindCount * left.activeCount - left.behindCount * right.activeCount;
 
   if (riskShareComparison !== 0) {
     return riskShareComparison;
@@ -3758,13 +3771,19 @@ export const updateNotificationSettings = onCall(async request => {
   const input = updateNotificationSettingsSchema.parse(request.data);
   const uid = request.auth.uid;
 
-  await db.collection('userPrivate').doc(uid).set(
-    {
-      notificationSettings: input.notificationSettings,
-      updatedAt: FieldValue.serverTimestamp(),
-    },
-    {merge: true},
-  );
+  await db
+    .collection('userPrivate')
+    .doc(uid)
+    .set(
+      {
+        notificationSettings: input.notificationSettings,
+        ...(typeof input.notificationSettings.tapInReminders === 'boolean'
+          ? {reminderPreferenceSavedAt: FieldValue.serverTimestamp()}
+          : {}),
+        updatedAt: FieldValue.serverTimestamp(),
+      },
+      {merge: true},
+    );
 
   return {notificationSettings: input.notificationSettings};
 });

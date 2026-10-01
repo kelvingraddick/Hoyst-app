@@ -1,10 +1,10 @@
+import {shareCircleInvitation} from '../../progress/services/progress-service';
 import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {
   ActivityIndicator,
   Alert,
   Animated,
   Pressable,
-  Share,
   StyleSheet,
   View,
   type LayoutChangeEvent,
@@ -939,11 +939,18 @@ function CircleDetailScreenContent({
   const [joinRequested, setJoinRequested] = useState(false);
   const [isJoining, setIsJoining] = useState(false);
   const [isRemovingTapIn, setIsRemovingTapIn] = useState(false);
-  const [publicCircle, setPublicCircle] = useState<CircleSummary | undefined>();
-  const [memberCircle, setMemberCircle] = useState<
-    CircleDetailModel | undefined
-  >();
-  const [groupStreakDays, setGroupStreakDays] = useState(0);
+  const [publicResult, setPublicResult] = useState<{
+    key: string;
+    detail?: CircleSummary;
+  }>();
+  const [memberResult, setMemberResult] = useState<{
+    key: string;
+    detail?: CircleDetailModel;
+  }>();
+  const [groupStreakResult, setGroupStreakResult] = useState<{
+    key: string;
+    days: number;
+  }>();
   const [isThreadVisible, setIsThreadVisible] = useState(false);
   const [threadLoadMoreRequestToken, setThreadLoadMoreRequestToken] =
     useState(0);
@@ -968,9 +975,23 @@ function CircleDetailScreenContent({
   const timezone = profile?.timezone ?? 'UTC';
   const canLoadMemberCircle =
     status === 'authenticatedReady' && Boolean(user?.uid);
-  const [memberCircleResolved, setMemberCircleResolved] = useState(
-    !canLoadMemberCircle,
-  );
+  const circleId = route.params.circleId;
+  const publicKey = JSON.stringify([circleId, status, user?.uid]);
+  const memberKey = JSON.stringify([publicKey, status, user?.uid, timezone]);
+  const groupStreakDays =
+    groupStreakResult?.key === publicKey ? groupStreakResult.days : 0;
+  const publicCircle =
+    publicResult?.key === publicKey ? publicResult.detail : undefined;
+  const memberCircle =
+    memberResult?.key === memberKey ? memberResult.detail : undefined;
+  const publicCircleResolved = publicResult?.key === publicKey;
+  const memberCircleResolved =
+    !canLoadMemberCircle || memberResult?.key === memberKey;
+  const isCircleLoading =
+    !publicCircleResolved ||
+    !memberCircleResolved ||
+    status === 'initializing' ||
+    status === 'authenticating';
   const detail = useMemo(() => {
     const baseDetail =
       memberCircle ??
@@ -1102,52 +1123,80 @@ function CircleDetailScreenContent({
   }, [detail?.id, heroTintScrollY]);
 
   useEffect(() => {
-    return subscribeToPublicCircle(route.params.circleId, setPublicCircle, () =>
-      setPublicCircle(undefined),
+    let active = true;
+    const unsubscribe = subscribeToPublicCircle(
+      circleId,
+      nextDetail => {
+        if (active) {
+          setPublicResult({key: publicKey, detail: nextDetail});
+        }
+      },
+      () => {
+        if (active) {
+          setPublicResult({key: publicKey});
+        }
+      },
     );
-  }, [route.params.circleId]);
+    return () => {
+      active = false;
+      unsubscribe();
+    };
+  }, [circleId, publicKey]);
 
   useEffect(() => {
     if (!canLoadMemberCircle || !user?.uid) {
-      setMemberCircle(undefined);
-      setMemberCircleResolved(true);
       return undefined;
     }
-
-    setMemberCircleResolved(false);
-    return subscribeToMemberCircleDetail({
-      circleId: route.params.circleId,
+    let active = true;
+    const unsubscribe = subscribeToMemberCircleDetail({
+      circleId,
       onDetail: nextDetail => {
-        setMemberCircle(nextDetail);
-        setMemberCircleResolved(true);
+        if (active) {
+          setMemberResult({key: memberKey, detail: nextDetail});
+        }
       },
       onError: () => {
-        setMemberCircle(undefined);
-        setMemberCircleResolved(true);
+        if (active) {
+          setMemberResult({key: memberKey});
+        }
       },
       timezone,
       uid: user.uid,
     });
-  }, [canLoadMemberCircle, route.params.circleId, timezone, user?.uid]);
+    return () => {
+      active = false;
+      unsubscribe();
+    };
+  }, [canLoadMemberCircle, circleId, memberKey, timezone, user?.uid]);
 
   useEffect(() => {
     if (!canLoadMemberCircle) {
-      setGroupStreakDays(0);
       return undefined;
     }
-
-    return firebaseFirestore()
+    let active = true;
+    const unsubscribe = firebaseFirestore()
       .collection(collections.circles)
-      .doc(route.params.circleId)
+      .doc(circleId)
       .onSnapshot(
         snapshot => {
-          setGroupStreakDays(
-            normalizeGroupStreakDays(snapshot.data()?.groupStreakDays),
-          );
+          if (active) {
+            setGroupStreakResult({
+              key: publicKey,
+              days: normalizeGroupStreakDays(snapshot.data()?.groupStreakDays),
+            });
+          }
         },
-        () => setGroupStreakDays(0),
+        () => {
+          if (active) {
+            setGroupStreakResult({key: publicKey, days: 0});
+          }
+        },
       );
-  }, [canLoadMemberCircle, route.params.circleId]);
+    return () => {
+      active = false;
+      unsubscribe();
+    };
+  }, [canLoadMemberCircle, circleId, publicKey]);
 
   const handleJoinCircle = useCallback(async () => {
     if (!detail) {
@@ -1194,6 +1243,40 @@ function CircleDetailScreenContent({
     memberCircleResolved,
     route.params.resumeAction,
   ]);
+
+  if (!detail && isCircleLoading) {
+    return (
+      <HoystScreen
+        background={<CircleDetailCanvas />}
+        contentContainerStyle={styles.content}
+        padded={false}>
+        <View style={[styles.circleHeroNav, styles.loadingNav]}>
+          <HeroIconButton accessibilityLabel="Go back" onPress={navigateBack}>
+            <ArrowLeft color={theme.text} size={22} strokeWidth={2.3} />
+          </HeroIconButton>
+        </View>
+        <View
+          accessibilityLabel="Loading circle"
+          accessibilityState={{busy: true}}
+          accessible
+          testID="circle-detail-skeleton"
+          style={styles.bodyStack}>
+          <View style={[styles.loadingPlaceholder, styles.loadingTitle]} />
+          <View style={[styles.loadingPlaceholder, styles.loadingHero]} />
+          <View style={[styles.loadingPlaceholder, styles.loadingProgress]} />
+          <View style={[styles.loadingPlaceholder, styles.loadingProgress]} />
+          <View style={styles.loadingMembers}>
+            {[0, 1, 2, 3].map(index => (
+              <View
+                key={index}
+                style={[styles.loadingPlaceholder, styles.loadingAvatar]}
+              />
+            ))}
+          </View>
+        </View>
+      </HoystScreen>
+    );
+  }
 
   if (!detail) {
     return (
@@ -1321,7 +1404,7 @@ function CircleDetailScreenContent({
       return;
     }
 
-    Share.share({
+    shareCircleInvitation(detail.id, {
       title: `Join ${detail.title} on Hoyst`,
       message: `Join ${detail.title} on Hoyst: ${detail.inviteUrl}`,
       url: detail.inviteUrl,
@@ -1769,7 +1852,9 @@ function CircleDetailScreenContent({
                 </HoystText>
                 {detail.privacy === 'public' ? (
                   <HoystText tone="muted" variant="caption">
-                    New Tap Ins in this public circle may show your name, profile avatar, and timestamp in Explore. Notes and photos stay in the circle.
+                    New Tap Ins in this public circle may show your name,
+                    profile avatar, and timestamp in Explore. Notes and photos
+                    stay in the circle.
                   </HoystText>
                 ) : null}
               </View>
@@ -1809,6 +1894,16 @@ export function CircleDetailScreen(props: Props): React.JSX.Element {
 }
 
 const styles = StyleSheet.create({
+  loadingPlaceholder: {
+    borderRadius: 16,
+    backgroundColor: 'rgba(128,128,128,0.08)',
+  },
+  loadingNav: {paddingHorizontal: 22, paddingTop: 8},
+  loadingTitle: {height: 24, width: '65%'},
+  loadingHero: {height: 70},
+  loadingProgress: {height: 96},
+  loadingMembers: {flexDirection: 'row', gap: 16},
+  loadingAvatar: {width: 56, height: 56, borderRadius: 28},
   archivedBanner: {alignItems: 'center', flexDirection: 'row', gap: 12},
   archivedBannerCopy: {flex: 1, gap: 3},
   archivedBannerIcon: {

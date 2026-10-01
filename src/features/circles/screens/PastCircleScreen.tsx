@@ -36,6 +36,9 @@ function formatDateKey(dateKey: string) {
 }
 
 function getOutcome(tapIn: PastCircleTapIn) {
+  if (tapIn.protectionKind === 'restore') {
+    return {label: 'Streak restored · Protected', tone: 'warning' as const};
+  }
   if (tapIn.status === 'skip') {
     return {label: 'Skipped', tone: 'warning' as const};
   }

@@ -106,7 +106,8 @@ function pressContinue(tree: renderer.ReactTestRenderer) {
 
 function selectOption(tree: renderer.ReactTestRenderer, id: string) {
   const option = tree.root.find(
-    node => node.props.option?.id === id && typeof node.props.onPress === 'function',
+    node =>
+      node.props.option?.id === id && typeof node.props.onPress === 'function',
   );
   act(() => option.props.onPress());
 }
@@ -136,14 +137,12 @@ describe('CreateCircleScreen unified flow', () => {
     const {tree} = renderScreen();
 
     act(() => {
-      tree.root
-        .findByType(HoystInput)
-        .props.onChangeText('Read 20 pages');
+      tree.root.findByType(HoystInput).props.onChangeText('Read 20 pages');
     });
     pressContinue(tree);
     selectOption(tree, 'personal');
 
-    expect(JSON.stringify(tree.toJSON())).toContain('Step 2 of 7');
+    expect(JSON.stringify(tree.toJSON())).toContain('Step 2 of 6');
     pressContinue(tree);
     expect(JSON.stringify(tree.toJSON())).toContain(
       'What kind of Commitment is this?',
@@ -162,11 +161,9 @@ describe('CreateCircleScreen unified flow', () => {
 
     pressContinue(tree);
     output = JSON.stringify(tree.toJSON());
-    expect(output).toContain('your Progress');
+    expect(output).not.toContain('Skip allowance');
     expect(output).not.toContain('Circle Progress');
 
-    pressContinue(tree);
-    output = JSON.stringify(tree.toJSON());
     expect(output).toContain('this Commitment');
 
     pressContinue(tree);
@@ -186,9 +183,7 @@ describe('CreateCircleScreen unified flow', () => {
       expect(JSON.stringify(tree.toJSON())).toContain(copy);
 
     act(() => {
-      tree.root
-        .findByType(HoystInput)
-        .props.onChangeText('Read 20 pages');
+      tree.root.findByType(HoystInput).props.onChangeText('Read 20 pages');
     });
     pressContinue(tree);
     expectStep('How do you want to commit?');
@@ -202,8 +197,6 @@ describe('CreateCircleScreen unified flow', () => {
     pressContinue(tree);
     expectStep('Set the Goal and Pace');
     pressContinue(tree);
-    expectStep('Set the Skip allowance');
-    pressContinue(tree);
     expectStep('Who can find and join it?');
     pressContinue(tree);
     expectStep('How many Members can join?');
@@ -214,7 +207,7 @@ describe('CreateCircleScreen unified flow', () => {
     const output = JSON.stringify(tree.toJSON());
     expect(output).toContain('Review your setup');
     expect(output).toContain('Public · Request approval');
-    expect(output).toContain('2 skips every 7 days');
+    expect(output).not.toContain('skips every');
     expect(output).toContain('UTC');
     expect(findButton(tree, 'Create Circle')).toBeTruthy();
   });
@@ -223,9 +216,7 @@ describe('CreateCircleScreen unified flow', () => {
     const {tree} = renderScreen();
 
     act(() => {
-      tree.root
-        .findByType(HoystInput)
-        .props.onChangeText('Read 20 pages');
+      tree.root.findByType(HoystInput).props.onChangeText('Read 20 pages');
     });
     pressContinue(tree);
     pressContinue(tree);
@@ -286,3 +277,8 @@ describe('CreateCircleScreen unified flow', () => {
     alertSpy.mockRestore();
   });
 });
+
+jest.mock('../src/features/progress/services/progress-service', () => ({
+  shareCircleInvitation: (_circleId: string, content: unknown) =>
+    require('react-native').Share.share(content),
+}));

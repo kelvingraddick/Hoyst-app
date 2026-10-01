@@ -10,6 +10,8 @@ import renderer, {act, type ReactTestInstance} from 'react-test-renderer';
 
 import {TapInPulseButton} from '../src/design/components/TapInPulseButton';
 import {CircleDetailScreen} from '../src/features/circles/screens/CircleDetailScreen';
+import {subscribeToPublicCircle} from '../src/features/circles/services/public-circle-service';
+import {subscribeToMemberCircleDetail} from '../src/features/home/services/home-data-service';
 import type {CircleDetailModel, CircleThreadItem} from '../src/types/models';
 
 const mockJoinCircle = jest.fn();
@@ -421,6 +423,188 @@ describe('CircleDetailScreen reference redesign', () => {
   afterEach(() => {
     alertSpy.mockRestore();
     jest.clearAllMocks();
+  });
+
+  it('keeps the skeleton until delayed member data arrives, with back navigation available', () => {
+    let resolve: (value?: CircleDetailModel) => void = () => undefined;
+    jest
+      .mocked(subscribeToMemberCircleDetail)
+      .mockImplementationOnce(options => {
+        resolve = options.onDetail;
+        return jest.fn();
+      });
+    const {tree, navigation} = renderScreen();
+    expect(
+      tree.root.findByProps({testID: 'circle-detail-skeleton'}),
+    ).toBeTruthy();
+    expect(outputOf(tree)).not.toContain('Circle unavailable');
+    act(() =>
+      tree.root
+        .findAllByProps({accessibilityLabel: 'Go back'})[0]
+        .props.onPress(),
+    );
+    expect(navigation.replace).toHaveBeenCalledWith('MainTabs', {
+      screen: 'Home',
+    });
+    act(() => resolve(detail()));
+    expect(
+      tree.root.findAllByProps({testID: 'circle-detail-skeleton'}),
+    ).toHaveLength(0);
+    expect(outputOf(tree)).not.toContain('Circle unavailable');
+  });
+
+  it('waits for the public source after the member source resolves empty', () => {
+    mockMemberDetail = undefined;
+    let resolve: (
+      value?: Parameters<Parameters<typeof subscribeToPublicCircle>[1]>[0],
+    ) => void = () => undefined;
+    jest
+      .mocked(subscribeToPublicCircle)
+      .mockImplementationOnce((_id, callback) => {
+        resolve = callback;
+        return jest.fn();
+      });
+    const {tree} = renderScreen();
+    expect(outputOf(tree)).not.toContain('Circle unavailable');
+    act(() => resolve(undefined));
+    expect(outputOf(tree)).toContain('Circle unavailable');
+  });
+
+  it('shows a public preview when delayed public data arrives for a guest', () => {
+    mockSessionState = {status: 'guest'};
+    mockPublicDetail = detail({viewerRole: undefined});
+    let resolve: (
+      value?: Parameters<Parameters<typeof subscribeToPublicCircle>[1]>[0],
+    ) => void = () => undefined;
+    jest
+      .mocked(subscribeToPublicCircle)
+      .mockImplementationOnce((_id, callback) => {
+        resolve = callback;
+        return jest.fn();
+      });
+    const {tree} = renderScreen();
+    expect(
+      tree.root.findByProps({testID: 'circle-detail-skeleton'}),
+    ).toBeTruthy();
+    act(() =>
+      resolve({
+        ...detail({viewerRole: undefined}),
+        matchCopy: 'Preview this circle',
+        joinLabel: 'Open seats',
+      }),
+    );
+    expect(
+      tree.root.findAllByProps({testID: 'circle-detail-skeleton'}),
+    ).toHaveLength(0);
+  });
+
+  it('settles unavailable after both subscriptions fail', () => {
+    jest
+      .mocked(subscribeToMemberCircleDetail)
+      .mockImplementationOnce(options => {
+        options.onError?.(new Error('denied'));
+        return jest.fn();
+      });
+    const {tree} = renderScreen();
+    expect(outputOf(tree)).toContain('Circle unavailable');
+  });
+
+  it('drops old circle data immediately and ignores callbacks after changing circle IDs', () => {
+    let staleResolve: (value?: CircleDetailModel) => void = () => undefined;
+    jest
+      .mocked(subscribeToMemberCircleDetail)
+      .mockImplementationOnce(options => {
+        staleResolve = options.onDetail;
+        options.onDetail(detail());
+        return jest.fn();
+      });
+    const {tree, navigation} = renderScreen();
+    jest
+      .mocked(subscribeToMemberCircleDetail)
+      .mockImplementationOnce(() => jest.fn());
+    jest
+      .mocked(subscribeToPublicCircle)
+      .mockImplementationOnce(() => jest.fn());
+    act(() =>
+      tree.update(
+        <CircleDetailScreen
+          navigation={navigation as never}
+          route={
+            {
+              key: 'CircleDetail',
+              name: 'CircleDetail',
+              params: {circleId: 'circle-2'},
+            } as never
+          }
+        />,
+      ),
+    );
+    expect(
+      tree.root.findByProps({testID: 'circle-detail-skeleton'}),
+    ).toBeTruthy();
+    act(() => staleResolve(detail()));
+    expect(
+      tree.root.findByProps({testID: 'circle-detail-skeleton'}),
+    ).toBeTruthy();
+    expect(outputOf(tree)).not.toContain('Circle unavailable');
+  });
+
+  it('waits for membership resolution before resuming a public join', async () => {
+    mockPublicDetail = detail({
+      viewerRole: undefined,
+      viewerMembershipStatus: undefined,
+    });
+    let resolve: (value?: CircleDetailModel) => void = () => undefined;
+    jest
+      .mocked(subscribeToMemberCircleDetail)
+      .mockImplementationOnce(options => {
+        resolve = options.onDetail;
+        return jest.fn();
+      });
+    renderScreen('join');
+    expect(mockJoinCircle).not.toHaveBeenCalled();
+    await act(async () => resolve(undefined));
+    expect(mockJoinCircle).toHaveBeenCalledTimes(1);
+  });
+
+  it('ignores member results from the previous account', () => {
+    let staleResolve: (value?: CircleDetailModel) => void = () => undefined;
+    jest
+      .mocked(subscribeToMemberCircleDetail)
+      .mockImplementationOnce(options => {
+        staleResolve = options.onDetail;
+        options.onDetail(detail());
+        return jest.fn();
+      });
+    const {tree, navigation} = renderScreen();
+    mockSessionState = {
+      status: 'authenticatedReady',
+      user: {providerIds: [], uid: 'user-2'},
+    };
+    jest
+      .mocked(subscribeToMemberCircleDetail)
+      .mockImplementationOnce(() => jest.fn());
+    jest
+      .mocked(subscribeToPublicCircle)
+      .mockImplementationOnce(() => jest.fn());
+    act(() =>
+      tree.update(
+        <CircleDetailScreen
+          navigation={navigation as never}
+          route={
+            {
+              key: 'CircleDetail',
+              name: 'CircleDetail',
+              params: {circleId: 'circle-1'},
+            } as never
+          }
+        />,
+      ),
+    );
+    act(() => staleResolve(detail()));
+    expect(
+      tree.root.findByProps({testID: 'circle-detail-skeleton'}),
+    ).toBeTruthy();
   });
 
   it('renders the Home-inspired identity, group progress, and member strip', () => {

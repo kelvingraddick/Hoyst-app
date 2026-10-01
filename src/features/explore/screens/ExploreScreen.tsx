@@ -1,6 +1,7 @@
 import React, {useCallback, useEffect, useRef, useState} from 'react';
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   KeyboardAvoidingView,
   Platform,
@@ -14,10 +15,11 @@ import {
   View,
 } from 'react-native';
 import {SafeAreaView, useSafeAreaInsets} from 'react-native-safe-area-context';
+import LinearGradient from 'react-native-linear-gradient';
 import {useIsFocused} from '@react-navigation/native';
 import type {BottomTabScreenProps} from '@react-navigation/bottom-tabs';
 import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
-import {Flame, Plus, Search, UsersRound, X} from 'lucide-react-native';
+import {Flame, Search, Users, UsersRound, X} from 'lucide-react-native';
 import {
   CircleCategoryIcon,
   getCircleCategoryVisual,
@@ -26,6 +28,7 @@ import {
   DesignSystemProvider,
   DSAvatar,
   DSButton,
+  DSIconButton,
   DSSurface,
   DSText,
   layout,
@@ -166,7 +169,7 @@ function ExploreContent({navigation}: Props) {
   const theme = useSystemTheme();
   const insets = useSafeAreaInsets();
   const focused = useIsFocused();
-  const {fontScale, width} = useWindowDimensions();
+  const {fontScale} = useWindowDimensions();
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState('All');
   const [page, setPage] = useState<ExplorePage>();
@@ -280,11 +283,7 @@ function ExploreContent({navigation}: Props) {
   const retry = () => setRefreshToken(value => value + 1);
   const header = (
     <View style={styles.header}>
-      <View
-        style={[
-          styles.headingRow,
-          (fontScale > 1.3 || width < 360) && styles.headingStack,
-        ]}>
+      <View style={styles.headingRow}>
         <View style={[styles.headingGroup, styles.grow]}>
           <ExploreSearchingHoy
             searching={focused && (requestPending || loadingMore)}
@@ -297,22 +296,20 @@ function ExploreContent({navigation}: Props) {
             <DSText
               testID="explore-subtitle"
               accessibilityLabel="Find circles moving at your pace.">
-              Find <Text style={styles.subtitleEmphasis}>circles</Text> moving at
-              your pace.
+              Find <Text style={styles.subtitleEmphasis}>circles</Text> moving
+              at your pace.
             </DSText>
           </View>
         </View>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Create a circle"
-          onPress={() => root?.navigate('CreateCircle')}
+        <DSIconButton
+          label="Friends"
+          icon={<Users size={18} strokeWidth={1.8} color={theme.text} />}
+          onPress={() => Alert.alert('Friends', 'Coming soon', [{text: 'OK'}])}
           style={[
-            styles.create,
+            styles.friends,
             {backgroundColor: theme.surface, borderColor: theme.border},
-          ]}>
-          <Plus size={18} color={theme.text} />
-          <DSText variant="action">Create</DSText>
-        </Pressable>
+          ]}
+        />
       </View>
       <View
         style={[
@@ -415,11 +412,20 @@ function ExploreContent({navigation}: Props) {
   );
   return (
     <SafeAreaView
-      edges={['top', 'left', 'right']}
+      edges={['left', 'right']}
       style={[styles.screen, {backgroundColor: theme.canvas}]}>
       {focused ? (
-        <StatusBar barStyle={theme.isDark ? 'light-content' : 'dark-content'} />
+        <StatusBar
+          barStyle={theme.isDark ? 'light-content' : 'dark-content'}
+          backgroundColor="transparent"
+        />
       ) : null}
+      <LinearGradient
+        pointerEvents="none"
+        colors={[theme.isDark ? '#18B9FF38' : '#18B9FF80', '#18B9FF00']}
+        style={styles.tint}
+        testID="explore-top-tint"
+      />
       <KeyboardAvoidingView
         style={styles.screen}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -437,7 +443,15 @@ function ExploreContent({navigation}: Props) {
             />
           )}
           ListHeaderComponent={header}
-          contentContainerStyle={styles.content}
+          contentContainerStyle={[
+            styles.content,
+            {paddingTop: insets.top + space.lg},
+          ]}
+          contentInsetAdjustmentBehavior="never"
+          automaticallyAdjustContentInsets={false}
+          automaticallyAdjustsScrollIndicatorInsets={false}
+          scrollIndicatorInsets={{top: insets.top, bottom: 0}}
+          progressViewOffset={insets.top}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
           onEndReached={() => {
@@ -529,6 +543,7 @@ export function ExploreScreen(props: Props) {
 }
 const styles = StyleSheet.create({
   screen: {flex: 1},
+  tint: {position: 'absolute', top: 0, left: 0, right: 0, height: 240},
   grow: {flex: 1, minWidth: 0},
   content: {paddingHorizontal: layout.gutter, paddingTop: space.lg},
   header: {gap: space.lg, paddingBottom: space.lg},
@@ -536,15 +551,12 @@ const styles = StyleSheet.create({
   headingCopy: {gap: 6},
   headingGroup: {flexDirection: 'row', alignItems: 'center', gap: 8},
   subtitleEmphasis: {fontWeight: '700'},
-  headingStack: {flexDirection: 'column', alignItems: 'flex-start'},
-  create: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: space.xs,
+  friends: {
+    flexShrink: 0,
+    width: minimumTarget(),
+    height: minimumTarget(),
     borderWidth: 1,
     borderRadius: radii.pill,
-    paddingHorizontal: space.md,
-    minHeight: minimumTarget(),
   },
   search: {
     flexDirection: 'row',

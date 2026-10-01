@@ -34,6 +34,11 @@ export {
 export {generateHomeGreeting} from './homeGreeting';
 export {getProfileSummary} from './profile';
 export {
+  checkProfileUsername,
+  updateProfile,
+  refreshMemberProfile,
+} from './profile/edit';
+export {
   backfillMomentumOpportunities,
   materializeMomentumOpportunities,
 } from './momentum';
@@ -61,3 +66,21 @@ export {
   refreshPublicActivityCircle,
   refreshPublicActivityProfile,
 } from './discovery';
+
+export {
+  ensureProgress,
+  completeProgressTask,
+  getRestoreOptions,
+  restoreStreak,
+  syncProgressPurchases,
+  progressPurchaseWebhook,
+} from './progress';
+export {
+  reconcileProgressTapIn,
+  initializeProgressAccount,
+  reconcileProgressMembership,
+  reconcileProgressReminders,
+  reconcileProgressRestore,
+} from './progress/triggers';
+
+export {getProgressMonth, getProgressDayActivity} from './progress/history';

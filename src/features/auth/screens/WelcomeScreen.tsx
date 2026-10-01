@@ -82,7 +82,6 @@ import {
   defaultWeeklyCommitmentFrequency,
   normalizeCommitmentPace,
   normalizeCommitmentFrequency,
-  normalizeSkipGraceRule,
 } from '../../create-circle/services/create-circle-draft';
 import {
   categoryOptions as setupCategoryOptions,
@@ -92,7 +91,6 @@ import {
   formatAccessSummary,
   formatPaceSummary,
   formatCommitmentRulesSummary,
-  formatSkipSummary,
   formatTimezoneSummary,
   privacyOptions as setupPrivacyOptions,
   publicJoinOptions as setupPublicJoinOptions,
@@ -509,7 +507,8 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
     starterCircleCommitmentPace,
   );
   const starterCirclePaceLabel = getStarterCirclePaceLabel(starterCircleDraft);
-  const StarterCirclePaceIcon = commitmentPaceIcons[starterCircleCommitmentPace];
+  const StarterCirclePaceIcon =
+    commitmentPaceIcons[starterCircleCommitmentPace];
   const canContinue =
     currentStep === 'circleCategory'
       ? starterCircleDraft.category.trim().length > 0
@@ -862,18 +861,6 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
     );
   };
 
-  const setStarterSkipRule = (nextRule: {
-    allowance?: number;
-    windowDays?: number;
-  }) => {
-    setStarterCircleField('graceRules', {
-      skip: normalizeSkipGraceRule({
-        ...starterCircleDraft.graceRules.skip,
-        ...nextRule,
-      }),
-    });
-  };
-
   const selectStarterCirclePace = (commitmentPace: CommitmentPace) => {
     setStarterCircleField('commitmentCadence', commitmentPace);
     setStarterCircleField(
@@ -985,8 +972,8 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
               Consistency feels lighter with the right support.
             </HoystText>
             <HoystText style={styles.heroText} tone="muted">
-              Set a Pace, explore public Circles, and create an account
-              only when you are ready to join or Tap In.
+              Set a Pace, explore public Circles, and create an account only
+              when you are ready to join or Tap In.
             </HoystText>
           </View>
         </View>
@@ -1342,62 +1329,6 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
             )}
           </View>
         ) : null}
-        {currentStep === 'circleGrace' ? (
-          <View style={styles.stack}>
-            <Pressable
-              accessibilityRole="switch"
-              accessibilityState={{
-                checked: starterCircleDraft.graceRules.skip.allowance > 0,
-              }}
-              onPress={() =>
-                setStarterSkipRule({
-                  allowance:
-                    starterCircleDraft.graceRules.skip.allowance > 0 ? 0 : 1,
-                })
-              }
-              style={({pressed}) => [
-                styles.toggleRow,
-                {
-                  backgroundColor: theme.glassSurfaceStrong,
-                  borderColor:
-                    starterCircleDraft.graceRules.skip.allowance > 0
-                      ? theme.warningForeground
-                      : theme.glassBorder,
-                  opacity: pressed ? 0.88 : 1,
-                },
-              ]}>
-              <View style={styles.optionCopy}>
-                <HoystText variant="bodyStrong">
-                  Optional Skips protect Progress
-                </HoystText>
-                <HoystText tone="muted">
-                  {isPersonal
-                    ? 'Skips count as covered for your Progress.'
-                    : 'Skips count as covered for Circle Progress.'}
-                </HoystText>
-              </View>
-              <HoystText variant="bodyStrong">
-                {starterCircleDraft.graceRules.skip.allowance > 0
-                  ? 'On'
-                  : 'Off'}
-              </HoystText>
-            </Pressable>
-            <SetupNumericStepper
-              label="Skips allowed"
-              max={30}
-              min={0}
-              onChange={allowance => setStarterSkipRule({allowance})}
-              value={starterCircleDraft.graceRules.skip.allowance}
-            />
-            <SetupNumericStepper
-              label="Window days"
-              max={365}
-              min={1}
-              onChange={windowDays => setStarterSkipRule({windowDays})}
-              value={starterCircleDraft.graceRules.skip.windowDays}
-            />
-          </View>
-        ) : null}
         {currentStep === 'circlePrivacy' ? (
           <View style={styles.optionStack}>
             <SetupOptionList
@@ -1519,15 +1450,6 @@ export function WelcomeScreen({navigation}: Props): React.JSX.Element {
               detail={starterCirclePaceLabel}
               icon={StarterCirclePaceIcon}
               label="Pace"
-            />
-            <PreviewRow
-              accent="orange"
-              detail={formatSkipSummary(
-                starterCircleDraft.graceRules.skip.allowance,
-                starterCircleDraft.graceRules.skip.windowDays,
-              )}
-              icon={Shield}
-              label="Skips"
             />
             {starterCircleDraft.circleMode === 'group' ? (
               <>

@@ -6,7 +6,7 @@ Implemented September 11, 2026 from the three approved light-mode mockups, follo
 
 The existing `TapInPicker` native slide-up modal keeps its route, subscription, sorting and eligibility. A screen-local `DesignSystemProvider` follows the existing appearance preference. The selector uses the 52-point `HoystTapInMark` unchanged, including its shadow and Reduce Motion behavior. Its animation pauses when the route loses focus.
 
-The neutral canvas has 22-point gutters and 16-point section gaps. The first due commitment uses a soft category surface with Home's 18-point card inset and radius. Other due commitments use neutral divided rows. Titles are 16/21, descriptions 14/20, metadata 11/15. Category precedes the muted commitment type. Actions wrap beneath the content on narrow devices or at enlarged text sizes. Nudge, Share and View stay in the expanded utility list, never inside a disclosure or overflow menu. Long lists scroll with the native modal body.
+The neutral canvas has 22-point gutters and 16-point section gaps. A neutral outlined `+ Create` pill sits right aligned and vertically centered beside the flexible Tap In title/count group, below the logo and close button. It has a platform minimum touch target, stays visible in populated, loading, error, empty and covered states, and opens the existing CreateCircle modal. Canceling creation returns to the selector. Developer previews use a local preview notice instead of navigating. The first due commitment uses a soft category surface with Home's 18-point card inset and radius. Other due commitments use neutral divided rows. Titles are 16/21, descriptions 14/20, metadata 11/15. Category precedes the muted commitment type. Actions wrap beneath the content on narrow devices or at enlarged text sizes. Nudge, Share and View stay in the expanded utility list, never inside a disclosure or overflow menu. Long lists scroll with the native modal body.
 
 Quantity commitments group their description and goal with a 4-point gap. The second line is muted 12/16 text, using `Goal: 20 minutes`, `Maximum: 2 hours` or `Allowed range: 2 to 6 servings`. Simple Build and Avoid commitments omit this line. Custom multiword units retain their existing spelling. `getCommitmentGoalLabel` supplies the same text to the selector and Home's focused card. Home's collapsed rows and all other Home styling remain unchanged.
 
@@ -44,3 +44,9 @@ PATH=/Users/kelvin/.nvm/versions/node/v22.23.2/bin:$PATH npm test -- \
   __tests__/home-commitment-stack.test.tsx \
   __tests__/commitment-goal-label.test.ts
 ```
+
+## Create header validation
+
+September 29, 2026: the Create pill was verified in the iPhone 17 Pro Simulator in [light](reference/tap-in-selector/create-light.png), [dark](reference/tap-in-selector/create-dark.png), and [360-point content width with accessibility-medium text](reference/tap-in-selector/create-dark-360-large.png). The narrow capture constrains the production content inside the same Simulator device. The title/count group and Create stay on one row, with wrapping text. The heading group remounts on native font-scale changes to refresh iOS text measurements. Create opens the existing creation modal; its close action returns to the populated selector.
+
+The three focused Explore, selector and sheet-options suites pass all 33 tests, including Create in populated, loading, error, empty and covered states and the Friends alert. Typecheck and scoped ESLint pass. These captures verify iOS Simulator layouts; Android and physical-device rendering were not tested.

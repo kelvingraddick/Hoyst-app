@@ -1,10 +1,17 @@
-import React from 'react';
-import {ScrollView, StyleSheet, useWindowDimensions, View} from 'react-native';
+import React, {useState} from 'react';
+import {
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  useWindowDimensions,
+  View,
+} from 'react-native';
 import {
   ArrowUpRight,
   Bell,
   Check,
   Flame,
+  Plus,
   Share2,
   Target,
   X,
@@ -20,6 +27,7 @@ import {
   DSListRow,
   DSSurface,
   DSText,
+  minimumTarget,
   useSystemTheme,
 } from '../../../design/system';
 import {
@@ -242,6 +250,7 @@ export function TapInPickerPresentation({
   message,
   active = true,
   onClose,
+  onCreateCircle,
   onTapIn,
 }: {
   coveredCount: number;
@@ -252,11 +261,13 @@ export function TapInPickerPresentation({
   message?: {title: string; body: string; success?: boolean};
   active?: boolean;
   onClose: () => void;
+  onCreateCircle: () => void;
   onTapIn: (circleId: string) => void;
 }) {
   const theme = useSystemTheme();
+  const [createPressed, setCreatePressed] = useState(false);
   const insets = useSafeAreaInsets();
-  const {height} = useWindowDimensions();
+  const {height, fontScale} = useWindowDimensions();
   const maximumSheetHeight = Math.max(
     1,
     height - (initialWindowMetrics?.insets.top ?? insets.top) - 10,
@@ -309,13 +320,29 @@ export function TapInPickerPresentation({
             icon={<X color={theme.muted} size={22} />}
             style={styles.close}
           />
-          <View style={styles.heading}>
-            <DSText variant="screenTitle" accessibilityRole="header">
-              Tap In
-            </DSText>
-            <DSText tone="muted">
-              {coveredCount} of {totalCount} tapped in
-            </DSText>
+          <View key={fontScale} style={styles.headingRow}>
+            <View style={styles.heading}>
+              <DSText variant="screenTitle" accessibilityRole="header">
+                Tap In
+              </DSText>
+              <DSText tone="muted">
+                {coveredCount} of {totalCount} tapped in
+              </DSText>
+            </View>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Create a circle"
+              onPress={onCreateCircle}
+              onPressIn={() => setCreatePressed(true)}
+              onPressOut={() => setCreatePressed(false)}
+              style={[
+                styles.create,
+                {backgroundColor: theme.surface, borderColor: theme.border},
+                createPressed && styles.createPressed,
+              ]}>
+              <Plus color={theme.text} size={16} />
+              <DSText variant="action">Create</DSText>
+            </Pressable>
           </View>
         </View>
         {dueCircles.length ? (
@@ -399,7 +426,21 @@ const styles = StyleSheet.create({
   hero: {gap: 16, paddingTop: 32},
   mark: {alignItems: 'center'},
   close: {position: 'absolute', top: 16, right: -6},
-  heading: {gap: 4},
+  headingRow: {flexDirection: 'row', alignItems: 'center', gap: 12},
+  heading: {flex: 1, minWidth: 0, gap: 4},
+  create: {
+    flexDirection: 'row',
+    flexShrink: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    paddingHorizontal: 12,
+    minHeight: minimumTarget(),
+    minWidth: minimumTarget(),
+    borderWidth: 1,
+    borderRadius: 999,
+  },
+  createPressed: {opacity: 0.7},
   featured: {
     paddingHorizontal: 18,
     paddingVertical: 12,

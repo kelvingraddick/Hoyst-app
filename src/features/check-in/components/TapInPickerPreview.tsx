@@ -134,6 +134,7 @@ function Fixture({route, navigation}: NativeStackScreenProps<Routes, 'Sheet'>) {
             success: true,
           }}
           onClose={() => navigation.goBack()}
+          onCreateCircle={() => setNotice('Create preview only')}
           onTapIn={() => setNotice('Tap In preview only')}
         />
         {notice ? <DSText>{notice}</DSText> : null}

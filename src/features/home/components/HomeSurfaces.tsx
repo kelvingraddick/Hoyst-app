@@ -1,4 +1,4 @@
-import React from 'react';
+import React, {useState} from 'react';
 import {
   Image,
   Pressable,
@@ -12,6 +12,7 @@ import {useHoystTheme} from '../../../design/theme/useHoystTheme';
 import {HoystText} from '../../../design/components/HoystText';
 import {homeTypography} from '../../../design/tokens/home';
 import type {CircleActivityItem} from '../../../types/models';
+import {InboxEventBadge} from '../../inbox/components/InboxEventBadge';
 
 export function HomeSurface({
   children,
@@ -103,20 +104,35 @@ export function HomeActivityRow({
   onPress: () => void;
 }) {
   const theme = useHoystTheme();
+  const [failedAvatarKey, setFailedAvatarKey] = useState<string>();
+  const avatarSource =
+    item.actorAvatarImage ??
+    (item.actorAvatarUrl ? {uri: item.actorAvatarUrl} : undefined);
+  const avatarKey = avatarSource
+    ? `${item.id}:${JSON.stringify(avatarSource)}`
+    : undefined;
+  const showPhoto = avatarSource && failedAvatarKey !== avatarKey;
+  const showEventBadge = item.eventType && !item.actorDisplayName?.trim();
+
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={`${item.actorName} ${item.message} ${item.timestamp}`}
       onPress={onPress}
       style={[styles.activity, {borderBottomColor: theme.border}]}>
-      {item.actorAvatarImage || item.actorAvatarUrl ? (
+      {showPhoto ? (
         <Image
-          source={item.actorAvatarImage ?? {uri: item.actorAvatarUrl!}}
+          source={avatarSource}
           resizeMode="cover"
           style={styles.activityAvatar}
           accessibilityIgnoresInvertColors
+          onError={() => setFailedAvatarKey(avatarKey)}
           testID="home-activity-avatar"
         />
+      ) : showEventBadge ? (
+        <View style={styles.activityAvatar} testID="home-activity-avatar">
+          <InboxEventBadge isDark={theme.isDark} type={item.eventType!} />
+        </View>
       ) : (
         <View
           style={[

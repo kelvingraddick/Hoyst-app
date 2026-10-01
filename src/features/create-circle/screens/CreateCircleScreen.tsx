@@ -1,5 +1,6 @@
+import {shareCircleInvitation} from '../../progress/services/progress-service';
 import React, {useEffect, useMemo, useRef, useState} from 'react';
-import {Alert, Pressable, Share, StyleSheet, View} from 'react-native';
+import {Alert, Pressable, StyleSheet, View} from 'react-native';
 import {Check, Share2} from 'lucide-react-native';
 import type {NativeStackScreenProps} from '@react-navigation/native-stack';
 
@@ -23,7 +24,6 @@ import {
   defaultMonthlyCommitmentFrequency,
   defaultWeeklyCommitmentFrequency,
   getPrivacyChoiceFields,
-  normalizeSkipGraceRule,
 } from '../services/create-circle-draft';
 import type {
   CircleJoinMode,
@@ -43,7 +43,6 @@ import {
   formatAccessSummary,
   formatPaceSummary,
   formatJoinMode,
-  formatSkipSummary,
   formatTimezoneSummary,
   getModeAwareSetupCopy,
   privacyOptions,
@@ -60,7 +59,6 @@ type WizardStep =
   | 'title'
   | 'commitment'
   | 'commitmentFrequency'
-  | 'grace'
   | 'privacy'
   | 'maxSize'
   | 'timezone'
@@ -77,7 +75,6 @@ const groupWizardSteps: WizardStep[] = [
   'category',
   'title',
   'commitmentFrequency',
-  'grace',
   'privacy',
   'maxSize',
   'timezone',
@@ -104,10 +101,6 @@ const stepCopy: Record<WizardStep, {body: string; title: string}> = {
   commitmentFrequency: {
     body: 'Choose the Goal for a Tap In and the Pace at which it is due.',
     title: 'Set the Goal and Pace',
-  },
-  grace: {
-    body: 'Choose how many skips can protect Circle Progress.',
-    title: 'Set the Skip allowance',
   },
   maxSize: {
     body: 'Smaller circles feel tighter. Larger circles create more social proof.',
@@ -143,8 +136,8 @@ export function CreateCircleScreen({navigation}: Props): React.JSX.Element {
   );
   const allowExitRef = useRef(false);
   const [currentStep, setCurrentStep] = useState<WizardStep>('commitment');
-  const [draft, setDraft] = useState<CreateCircleDraft>(() =>
-    initialDraftRef.current,
+  const [draft, setDraft] = useState<CreateCircleDraft>(
+    () => initialDraftRef.current,
   );
   const [createdCircle, setCreatedCircle] = useState<CreatedCircle>();
   const [isCreating, setIsCreating] = useState(false);
@@ -161,13 +154,6 @@ export function CreateCircleScreen({navigation}: Props): React.JSX.Element {
       };
     }
 
-    if (currentStep === 'grace') {
-      return {
-        body: `Choose how many skips can protect ${modeCopy.progressLabel}.`,
-        title: 'Set the Skip allowance',
-      };
-    }
-
     if (currentStep === 'timezone') {
       return {
         body: `This controls when each Tap In day resets for this ${modeCopy.containerLabel}.`,
@@ -177,43 +163,35 @@ export function CreateCircleScreen({navigation}: Props): React.JSX.Element {
 
     return stepCopy[currentStep];
   }, [currentStep, modeCopy]);
-  const skipRule = draft.graceRules.skip;
   const isDirty = useMemo(
     () => JSON.stringify(draft) !== JSON.stringify(initialDraftRef.current),
     [draft],
   );
 
-  useEffect(
-    () => {
-      if (typeof navigation.addListener !== 'function') {
-        return undefined;
+  useEffect(() => {
+    if (typeof navigation.addListener !== 'function') {
+      return undefined;
+    }
+
+    return navigation.addListener('beforeRemove', event => {
+      if (allowExitRef.current || !isDirty) {
+        return;
       }
 
-      return navigation.addListener('beforeRemove', event => {
-        if (allowExitRef.current || !isDirty) {
-          return;
-        }
-
-        event.preventDefault();
-        Alert.alert(
-          'Discard setup?',
-          'Your Commitment setup will be lost.',
-          [
-            {style: 'cancel', text: 'Keep editing'},
-            {
-              onPress: () => {
-                allowExitRef.current = true;
-                navigation.dispatch(event.data.action);
-              },
-              style: 'destructive',
-              text: 'Discard',
-            },
-          ],
-        );
-      });
-    },
-    [isDirty, navigation],
-  );
+      event.preventDefault();
+      Alert.alert('Discard setup?', 'Your Commitment setup will be lost.', [
+        {style: 'cancel', text: 'Keep editing'},
+        {
+          onPress: () => {
+            allowExitRef.current = true;
+            navigation.dispatch(event.data.action);
+          },
+          style: 'destructive',
+          text: 'Discard',
+        },
+      ]);
+    });
+  }, [isDirty, navigation]);
   const canContinue = useMemo(() => {
     if (currentStep === 'category') {
       return draft.category.trim().length > 0;
@@ -270,18 +248,6 @@ export function CreateCircleScreen({navigation}: Props): React.JSX.Element {
       Number.isFinite(parsedValue) && parsedValue >= 0 ? parsedValue : 0;
 
     setField(key, nextValue);
-  };
-
-  const setSkipRule = (nextRule: {allowance?: number; windowDays?: number}) => {
-    setDraft(current => ({
-      ...current,
-      graceRules: {
-        skip: normalizeSkipGraceRule({
-          ...current.graceRules.skip,
-          ...nextRule,
-        }),
-      },
-    }));
   };
 
   const selectPrivacyMode = (privacyMode: CirclePrivacyMode) => {
@@ -368,7 +334,7 @@ export function CreateCircleScreen({navigation}: Props): React.JSX.Element {
   const shareInvite = async () => {
     const inviteLink = getInviteLink(createdCircle?.inviteCode);
 
-    await Share.share({
+    await shareCircleInvitation(createdCircle!.circleId, {
       message: `Join ${draft.title.trim()} on Hoyst: ${inviteLink}`,
       title: `Join ${draft.title.trim()} on Hoyst`,
     });
@@ -576,58 +542,6 @@ export function CreateCircleScreen({navigation}: Props): React.JSX.Element {
       );
     }
 
-    if (currentStep === 'grace') {
-      const graceEnabled = skipRule.allowance > 0;
-
-      return (
-        <View style={styles.stack}>
-          <Pressable
-            accessibilityRole="switch"
-            accessibilityState={{checked: graceEnabled}}
-            onPress={() => setSkipRule({allowance: graceEnabled ? 0 : 1})}
-            style={({pressed}) => [
-              styles.toggleRow,
-              {
-                backgroundColor: theme.surface,
-                borderColor: graceEnabled
-                  ? theme.warningForeground
-                  : theme.border,
-                opacity: pressed ? 0.92 : 1,
-              },
-            ]}>
-            <View style={styles.optionCopy}>
-              <HoystText variant="bodyStrong">
-                Optional Skips protect Progress
-              </HoystText>
-              <HoystText tone="muted">
-                {isPersonal
-                  ? 'Skips count as covered for your Progress.'
-                  : 'Skips count as covered for Circle Progress.'}
-              </HoystText>
-            </View>
-            <HoystChip
-              label={graceEnabled ? 'On' : 'Off'}
-              tone={graceEnabled ? 'orange' : 'neutral'}
-            />
-          </Pressable>
-          <SetupNumericStepper
-            label="Skips allowed"
-            max={30}
-            min={0}
-            onChange={allowance => setSkipRule({allowance})}
-            value={skipRule.allowance}
-          />
-          <SetupNumericStepper
-            label="Window days"
-            max={365}
-            min={1}
-            onChange={windowDays => setSkipRule({windowDays})}
-            value={skipRule.windowDays}
-          />
-        </View>
-      );
-    }
-
     if (currentStep === 'privacy') {
       const publicJoinMode =
         draft.joinMode === 'open' || draft.joinMode === 'request_to_join'
@@ -714,9 +628,7 @@ export function CreateCircleScreen({navigation}: Props): React.JSX.Element {
         <SetupSummaryRow
           label="Type"
           value={
-            draft.circleMode === 'personal'
-              ? 'Personal commitment'
-              : 'Circle'
+            draft.circleMode === 'personal' ? 'Personal commitment' : 'Circle'
           }
         />
         <SetupSummaryRow
@@ -738,22 +650,11 @@ export function CreateCircleScreen({navigation}: Props): React.JSX.Element {
             draft.commitmentFrequency,
           )}
         />
-        <SetupSummaryRow
-          label="Grace"
-          value={
-            skipRule.allowance > 0
-              ? formatSkipSummary(skipRule.allowance, skipRule.windowDays)
-              : 'No skips'
-          }
-        />
         {draft.circleMode === 'group' ? (
           <>
             <SetupSummaryRow
               label="Access"
-              value={formatAccessSummary(
-                draft.privacyMode,
-                draft.joinMode,
-              )}
+              value={formatAccessSummary(draft.privacyMode, draft.joinMode)}
             />
             <SetupSummaryRow
               label="Max size"

@@ -1,4 +1,11 @@
-import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
+import React, {
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import {
   Alert,
   AppState,
@@ -13,8 +20,10 @@ import {
 import type {BottomTabNavigationProp} from '@react-navigation/bottom-tabs';
 import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import {useFocusEffect, useNavigation} from '@react-navigation/native';
-import {ChevronRight, List} from 'lucide-react-native';
+import {ChevronRight, List, Plus} from 'lucide-react-native';
 import {DateTime} from 'luxon';
+import LinearGradient from 'react-native-linear-gradient';
+import {useSafeAreaInsets} from 'react-native-safe-area-context';
 
 import {
   HomeActivityRow,
@@ -35,6 +44,7 @@ import {
 import {getCircleCategoryVisual} from '../../../design/components/CircleCategoryIcon';
 import {
   HomeHeroHeader,
+  homeHoyVisuals,
   HomeNotificationButton,
 } from '../../../design/components/HomeHeroHeader';
 import {homeTypography} from '../../../design/tokens/home';
@@ -105,6 +115,8 @@ import {
   subscribeToInboxEvents,
   subscribeToInboxUnreadCount,
 } from '../../settings/services/notification-settings-service';
+
+import {HomePreviewContext} from '../components/HomePreviewContext';
 
 const guestStarterArtwork = require('../../../assets/hoy/get-started-invites-network-hands.png');
 
@@ -201,10 +213,12 @@ function mapInboxEventToActivity(event: InboxEvent): CircleActivityItem {
 
   return {
     actorAvatarUrl: event.actor?.avatarUrl,
+    actorDisplayName: event.actor?.displayName,
     actorInitials: getInitials(actorName) || 'HO',
     actorName,
     actionLabel: getCircleActivityActionLabel(event),
     id: event.id,
+    eventType: event.type,
     mediaImageUrl: event.mediaImageUrl,
     message: getEventMessage(event),
     timestamp: event.createdAtLabel,
@@ -648,6 +662,11 @@ export function HomeScreen(): React.JSX.Element {
     () => circleActivityEvents.map(mapInboxEventToActivity),
     [circleActivityEvents],
   );
+  const preview = useContext(HomePreviewContext);
+  const insets = useSafeAreaInsets();
+  const previewScroll = useRef<ScrollView>(null);
+  const [heroHeight, setHeroHeight] = useState(240);
+  const hoyTint = homeHoyVisuals[displayedHoyState ?? 'thinking'].tint;
   const homeLinkIconColor = theme.isDark ? '#252527' : '#EEEEF0';
   const homeNeutralSurfaceColor = theme.isDark ? '#252527' : '#FFFFFF';
   const homeCardLiftStyle = [
@@ -1005,7 +1024,7 @@ export function HomeScreen(): React.JSX.Element {
       return;
     }
 
-    navigation.navigate('Momentum');
+    navigation.navigate('Progress');
   };
 
   const openInbox = () => {
@@ -1045,12 +1064,31 @@ export function HomeScreen(): React.JSX.Element {
     <View
       style={[styles.root, theme.isDark ? styles.rootDark : styles.rootLight]}>
       <StatusBar barStyle={theme.isDark ? 'light-content' : 'dark-content'} />
+      <LinearGradient
+        pointerEvents="none"
+        colors={[`${hoyTint}${theme.isDark ? '26' : 'A6'}`, `${hoyTint}00`]}
+        style={[styles.tint, {height: heroHeight}]}
+        testID="home-hoy-context-tint"
+      />
       <ScrollView
+        ref={preview?.captureBottom ? previewScroll : undefined}
+        onContentSizeChange={
+          preview?.captureBottom
+            ? () => previewScroll.current?.scrollToEnd({animated: false})
+            : undefined
+        }
         bounces={false}
-        contentContainerStyle={styles.scrollContent}
+        contentInsetAdjustmentBehavior="never"
+        automaticallyAdjustContentInsets={false}
+        automaticallyAdjustsScrollIndicatorInsets={false}
+        contentContainerStyle={[styles.scrollContent, {paddingTop: insets.top}]}
         showsVerticalScrollIndicator={false}
         style={styles.scroll}>
         <HomeHeroHeader
+          topInsetApplied
+          onLayout={({nativeEvent: {layout}}) =>
+            setHeroHeight(layout.height + insets.top)
+          }
           bubbleText={bubbleText}
           emphasis={[
             homeGreetingContext.firstName ?? '',
@@ -1099,9 +1137,19 @@ export function HomeScreen(): React.JSX.Element {
               homeData.hasResolvedGreetingContext &&
               !hasHomeDataError ? (
               <HomeProgress
+                viewportWidth={preview?.viewportWidth}
                 streakDays={homeData.personalStreakDays}
                 momentumPercent={momentumDisplay.rawRollingPercentage}
-                onMomentumPress={() => navigation.navigate('Momentum')}
+                onStreakPress={() =>
+                  rootNavigation?.navigate('ProgressDetails', {
+                    section: 'streak',
+                  })
+                }
+                onMomentumPress={() =>
+                  rootNavigation?.navigate('ProgressDetails', {
+                    section: 'momentum',
+                  })
+                }
               />
             ) : isSessionResolving || isLoadingHomeData ? (
               <View
@@ -1388,6 +1436,49 @@ export function HomeScreen(): React.JSX.Element {
                   />
                 </View>
               </Pressable>
+              <Pressable
+                accessibilityLabel="Create new commitment"
+                accessibilityRole="button"
+                onPress={() => rootNavigation?.navigate('CreateCircle')}
+                style={({pressed}) => [
+                  styles.allMyCommitmentsPressable,
+                  {opacity: pressed ? actionMotion.pressedOpacity : 1},
+                ]}
+                testID="create-new-commitment-link">
+                <View
+                  style={[
+                    styles.allMyCommitmentsLink,
+                    {borderBottomColor: theme.border},
+                  ]}
+                  testID="create-new-commitment-link-content">
+                  <View
+                    style={[
+                      styles.linkIcon,
+                      {backgroundColor: homeLinkIconColor},
+                    ]}>
+                    <Plus
+                      color={theme.textMuted}
+                      size={20}
+                      strokeWidth={2.4}
+                      testID="create-new-commitment-plus-icon"
+                    />
+                  </View>
+                  <HoystText
+                    style={[
+                      styles.allMyCommitmentsLabel,
+                      {color: theme.textMuted},
+                    ]}
+                    testID="create-new-commitment-label">
+                    Create new commitment
+                  </HoystText>
+                  <ChevronRight
+                    color={theme.textMuted}
+                    size={20}
+                    strokeWidth={2.6}
+                    testID="create-new-commitment-chevron"
+                  />
+                </View>
+              </Pressable>
             </View>
           ) : null}
 
@@ -1519,6 +1610,7 @@ const styles = StyleSheet.create({
     marginTop: 0,
     width: '100%',
   },
+  tint: {position: 'absolute', top: 0, left: 0, right: 0},
   root: {
     flex: 1,
   },
@@ -1529,6 +1621,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FAFAF7',
   },
   scroll: {
+    flex: 1,
     backgroundColor: 'transparent',
   },
   scrollContent: {

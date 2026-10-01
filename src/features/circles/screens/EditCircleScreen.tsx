@@ -24,7 +24,6 @@ import {
   defaultWeeklyCommitmentFrequency,
   getPrivacyChoiceFields,
   isCircleMaxSizeBelowMemberCount,
-  normalizeSkipGraceRule,
 } from '../../create-circle/services/create-circle-draft';
 import {subscribeToMemberCircleDetail} from '../../home/services/home-data-service';
 import {updateCircle} from '../services/circle-service';
@@ -141,33 +140,30 @@ export function EditCircleScreen({
     originalPayloadKey && payloadKey && payloadKey !== originalPayloadKey,
   );
 
-  useEffect(
-    () => {
-      if (typeof navigation.addListener !== 'function') {
-        return undefined;
+  useEffect(() => {
+    if (typeof navigation.addListener !== 'function') {
+      return undefined;
+    }
+
+    return navigation.addListener('beforeRemove', event => {
+      if (allowExitRef.current || !isDirty) {
+        return;
       }
 
-      return navigation.addListener('beforeRemove', event => {
-        if (allowExitRef.current || !isDirty) {
-          return;
-        }
-
-        event.preventDefault();
-        Alert.alert('Discard changes?', 'Your unsaved changes will be lost.', [
-          {style: 'cancel', text: 'Keep editing'},
-          {
-            onPress: () => {
-              allowExitRef.current = true;
-              navigation.dispatch(event.data.action);
-            },
-            style: 'destructive',
-            text: 'Discard',
+      event.preventDefault();
+      Alert.alert('Discard changes?', 'Your unsaved changes will be lost.', [
+        {style: 'cancel', text: 'Keep editing'},
+        {
+          onPress: () => {
+            allowExitRef.current = true;
+            navigation.dispatch(event.data.action);
           },
-        ]);
-      });
-    },
-    [isDirty, navigation],
-  );
+          style: 'destructive',
+          text: 'Discard',
+        },
+      ]);
+    });
+  }, [isDirty, navigation]);
 
   const setField = <Key extends keyof CreateCircleDraft>(
     key: Key,
@@ -210,22 +206,6 @@ export function EditCircleScreen({
       Number.isFinite(parsedValue) && parsedValue >= 0 ? parsedValue : 0;
 
     setField(key, nextValue);
-  };
-
-  const setSkipRule = (nextRule: {allowance?: number; windowDays?: number}) => {
-    setDraft(current =>
-      current
-        ? {
-            ...current,
-            graceRules: {
-              skip: normalizeSkipGraceRule({
-                ...current.graceRules.skip,
-                ...nextRule,
-              }),
-            },
-          }
-        : current,
-    );
   };
 
   const selectPrivacyMode = (privacyMode: CirclePrivacyMode) => {
@@ -349,9 +329,7 @@ export function EditCircleScreen({
     );
   }
 
-  const skipRule = draft.graceRules.skip;
   const isPersonal = draft.circleMode === 'personal';
-  const graceEnabled = skipRule.allowance > 0;
   const publicJoinMode =
     draft.joinMode === 'open' || draft.joinMode === 'request_to_join'
       ? draft.joinMode
@@ -361,7 +339,7 @@ export function EditCircleScreen({
     <CommitmentSetupScaffold
       body={
         isPersonal
-          ? 'Update the Commitment Goal, Pace, timing, and Skips.'
+          ? 'Update the Commitment Goal, Pace, and timing.'
           : 'Update the Circle name, rules, access, timing, and capacity.'
       }
       eyebrow="Owner settings"
@@ -532,9 +510,7 @@ export function EditCircleScreen({
           <View style={styles.nestedBlock}>
             <View style={styles.sectionHeader}>
               <HoystText variant="bodyStrong">
-                {draft.commitmentType === 'limit'
-                  ? 'Goal range'
-                  : 'Goal value'}
+                {draft.commitmentType === 'limit' ? 'Goal range' : 'Goal value'}
               </HoystText>
               <HoystChip
                 label={draft.commitmentType === 'limit' ? 'Limit' : 'Goal'}
@@ -682,60 +658,6 @@ export function EditCircleScreen({
           </HoystText>
         )}
       </GlassPanel>
-
-      <GlassPanel>
-        <View style={styles.sectionHeader}>
-          <HoystText variant="title">Skips</HoystText>
-          <HoystChip
-            label={graceEnabled ? 'On' : 'Off'}
-            tone={graceEnabled ? 'orange' : 'neutral'}
-          />
-        </View>
-        <Pressable
-          accessibilityRole="switch"
-          accessibilityState={{checked: graceEnabled}}
-          onPress={() => setSkipRule({allowance: graceEnabled ? 0 : 1})}
-          style={({pressed}) => [
-            styles.toggleRow,
-            {
-              backgroundColor: theme.glassSurfaceStrong,
-              borderColor: graceEnabled
-                ? theme.warningForeground
-                : theme.glassBorder,
-              opacity: pressed ? 0.92 : 1,
-            },
-          ]}>
-          <View style={styles.optionCopy}>
-            <HoystText variant="bodyStrong">
-              Optional Skips protect Progress
-            </HoystText>
-            <HoystText tone="muted">
-              {isPersonal
-                ? 'Skips count as covered for your Progress.'
-                : 'Skips count as covered for Circle Progress.'}
-            </HoystText>
-          </View>
-          <HoystChip
-            label={graceEnabled ? 'On' : 'Off'}
-            tone={graceEnabled ? 'orange' : 'neutral'}
-          />
-        </Pressable>
-        <SetupNumericStepper
-          label="Skips allowed"
-          max={30}
-          min={0}
-          onChange={allowance => setSkipRule({allowance})}
-          value={skipRule.allowance}
-        />
-        <SetupNumericStepper
-          label="Window days"
-          max={365}
-          min={1}
-          onChange={windowDays => setSkipRule({windowDays})}
-          value={skipRule.windowDays}
-        />
-      </GlassPanel>
-
     </CommitmentSetupScaffold>
   );
 }

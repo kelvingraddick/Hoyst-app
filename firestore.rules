@@ -65,6 +65,16 @@ service cloud.firestore {
         allow write: if false;
       }
 
+      match /progress/{summaryId} {
+        allow read: if isSelf(uid);
+        allow write: if false;
+      }
+
+      match /progressLedger/{entryId} {
+        allow read: if isSelf(uid);
+        allow write: if false;
+      }
+
       match /momentum/{summaryId} {
         allow read: if isSelf(uid);
         allow write: if false;

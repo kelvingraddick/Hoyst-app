@@ -860,9 +860,9 @@ describe('TapInCompleteScreen', () => {
     const output = JSON.stringify(tree!.toJSON());
 
     expect(output).toContain('Skip Recorded');
-    expect(output).toContain('Grace skip used');
+    expect(output).toContain('Skip used');
     expect(output).toContain('6 days streak held');
-    expect(output).toContain('No note added. Your grace skip still counts.');
+    expect(output).toContain('No note added. Your skip still protects this opportunity.');
     expect(output).not.toContain('Share as story');
     expect(output).not.toContain('Add details');
   });

@@ -1,3 +1,4 @@
+import {shareCircleInvitation} from '../../progress/services/progress-service';
 import React, {useCallback, useEffect, useState} from 'react';
 import {
   Alert,
@@ -5,7 +6,6 @@ import {
   Modal,
   Platform,
   Pressable,
-  Share,
   StyleSheet,
   View,
 } from 'react-native';
@@ -514,7 +514,7 @@ export function CircleToolsScreen({
     setIsResettingInvite(true);
     try {
       const result = await rotateCircleInvite(detail.id);
-      await Share.share({
+      await shareCircleInvitation(detail.id, {
         message: `Join ${detail.title} on Hoyst: ${result.inviteUrl}`,
         title: `Join ${detail.title} on Hoyst`,
         url: result.inviteUrl,
@@ -678,7 +678,7 @@ export function CircleToolsScreen({
               <SettingsRow
                 detail={
                   isPersonal
-                    ? 'Change the Commitment Goal, Pace, timing, and Skips.'
+                    ? 'Change the Commitment Goal, Pace, and timing.'
                     : 'Change the name, rules, access, timing, and capacity.'
                 }
                 icon={Pencil}

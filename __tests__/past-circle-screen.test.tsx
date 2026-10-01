@@ -78,6 +78,7 @@ jest.mock('../src/features/circles/services/past-circle-service', () => ({
         dateKey: '2026-06-29',
         id: 'former-1',
         status: 'skip',
+        protectionKind: 'restore',
       },
     ]);
     return jest.fn();
@@ -129,7 +130,7 @@ describe('PastCircleScreen', () => {
     expect(renderedText).toContain('Membership period 1');
     expect(renderedText).toContain('Membership period 2');
     expect(output).toContain('Strong ending');
-    expect(output).toContain('Skipped');
+    expect(output).toContain('Streak restored · Protected');
     const textLines = renderedText.split('\n');
     expect(textLines).not.toContain('Members');
     expect(textLines).not.toContain('Invite');

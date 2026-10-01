@@ -12,16 +12,17 @@ import {
   DSText,
   space,
   useSystemTheme,
-  type SemanticTone,
 } from '../../../design/system';
 import {clearDeliveredNotifications} from '../../../lib/notifications';
 import type {RootStackParamList} from '../../../navigation/types';
 import {useSettingsStore} from '../../../store/settings-store';
 import {useSessionStore} from '../../../store/session-store';
+import type {InboxEvent} from '../../../types/models';
 import {
-  legacyCircleActivityEventTypes,
-  type InboxEvent,
-} from '../../../types/models';
+  getInboxEventTone,
+  InboxEventBadge,
+  type InboxIconTone,
+} from '../components/InboxEventBadge';
 import {
   markAllInboxEventsRead,
   markInboxEventRead,
@@ -30,7 +31,7 @@ import {
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Inbox'>;
 type InboxVisual = {
-  messageTone: SemanticTone;
+  messageTone: InboxIconTone;
 };
 
 function getInitials(name: string) {
@@ -42,76 +43,9 @@ function getInitials(name: string) {
     .join('');
 }
 
-function isSuccessEvent(event: InboxEvent) {
-  return (
-    event.type === 'circle_complete' ||
-    event.type === 'circle_restored' ||
-    event.type === legacyCircleActivityEventTypes.achievementUnlocked ||
-    event.type === legacyCircleActivityEventTypes.circleCreated ||
-    event.type === legacyCircleActivityEventTypes.circleJoined ||
-    event.type === legacyCircleActivityEventTypes.momentumLevelUp ||
-    event.type === legacyCircleActivityEventTypes.streakMilestone ||
-    event.type === legacyCircleActivityEventTypes.tappedIn ||
-    event.type === 'join_approved' ||
-    event.type === 'member_joined'
-  );
-}
-
-function isAlertEvent(event: InboxEvent) {
-  if (
-    event.type === 'circle_at_risk' ||
-    event.type === legacyCircleActivityEventTypes.skipped ||
-    event.type === 'member_due_prompt' ||
-    event.type === 'tap_in_final_warning' ||
-    event.type === 'join_declined'
-  ) {
-    return true;
-  }
-
-  return false;
-}
-
 function getInboxVisual(event: InboxEvent): InboxVisual {
-  if (isSuccessEvent(event)) {
-    return {
-      messageTone: 'success',
-    };
-  }
-
-  if (isAlertEvent(event)) {
-    return {
-      messageTone: 'warning',
-    };
-  }
-
-  if (event.type === 'tap_in_midday_reminder') {
-    return {
-      messageTone: 'warning',
-    };
-  }
-
-  if (
-    event.type === 'circle_discovery_suggestion' ||
-    event.type === 'evening_summary'
-  ) {
-    return {
-      messageTone: 'action',
-    };
-  }
-
-  if (
-    event.type === 'circle_archived' ||
-    event.type === 'join_request' ||
-    event.type === 'nudge' ||
-    event.type === 'circle_nudge_prompt'
-  ) {
-    return {
-      messageTone: 'progress',
-    };
-  }
-
   return {
-    messageTone: 'muted',
+    messageTone: getInboxEventTone(event.type),
   };
 }
 
@@ -136,28 +70,40 @@ function getUnreadEventIds(events: readonly InboxEvent[]) {
   return events.filter(event => !event.isRead).map(event => event.id);
 }
 
-function InboxAvatar({name, uri}: {name: string; uri?: string}) {
+function InboxAvatar({event, tone}: {event: InboxEvent; tone: InboxIconTone}) {
   const theme = useSystemTheme();
   const [failedUri, setFailedUri] = useState<string>();
+  const uri = event.actor?.avatarUrl;
+  const actorName = event.actor?.displayName?.trim();
   const backgroundColor = theme.isDark ? '#151827' : '#FFFFFF';
+
+  if (!uri || failedUri === uri) {
+    if (!actorName) {
+      return (
+        <InboxEventBadge isDark={theme.isDark} type={event.type} tone={tone} />
+      );
+    }
+
+    return (
+      <View style={[styles.avatarFace, {backgroundColor}]}>
+        <DSText allowFontScaling={false} style={styles.avatarInitials}>
+          {getInitials(actorName)}
+        </DSText>
+      </View>
+    );
+  }
 
   return (
     <View style={[styles.avatarFace, {backgroundColor}]}>
-      {uri && failedUri !== uri ? (
-        <Image
-          source={{uri}}
-          resizeMode="cover"
-          accessibilityIgnoresInvertColors
-          accessible={false}
-          onError={() => setFailedUri(uri)}
-          style={styles.avatarImage}
-          testID="inbox-avatar-image"
-        />
-      ) : (
-        <DSText allowFontScaling={false} style={styles.avatarInitials}>
-          {getInitials(name) || 'HO'}
-        </DSText>
-      )}
+      <Image
+        source={{uri}}
+        resizeMode="cover"
+        accessibilityIgnoresInvertColors
+        accessible={false}
+        onError={() => setFailedUri(uri)}
+        style={styles.avatarImage}
+        testID="inbox-avatar-image"
+      />
     </View>
   );
 }
@@ -199,8 +145,8 @@ function InboxEventRow({
       <View style={styles.notificationAvatarSlot} testID="inbox-avatar">
         <InboxAvatar
           key={event.actor?.avatarUrl}
-          name={lead}
-          uri={event.actor?.avatarUrl}
+          event={event}
+          tone={visual.messageTone}
         />
         <View style={styles.notificationUnreadSlot}>
           {isUnread ? (

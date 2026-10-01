@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		A61E6F411111111111111101 /* HoystAppInfo.m in Sources */ = {isa = PBXBuildFile; fileRef = A61E6F411111111111111102 /* HoystAppInfo.m */; };
 		13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB51A68108700A75B9A /* Images.xcassets */; };
 		35D2C81CD0704AB4298F857D /* Pods_OneSignalNotificationServiceExtension.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 066E273B6EC88C21BDDD064A /* Pods_OneSignalNotificationServiceExtension.framework */; };
 		550E75A5DA7EE56BBD549C82 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB81A68108700A75B9A /* PrivacyInfo.xcprivacy */; };
@@ -47,6 +48,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		A61E6F411111111111111102 /* HoystAppInfo.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; name = HoystAppInfo.m; path = Hoyst/HoystAppInfo.m; sourceTree = "<group>"; };
 		065675BD27EA413DA98F1D82 /* OneSignalNotificationServiceExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = OneSignalNotificationServiceExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		066E273B6EC88C21BDDD064A /* Pods_OneSignalNotificationServiceExtension.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_OneSignalNotificationServiceExtension.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		0F143D173F0495942865BB42 /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
@@ -98,6 +100,7 @@
 				13B07FB51A68108700A75B9A /* Images.xcassets */,
 				761780EC2CA45674006654EE /* AppDelegate.swift */,
 				5A8D91B32F8F6D7100AABB01 /* HoystClipboardImage.swift */,
+				A61E6F411111111111111102 /* HoystAppInfo.m */,
 				5A8D91B42F8F6D7100AABB01 /* HoystClipboardImageBridge.m */,
 				5A8D91B62F8F6D7100AABB01 /* HoystInviteLinkModule.m */,
 				13B07FB41A68108700A75B9A /* Hoyst.entitlements */,
@@ -179,6 +182,7 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = 13B07F931A680F5B00A75B9A /* Build configuration list for PBXNativeTarget "Hoyst" */;
 			buildPhases = (
+				A10930001544000000000001 /* Verify Simulator signing */,
 				C38B50BA6285516D6DCD4F65 /* [CP] Check Pods Manifest.lock */,
 				13B07F871A680F5B00A75B9A /* Sources */,
 				13B07F8C1A680F5B00A75B9A /* Frameworks */,
@@ -277,6 +281,23 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXShellScriptBuildPhase section */
+		A10930001544000000000001 /* Verify Simulator signing */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+				"$(SRCROOT)/../scripts/check-ios-simulator-signing.sh",
+			);
+			name = "Verify Simulator signing";
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "/bin/sh \"$SRCROOT/../scripts/check-ios-simulator-signing.sh\"\n";
+			showEnvVarsInLog = 0;
+		};
 		00DD1BFF1BD5951E006B06BC /* Bundle React Native code and images */ = {
 			isa = PBXShellScriptBuildPhase;
 			buildActionMask = 2147483647;
@@ -411,6 +432,7 @@
 			files = (
 				761780ED2CA45674006654EE /* AppDelegate.swift in Sources */,
 				5A8D91B12F8F6D7100AABB01 /* HoystClipboardImage.swift in Sources */,
+				A61E6F411111111111111101 /* HoystAppInfo.m in Sources */,
 				5A8D91B22F8F6D7100AABB01 /* HoystClipboardImageBridge.m in Sources */,
 				5A8D91B52F8F6D7100AABB01 /* HoystInviteLinkModule.m in Sources */,
 			);

@@ -32,6 +32,10 @@ import {neutralizeCircleSlotAggregateForArchive} from './archive';
 export {neutralizeCircleSlotAggregateForArchive} from './archive';
 
 type RecordTapInOpportunityInput = {
+  beforeWrite?: (
+    opportunityId: string,
+    prior: DocumentData | undefined,
+  ) => Promise<void>;
   checkInId: string;
   circle: DocumentData | undefined;
   circleId: string;
@@ -332,6 +336,8 @@ function buildOpportunityPayload({
   return {
     availableDateKey: slot.availableDateKey,
     cadence: normalizeCommitmentSchedule(circle).pace,
+    opportunitiesPerPeriod:
+      normalizeCommitmentSchedule(circle).opportunitiesPerPeriod,
     circleId,
     commitment: asString(circle?.commitment),
     countsTowardCircle: true,
@@ -368,6 +374,7 @@ function buildOpportunityPayload({
 }
 
 export async function recordTapInOpportunity({
+  beforeWrite,
   checkInId,
   circle,
   circleId,
@@ -487,18 +494,30 @@ export async function recordTapInOpportunity({
     asNumber(periodData?.coveredOpportunityCount, 0) + coveredDelta,
   );
 
+  await beforeWrite?.(opportunityRef.id, priorOpportunitySnapshot.data());
+
   transaction.set(
     opportunityRef,
-    buildOpportunityPayload({
-      checkInId,
-      circle,
-      circleId,
-      dateKey,
-      profile,
-      slot,
-      status: opportunityStatus,
-      uid,
-    }),
+    {
+      ...buildOpportunityPayload({
+        checkInId,
+        circle,
+        circleId,
+        dateKey,
+        profile,
+        slot,
+        status: opportunityStatus,
+        uid,
+      }),
+      ...(status === 'done'
+        ? {
+            firstSuccessfulAt:
+              priorOpportunitySnapshot.data()?.firstSuccessfulAt ??
+              priorOpportunitySnapshot.data()?.completedAt ??
+              FieldValue.serverTimestamp(),
+          }
+        : {}),
+    },
     {merge: true},
   );
   transaction.set(
@@ -618,6 +637,14 @@ export async function removeTapInOpportunity({
   transaction.set(
     opportunityRef,
     {
+      ...(priorStatus === 'completed'
+        ? {
+            firstSuccessfulAt:
+              opportunitySnapshots[matchedIndex].data()?.firstSuccessfulAt ??
+              opportunitySnapshots[matchedIndex].data()?.completedAt ??
+              FieldValue.serverTimestamp(),
+          }
+        : {}),
       completedAt: FieldValue.delete(),
       completionDateKey: FieldValue.delete(),
       linkedCheckInId: FieldValue.delete(),
@@ -882,7 +909,10 @@ export async function neutralizeCircleOpportunitiesForArchive({
         opportunity.status === 'available' || opportunity.status === 'upcoming';
       const expiresDateKey = asString(opportunity.expiresDateKey);
 
-      if (!isUnfinished || (expiresDateKey && expiresDateKey < archiveDateKey)) {
+      if (
+        !isUnfinished ||
+        (expiresDateKey && expiresDateKey < archiveDateKey)
+      ) {
         return;
       }
 

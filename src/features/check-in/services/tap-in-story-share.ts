@@ -284,12 +284,16 @@ export async function copyTapInStoryImageToClipboard(
 export async function shareTapInStoryImage(
   storyCardRef: RefObject<View | null>,
   message: string,
+  canOpenShare?: () => boolean,
 ) {
   let capturedUri: string | undefined;
   const {captureRef, releaseCapture, shareOpen} = await loadStoryShareModules();
 
   try {
     capturedUri = await captureRef(storyCardRef, storyCaptureOptions);
+
+    if (canOpenShare && !canOpenShare())
+      throw new Error('Your account changed. Reopen the share preview.');
 
     await shareOpen({
       failOnCancel: false,

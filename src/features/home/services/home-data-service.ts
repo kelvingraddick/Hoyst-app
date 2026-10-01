@@ -2384,6 +2384,7 @@ export function subscribeToHomeData({
   const states = new Map<string, CircleSubscriptionState>();
   const viewerOpenOpportunities = new Map<string, PlainData>();
   let hasLoadedViewerOpportunities = false;
+  let sharedSkips: number | undefined;
   let circleUnsubscribes: Array<() => void> = [];
 
   const hasResolvedGreetingContext = () =>
@@ -2431,7 +2432,8 @@ export function subscribeToHomeData({
             viewerOpenOpportunities.get(circleId),
           ),
         )
-        .filter((circle): circle is CircleManagementCard => Boolean(circle)),
+        .filter((circle): circle is CircleManagementCard => Boolean(circle))
+        .map(circle => ({...circle, viewerAvailableSkips: sharedSkips})),
     );
 
     const activeStates = new Map(
@@ -2639,7 +2641,13 @@ export function subscribeToHomeData({
       emit();
     }, onError);
 
+  const unsubscribeInventory = firestore.collection(collections.userPrivate).doc(uid).collection('progress').doc('current').onSnapshot(snapshot => {
+    sharedSkips = snapshot.data()?.inventory?.skips;
+    emit();
+  }, onError);
+
   return () => {
+    unsubscribeInventory();
     unsubscribeMemberships();
     unsubscribeViewerOpportunities();
     stopCircleListeners();
@@ -2676,10 +2684,16 @@ export function subscribeToMemberCircleDetail({
     skipGraceUnsubscribes: [],
     todayCheckInStatuses: new Map(),
   };
+  let hasLoadedCircle = false;
+  let hasLoadedMembership = false;
   let membershipData: PlainData | undefined;
   let activeUnsubscribes: Array<() => void> = [];
 
   const emit = () => {
+    if (!hasLoadedCircle || !hasLoadedMembership) {
+      return;
+    }
+
     if (!membershipData) {
       onDetail(undefined);
       return;
@@ -2815,6 +2829,7 @@ export function subscribeToMemberCircleDetail({
   };
 
   const unsubscribeCircle = circleRef.onSnapshot(snapshot => {
+    hasLoadedCircle = true;
     state.circleData = snapshotData(snapshot);
     if (normalizeMembershipStatus(membershipData?.status) === 'active') {
       syncCircleOpportunityListener({
@@ -2862,6 +2877,7 @@ export function subscribeToMemberCircleDetail({
     .collection('members')
     .doc(uid)
     .onSnapshot(snapshot => {
+      hasLoadedMembership = true;
       membershipData = snapshotData(snapshot);
       startActiveListeners();
       emit();

@@ -1,7 +1,7 @@
 import React from 'react';
-import {Pressable, StyleSheet, useWindowDimensions, View} from 'react-native';
+import {StyleSheet, useWindowDimensions, View} from 'react-native';
 import Svg, {Path} from 'react-native-svg';
-import {Check, Flame, Minus, TrendingUp} from 'lucide-react-native';
+import {Check, Minus} from 'lucide-react-native';
 import {HoystText} from '../../../design/components/HoystText';
 import {useHoystTheme} from '../../../design/theme/useHoystTheme';
 import type {HomeProgressCell} from '../services/home-data-service';
@@ -12,6 +12,8 @@ import {
 import {brandColors} from '../../../design/tokens/colors';
 import {homeTypography} from '../../../design/tokens/home';
 import {DateTime} from 'luxon';
+import {DesignSystemProvider} from '../../../design/system';
+import {ProgressStatsRow} from '../../progress/components/ProgressStatsRow';
 
 export function HomeWeekPath({days}: {days: readonly HomeProgressCell[]}) {
   const theme = useHoystTheme();
@@ -143,53 +145,30 @@ export function HomeWeekPath({days}: {days: readonly HomeProgressCell[]}) {
 
 export function HomeProgress({
   streakDays,
+  viewportWidth,
   momentumPercent,
+  onStreakPress,
   onMomentumPress,
 }: {
   streakDays: number;
+  viewportWidth?: number;
   momentumPercent: number;
+  onStreakPress: () => void;
   onMomentumPress: () => void;
 }) {
   const theme = useHoystTheme();
-  const accent = theme.isDark ? '#B89FFF' : theme.accentForeground;
-  const statsSurface = theme.isDark ? '#121212' : '#FFFFFF';
-  const statsShadow = theme.isDark ? '#000000' : '#92723E';
   return (
     <View style={styles.progress}>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={`Current streak ${streakDays} days. 14-day momentum ${momentumPercent}%. View Momentum`}
-        onPress={onMomentumPress}
-        style={[
-          styles.stats,
-          {backgroundColor: statsSurface, shadowColor: statsShadow},
-        ]}
-        testID="home-momentum-bar">
-        <View style={styles.stat}>
-          <View style={styles.statValue}>
-            <Flame size={16} color={theme.warningForeground} />
-            <HoystText
-              style={[styles.number, {color: theme.warningForeground}]}>
-              {streakDays} {streakDays === 1 ? 'day' : 'days'}
-            </HoystText>
-          </View>
-          <HoystText style={styles.statCaption} tone="muted">
-            Current streak
-          </HoystText>
-        </View>
-        <View style={[styles.divider, {backgroundColor: theme.borderStrong}]} />
-        <View style={styles.stat}>
-          <View style={styles.statValue}>
-            <TrendingUp size={16} color={accent} />
-            <HoystText style={[styles.number, {color: accent}]}>
-              {momentumPercent}%
-            </HoystText>
-          </View>
-          <HoystText style={styles.statCaption} tone="muted">
-            14-day momentum
-          </HoystText>
-        </View>
-      </Pressable>
+      <DesignSystemProvider scheme={theme.isDark ? 'dark' : 'light'}>
+        <ProgressStatsRow
+          viewportWidth={viewportWidth}
+          streak={`${streakDays} ${streakDays === 1 ? 'day' : 'days'}`}
+          momentum={`${momentumPercent}%`}
+          onStreakPress={onStreakPress}
+          onMomentumPress={onMomentumPress}
+          testIDPrefix="home"
+        />
+      </DesignSystemProvider>
     </View>
   );
 }
@@ -256,31 +235,7 @@ const styles = StyleSheet.create({
   date: {fontSize: 14, lineHeight: 20, fontWeight: '600', marginTop: 2},
   today: {fontSize: 12, lineHeight: 16, fontWeight: '600', marginTop: 4},
   progress: {gap: 12},
-  stats: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 12,
-    minHeight: 56,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 14,
-    shadowOffset: {width: 0, height: 6},
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 3,
-  },
-  stat: {flex: 1, gap: 4},
-  statValue: {flexDirection: 'row', alignItems: 'center', gap: 8},
-  number: {fontSize: 18, lineHeight: 22, fontWeight: '600', flexShrink: 1},
-  statCaption: {
-    fontSize: 11,
-    lineHeight: 15,
-    fontWeight: '400',
-    marginLeft: 24,
-  },
   caption: homeTypography.secondary,
-  divider: {width: 1, height: 32},
   actionProgress: {gap: 8},
   track: {height: 5, borderRadius: 3, overflow: 'hidden'},
   fill: {height: '100%', borderRadius: 3},

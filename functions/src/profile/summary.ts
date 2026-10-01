@@ -48,6 +48,7 @@ function getCheckInCircleId(snapshot: QueryDocumentSnapshot) {
 
 function getCheckInDateKey(snapshot: QueryDocumentSnapshot, timezone: string) {
   const data = snapshot.data();
+  if (data.protectionKind === 'restore' && typeof data.effectiveDateKey === 'string') return data.restoration?.personalEffectiveDateKey || data.effectiveDateKey;
   const createdAt = data.createdAt as {toDate?: () => Date} | undefined;
 
   if (createdAt?.toDate) {

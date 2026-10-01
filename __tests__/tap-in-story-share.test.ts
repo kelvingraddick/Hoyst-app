@@ -61,6 +61,16 @@ const detail = {
 } satisfies CircleDetailModel;
 
 describe('Tap In story sharing', () => {
+  it('releases an export and does not open the sheet if its account changes during capture', async () => {
+    const ref = {current: {}} as RefObject<never>;
+    await expect(
+      shareTapInStoryImage(ref, 'Join me on Hoyst', () => false),
+    ).rejects.toThrow('Your account changed');
+    expect(mockShareOpen).not.toHaveBeenCalled();
+    expect(mockReleaseCapture).toHaveBeenCalledWith(
+      'file:///tmp/hoyst-story.png',
+    );
+  });
   beforeEach(() => {
     mockCaptureRef.mockReset();
     mockReleaseCapture.mockReset();

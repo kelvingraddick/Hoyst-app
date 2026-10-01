@@ -21,6 +21,7 @@ export type PastCircleSummary = {
 };
 
 export type PastCircleTapIn = {
+  protectionKind?: 'restore';
   coverageStatus?: CheckInCoverageStatus;
   currentValue?: number;
   dateKey: string;
@@ -126,6 +127,7 @@ function mapPastTapIn(
     note: asOptionalString(data.note),
     photoUrl: asOptionalString(data.photoUrl),
     status,
+    protectionKind: data.protectionKind === 'restore' ? 'restore' : undefined,
     unitLabel: asOptionalString(data.unitLabel),
   };
 }

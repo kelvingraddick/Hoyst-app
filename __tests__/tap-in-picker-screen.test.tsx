@@ -263,6 +263,35 @@ describe('TapInPickerScreen', () => {
     jest.clearAllMocks();
   });
 
+  it.each(['populated', 'empty', 'loading', 'error', 'covered'] as const)(
+    'opens CreateCircle from the header in the %s state',
+    state => {
+      if (state === 'populated' || state === 'covered') {
+        mockHomeData = homeData([
+          circle({
+            viewerHasTappedInToday: state === 'covered',
+            viewerTodayStatus: state === 'covered' ? 'done' : undefined,
+          }),
+        ]);
+      }
+      if (state === 'loading' || state === 'error') {
+        mockSubscriptionMode = state;
+      }
+      const {navigation, tree} = renderScreen();
+      const create = tree.root.findAll(
+        node =>
+          String(node.type) === 'View' &&
+          node.props.accessibilityRole === 'button' &&
+          node.props.accessibilityLabel === 'Create a circle',
+      )[0];
+      expect(create).toBeDefined();
+      act(() => create.props.onClick());
+      expect(navigation.navigate).toHaveBeenCalledWith('CreateCircle');
+      expect(navigation.goBack).not.toHaveBeenCalled();
+      act(() => tree.unmount());
+    },
+  );
+
   it('renders a compact hero, divided due-card stack and visible utilities', () => {
     mockHomeData = homeData([
       circle({
@@ -772,7 +801,7 @@ describe('TapInPickerScreen', () => {
     ]);
     const {tree} = renderScreen();
     const output = getTextOutput(tree.toJSON());
-    expect(output).toContain('Grace skip used today');
+    expect(output).toContain('Skip used today');
     expect(output).toContain('1/2 members met goal today');
     expect(output).not.toContain('Pending circle');
     expect(output).toContain('1 of 1 tapped in');
@@ -856,3 +885,8 @@ describe('TapInPickerScreen', () => {
     expect(getTextOutput(rendered.tree.toJSON())).toContain('Today is covered');
   });
 });
+
+jest.mock('../src/features/progress/services/progress-service', () => ({
+  shareCircleInvitation: (_circleId: string, content: unknown) =>
+    require('react-native').Share.share(content),
+}));

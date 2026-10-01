@@ -1,3 +1,4 @@
+import {useProgress} from '../../progress/hooks/useProgress';
 import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {Alert, Image, View} from 'react-native';
 import {Share2, Trash2} from 'lucide-react-native';
@@ -82,6 +83,7 @@ function TapInComposerController({
   const [selectedPhotoUri, setSelectedPhotoUri] = useState<string>();
   const [quantityInput, setQuantityInput] = useState('0');
   const [hasEditedQuantity, setHasEditedQuantity] = useState(false);
+  const rewardState = useProgress();
   const profile = useUserProfileStore(state => state.profile);
   const status = useSessionStore(state => state.status);
   const user = useSessionStore(state => state.user);
@@ -261,28 +263,24 @@ function TapInComposerController({
       : detail.remainingCheckIns === 1
       ? `1 Tap In left ${remainingPeriodCopy}`
       : `${detail.remainingCheckIns ?? 0} Tap Ins left ${remainingPeriodCopy}`;
-  const skipGraceRule = detail.graceRules?.skip;
-  const skipAllowance = skipGraceRule?.allowance ?? 0;
-  const skipWindowDays = skipGraceRule?.windowDays ?? 1;
-  const availableSkips = detail.viewerAvailableSkips;
+  const availableSkips = rewardState.summary?.inventory.skips;
   const isSkipAvailabilityKnown = typeof availableSkips === 'number';
-  const hasSkipRule = skipAllowance > 0;
   const canSubmitTapIn =
     !detail.viewerHasTappedInToday ||
-    (isQuantityTapIn && detail.viewerTodayStatus !== 'skip');
+    detail.viewerTodayStatus === 'skip' ||
+    isQuantityTapIn;
   const canSkip =
     !detail.viewerHasCheckedIn &&
+    rewardState.summary?.flags.inventory === true &&
     canSubmitTapIn &&
-    hasSkipRule &&
     isSkipAvailabilityKnown &&
     availableSkips > 0;
-  const shouldShowSkipAction =
-    !detail.viewerHasCheckedIn && canSubmitTapIn && hasSkipRule;
+  const shouldShowSkipAction = !detail.viewerHasCheckedIn && canSubmitTapIn;
   const skipActionLabel = !isSkipAvailabilityKnown
-    ? `Checking skips (${skipAllowance} per ${skipWindowDays} days)`
+    ? 'Loading your skips'
     : availableSkips > 0
     ? `Use Skip (${availableSkips} left)`
-    : `No skips left (${skipAllowance} per ${skipWindowDays} days)`;
+    : 'No skips left';
   const hasRemovableTodayCheckIn =
     detail.viewerHasTappedInToday &&
     Boolean(detail.viewerTodayStatus) &&
@@ -431,6 +429,7 @@ function TapInComposerController({
             }
           : {}),
         completionMomentum: result.momentum,
+        completionProgress: result.progress,
         dateKey: result.dateKey,
         inviteUrl: detail.inviteUrl,
         memberCount: detail.memberCount,
@@ -618,7 +617,7 @@ function TapInComposerController({
               </View>
               <DSText tone={viewerTodayNote ? 'text' : 'muted'}>
                 {detail.viewerTodayStatus === 'skip'
-                  ? 'Your grace skip is covering today for this Circle.'
+                  ? 'Your skip protects today for this Circle.'
                   : viewerTodayNote ||
                     'No note added. Your Tap In still counts.'}
               </DSText>

@@ -18,6 +18,8 @@ Version **1.2.0**, established September 8, 2026. Approved Home source revision:
 | [Tap In composer](tap-in-composer.md)                             | Scoped category fade, glowing action, quantity controls and native validation      |
 | [Tap In selector](tap-in-selector.md)                             | Featured card, compact rows and the approved Home goal-line exception              |
 
+[Progress screen and native evidence](progress.md) documents the XP and rewards tab. Its rollout and store acceptance gates are in [Progress rewards](../progress-rewards.md).
+
 ## Open the gallery
 
 Run a Debug build with Metro running. Open the React Native developer menu, then choose **Hoyst Design System**. On iOS Simulator use **Command+D** or **Device > Shake**. On the Android emulator, `adb -s emulator-5554 shell input keyevent 82` opens the developer menu. Select Foundations, Controls, Patterns, or States. Use Show dark/Show light, Long content and 360 width to vary the examples. The width option constrains the native content to 360 points/dp; it simulates a narrow layout without pretending to be a different physical device. Set text size through the OS to check real native scaling.
@@ -35,6 +37,12 @@ The gallery integration remains a development-only host in `App.tsx`; release bu
 5. Changes to this system are explicit and versioned. Fixes increment patch, additive roles increment minor, and incompatible API or default visual changes increment major. Record decisions and update reference evidence rather than silently retuning global styles.
 
 ## Decision log
+
+- **2026-09-30:** The user approved the same transparent top-area correction on Home as Progress. Home's scroll viewport now extends through the top safe area, with its inset applied to scrolling content. This supersedes Home's earlier top clipping; initial header spacing, stationary Hoy-dependent tint, bottom spacing, and other frozen presentation remain unchanged.
+
+- **2026-09-30:** The user explicitly approved a stationary Home tint retaining the existing Hoy-dependent colors, and replacing Home’s stats with Progress’s compact streak/momentum cards. Each card opens its corresponding details. Local scroll clipping keeps content beneath the transparent status bar; initial header geometry is retained. Other Home presentation and tab-bar defaults remain frozen.
+
+- **2026-09-29:** The user approved a narrow Home addition: `Create new commitment` directly beneath `All my commitments`, matching the existing local row and opening the existing personal/Circle creation modal. This does not authorize other Home, shared-style, artwork or tab-bar changes.
 
 - **2026-09-11:** The Tap In selector adopts a local neutral canvas, featured category card and compact utility rows. The user explicitly approved adding the same quantity goal line below Home's focused commitment description. This is a narrow Home exception; all other frozen defaults and tab-bar treatment remain unchanged by this work.
 - **2026-09-08:** Home is approved and excluded from every migration stage, including indirect changes.

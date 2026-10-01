@@ -1,4 +1,5 @@
 import React from 'react';
+import {ProgressDetailsScreen} from '../features/progress/screens/ProgressDetailsScreen';
 import {createNativeStackNavigator} from '@react-navigation/native-stack';
 
 import {HoystScreen} from '../design/components/HoystScreen';
@@ -12,6 +13,15 @@ import {ArchivedCirclesScreen} from '../features/circles/screens/ArchivedCircles
 import {EditCircleScreen} from '../features/circles/screens/EditCircleScreen';
 import {ConvertPersonalCircleScreen} from '../features/circles/screens/ConvertPersonalCircleScreen';
 import {EditProfileScreen} from '../features/settings/screens/EditProfileScreen';
+import {
+  SettingsScreen,
+  AccountSettingsScreen,
+  NotificationSettingsScreen,
+  AppearanceSettingsScreen,
+  AboutHoystScreen,
+} from '../features/settings/screens/SettingsScreens';
+import {ProfileShareScreen} from '../features/profile/screens/ProfileShareScreen';
+import {ProfileMilestonesScreen} from '../features/profile/screens/ProfileMilestonesScreen';
 import {TapInCompleteScreen} from '../features/check-in/screens/TapInCompleteScreen';
 import {TapInComposerScreen} from '../features/check-in/screens/TapInComposerScreen';
 import {TapInPickerScreen} from '../features/check-in/screens/TapInPickerScreen';
@@ -86,6 +96,50 @@ export function RootNavigator(): React.JSX.Element {
           }}
         />
       ) : null}
+      {canRegisterAccountRoutes ? (
+        <>
+          <Stack.Screen
+            component={SettingsScreen}
+            name="Settings"
+            options={{headerShown: false}}
+          />
+          <Stack.Screen
+            component={AccountSettingsScreen}
+            name="AccountSettings"
+            options={{headerShown: false}}
+          />
+          <Stack.Screen
+            component={NotificationSettingsScreen}
+            name="NotificationSettings"
+            options={{headerShown: false}}
+          />
+          <Stack.Screen
+            component={AppearanceSettingsScreen}
+            name="AppearanceSettings"
+            options={{headerShown: false}}
+          />
+          <Stack.Screen
+            component={AboutHoystScreen}
+            name="AboutHoyst"
+            options={{headerShown: false}}
+          />
+          <Stack.Screen
+            component={ProfileShareScreen}
+            name="ProfileShare"
+            options={{headerShown: false}}
+          />
+          <Stack.Screen
+            component={ProfileMilestonesScreen}
+            name="ProfileMilestones"
+            options={{headerShown: false}}
+          />
+        </>
+      ) : null}
+      <Stack.Screen
+        component={ProgressDetailsScreen}
+        name="ProgressDetails"
+        options={{headerShown: false}}
+      />
       <Stack.Screen
         component={CircleInviteScreen}
         name="CircleInvite"

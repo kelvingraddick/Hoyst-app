@@ -1,3 +1,4 @@
+import {authenticatedCallable} from '../../../lib/firebase/authenticated-callable';
 import {firebaseFunctions} from '../../../lib/firebase/functions';
 import {firebaseAuth} from '../../../lib/firebase/auth';
 import {getFirebaseApp} from '../../../lib/firebase/app';
@@ -13,6 +14,7 @@ export type SubmitTapInInput = {
 };
 
 export type SubmitTapInResult = {
+  progress?: {xpEarned: number; rewards: {skips: number; restores: number}};
   checkInId: string;
   coverageStatus?: 'covered' | 'skipped' | 'partial' | 'failed';
   currentValue?: number;
@@ -41,9 +43,7 @@ export type UpdateTapInDetailsResult = {
 };
 
 export async function submitTapIn(input: SubmitTapInInput) {
-  const callable = firebaseFunctions().httpsCallable('submitTapIn');
-  const result = await callable(input);
-  return result.data as SubmitTapInResult;
+  return authenticatedCallable<SubmitTapInResult>('submitTapIn', {...input, progressVersion: 1});
 }
 
 export async function uploadTapInPhoto({

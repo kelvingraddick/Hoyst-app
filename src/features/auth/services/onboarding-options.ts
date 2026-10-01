@@ -43,7 +43,6 @@ export const onboardingSteps: OnboardingStep[] = [
   'circleCategory',
   'circleTitle',
   'circleRules',
-  'circleGrace',
   'circlePrivacy',
   'circleCapacity',
   'circleTimezone',

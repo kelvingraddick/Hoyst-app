@@ -76,16 +76,27 @@ export function DSText({
 export function DSScreen({
   children,
   bottomClearance = 0,
+  transparent = false,
+  scrollRef,
   contentContainerStyle,
   ...props
-}: ScrollViewProps & {bottomClearance?: number}) {
+}: ScrollViewProps & {
+  bottomClearance?: number;
+  transparent?: boolean;
+  scrollRef?: React.Ref<ScrollView>;
+}) {
   const theme = useSystemTheme();
   return (
-    <SafeAreaView style={[styles.flex, {backgroundColor: theme.canvas}]}>
+    <SafeAreaView
+      style={[
+        styles.flex,
+        {backgroundColor: transparent ? 'transparent' : theme.canvas},
+      ]}>
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView
+          ref={scrollRef}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
           {...props}

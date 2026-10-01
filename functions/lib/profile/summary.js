@@ -24,6 +24,8 @@ function getCheckInCircleId(snapshot) {
 }
 function getCheckInDateKey(snapshot, timezone) {
     const data = snapshot.data();
+    if (data.protectionKind === 'restore' && typeof data.effectiveDateKey === 'string')
+        return data.restoration?.personalEffectiveDateKey || data.effectiveDateKey;
     const createdAt = data.createdAt;
     if (createdAt?.toDate) {
         return (0, streak_1.getDateKey)(createdAt.toDate(), timezone);

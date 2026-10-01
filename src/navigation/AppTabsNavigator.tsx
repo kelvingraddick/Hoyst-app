@@ -14,7 +14,7 @@ import {
 import {HoystTapInMark} from '../design/components/HoystTapInMark';
 import {ExploreScreen} from '../features/explore/screens/ExploreScreen';
 import {HomeScreen} from '../features/home/screens/HomeScreen';
-import {MomentumScreen} from '../features/momentum/screens/MomentumScreen';
+import {ProgressScreen} from '../features/progress/screens/ProgressScreen';
 import {ProfileScreen} from '../features/profile/screens/ProfileScreen';
 import {useHoystTheme} from '../design/theme/useHoystTheme';
 import {HoystTabBarBackground} from './components/HoystTabBarBackground';
@@ -36,7 +36,7 @@ type TabBarIconComponent = (props: TabBarIconProps) => React.JSX.Element;
 const routeIcons: Record<StandardTabName, TabBarIconComponent> = {
   Home: HomeTabIcon,
   Explore: ExploreTabIcon,
-  Momentum: MomentumTabIcon,
+  Progress: MomentumTabIcon,
   Profile: ProfileTabIcon,
 };
 
@@ -250,7 +250,7 @@ export function AppTabsNavigator({
           tabBarLabel: () => null,
         }}
       />
-      <Tab.Screen component={MomentumScreen} name="Momentum" />
+      <Tab.Screen component={ProgressScreen} name="Progress" />
       <Tab.Screen component={ProfileScreen} name="Profile" />
     </Tab.Navigator>
   );

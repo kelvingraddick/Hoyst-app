@@ -1,10 +1,10 @@
+import {shareCircleInvitation} from '../../progress/services/progress-service';
 import React, {useCallback, useEffect, useMemo, useState} from 'react';
 import {
   Alert,
   FlatList,
   Modal,
   Pressable,
-  Share,
   StatusBar,
   StyleSheet,
   View,
@@ -472,7 +472,7 @@ function CirclesScreenContent({navigation}: Props) {
         openCircle(circle.id);
         return;
       }
-      Share.share({
+      shareCircleInvitation(circle.id, {
         title: `Join ${circle.title} on Hoyst`,
         message: `Join ${circle.title} on Hoyst: ${circle.inviteUrl}`,
         url: circle.inviteUrl,

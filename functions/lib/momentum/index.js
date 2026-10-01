@@ -192,6 +192,7 @@ function buildOpportunityPayload({ checkInId, circle, circleId, dateKey, profile
     return {
         availableDateKey: slot.availableDateKey,
         cadence: (0, schedule_1.normalizeCommitmentSchedule)(circle).pace,
+        opportunitiesPerPeriod: (0, schedule_1.normalizeCommitmentSchedule)(circle).opportunitiesPerPeriod,
         circleId,
         commitment: asString(circle?.commitment),
         countsTowardCircle: true,
@@ -226,7 +227,7 @@ function buildOpportunityPayload({ checkInId, circle, circleId, dateKey, profile
             : {}),
     };
 }
-async function recordTapInOpportunity({ checkInId, circle, circleId, dateKey, memberCount, member, profile, status, transaction, uid, }) {
+async function recordTapInOpportunity({ beforeWrite, checkInId, circle, circleId, dateKey, memberCount, member, profile, status, transaction, uid, }) {
     const userPrivateRef = firebase_1.db.collection('userPrivate').doc(uid);
     const slots = getCurrentSlots(circle);
     const opportunityRefs = slots.map(slot => userPrivateRef
@@ -300,16 +301,26 @@ async function recordTapInOpportunity({ checkInId, circle, circleId, dateKey, me
         (priorStatus === 'skipped' ? 1 : 0);
     const expectedOpportunityCount = Math.max(0, asNumber(periodData?.expectedOpportunityCount, 0) + expectedDelta);
     const coveredOpportunityCount = Math.max(0, asNumber(periodData?.coveredOpportunityCount, 0) + coveredDelta);
-    transaction.set(opportunityRef, buildOpportunityPayload({
-        checkInId,
-        circle,
-        circleId,
-        dateKey,
-        profile,
-        slot,
-        status: opportunityStatus,
-        uid,
-    }), { merge: true });
+    await beforeWrite?.(opportunityRef.id, priorOpportunitySnapshot.data());
+    transaction.set(opportunityRef, {
+        ...buildOpportunityPayload({
+            checkInId,
+            circle,
+            circleId,
+            dateKey,
+            profile,
+            slot,
+            status: opportunityStatus,
+            uid,
+        }),
+        ...(status === 'done'
+            ? {
+                firstSuccessfulAt: priorOpportunitySnapshot.data()?.firstSuccessfulAt ??
+                    priorOpportunitySnapshot.data()?.completedAt ??
+                    firestore_1.FieldValue.serverTimestamp(),
+            }
+            : {}),
+    }, { merge: true });
     transaction.set(circleSlotRef, {
         availableDateKey: slot.availableDateKey,
         completedMemberCount: completedMemberUids.length,
@@ -385,6 +396,13 @@ async function removeTapInOpportunity({ circle, circleId, dateKey, transaction, 
     const expectedOpportunityCount = asNumber(periodData?.expectedOpportunityCount, 0);
     const coveredOpportunityCount = Math.max(0, asNumber(periodData?.coveredOpportunityCount, 0) + coveredDelta);
     transaction.set(opportunityRef, {
+        ...(priorStatus === 'completed'
+            ? {
+                firstSuccessfulAt: opportunitySnapshots[matchedIndex].data()?.firstSuccessfulAt ??
+                    opportunitySnapshots[matchedIndex].data()?.completedAt ??
+                    firestore_1.FieldValue.serverTimestamp(),
+            }
+            : {}),
         completedAt: firestore_1.FieldValue.delete(),
         completionDateKey: firestore_1.FieldValue.delete(),
         linkedCheckInId: firestore_1.FieldValue.delete(),
@@ -565,7 +583,8 @@ async function neutralizeCircleOpportunitiesForArchive({ archivedAt = new Date()
             const opportunity = doc.data();
             const isUnfinished = opportunity.status === 'available' || opportunity.status === 'upcoming';
             const expiresDateKey = asString(opportunity.expiresDateKey);
-            if (!isUnfinished || (expiresDateKey && expiresDateKey < archiveDateKey)) {
+            if (!isUnfinished ||
+                (expiresDateKey && expiresDateKey < archiveDateKey)) {
                 return;
             }
             writes.push({

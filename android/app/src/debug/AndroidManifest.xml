@@ -5,5 +5,16 @@
     <application
         android:usesCleartextTraffic="true"
         tools:targetApi="28"
-        tools:ignore="GoogleAppIndexingWarning"/>
+        tools:ignore="GoogleAppIndexingWarning">
+      <!-- Read-only debug fixtures. This route does not exist in release builds. -->
+      <activity android:name=".MainActivity" android:exported="true">
+        <intent-filter>
+          <action android:name="android.intent.action.VIEW"/>
+          <category android:name="android.intent.category.DEFAULT"/>
+          <category android:name="android.intent.category.BROWSABLE"/>
+          <data android:scheme="hoyst" android:host="progress-preview"/>
+          <data android:scheme="hoyst" android:host="profile-preview"/>
+        </intent-filter>
+      </activity>
+    </application>
 </manifest>

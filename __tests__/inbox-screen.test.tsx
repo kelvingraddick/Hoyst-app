@@ -1,7 +1,17 @@
 import React from 'react';
 import {Image, Pressable, StyleSheet} from 'react-native';
 import renderer, {act} from 'react-test-renderer';
-import {ChevronRight} from 'lucide-react-native';
+import {
+  AlarmClock,
+  Bell,
+  Check,
+  ChevronRight,
+  Clock3,
+  Compass,
+  Moon,
+  Sparkle,
+  TriangleAlert,
+} from 'lucide-react-native';
 // Register the same native styling interop used by Metro in the running app.
 import 'react-native-css-interop/dist/runtime/components';
 
@@ -422,7 +432,7 @@ describe('InboxScreen', () => {
     });
   });
 
-  it('uses a full-crop avatar image when available and initials fallback otherwise', () => {
+  it('uses a full-crop person photo and an event icon without a person', () => {
     mockInboxEvents = [
       eventForType('companion_tapped_in'),
       inboxEvent({id: 'without-actor', isRead: true}),
@@ -432,6 +442,185 @@ describe('InboxScreen', () => {
 
     expect(nativeNodes(tree, 'inbox-avatar')).toHaveLength(2);
     expect(tree.root.findAllByType(Image)).toHaveLength(1);
+    expect(nativeNodes(tree, 'inbox-event-icon')).toHaveLength(1);
+  });
+
+  it('shows an icon for every known event type without a person', () => {
+    const types: InboxEventType[] = [
+      'circle_archived',
+      'circle_at_risk',
+      'circle_complete',
+      'circle_discovery_suggestion',
+      'circle_nudge_prompt',
+      'circle_restored',
+      'companion_achievement_unlocked',
+      'companion_circle_created',
+      'companion_circle_joined',
+      'companion_momentum_level_up',
+      'companion_skipped',
+      'companion_streak_milestone',
+      'companion_tapped_in',
+      'evening_summary',
+      'join_approved',
+      'join_declined',
+      'join_request',
+      'member_due_prompt',
+      'member_joined',
+      'nudge',
+      'tap_in_final_warning',
+      'tap_in_midday_reminder',
+    ];
+    mockInboxEvents = types.map(type =>
+      inboxEvent({id: type, title: type, type}),
+    );
+
+    const {tree} = renderInbox();
+
+    expect(nativeNodes(tree, 'inbox-circle-complete-icon')).toHaveLength(1);
+    expect(nativeNodes(tree, 'inbox-event-icon')).toHaveLength(
+      types.length - 1,
+    );
+    expect(nativeNodes(tree, 'inbox-avatar-image')).toHaveLength(0);
+  });
+
+  it('uses distinct icons for reminders, warnings, suggestions, and recaps', () => {
+    mockInboxEvents = [
+      eventForType('tap_in_midday_reminder'),
+      eventForType('tap_in_final_warning'),
+      eventForType('circle_at_risk'),
+      eventForType('circle_discovery_suggestion'),
+      eventForType('evening_summary'),
+    ];
+
+    const {tree} = renderInbox();
+
+    expect(tree.root.findAllByType(Clock3)).toHaveLength(1);
+    expect(tree.root.findAllByType(AlarmClock)).toHaveLength(1);
+    expect(tree.root.findAllByType(TriangleAlert)).toHaveLength(1);
+    expect(tree.root.findAllByType(Compass)).toHaveLength(1);
+    expect(tree.root.findAllByType(Moon)).toHaveLength(1);
+  });
+
+  it('shows a green celebration icon instead of CC for Circle complete', () => {
+    mockInboxEvents = [
+      inboxEvent({
+        id: 'complete',
+        title: 'Circle complete',
+        type: 'circle_complete',
+      }),
+    ];
+
+    for (const [appearance, backgroundColor, successColor] of [
+      ['light', '#E7F8EF', '#07763E'],
+      ['dark', '#122B1F', '#4BE083'],
+    ] as const) {
+      mockAppearance = appearance;
+      const {tree} = renderInbox();
+      const icon = nativeNodes(tree, 'inbox-circle-complete-icon');
+
+      expect(icon).toHaveLength(1);
+      expect(StyleSheet.flatten(icon[0]?.props.style)).toMatchObject({
+        backgroundColor,
+        height: 28,
+        width: 28,
+      });
+      expect(tree.root.findAllByType(Check)).toHaveLength(1);
+      expect(tree.root.findByType(Check).props).toMatchObject({
+        color: successColor,
+        size: 16,
+        strokeWidth: 2.2,
+      });
+      expect(tree.root.findAllByType(Sparkle)).toHaveLength(0);
+      expect(
+        tree.root
+          .findAllByType(DSText)
+          .some(node => node.props.children === 'CC'),
+      ).toBe(false);
+    }
+  });
+
+  it.each(['light', 'dark'] as const)(
+    'matches event colors to their backplates in %s mode',
+    appearance => {
+      mockAppearance = appearance;
+      mockInboxEvents = [
+        eventForType('circle_at_risk'),
+        eventForType('circle_discovery_suggestion'),
+        eventForType('circle_nudge_prompt'),
+      ];
+
+      const {tree} = renderInbox();
+      const icons = nativeNodes(tree, 'inbox-event-icon');
+      const expected =
+        appearance === 'light'
+          ? [
+              ['#FFF0E6', '#A83A00'],
+              ['#E7F8FF', '#086CA8'],
+              ['#F0ECFF', '#5A1CFF'],
+            ]
+          : [
+              ['#38291F', '#FF8A3D'],
+              ['#133240', '#8FE2FF'],
+              ['#29213E', '#B89FFF'],
+            ];
+
+      icons.forEach((icon, index) => {
+        expect(StyleSheet.flatten(icon.props.style).backgroundColor).toBe(
+          expected[index]?.[0],
+        );
+        expect(
+          icon.findAll(node => typeof node.type !== 'string')[0]?.props.color,
+        ).toBe(expected[index]?.[1]);
+      });
+    },
+  );
+
+  it('prefers a person photo, then person initials, over the event icon', () => {
+    mockInboxEvents = [
+      inboxEvent({
+        actor: {
+          avatarUrl: 'https://example.com/person.jpg',
+          displayName: 'Clark Digital',
+        },
+        type: 'circle_complete',
+      }),
+    ];
+
+    const {tree} = renderInbox();
+    const photo = nativeNodes(tree, 'inbox-avatar-image')[0]!;
+
+    expect(nativeNodes(tree, 'inbox-circle-complete-icon')).toHaveLength(0);
+    act(() => photo.props.onError());
+    expect(nativeNodes(tree, 'inbox-avatar-image')).toHaveLength(0);
+    expect(
+      tree.root
+        .findAllByType(DSText)
+        .some(node => node.props.children === 'CD'),
+    ).toBe(true);
+    expect(nativeNodes(tree, 'inbox-circle-complete-icon')).toHaveLength(0);
+  });
+
+  it('uses an event icon after an unnamed actor photo fails', () => {
+    mockInboxEvents = [
+      inboxEvent({actor: {avatarUrl: 'https://example.com/unnamed.jpg'}}),
+    ];
+
+    const {tree} = renderInbox();
+    const photo = nativeNodes(tree, 'inbox-avatar-image')[0]!;
+    act(() => photo.props.onError());
+    expect(nativeNodes(tree, 'inbox-event-icon')).toHaveLength(1);
+  });
+
+  it('uses a neutral bell for an unrecognized stored event type', () => {
+    mockInboxEvents = [inboxEvent({type: 'future_event' as InboxEventType})];
+
+    const {tree} = renderInbox();
+    const icon = nativeNodes(tree, 'inbox-event-icon')[0]!;
+
+    expect(tree.root.findAllByType(Bell)).toHaveLength(1);
+    expect(StyleSheet.flatten(icon.props.style).backgroundColor).toBe(
+      '#EEF1F7',
+    );
   });
 
   it('keeps long activity copy flexible beside the optional thumbnail', () => {

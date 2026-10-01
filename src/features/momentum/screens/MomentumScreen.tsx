@@ -1,4 +1,4 @@
-import React, {useEffect, useMemo, useState} from 'react';
+import React, {useEffect, useMemo, useRef, useState} from 'react';
 import {ScrollView, StyleSheet, View} from 'react-native';
 import {useQuery} from '@tanstack/react-query';
 
@@ -232,7 +232,36 @@ function buildMomentumWinRecap(circles: HomeData['circles']) {
   };
 }
 
-export function MomentumScreen(): React.JSX.Element {
+export function MomentumScreen({
+  initialSection,
+}: {
+  initialSection?: 'streak' | 'momentum' | 'achievements';
+} = {}): React.JSX.Element {
+  const scroll = useRef<ScrollView>(null);
+  const streakOffset = useRef(0);
+  const achievementsOffset = useRef(0);
+  const focused = useRef(false);
+  const focusSection = () => {
+    if (
+      initialSection === 'achievements' &&
+      achievementsOffset.current > 0 &&
+      !focused.current
+    ) {
+      scroll.current?.scrollTo({
+        y: achievementsOffset.current,
+        animated: false,
+      });
+      focused.current = true;
+    }
+    if (
+      initialSection === 'streak' &&
+      streakOffset.current > 0 &&
+      !focused.current
+    ) {
+      scroll.current?.scrollTo({y: streakOffset.current, animated: false});
+      focused.current = true;
+    }
+  };
   const theme = useHoystTheme();
   const status = useSessionStore(state => state.status);
   const user = useSessionStore(state => state.user);
@@ -325,9 +354,12 @@ export function MomentumScreen(): React.JSX.Element {
       : 0;
 
   return (
-    <HoystScreen contentContainerStyle={styles.content}>
+    <HoystScreen
+      scrollViewRef={scroll}
+      onContentSizeChange={focusSection}
+      contentContainerStyle={styles.content}>
       <View style={styles.heroCopy}>
-        <HoystText variant="headline">Momentum</HoystText>
+        <HoystText variant="headline">Progress details</HoystText>
         <HoystText tone="muted">
           Your streaks. Your progress. Your wins.
         </HoystText>
@@ -408,86 +440,100 @@ export function MomentumScreen(): React.JSX.Element {
         </View>
       </GlassPanel>
 
-      <GlassPanel style={styles.currentStreakCard}>
-        <View style={styles.currentStreakHeader}>
-          <HoystText
-            numberOfLines={1}
-            style={styles.currentStreakLabel}
-            tone="muted">
-            Current Streak
-          </HoystText>
-          <View
-            accessibilityLabel={`Best streak: ${bestStreakDays} ${getDayNoun(
-              bestStreakDays,
-            )}`}
-            style={[
-              styles.bestStreakBadge,
-              {backgroundColor: `${theme.accentWarm}12`},
-            ]}>
-            <MomentumMiniTrophyIllustration
-              color={theme.accentWarm}
-              size={15}
-            />
+      <View
+        onLayout={({nativeEvent: {layout}}) => {
+          streakOffset.current = layout.y;
+          focusSection();
+        }}>
+        <GlassPanel style={styles.currentStreakCard}>
+          <View style={styles.currentStreakHeader}>
             <HoystText
               numberOfLines={1}
-              style={[
-                styles.bestStreakText,
-                {color: theme.accentWarmForeground},
-              ]}>
-              Best: {bestStreakDays} {getDayNoun(bestStreakDays)}
+              style={styles.currentStreakLabel}
+              tone="muted">
+              Current Streak
             </HoystText>
-          </View>
-        </View>
-        <View style={styles.currentStreakBody}>
-          <View
-            accessible
-            accessibilityLabel={`${currentStreakDays} ${getDayNoun(
-              currentStreakDays,
-            )} current streak`}
-            style={styles.currentStreakIconWrap}>
-            <MomentumStreakIllustration
-              size={MOMENTUM_ICON_SIZE}
-              streakDays={currentStreakDays}
-            />
-          </View>
-          <View style={styles.currentStreakCopy}>
-            <View style={styles.currentStreakValueRow}>
-              <HoystText
-                adjustsFontSizeToFit
-                minimumFontScale={0.72}
-                numberOfLines={1}
-                style={[styles.currentStreakValue, {color: theme.accentWarm}]}>
-                {currentStreakDays}
-              </HoystText>
+            <View
+              accessibilityLabel={`Best streak: ${bestStreakDays} ${getDayNoun(
+                bestStreakDays,
+              )}`}
+              style={[
+                styles.bestStreakBadge,
+                {backgroundColor: `${theme.accentWarm}12`},
+              ]}>
+              <MomentumMiniTrophyIllustration
+                color={theme.accentWarm}
+                size={15}
+              />
               <HoystText
                 numberOfLines={1}
                 style={[
-                  styles.currentStreakUnit,
+                  styles.bestStreakText,
                   {color: theme.accentWarmForeground},
                 ]}>
-                {getDayNoun(currentStreakDays)}
+                Best: {bestStreakDays} {getDayNoun(bestStreakDays)}
               </HoystText>
             </View>
-            <HoystText
-              numberOfLines={1}
-              style={styles.currentStreakPrompt}
-              tone="muted">
-              {currentStreakDays > 0 ? 'Keep it going!' : 'Start your streak'}
-            </HoystText>
           </View>
-        </View>
-        <View style={styles.currentStreakGrid}>
-          {currentStreakRows.map((row, rowIndex) => (
-            <View key={rowIndex} style={styles.currentStreakRow}>
-              {row.map(day => (
-                <CurrentStreakDayCell day={day} key={day.dateKey} />
-              ))}
+          <View style={styles.currentStreakBody}>
+            <View
+              accessible
+              accessibilityLabel={`${currentStreakDays} ${getDayNoun(
+                currentStreakDays,
+              )} current streak`}
+              style={styles.currentStreakIconWrap}>
+              <MomentumStreakIllustration
+                size={MOMENTUM_ICON_SIZE}
+                streakDays={currentStreakDays}
+              />
             </View>
-          ))}
-        </View>
-      </GlassPanel>
+            <View style={styles.currentStreakCopy}>
+              <View style={styles.currentStreakValueRow}>
+                <HoystText
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.72}
+                  numberOfLines={1}
+                  style={[
+                    styles.currentStreakValue,
+                    {color: theme.accentWarm},
+                  ]}>
+                  {currentStreakDays}
+                </HoystText>
+                <HoystText
+                  numberOfLines={1}
+                  style={[
+                    styles.currentStreakUnit,
+                    {color: theme.accentWarmForeground},
+                  ]}>
+                  {getDayNoun(currentStreakDays)}
+                </HoystText>
+              </View>
+              <HoystText
+                numberOfLines={1}
+                style={styles.currentStreakPrompt}
+                tone="muted">
+                {currentStreakDays > 0 ? 'Keep it going!' : 'Start your streak'}
+              </HoystText>
+            </View>
+          </View>
+          <View style={styles.currentStreakGrid}>
+            {currentStreakRows.map((row, rowIndex) => (
+              <View key={rowIndex} style={styles.currentStreakRow}>
+                {row.map(day => (
+                  <CurrentStreakDayCell day={day} key={day.dateKey} />
+                ))}
+              </View>
+            ))}
+          </View>
+        </GlassPanel>
+      </View>
 
-      <View style={styles.achievementsSection}>
+      <View
+        style={styles.achievementsSection}
+        onLayout={({nativeEvent: {layout}}) => {
+          achievementsOffset.current = layout.y;
+          focusSection();
+        }}>
         <SectionHeader title="Achievements" />
         <ScrollView
           horizontal

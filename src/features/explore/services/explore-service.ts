@@ -35,18 +35,26 @@ export async function searchPublicCircles(
   return result.data as ExplorePage;
 }
 
-export function formatPublicTapInTime(iso: string) {
-  const date = new Date(iso);
-  if (!Number.isFinite(date.getTime())) {
+export function formatPublicTapInTime(iso: string, now = Date.now()) {
+  const occurredAt = new Date(iso).getTime();
+  if (!Number.isFinite(occurredAt)) {
     return '';
   }
-  return date.toLocaleString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  });
+  const seconds = Math.max(0, Math.floor((now - occurredAt) / 1000));
+  if (seconds < 60) {
+    return 'Just now';
+  }
+  const units: readonly [string, number][] = [
+    ['year', 365 * 24 * 60 * 60],
+    ['month', 30 * 24 * 60 * 60],
+    ['week', 7 * 24 * 60 * 60],
+    ['day', 24 * 60 * 60],
+    ['hour', 60 * 60],
+    ['minute', 60],
+  ];
+  const [unit, duration] = units.find(([, value]) => seconds >= value)!;
+  const count = Math.floor(seconds / duration);
+  return `${count} ${unit}${count === 1 ? '' : 's'} ago`;
 }
 
 export function getExploreSearchError(error: unknown): string {

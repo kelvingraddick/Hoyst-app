@@ -182,8 +182,8 @@ describe('EditCircleScreen refresh', () => {
     expect(output).toContain('Basics');
     expect(output).toContain('Commitment rules');
     expect(output).toContain('Pace and timing');
-    expect(output).toContain('Skips');
-    expect(output).toContain('your Progress');
+    expect(output).not.toContain('Skips');
+    expect(output).not.toContain('Allow Skips');
     expect(output).not.toContain('Access and capacity');
     expect(output).not.toContain('Circle Progress');
     expect(output).not.toContain('Members');

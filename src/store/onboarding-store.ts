@@ -119,7 +119,7 @@ export function normalizeOnboardingStepForMode(
   value: unknown,
   circleMode: 'personal' | 'group',
 ): OnboardingStep {
-  const normalizedStep = normalizeOnboardingStep(value);
+  const normalizedStep = value === 'circleGrace' ? circleMode === 'personal' ? 'circleTimezone' : 'circlePrivacy' : normalizeOnboardingStep(value);
   const availableSteps = getOnboardingSteps(circleMode);
 
   if (availableSteps.includes(normalizedStep)) {
