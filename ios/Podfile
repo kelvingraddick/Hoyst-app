@@ -36,7 +36,35 @@ target 'Hoyst' do
       # :ccache_enabled => true
     )
 
+    # Static frameworks flatten React Native's source include prefixes.
+    # Use iOS headers before the portable C++ fallbacks and retain inherited paths.
+    react_common_root = File.expand_path(File.join(config[:reactNativePath], 'ReactCommon'), __dir__)
+    namespace_roots = Dir.glob(File.join(react_common_root, '**', '{ReactCommon,react}'))
+      .select { |path| File.directory?(path) && !path.include?('/android/') && !path.include?('/samples/') }
+      .map { |path| File.dirname(path) }
+    header_roots = [react_common_root, *namespace_roots,
+      File.join(react_common_root, 'yoga'), File.join(react_common_root, 'jsi'),
+      File.join(react_common_root, 'jsiexecutor')].uniq
+      .sort_by { |path| path.include?('/platform/ios') ? 0 : path.include?('/platform/cxx') ? 2 : 1 }
+    react_header_paths = header_roots.map do |path|
+      '"$(PODS_ROOT)/../../node_modules/react-native/ReactCommon' + path.delete_prefix(react_common_root) + '"'
+    end
+    add_react_header_paths = lambda do |target|
+      target.build_configurations.each do |build_config|
+        paths = Array(build_config.build_settings['HEADER_SEARCH_PATHS'] || ['$(inherited)'])
+        react_header_paths.each { |path| paths << path unless paths.include?(path) }
+        build_config.build_settings['HEADER_SEARCH_PATHS'] = paths
+      end
+    end
+    installer.aggregate_targets.map(&:user_project).compact.uniq.each do |project|
+      project.native_targets.select { |target| target.name == 'Hoyst' }.each do |target|
+        add_react_header_paths.call(target)
+      end
+      project.save
+    end
     installer.pods_project.targets.each do |target|
+      add_react_header_paths.call(target) unless target.name == 'OneSignalXCFramework'
+
       next unless target.name == 'fmt'
 
       target.build_configurations.each do |build_config|
