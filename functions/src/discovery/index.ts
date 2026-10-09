@@ -1,3 +1,9 @@
+import {getCommitmentType, getQuantityConfig} from '../shared/commitments';
+import {
+  normalizeCategory,
+  categorySearchNames,
+  readAppearance,
+} from '../shared/commitment-appearance';
 import {createHash} from 'node:crypto';
 import {
   FieldPath,
@@ -26,6 +32,135 @@ const requestSchema = z.object({
 });
 const pageSize = 20;
 const index = () => db.collection('publicCircleIndex');
+
+const suggestionSchema = z.object({
+  query: z.string().trim().max(120).default(''),
+  categories: z.array(z.string().trim().min(1).max(40)).max(3).default([]),
+});
+
+/** Small, guest-readable recommendation projection. Authority is checked live. */
+export const suggestPublicCircles = onCall(async request => {
+  const parsed = suggestionSchema.safeParse(request.data ?? {});
+  if (!parsed.success)
+    throw new HttpsError('invalid-argument', 'Invalid suggestions request.');
+  const categories = parsed.data.categories.map(normalizeCategory);
+  const ignored = new Set([
+    'a',
+    'an',
+    'the',
+    'for',
+    'to',
+    'of',
+    'my',
+    'each',
+    'minutes',
+    'minute',
+    'days',
+    'day',
+  ]);
+  const words = searchWords(parsed.data.query)
+    .filter(word => !ignored.has(word) && !/^\d+$/.test(word))
+    .slice(0, 3);
+  const base = index()
+    .where('circleMode', '==', 'group')
+    .where('lifecycleStatus', '==', 'active');
+  const queries = words.map(word =>
+    base
+      .where('searchTokens', 'array-contains', word)
+      .orderBy('updatedAt', 'desc')
+      .limit(30)
+      .get(),
+  );
+  queries.push(
+    (categories.length
+      ? base.where('category', 'in', [
+          ...new Set(categories.flatMap(categorySearchNames)),
+        ])
+      : base
+    )
+      .orderBy('updatedAt', 'desc')
+      .limit(30)
+      .get(),
+  );
+  const pages = await Promise.all(queries);
+  const candidates = [
+    ...new Map(
+      pages.flatMap(page => page.docs.map(doc => [doc.id, doc] as const)),
+    ).values(),
+  ];
+  const live = candidates.length
+    ? await db.getAll(
+        ...candidates.map(doc => db.collection('circles').doc(doc.id)),
+      )
+    : [];
+  const membershipSnapshots =
+    request.auth?.uid && candidates.length
+      ? await db.getAll(
+          ...candidates.map(doc =>
+            db
+              .collection('circles')
+              .doc(doc.id)
+              .collection('members')
+              .doc(request.auth!.uid),
+          ),
+        )
+      : [];
+  const alreadyJoined = new Set(
+    membershipSnapshots
+      .filter(doc => ['active', 'pending'].includes(doc.data()?.status))
+      .map(doc => doc.ref.parent.parent!.id),
+  );
+  const circles = live
+    .filter(doc => {
+      const circle = doc.data();
+      return (
+        !alreadyJoined.has(doc.id) &&
+        isPublicActive(circle) &&
+        typeof circle?.title === 'string' &&
+        typeof circle?.commitment === 'string' &&
+        circle?.joinMode !== 'invite_only' &&
+        Number(circle?.memberCount ?? 0) < Number(circle?.maxSize ?? 10)
+      );
+    })
+    .map(doc => {
+      const circle = doc.data()!;
+      const tokens = searchTokens(circle);
+      return {
+        id: doc.id,
+        circle,
+        score:
+          words.filter(word => tokens.includes(word)).length * 10 +
+          (categories.includes(normalizeCategory(circle.category)) ? 1 : 0),
+      };
+    })
+    .filter(
+      candidate => candidate.score > 0 || (!words.length && !categories.length),
+    )
+    .sort(
+      (a, b) =>
+        b.score - a.score ||
+        millis(b.circle.updatedAt) - millis(a.circle.updatedAt) ||
+        b.id.localeCompare(a.id),
+    )
+    .slice(0, 3)
+    .map(({id, circle}) => ({
+      id,
+      title: String(circle.title),
+      commitment: String(circle.commitment),
+      category: normalizeCategory(circle.category),
+      appearance: readAppearance(circle.appearance),
+      memberCount: Math.max(0, Number(circle.memberCount) || 0),
+      maxSize: Number(circle.maxSize) || 10,
+      groupStreakDays: Number(circle.groupStreakDays) || 0,
+      joinMode: circle.joinMode ?? 'request_to_join',
+      commitmentCadence: circle.commitmentCadence ?? 'daily',
+      commitmentFrequency: circle.commitmentFrequency ?? {tapInsPerWeek: 7},
+      ...getQuantityConfig(circle),
+      commitmentType: getCommitmentType(circle),
+      timezone: circle.timezone ?? 'UTC',
+    }));
+  return {circles};
+});
 
 /** One indexed prefix narrows candidates; remaining terms are AND matched on the server.
  * No first-50 cutoff. Counts cover the entire candidate query, not just the current page. */
@@ -70,7 +205,7 @@ export const searchPublicCircles = onCall(async request => {
     .where('circleMode', '==', 'group')
     .where('lifecycleStatus', '==', 'active');
   if (input.category !== 'All') {
-    query = query.where('category', '==', input.category);
+    query = query.where('category', 'in', categorySearchNames(input.category));
   }
   if (words.length) {
     query = query.where(
@@ -149,7 +284,8 @@ export const searchPublicCircles = onCall(async request => {
       return {
         id: doc.id,
         title: String(data.title),
-        category: String(data.category ?? 'General'),
+        category: normalizeCategory(data.category),
+        appearance: readAppearance(data.appearance),
         commitment: String(data.commitment),
         memberCount: Math.max(0, Number(data.memberCount) || 0),
         maxSize: Math.max(1, Number(data.maxSize) || 10),
@@ -166,7 +302,7 @@ export const searchPublicCircles = onCall(async request => {
     categories: [
       ...new Set(
         categorySnapshot.docs.map(doc =>
-          String(doc.data().category ?? 'General'),
+          normalizeCategory(doc.data().category),
         ),
       ),
     ].sort(),

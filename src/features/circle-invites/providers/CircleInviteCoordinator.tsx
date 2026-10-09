@@ -1,15 +1,11 @@
 import {useEffect, useRef} from 'react';
-import {
-  CommonActions,
-  type NavigationContainerRef,
-} from '@react-navigation/native';
+import {type NavigationContainerRef} from '@react-navigation/native';
 import {AppState, Linking, NativeModules, Settings} from 'react-native';
 
 import type {RootStackParamList} from '../../../navigation/types';
 import {useOnboardingStore} from '../../../store/onboarding-store';
 import {useCircleInviteStore} from '../../../store/circle-invite-store';
 import {useSessionStore} from '../../../store/session-store';
-import {joinCircle} from '../../circles/services/circle-service';
 import {resolveCircleInvite} from '../services/invite-service';
 import {parseCircleInviteUrl} from '../services/invite-url';
 
@@ -45,11 +41,6 @@ function isUnavailableError(error: unknown) {
   return code.endsWith('/not-found') || code === 'not-found';
 }
 
-function isFullError(error: unknown) {
-  const code = (error as {code?: string}).code ?? '';
-  return code.endsWith('/resource-exhausted') || code === 'resource-exhausted';
-}
-
 export function CircleInviteCoordinator({
   isNavigationReady,
   navigationRef,
@@ -62,7 +53,6 @@ export function CircleInviteCoordinator({
     state => state.markInitialUrlChecked,
   );
   const inviteCode = useCircleInviteStore(state => state.inviteCode);
-  const preview = useCircleInviteStore(state => state.preview);
   const consented = useCircleInviteStore(state => state.consented);
   const resolutionStatus = useCircleInviteStore(
     state => state.resolutionStatus,
@@ -81,11 +71,25 @@ export function CircleInviteCoordinator({
   const setResolutionError = useCircleInviteStore(
     state => state.setResolutionError,
   );
-  const setJoining = useCircleInviteStore(state => state.setJoining);
-  const setJoinError = useCircleInviteStore(state => state.setJoinError);
-  const setPreviewFull = useCircleInviteStore(state => state.setPreviewFull);
-  const clearInvite = useCircleInviteStore(state => state.clearInvite);
   const sessionStatus = useSessionStore(state => state.status);
+  const uid = useSessionStore(state => state.user?.uid);
+  const preview = useCircleInviteStore(state => state.preview);
+  const retryResolution = useCircleInviteStore(state => state.retryResolution);
+  const refreshedIdentity = useRef<{code: string; uid?: string} | undefined>(
+    undefined,
+  );
+  useEffect(() => {
+    if (
+      inviteCode &&
+      resolutionStatus === 'ready' &&
+      preview?.viewerUid !== uid &&
+      (refreshedIdentity.current?.code !== inviteCode ||
+        refreshedIdentity.current?.uid !== uid)
+    ) {
+      refreshedIdentity.current = {code: inviteCode, uid};
+      retryResolution();
+    }
+  }, [inviteCode, preview?.viewerUid, resolutionStatus, retryResolution, uid]);
   const hasHydratedOnboarding = useOnboardingStore(state => state.hasHydrated);
   const onboardingJourney = useOnboardingStore(state => state.journey);
   const hasSeenOnboarding = useOnboardingStore(
@@ -225,10 +229,7 @@ export function CircleInviteCoordinator({
     }
 
     const isInviteOnboardingActive =
-      consented &&
-      onboardingJourney === 'invite' &&
-      !hasSeenOnboarding &&
-      sessionStatus !== 'authenticatedReady';
+      consented && onboardingJourney === 'invite' && !hasSeenOnboarding;
     if (isInviteOnboardingActive || joinStatus === 'joining') {
       return;
     }
@@ -250,83 +251,7 @@ export function CircleInviteCoordinator({
     sessionStatus,
   ]);
 
-  useEffect(() => {
-    if (
-      !consented ||
-      !inviteCode ||
-      !preview ||
-      preview.isFull ||
-      sessionStatus !== 'authenticatedReady' ||
-      joinStatus !== 'idle'
-    ) {
-      return;
-    }
-
-    const requestId = joinRequestIdRef.current + 1;
-    joinRequestIdRef.current = requestId;
-    setJoining();
-    joinCircle(preview.circleId, inviteCode)
-      .then(() => {
-        const currentInvite = useCircleInviteStore.getState();
-        if (
-          joinRequestIdRef.current !== requestId ||
-          currentInvite.inviteCode !== inviteCode ||
-          !currentInvite.consented
-        ) {
-          return;
-        }
-
-        clearInvite();
-        navigationRef.dispatch(
-          CommonActions.reset({
-            index: 1,
-            routes: [
-              {name: 'MainTabs'},
-              {
-                name: 'CircleDetail',
-                params: {circleId: preview.circleId},
-              },
-            ],
-          }),
-        );
-      })
-      .catch(error => {
-        const currentInvite = useCircleInviteStore.getState();
-        if (
-          joinRequestIdRef.current !== requestId ||
-          currentInvite.inviteCode !== inviteCode ||
-          !currentInvite.consented
-        ) {
-          return;
-        }
-
-        if (isFullError(error)) {
-          setPreviewFull();
-          return;
-        }
-
-        if (isUnavailableError(error)) {
-          setResolutionUnavailable();
-          return;
-        }
-
-        setJoinError(
-          'Could not join this Circle. Check your connection and try again.',
-        );
-      });
-  }, [
-    clearInvite,
-    consented,
-    inviteCode,
-    joinStatus,
-    navigationRef,
-    preview,
-    sessionStatus,
-    setJoinError,
-    setJoining,
-    setPreviewFull,
-    setResolutionUnavailable,
-  ]);
+  // Joining is explicitly owned by the shared wizard after preview consent.
 
   return null;
 }

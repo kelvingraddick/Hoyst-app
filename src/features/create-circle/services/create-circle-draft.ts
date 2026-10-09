@@ -1,3 +1,8 @@
+import {
+  normalizeCategory,
+  readAppearance,
+  type CommitmentAppearance,
+} from '../../../shared/commitment-appearance';
 import type {
   CircleJoinMode,
   CircleMode,
@@ -12,11 +17,14 @@ import type {
 } from '../../../types/models';
 
 export type CreateCirclePayload = {
+  independentTitle?: boolean;
   category: string;
+  appearance?: CommitmentAppearance;
   circleMode: CircleMode;
   commitment: string;
   commitmentCadence: CommitmentPace;
   commitmentFrequency: CommitmentFrequency;
+  buildTrackingMode?: 'confirmation' | 'quantity';
   commitmentType: CommitmentType;
   graceRules: {
     skip: GraceRule;
@@ -46,7 +54,7 @@ export const defaultWeeklyCommitmentFrequency: CommitmentFrequency = {
   tapInsPerWeek: 4,
 };
 export const defaultMonthlyCommitmentFrequency: CommitmentFrequency = {
-  opportunitiesPerPeriod: 4,
+  opportunitiesPerPeriod: 16,
   tapInsPerWeek: 4,
 };
 export const defaultCommitmentPace: CommitmentPace = 'daily';
@@ -67,13 +75,14 @@ export function createInitialCircleDraft(timezone?: string): CreateCircleDraft {
     circleMode: defaultCircleMode,
     commitment: '',
     commitmentCadence: defaultCommitmentPace,
-    commitmentFrequency: defaultCommitmentFrequency,
+    commitmentFrequency: {...defaultCommitmentFrequency},
+    buildTrackingMode: 'confirmation',
     commitmentType: defaultCommitmentType,
     graceRules: {
       skip: defaultSkipGraceRule,
     },
     inviteCode: '',
-    joinMode: 'request_to_join',
+    joinMode: 'open',
     maxSize: defaultCircleMaxSize,
     privacy: 'public',
     privacyMode: 'public',
@@ -128,10 +137,12 @@ export function buildCircleEditDraft(
   circle: Pick<
     CircleSummary,
     | 'category'
+    | 'appearance'
     | 'circleMode'
     | 'commitment'
     | 'commitmentCadence'
     | 'commitmentFrequency'
+    | 'buildTrackingMode'
     | 'commitmentType'
     | 'graceRules'
     | 'joinMode'
@@ -155,7 +166,8 @@ export function buildCircleEditDraft(
 
   return {
     ...initialDraft,
-    category: circle.category,
+    category: normalizeCategory(circle.category),
+    appearance: readAppearance(circle.appearance),
     circleMode: normalizeCircleMode(circle.circleMode),
     commitment: circle.commitment,
     commitmentCadence: commitmentPace,
@@ -163,6 +175,9 @@ export function buildCircleEditDraft(
       circle.commitmentFrequency ?? initialDraft.commitmentFrequency,
       commitmentPace,
     ),
+    buildTrackingMode:
+      circle.buildTrackingMode ??
+      ((circle.targetValue ?? 1) > 1 ? 'quantity' : 'confirmation'),
     commitmentType: normalizeCommitmentType(circle.commitmentType),
     graceRules: {
       skip: normalizeSkipGraceRule(
@@ -313,14 +328,17 @@ export function buildCreateCirclePayload(
       : undefined;
   const targetValue =
     commitmentType === 'build'
-      ? normalizeOptionalQuantityValue(draft.targetValue) ??
-        defaultCommitmentTargetValue
+      ? draft.buildTrackingMode === 'confirmation'
+        ? 1
+        : normalizeOptionalQuantityValue(draft.targetValue) ??
+          defaultCommitmentTargetValue
       : commitmentType === 'avoid'
       ? defaultCommitmentTargetValue
       : undefined;
 
   return {
-    category: draft.category.trim(),
+    category: normalizeCategory(draft.category),
+    appearance: readAppearance(draft.appearance),
     circleMode,
     commitment: draft.commitment.trim(),
     commitmentCadence: commitmentPace,
@@ -328,6 +346,13 @@ export function buildCreateCirclePayload(
       draft.commitmentFrequency,
       commitmentPace,
     ),
+    ...(commitmentType === 'build'
+      ? {
+          buildTrackingMode:
+            draft.buildTrackingMode ??
+            ((draft.targetValue ?? 1) > 1 ? 'quantity' : 'confirmation'),
+        }
+      : {}),
     commitmentType,
     graceRules: {
       skip: normalizeSkipGraceRule(draft.graceRules.skip),
@@ -342,10 +367,11 @@ export function buildCreateCirclePayload(
     stepValue: defaultCommitmentStepValue,
     ...(typeof targetValue === 'number' ? {targetValue} : {}),
     timezone: draft.timezone.trim() || getLocalTimezone(),
-    title:
-      circleMode === 'personal' ? draft.commitment.trim() : draft.title.trim(),
+    ...(circleMode === 'personal' ? {independentTitle: true} : {}),
+    title: draft.title.trim() || draft.commitment.trim().slice(0, 80),
     unitLabel:
-      commitmentType === 'avoid'
+      commitmentType === 'avoid' ||
+      (commitmentType === 'build' && draft.buildTrackingMode === 'confirmation')
         ? defaultCommitmentUnitLabel
         : normalizeUnitLabel(draft.unitLabel),
   };

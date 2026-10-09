@@ -10,6 +10,7 @@ exports.isSuccessfulDone = isSuccessfulDone;
 exports.canPublishNewTapIn = canPublishNewTapIn;
 exports.validCandidate = validCandidate;
 exports.publicPreview = publicPreview;
+const commitment_appearance_1 = require("../shared/commitment-appearance");
 function millis(value) {
     if (value &&
         typeof value === 'object' &&
@@ -29,7 +30,12 @@ function searchWords(value) {
     ];
 }
 function searchTokens(circle) {
-    const words = searchWords([circle.title, circle.category, circle.commitment]
+    const words = searchWords([
+        circle.title,
+        ...(0, commitment_appearance_1.categorySearchNames)(circle.category),
+        circle.category,
+        circle.commitment,
+    ]
         .filter(value => typeof value === 'string')
         .join(' '));
     return [

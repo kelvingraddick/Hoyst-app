@@ -797,6 +797,7 @@ async function submitTapInHandler(request) {
             checkInPayload.createdAt = now;
         }
         if (input.status === 'done') {
+            checkInPayload.buildTrackingMode = quantityConfig.buildTrackingMode ?? firestore_1.FieldValue.delete();
             checkInPayload.commitmentType = commitmentType;
             checkInPayload.currentValue = currentValue;
             checkInPayload.stepValue = quantityConfig.stepValue;
@@ -821,6 +822,7 @@ async function submitTapInHandler(request) {
             }
         }
         else {
+            checkInPayload.buildTrackingMode = quantityConfig.buildTrackingMode ?? firestore_1.FieldValue.delete();
             checkInPayload.commitmentType = commitmentType;
             checkInPayload.currentValue = firestore_1.FieldValue.delete();
             checkInPayload.maximumValue = firestore_1.FieldValue.delete();

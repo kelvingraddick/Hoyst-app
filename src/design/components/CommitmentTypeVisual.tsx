@@ -1,13 +1,7 @@
 import React from 'react';
-import {
-  Image,
-  StyleSheet,
-  View,
-  type ImageSourcePropType,
-  type StyleProp,
-  type ViewStyle,
-} from 'react-native';
+import {StyleSheet, View, type StyleProp, type ViewStyle} from 'react-native';
 
+import {CircularEmoji, type CircularEmojiKind} from './CircularEmoji';
 import type {CommitmentType} from '../../types/models';
 import {radius} from '../tokens/radius';
 import {useHoystTheme} from '../theme/useHoystTheme';
@@ -31,24 +25,24 @@ type CommitmentTypePillProps = {
 type CommitmentTypeVisual = {
   backgroundColor: string;
   label: string;
-  source: ImageSourcePropType;
+  kind: CircularEmojiKind;
 };
 
 const commitmentTypeVisuals: Record<CommitmentType, CommitmentTypeVisual> = {
   avoid: {
     backgroundColor: 'rgba(255,59,48,0.16)',
     label: 'Avoid',
-    source: require('../../assets/commitment-types/avoid.png'),
+    kind: 'avoid',
   },
   build: {
     backgroundColor: 'rgba(16,185,103,0.16)',
     label: 'Build',
-    source: require('../../assets/commitment-types/build.png'),
+    kind: 'build',
   },
   limit: {
     backgroundColor: 'rgba(255,109,0,0.16)',
     label: 'Limit',
-    source: require('../../assets/commitment-types/limit.png'),
+    kind: 'limit',
   },
 };
 
@@ -66,32 +60,19 @@ export function CommitmentTypeIcon({
   const visual = getCommitmentTypeVisual(commitmentType);
 
   return (
-    <View
+    <CircularEmoji
+      kind={visual.kind}
       accessibilityLabel={
         decorative
           ? undefined
           : accessibilityLabel ?? `${visual.label} commitment type`
       }
-      accessibilityRole={decorative ? undefined : 'image'}
-      accessible={!decorative}
-      style={[
-        styles.iconCircle,
-        {
-          backgroundColor: visual.backgroundColor,
-          borderRadius: size / 2,
-          height: size,
-          width: size,
-        },
-        style,
-      ]}
-      testID={`commitment-type-icon-${commitmentType}`}>
-      <Image
-        accessibilityIgnoresInvertColors
-        resizeMode="contain"
-        source={visual.source}
-        style={{height: size * 0.76, width: size * 0.76}}
-      />
-    </View>
+      size={size}
+      emojiSize={size * 0.65}
+      backgroundColor={visual.backgroundColor}
+      style={[styles.iconCircle, style]}
+      testID={`commitment-type-icon-${commitmentType}`}
+    />
   );
 }
 

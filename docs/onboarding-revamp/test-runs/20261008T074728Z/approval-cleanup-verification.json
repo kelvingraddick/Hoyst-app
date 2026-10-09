@@ -1,0 +1,24 @@
+{
+  "at": "2026-10-09T05:31:41.460Z",
+  "accounts": [
+    {
+      "uid": "zw4qSaCzW5T7QBVCO4dsh97zX792",
+      "authMissing": true,
+      "statuses": {
+        "users/zw4qSaCzW5T7QBVCO4dsh97zX792": 404,
+        "userPrivate/zw4qSaCzW5T7QBVCO4dsh97zX792": 404,
+        "userPrivate/zw4qSaCzW5T7QBVCO4dsh97zX792/momentum/current": 404
+      }
+    },
+    {
+      "uid": "KWXlttYHLHh4I7MLG2MLyM58ilQ2",
+      "authMissing": true,
+      "statuses": {
+        "users/KWXlttYHLHh4I7MLG2MLyM58ilQ2": 404,
+        "userPrivate/KWXlttYHLHh4I7MLG2MLyM58ilQ2": 404,
+        "userPrivate/KWXlttYHLHh4I7MLG2MLyM58ilQ2/momentum/current": 404
+      }
+    }
+  ],
+  "circleMissing": true
+}

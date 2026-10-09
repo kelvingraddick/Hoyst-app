@@ -1,3 +1,8 @@
+import {
+  normalizeCategory,
+  palettes,
+  selectableEmojis,
+} from '../shared/commitment-appearance';
 import {getAuth} from 'firebase-admin/auth';
 import {
   FieldValue,
@@ -38,30 +43,79 @@ const commitmentFrequencySchema = z.object({
   opportunitiesPerPeriod: z.number().int().min(1).max(31).optional(),
   tapInsPerWeek: z.number().int().min(1).max(7),
 });
-const starterCircleSchema = z.object({
-  category: z.string().trim().min(1).max(40),
-  circleMode: z.enum(['personal', 'group']).optional().default('group'),
-  commitment: z.string().trim().min(1).max(160),
-  commitmentCadence: z.enum(['daily', 'weekly', 'monthly']).optional(),
-  commitmentFrequency: commitmentFrequencySchema,
-  commitmentType: z.enum(['build', 'limit', 'avoid']).default('build'),
-  graceRules: z
-    .object({
-      skip: graceRuleSchema,
-    })
-    .optional(),
-  joinMode: z.enum(['open', 'request_to_join', 'invite_only']),
-  maximumValue: z.number().int().min(0).max(100000).optional(),
-  maxSize: z.number().int().min(1).max(100),
-  minimumValue: z.number().int().min(0).max(100000).optional(),
-  privacy: z.enum(['public', 'private']),
-  setupId: z.string().trim().min(1).max(120),
-  stepValue: z.number().min(0.01).max(100000).default(1),
-  targetValue: z.number().int().min(0).max(100000).optional(),
-  timezone: z.string().trim().min(1).max(80).optional(),
-  title: z.string().trim().min(1).max(80),
-  unitLabel: z.string().trim().min(1).max(32).default('Tap In'),
-});
+const starterCircleSchema = z
+  .object({
+    category: z.string().trim().min(1).max(40).transform(normalizeCategory),
+    appearance: z
+      .object({
+        emoji: z
+          .string()
+          .refine(
+            value => selectableEmojis.includes(value),
+            'Unsupported emoji',
+          )
+          .optional(),
+        palette: z
+          .string()
+          .refine(
+            value => Object.prototype.hasOwnProperty.call(palettes, value),
+            'Unsupported palette',
+          )
+          .optional(),
+      })
+      .strict()
+      .optional(),
+    independentTitle: z.boolean().optional(),
+    circleMode: z.enum(['personal', 'group']).optional().default('group'),
+    commitment: z.string().trim().min(1).max(160),
+    commitmentCadence: z.enum(['daily', 'weekly', 'monthly']).optional(),
+    commitmentFrequency: commitmentFrequencySchema,
+    commitmentType: z.enum(['build', 'limit', 'avoid']).default('build'),
+    buildTrackingMode: z.enum(['confirmation', 'quantity']).optional(),
+    graceRules: z
+      .object({
+        skip: graceRuleSchema,
+      })
+      .optional(),
+    joinMode: z.enum(['open', 'request_to_join', 'invite_only']),
+    maximumValue: z.number().int().min(0).max(100000).optional(),
+    maxSize: z.number().int().min(1).max(100),
+    minimumValue: z.number().int().min(0).max(100000).optional(),
+    privacy: z.enum(['public', 'private']),
+    setupId: z.string().trim().min(1).max(120),
+    stepValue: z.number().min(0.01).max(100000).default(1),
+    targetValue: z.number().int().min(0).max(100000).optional(),
+    timezone: z.string().trim().min(1).max(80).optional(),
+    title: z.string().trim().min(1).max(80),
+    unitLabel: z.string().trim().min(1).max(32).default('Tap In'),
+  })
+  .superRefine((input, context) => {
+    if (
+      input.commitmentType === 'build' &&
+      input.buildTrackingMode === 'quantity' &&
+      (!input.targetValue || input.targetValue < 1)
+    )
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Enter a positive goal amount.',
+        path: ['targetValue'],
+      });
+    if (input.circleMode === 'group' && input.maxSize < 2)
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Capacity must be at least 2.',
+        path: ['maxSize'],
+      });
+    if (
+      input.commitmentType === 'limit' &&
+      (input.minimumValue ?? 0) > (input.maximumValue ?? 1)
+    )
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Minimum cannot exceed maximum.',
+        path: ['minimumValue'],
+      });
+  });
 const starterCircleHiddenDefaults = {
   graceRules: {
     skip: {
@@ -73,7 +127,7 @@ const starterCircleHiddenDefaults = {
 };
 
 const completeProfileSchema = z.object({
-  avatarUrl: z.string().url().optional(),
+  avatarUrl: z.string().url().nullable().optional(),
   displayName: z.string().trim().min(1).max(60),
   handle: z
     .string()
@@ -406,7 +460,13 @@ async function deleteAuthUser(uid: string) {
 
 export const completeProfile = onCall(async request => {
   const uid = requireAuthUid(request.auth?.uid);
-  const input = completeProfileSchema.parse(request.data);
+  const parsedInput = completeProfileSchema.safeParse(request.data);
+  if (!parsedInput.success)
+    throw new HttpsError(
+      'invalid-argument',
+      parsedInput.error.issues.map(issue => issue.message).join(' '),
+    );
+  const input = parsedInput.data;
   const userRecord = request.auth?.token;
   const userRef = db.collection('users').doc(uid);
   const userPrivateRef = db.collection('userPrivate').doc(uid);
@@ -438,7 +498,10 @@ export const completeProfile = onCall(async request => {
       userPrivate?.onboardingStarterCircleSetupId,
     );
     const profileData = {
-      avatarUrl: input.avatarUrl ?? authAvatarUrl ?? null,
+      avatarUrl:
+        input.avatarUrl === null
+          ? null
+          : input.avatarUrl ?? authAvatarUrl ?? null,
       displayName: input.displayName,
       handle: input.handle,
       onboardingStatus: 'complete',
@@ -530,11 +593,11 @@ export const completeProfile = onCall(async request => {
       const joinMode = isPersonal
         ? 'invite_only'
         : input.starterCircle.joinMode;
-      const maxSize = isPersonal ? 1 : starterCircleHiddenDefaults.maxSize;
+      const maxSize = isPersonal ? 1 : input.starterCircle.maxSize;
       const privacy = isPersonal ? 'private' : input.starterCircle.privacy;
-      const title = isPersonal
-        ? input.starterCircle.commitment
-        : input.starterCircle.title;
+      const title =
+        input.starterCircle.title ||
+        input.starterCircle.commitment.slice(0, 80);
       const commitmentPace = getInputCommitmentPace(
         input.starterCircle.commitmentCadence,
         input.starterCircle.commitmentFrequency,
@@ -547,7 +610,17 @@ export const completeProfile = onCall(async request => {
       const quantityConfig = getQuantityConfig(input.starterCircle);
       const circle = {
         category: input.starterCircle.category,
+        ...(input.starterCircle.appearance !== undefined
+          ? {appearance: input.starterCircle.appearance}
+          : {}),
         circleMode,
+        ...(isPersonal
+          ? {
+              independentTitle:
+                input.starterCircle.independentTitle ??
+                title !== input.starterCircle.commitment,
+            }
+          : {}),
         createdAt: now,
         commitment: input.starterCircle.commitment,
         commitmentCadence: commitmentPace,
@@ -573,6 +646,9 @@ export const completeProfile = onCall(async request => {
           : {}),
         title,
         timezone: input.starterCircle.timezone ?? input.timezone,
+        ...(quantityConfig.buildTrackingMode
+          ? {buildTrackingMode: quantityConfig.buildTrackingMode}
+          : {}),
         unitLabel: quantityConfig.unitLabel,
         updatedAt: now,
       };
@@ -610,6 +686,9 @@ export const completeProfile = onCall(async request => {
       if (!isPersonal && privacy === 'public') {
         transaction.set(publicIndexRef, {
           category: input.starterCircle.category,
+          ...(input.starterCircle.appearance !== undefined
+            ? {appearance: input.starterCircle.appearance}
+            : {}),
           circleMode,
           commitment: input.starterCircle.commitment,
           commitmentCadence: commitmentPace,
@@ -638,6 +717,9 @@ export const completeProfile = onCall(async request => {
             ? {targetValue: quantityConfig.targetValue}
             : {}),
           title,
+          ...(quantityConfig.buildTrackingMode
+            ? {buildTrackingMode: quantityConfig.buildTrackingMode}
+            : {}),
           unitLabel: quantityConfig.unitLabel,
           updatedAt: now,
         });
@@ -713,6 +795,15 @@ export const completeProfile = onCall(async request => {
 
 export const deleteAccount = onCall(async request => {
   const uid = requireAuthUid(request.auth?.uid);
+  await db.runTransaction(async transaction => {
+    const profileRef = db.collection('users').doc(uid);
+    const profile = await transaction.get(profileRef);
+    if (profile.exists) {
+      transaction.update(profileRef, {
+        accountDeletionStartedAt: FieldValue.serverTimestamp(),
+      });
+    }
+  });
   const ownedCircleSnapshots = await db
     .collection('circles')
     .where('ownerId', '==', uid)

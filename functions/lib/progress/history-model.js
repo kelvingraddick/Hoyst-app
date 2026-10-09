@@ -6,6 +6,7 @@ exports.recordDate = recordDate;
 exports.activityFromRecord = activityFromRecord;
 exports.monthSummary = monthSummary;
 exports.pageActivities = pageActivities;
+const commitment_appearance_1 = require("../shared/commitment-appearance");
 const streak_1 = require("../profile/streak");
 const commitments_1 = require("../shared/commitments");
 function validDateKey(value) {
@@ -54,8 +55,9 @@ function activityFromRecord(record, timezone, metadata = {}) {
                         ? 'completed'
                         : undefined;
     const dateKey = recordDate(record, timezone);
-    if (!status || !validDateKey(dateKey))
+    if (!status || !validDateKey(dateKey)) {
         return undefined;
+    }
     const labels = {
         completed: 'Completed',
         partial: 'Partial',
@@ -76,7 +78,8 @@ function activityFromRecord(record, timezone, metadata = {}) {
         dateKey,
         status,
         title: metadata.title || data.title || 'Past commitment',
-        category: metadata.category || data.category || 'Custom',
+        category: (0, commitment_appearance_1.normalizeCategory)(metadata.category || data.category),
+        appearance: (0, commitment_appearance_1.readAppearance)(metadata.appearance ?? data.appearance),
         description: labels[status] + quantity,
         ...(typeof data.note === 'string' && data.note ? { note: data.note } : {}),
         ...(typeof data.photoUrl === 'string' && data.photoUrl

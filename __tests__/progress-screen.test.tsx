@@ -1,9 +1,10 @@
+import {CircularEmoji} from '../src/design/components/CircularEmoji';
 import React from 'react';
 import {Pressable, ScrollView, StyleSheet, Text, View} from 'react-native';
 import renderer, {act} from 'react-test-renderer';
 import {ProgressScreen} from '../src/features/progress/screens/ProgressScreen';
 import {DSButton, DSSurface, minimumTarget} from '../src/design/system';
-import {FastForward, RotateCcw} from 'lucide-react-native';
+import {FastForward, BarChart3, History} from 'lucide-react-native';
 import {brandColors} from '../src/design/tokens/colors';
 import type {ProgressSummary} from '../src/features/progress/services/progress-service';
 
@@ -546,9 +547,13 @@ it.each(['light', 'dark'] as const)(
         node =>
           node.props.accessibilityLabel === '1 Streak restore. Use reward.',
       )!;
-    expect(restore.findByType(RotateCcw).props.color).toBe(
-      brandColors.orangeStrong,
-    );
+    expect(
+      restore
+        .findAllByType(Text)
+        .map(node => node.props.children)
+        .join(''),
+    ).toContain('🔄');
+    expect(JSON.stringify(screen.toJSON())).toContain('⏭️');
   },
 );
 
@@ -829,4 +834,27 @@ it('advances the default selected day at midnight and refreshes history', () => 
   expect(mockHistoryRefresh).toHaveBeenCalled();
   clock.mockRestore();
   interval.mockRestore();
+});
+
+it('preserves gray shortcut icons while reward badges use emoji', () => {
+  mount();
+  const xp = screen.root.findByProps({testID: 'progress-option-xp'});
+  const history = screen.root.findByProps({testID: 'progress-option-history'});
+  expect(xp.findAllByType(CircularEmoji)).toHaveLength(0);
+  expect(history.findAllByType(CircularEmoji)).toHaveLength(0);
+  expect(xp.findAllByType(BarChart3)).toHaveLength(1);
+  expect(history.findAllByType(History)).toHaveLength(1);
+  const kinds = screen.root
+    .findAllByType(CircularEmoji)
+    .map(node => node.props.kind);
+  expect(kinds).toEqual(
+    expect.arrayContaining([
+      'streak',
+      'momentum',
+      'milestone',
+      'tapIns',
+      'skip',
+      'restore',
+    ]),
+  );
 });

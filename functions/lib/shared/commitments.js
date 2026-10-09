@@ -60,6 +60,13 @@ function getQuantityConfig(circle) {
     }
     return {
         stepValue,
+        buildTrackingMode: circle?.buildTrackingMode === 'quantity'
+            ? 'quantity'
+            : circle?.buildTrackingMode === 'confirmation'
+                ? 'confirmation'
+                : typeof circle?.targetValue === 'number' && circle.targetValue > 1
+                    ? 'quantity'
+                    : 'confirmation',
         targetValue: clampPositiveNumber(circle?.targetValue, 1),
         unitLabel,
     };
@@ -68,8 +75,7 @@ function isSingleTapInCommitment(circle) {
     const commitmentType = getCommitmentType(circle);
     const quantityConfig = getQuantityConfig(circle);
     return (commitmentType === 'build' &&
-        (quantityConfig.targetValue ?? 1) <= 1 &&
-        quantityConfig.stepValue === 1);
+        quantityConfig.buildTrackingMode === 'confirmation');
 }
 function getCoverageStatusForTapIn({ circle, currentValue, status, }) {
     if (status === 'skip') {

@@ -113,7 +113,7 @@ function Commitment({
 }) {
   const theme = useSystemTheme();
   const {fontScale, width} = useWindowDimensions();
-  const visual = getCircleCategoryVisual(circle.category);
+  const visual = getCircleCategoryVisual(circle.category, circle.appearance);
   const goal = getCommitmentGoalPresentation(circle);
   const update = circle.viewerCanUpdateTapIn && circle.viewerHasTappedInToday;
   const label = update ? 'Update Tap In' : 'Tap In';
@@ -145,6 +145,7 @@ function Commitment({
       <View style={styles.identity}>
         <CircleCategoryIcon
           category={circle.category}
+          appearance={circle.appearance}
           size={32}
           showBackplate={false}
         />

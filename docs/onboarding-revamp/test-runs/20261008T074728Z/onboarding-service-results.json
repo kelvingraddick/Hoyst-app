@@ -1,0 +1,29 @@
+[
+  {
+    "scenario": "live onboarding capacity and setup-id retry",
+    "status": "passed",
+    "detail": {
+      "circleId": "3jkcZVudDoh3XzQT9LHY"
+    }
+  },
+  {
+    "scenario": "live explicit no-photo profile",
+    "status": "passed",
+    "detail": {}
+  },
+  {
+    "scenario": "live numeric-one Tap In coverage and private-note exclusion",
+    "status": "passed",
+    "detail": {
+      "circleId": "3jkcZVudDoh3XzQT9LHY",
+      "dateKey": "2026-10-08"
+    }
+  },
+  {
+    "scenario": "cleanup owner",
+    "status": "passed",
+    "detail": {
+      "uid": "rbm8zSv2d6biQGe5bUUg1QYFFOs2"
+    }
+  }
+]

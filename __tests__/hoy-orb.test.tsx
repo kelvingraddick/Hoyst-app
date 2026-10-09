@@ -40,6 +40,16 @@ function renderOrb(
 }
 
 describe('HoyOrb', () => {
+  it('uses optional setup artwork without replacing the default Home source', () => {
+    const artworkSource = require('../src/assets/hoy/setup-friendly-blue.png');
+    let tree!: renderer.ReactTestRenderer;
+    act(() => {
+      tree = renderer.create(<HoyOrb animated={false} presentation="home" state="getting_started" artworkSource={artworkSource} testID="blue-hoy" />);
+    });
+    expect(tree.root.findByProps({testID: 'blue-hoy-getting_started-image'}).props.source).toEqual(artworkSource);
+    expect(getHoyAssetSource('getting_started')).toEqual(require('../src/assets/hoy/default.png'));
+    act(() => tree.unmount());
+  });
   it.each(allStates)('selects the %s asset', state => {
     const tree = renderOrb(state);
     const image = tree.root.findByProps({

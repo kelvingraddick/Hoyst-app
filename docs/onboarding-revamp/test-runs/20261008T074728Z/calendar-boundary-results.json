@@ -1,0 +1,55 @@
+{
+  "scope": "Compiled backend scheduling helper; not a native or live rollover test",
+  "results": [
+    {
+      "scenario": "2026-02 monthly 16",
+      "status": "passed",
+      "scheduledSlots": 16
+    },
+    {
+      "scenario": "2026-02 monthly 31",
+      "status": "passed",
+      "scheduledSlots": 28
+    },
+    {
+      "scenario": "2028-02 monthly 16",
+      "status": "passed",
+      "scheduledSlots": 16
+    },
+    {
+      "scenario": "2028-02 monthly 31",
+      "status": "passed",
+      "scheduledSlots": 29
+    },
+    {
+      "scenario": "2026-04 monthly 16",
+      "status": "passed",
+      "scheduledSlots": 16
+    },
+    {
+      "scenario": "2026-04 monthly 31",
+      "status": "passed",
+      "scheduledSlots": 30
+    },
+    {
+      "scenario": "2026-05 monthly 16",
+      "status": "passed",
+      "scheduledSlots": 16
+    },
+    {
+      "scenario": "2026-05 monthly 31",
+      "status": "passed",
+      "scheduledSlots": 31
+    },
+    {
+      "scenario": "month boundary America/New_York",
+      "status": "passed",
+      "period": "2026-02"
+    },
+    {
+      "scenario": "month boundary Pacific/Kiritimati",
+      "status": "passed",
+      "period": "2026-03"
+    }
+  ]
+}

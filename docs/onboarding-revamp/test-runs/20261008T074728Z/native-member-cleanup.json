@@ -1,0 +1,79 @@
+{
+  "uid": "A25lQWhu4ggBZxnK3LkEHQl5Noz1",
+  "checkedAt": "2026-10-08T16:03:35.933Z",
+  "profileBefore": {
+    "status": 200,
+    "fields": {
+      "displayName": {
+        "stringValue": "QA Invite Member"
+      },
+      "providerIds": {
+        "arrayValue": {
+          "values": [
+            {
+              "stringValue": "email"
+            }
+          ]
+        }
+      },
+      "avatarUrl": {
+        "nullValue": null
+      },
+      "updatedAt": {
+        "timestampValue": "2026-10-08T15:55:55.893Z"
+      },
+      "onboardingStatus": {
+        "stringValue": "complete"
+      },
+      "timezone": {
+        "stringValue": "America/New_York"
+      },
+      "handle": {
+        "stringValue": "qa074728join"
+      },
+      "createdAt": {
+        "timestampValue": "2026-10-08T15:55:55.893Z"
+      }
+    }
+  },
+  "membershipBefore": {
+    "status": 200,
+    "fields": {
+      "role": {
+        "stringValue": "member"
+      },
+      "handle": {
+        "stringValue": "qa074728join"
+      },
+      "status": {
+        "stringValue": "pending"
+      },
+      "notificationToken": {
+        "stringValue": "8c2ea34a-1664-49c0-91aa-1457fc062183"
+      },
+      "requestedAt": {
+        "timestampValue": "2026-10-08T15:55:58.910Z"
+      },
+      "displayName": {
+        "stringValue": "QA Invite Member"
+      },
+      "uid": {
+        "stringValue": "A25lQWhu4ggBZxnK3LkEHQl5Noz1"
+      },
+      "avatarUrl": {
+        "nullValue": null
+      }
+    }
+  },
+  "deleteResult": {
+    "deleted": true
+  },
+  "after": {
+    "users/A25lQWhu4ggBZxnK3LkEHQl5Noz1": 404,
+    "handles/qa074728join": 404,
+    "userPrivate/A25lQWhu4ggBZxnK3LkEHQl5Noz1": 404,
+    "userPrivate/A25lQWhu4ggBZxnK3LkEHQl5Noz1/momentum/current": 404,
+    "circles/b5fs8dzZq4GI0xTph6Aa/members/A25lQWhu4ggBZxnK3LkEHQl5Noz1": 404
+  },
+  "authAbsent": true
+}

@@ -8,6 +8,7 @@ import type {
 
 type CommitmentLike = Pick<
   CircleSummary,
+  | 'buildTrackingMode'
   | 'commitmentType'
   | 'maximumValue'
   | 'minimumValue'
@@ -81,6 +82,7 @@ export function getQuantityConfig(
 
   return {
     stepValue,
+    buildTrackingMode: circle?.buildTrackingMode === 'quantity' ? 'quantity' : circle?.buildTrackingMode === 'confirmation' ? 'confirmation' : (typeof circle?.targetValue === 'number' && circle.targetValue > 1 ? 'quantity' : 'confirmation'),
     targetValue: asNonNegativeNumber(circle?.targetValue, 1),
     unitLabel,
   };
@@ -93,8 +95,7 @@ export function isSingleTapInCommitment(
 
   return (
     getCommitmentType(circle) === 'build' &&
-    (quantityConfig.targetValue ?? 1) <= 1 &&
-    quantityConfig.stepValue === 1
+    quantityConfig.buildTrackingMode === 'confirmation'
   );
 }
 

@@ -34,8 +34,9 @@ async function readEconomy(transaction, uid, timezone) {
     const wallet = snapshot.exists
         ? snapshot.data()
         : (0, model_1.starterWallet)(now);
-    if (flags.inventory)
+    if (flags.inventory) {
         wallet.inventoryEnforcedAt ??= now;
+    }
     flags.inventory ||= Boolean(wallet.inventoryEnforcedAt);
     if (flags.earning &&
         !wallet.earningActivatedAt) {
@@ -117,7 +118,7 @@ function requireInventoryVersion(enforced, version) {
         throw new https_1.HttpsError('failed-precondition', 'Update Hoyst to use your shared rewards.');
     }
 }
-async function prepareSuccessfulOpportunity(transaction, economy, opportunityId, timezone) {
+async function prepareSuccessfulOpportunity(transaction, economy, opportunityId, _timezone) {
     const id = 'opportunity_' + (0, exports.key)(opportunityId);
     const record = await transaction.get((0, exports.ledgerRef)(economy.uid, id));
     const before = economy.wallet.totalXP;

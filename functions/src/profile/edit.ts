@@ -59,11 +59,7 @@ function requireComplete(profile: FirebaseFirestore.DocumentData | undefined) {
 export const checkProfileUsername = onCall(async request => {
   const uid = requireUid(request.auth?.uid);
   const handle = parse(handleSchema, request.data?.handle);
-  const [user, candidate] = await Promise.all([
-    db.doc(`users/${uid}`).get(),
-    db.doc(`handles/${handle}`).get(),
-  ]);
-  requireComplete(user.data());
+  const candidate = await db.doc(`handles/${handle}`).get();
   return {
     handle,
     available: !candidate.exists || candidate.data()?.uid === uid,

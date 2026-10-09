@@ -1,0 +1,54 @@
+[
+  {
+    "uid": "idobshV0qWTHvpSkAfIi7hjQZnG2",
+    "actor": "service-owner",
+    "authMissing": true,
+    "profileMissing": true,
+    "privateRootMissing": true,
+    "handleMissing": true
+  },
+  {
+    "uid": "lEbH7NtydgQ1Kc0oVShuMpwN4FG2",
+    "actor": "service-member",
+    "authMissing": true,
+    "profileMissing": true,
+    "privateRootMissing": true,
+    "handleMissing": true
+  },
+  {
+    "uid": "5dRgCg1rX0NHgJaYVFL87x3fGdI2",
+    "actor": "service-racer",
+    "authMissing": true,
+    "profileMissing": true,
+    "privateRootMissing": true,
+    "handleMissing": true
+  },
+  {
+    "uid": "rbm8zSv2d6biQGe5bUUg1QYFFOs2",
+    "actor": "service-onboarding",
+    "authMissing": true,
+    "profileMissing": true,
+    "privateRootMissing": true,
+    "handleMissing": true
+  },
+  {
+    "circleId": "BOeVSBQtWzhLaIsxYcg2",
+    "circleMissing": true,
+    "indexMissing": true
+  },
+  {
+    "circleId": "oGWDiqTsbgkCdYCx17bV",
+    "circleMissing": true,
+    "indexMissing": true
+  },
+  {
+    "circleId": "A9tnmgzbhpfIOWTKnbK7",
+    "circleMissing": true,
+    "indexMissing": true
+  },
+  {
+    "circleId": "3jkcZVudDoh3XzQT9LHY",
+    "circleMissing": true,
+    "indexMissing": true
+  }
+]

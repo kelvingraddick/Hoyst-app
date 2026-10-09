@@ -1,3 +1,7 @@
+import {
+  normalizeCategory,
+  readAppearance,
+} from '../../../shared/commitment-appearance';
 import type {FirebaseFirestoreTypes} from '@react-native-firebase/firestore';
 import {DateTime} from 'luxon';
 
@@ -360,6 +364,7 @@ function getCommitmentSource(
   checkInData?: PlainData,
 ): Partial<CircleSummary> {
   return {
+    buildTrackingMode: (checkInData?.buildTrackingMode ?? circleData?.buildTrackingMode) === 'quantity' ? 'quantity' : (checkInData?.buildTrackingMode ?? circleData?.buildTrackingMode) === 'confirmation' ? 'confirmation' : undefined,
     commitmentType: getCommitmentType(
       (checkInData ?? circleData) as Partial<CircleSummary> | undefined,
     ),
@@ -409,7 +414,7 @@ function getQuantityMarkerForCheckIn(
       : quantityConfig.targetValue ?? 1;
   const quantityValue = asOptionalNonNegativeNumber(checkInData.currentValue);
 
-  if (requiredQuantity <= 1 || typeof quantityValue !== 'number') {
+  if (requiredQuantity <= 0 || typeof quantityValue !== 'number') {
     return undefined;
   }
 
@@ -597,6 +602,16 @@ function mapMemberStatus(
     id: uid,
     initials: getInitials(name),
     membershipStatus: status,
+    joinedAt:
+      memberData.joinedAt instanceof Date
+        ? memberData.joinedAt
+        : asDate(memberData.joinedAt),
+    opportunityEligibility:
+      memberData.opportunityEligibility === 'next_opening'
+        ? 'next_opening'
+        : memberData.opportunityEligibility === 'include_current'
+        ? 'include_current'
+        : undefined,
     name,
     ...(todayStatus ? {todayStatus} : {}),
     cycleCoveredCount,
@@ -1629,7 +1644,9 @@ export function mapHomeCircleFromData({
   });
 
   return {
-    category: asString(circleData.category, 'General'),
+    category: normalizeCategory(circleData.category),
+    appearance: readAppearance(circleData.appearance),
+    buildTrackingMode: circleData.buildTrackingMode === 'quantity' ? 'quantity' : circleData.buildTrackingMode === 'confirmation' ? 'confirmation' : undefined,
     circleMode,
     completionRate: progressPercent,
     commitmentCadence: commitmentPace,
@@ -2641,10 +2658,15 @@ export function subscribeToHomeData({
       emit();
     }, onError);
 
-  const unsubscribeInventory = firestore.collection(collections.userPrivate).doc(uid).collection('progress').doc('current').onSnapshot(snapshot => {
-    sharedSkips = snapshot.data()?.inventory?.skips;
-    emit();
-  }, onError);
+  const unsubscribeInventory = firestore
+    .collection(collections.userPrivate)
+    .doc(uid)
+    .collection('progress')
+    .doc('current')
+    .onSnapshot(snapshot => {
+      sharedSkips = snapshot.data()?.inventory?.skips;
+      emit();
+    }, onError);
 
   return () => {
     unsubscribeInventory();

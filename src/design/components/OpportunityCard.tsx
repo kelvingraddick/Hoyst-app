@@ -52,7 +52,11 @@ export function OpportunityCard({
 }: OpportunityCardProps): React.JSX.Element {
   const theme = useHoystTheme();
   const status = getStatus(card);
-  const categoryColor = getCircleCategoryForegroundColor(card.category, theme);
+  const categoryColor = getCircleCategoryForegroundColor(
+    card.category,
+    theme,
+    card.appearance,
+  );
   const pulseRingState = getPulseRingStateForCircle(card);
   const canTapIn = canTapInToday(card);
 

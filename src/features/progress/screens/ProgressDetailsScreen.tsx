@@ -473,6 +473,7 @@ function Content({navigation, route}: Props) {
                         key={circle.id}
                         title={circle.title}
                         subtitle={circle.commitment}
+                        emojiKind="skip"
                         icon={FastForward}
                         onPress={() =>
                           navigation.navigate('TapInComposer', {
@@ -535,6 +536,7 @@ function Content({navigation, route}: Props) {
                       key={option.slot.id}
                       title={option.title}
                       subtitle={`${option.slot.expiresDateKey} · Reconnect ${option.resultingStreak} opportunities`}
+                      emojiKind="restore"
                       icon={RotateCcw}
                       onPress={() =>
                         setChoice({option, requestId: requestId()})

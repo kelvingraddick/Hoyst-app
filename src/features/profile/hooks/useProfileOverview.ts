@@ -1,3 +1,4 @@
+import type {CommitmentAppearance} from '../../../shared/commitment-appearance';
 import {useCallback, useEffect, useState} from 'react';
 import {useFocusEffect} from '@react-navigation/native';
 import {useQuery} from '@tanstack/react-query';
@@ -44,15 +45,20 @@ export function useProfileOverview() {
     momentumLabel?: string;
     momentumError?: boolean;
     categories?: string[];
+    commitmentAppearances?: {
+      id: string;
+      category: string;
+      appearance?: CommitmentAppearance;
+    }[];
   }>({});
   useEffect(() => {
     setAuxiliary({uid});
-    if (!uid) return;
+    if (!uid) {return;}
     let current = true;
     const unsubscribeMomentum = subscribeToMomentumSummary({
       uid,
       onSummary: summary => {
-        if (!current) return;
+        if (!current) {return;}
         const model = getMomentumDisplayModel(summary);
         setAuxiliary(value => ({
           ...value,
@@ -65,12 +71,12 @@ export function useProfileOverview() {
       },
       onError: () => {
         if (current)
-          setAuxiliary(value => ({
+          {setAuxiliary(value => ({
             ...value,
             uid,
             momentumLabel: undefined,
             momentumError: true,
-          }));
+          }));}
       },
     });
     const unsubscribeHome = subscribeToHomeData({
@@ -78,13 +84,20 @@ export function useProfileOverview() {
       timezone: profile?.timezone ?? 'UTC',
       onData: home => {
         if (current && home.hasLoadedMemberships)
-          setAuxiliary(value => ({
+          {setAuxiliary(value => ({
             ...value,
             uid,
+            commitmentAppearances: home.circles
+              .slice(0, 3)
+              .map(({id, category, appearance}) => ({
+                id,
+                category,
+                appearance,
+              })),
             categories: [
               ...new Set(home.circles.map(circle => circle.category)),
             ].slice(0, 3),
-          }));
+          }));}
       },
       onError: () => undefined,
     });
@@ -123,6 +136,7 @@ export function useProfileOverview() {
     momentumLabel: preview ? preview.momentumLabel : visible.momentumLabel,
     momentumError: preview ? false : visible.momentumError,
     categories: preview ? preview.categories : visible.categories,
+    commitmentAppearances: preview ? undefined : visible.commitmentAppearances,
     refresh,
   };
 }

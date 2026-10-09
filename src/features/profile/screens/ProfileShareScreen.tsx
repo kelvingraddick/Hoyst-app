@@ -220,7 +220,13 @@ function ShareCard({
             {
               value: stats.totalTapIns.toLocaleString(),
               label: 'Total Tap Ins',
-              icon: <ProfileIcon icon={CalendarCheck} tone="green" />,
+              icon: (
+                <ProfileIcon
+                  emojiKind="tapIns"
+                  icon={CalendarCheck}
+                  tone="green"
+                />
+              ),
             },
           ].map(stat => (
             <View key={stat.label} style={styles.stat}>

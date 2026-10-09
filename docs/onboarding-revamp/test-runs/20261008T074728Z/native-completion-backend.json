@@ -1,0 +1,141 @@
+{
+  "checkedAt": "2026-10-08T14:46:00.283Z",
+  "uid": "0Kn1CerJtegU4hQAqY0lxjbsQ3V2",
+  "circleId": "HzSd98Kuo4CDyhoSBWVL",
+  "profile": {
+    "status": 200,
+    "fields": {
+      "createdAt": {
+        "timestampValue": "2026-10-08T14:43:15.956Z"
+      },
+      "providerIds": {
+        "arrayValue": {
+          "values": [
+            {
+              "stringValue": "email"
+            }
+          ]
+        }
+      },
+      "updatedAt": {
+        "timestampValue": "2026-10-08T14:43:15.956Z"
+      },
+      "avatarUrl": {
+        "stringValue": "https://firebasestorage.googleapis.com/v0/b/hoyst-firebase-app.firebasestorage.app/o/users%2F0Kn1CerJtegU4hQAqY0lxjbsQ3V2%2Favatar%2Fprofile-1791470591358-icpqfao3r4i.jpg?alt=media&token=7d5a3ac8-5ce3-450b-acbf-3d4d5895b4f2"
+      },
+      "handle": {
+        "stringValue": "qa074728native"
+      },
+      "onboardingStatus": {
+        "stringValue": "complete"
+      },
+      "timezone": {
+        "stringValue": "Europe/London"
+      },
+      "displayName": {
+        "stringValue": "QA Native Reader"
+      }
+    }
+  },
+  "circle": {
+    "status": 200,
+    "fields": {
+      "unitLabel": {
+        "stringValue": "page"
+      },
+      "commitmentType": {
+        "stringValue": "build"
+      },
+      "commitmentFrequency": {
+        "mapValue": {
+          "fields": {
+            "tapInsPerWeek": {
+              "integerValue": "7"
+            }
+          }
+        }
+      },
+      "commitment": {
+        "stringValue": "Read one QA page"
+      },
+      "createdAt": {
+        "timestampValue": "2026-10-08T14:43:15.956Z"
+      },
+      "joinMode": {
+        "stringValue": "invite_only"
+      },
+      "updatedAt": {
+        "timestampValue": "2026-10-08T14:43:15.956Z"
+      },
+      "stepValue": {
+        "integerValue": "1"
+      },
+      "ownerId": {
+        "stringValue": "0Kn1CerJtegU4hQAqY0lxjbsQ3V2"
+      },
+      "graceRules": {
+        "mapValue": {
+          "fields": {
+            "skip": {
+              "mapValue": {
+                "fields": {
+                  "allowance": {
+                    "integerValue": "2"
+                  },
+                  "windowDays": {
+                    "integerValue": "7"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "category": {
+        "stringValue": "Learning"
+      },
+      "privacy": {
+        "stringValue": "private"
+      },
+      "title": {
+        "stringValue": "QA 0747 Personal Reader Edited"
+      },
+      "targetValue": {
+        "integerValue": "1"
+      },
+      "memberCount": {
+        "integerValue": "1"
+      },
+      "independentTitle": {
+        "booleanValue": true
+      },
+      "lifecycleStatus": {
+        "stringValue": "active"
+      },
+      "circleMode": {
+        "stringValue": "personal"
+      },
+      "maxSize": {
+        "integerValue": "1"
+      },
+      "timezone": {
+        "stringValue": "Europe/London"
+      },
+      "appearance": {
+        "mapValue": {
+          "fields": {
+            "palette": {
+              "stringValue": "purple"
+            }
+          }
+        }
+      },
+      "commitmentCadence": {
+        "stringValue": "daily"
+      },
+      "buildTrackingMode": {
+        "stringValue": "quantity"
+      }
+    }
+  }
+}

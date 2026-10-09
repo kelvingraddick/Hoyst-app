@@ -295,13 +295,17 @@ export async function recalculateMomentumSummaryForUser(uid: string) {
   });
   const reconciledSummary = {...summary, ...streaks, rollingMomentum};
 
-  await momentumRef.set(
-    {
-      ...reconciledSummary,
-      updatedAt: FieldValue.serverTimestamp(),
-    },
-    {merge: true},
-  );
+  // Reading the profile in the write transaction also protects against a
+  // deletion that starts after this recalculation read its opportunities.
+  await db.runTransaction(async transaction => {
+    const profile = await transaction.get(db.collection('users').doc(uid));
+    if (!profile.exists || profile.data()?.accountDeletionStartedAt) return;
+    transaction.set(
+      momentumRef,
+      {...reconciledSummary, updatedAt: FieldValue.serverTimestamp()},
+      {merge: true},
+    );
+  });
 
   return reconciledSummary;
 }

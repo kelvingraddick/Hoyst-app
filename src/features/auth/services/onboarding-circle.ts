@@ -47,6 +47,9 @@ export function applyStarterCircleHiddenDefaults(
   const normalizedDraft = {
     ...createInitialCircleDraft(timezone),
     ...draft,
+    buildTrackingMode:
+      draft.buildTrackingMode ??
+      ((draft.targetValue ?? 1) > 1 ? 'quantity' : 'confirmation'),
     graceRules: {
       skip: normalizeSkipGraceRule(
         draft.graceRules?.skip ?? createInitialCircleDraft().graceRules.skip,

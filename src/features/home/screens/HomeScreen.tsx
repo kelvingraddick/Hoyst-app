@@ -1,3 +1,4 @@
+import {SetupResumeBanner} from '../../create-circle/components/SetupResumeBanner';
 import React, {
   useCallback,
   useContext,
@@ -1129,7 +1130,9 @@ export function HomeScreen(): React.JSX.Element {
                 style={styles.progressPlaceholder}
               />
             )}
-            {isGuestHome ? (
+            <SetupResumeBanner navigation={rootNavigation}/>
+
+          {isGuestHome ? (
               <HoystText style={styles.guestProgressCopy} tone="muted">
                 Your first streak starts with one Tap In.
               </HoystText>

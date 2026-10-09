@@ -1,0 +1,89 @@
+{
+  "state": {
+    "records": {
+      "create:LYuv6xiTeDNba886x2vSyTysXeD2": {
+        "step": "finish",
+        "draft": {
+          "category": "Fitness",
+          "circleMode": "personal",
+          "commitment": "QA Recovery",
+          "commitmentCadence": "daily",
+          "commitmentFrequency": {
+            "tapInsPerWeek": 7
+          },
+          "buildTrackingMode": "confirmation",
+          "commitmentType": "build",
+          "graceRules": {
+            "skip": {
+              "allowance": 2,
+              "windowDays": 7
+            }
+          },
+          "inviteCode": "",
+          "joinMode": "open",
+          "maxSize": 10,
+          "privacy": "public",
+          "privacyMode": "public",
+          "stepValue": 1,
+          "targetValue": 1,
+          "timezone": "America/New_York",
+          "title": "QA Recovery",
+          "unitLabel": "Tap In"
+        },
+        "interests": [],
+        "customText": "QA Recovery",
+        "requestId": "setup-mv0imksp-s0vkf5nxk6",
+        "status": "saved",
+        "deferred": false,
+        "completed": false,
+        "needsReminders": false,
+        "profileDraft": {
+          "name": "QA Phone Tester",
+          "handle": "qa074728phone"
+        },
+        "selection": {
+          "kind": "custom"
+        },
+        "paceCounts": {
+          "weekly": 4,
+          "monthly": 16
+        },
+        "goalDrafts": {},
+        "submittedDraft": {
+          "category": "Fitness",
+          "circleMode": "personal",
+          "commitment": "QA Recovery",
+          "commitmentCadence": "daily",
+          "commitmentFrequency": {
+            "tapInsPerWeek": 7
+          },
+          "buildTrackingMode": "confirmation",
+          "commitmentType": "build",
+          "graceRules": {
+            "skip": {
+              "allowance": 2,
+              "windowDays": 7
+            }
+          },
+          "inviteCode": "",
+          "joinMode": "open",
+          "maxSize": 10,
+          "privacy": "public",
+          "privacyMode": "public",
+          "stepValue": 1,
+          "targetValue": 1,
+          "timezone": "America/New_York",
+          "title": "QA Recovery",
+          "unitLabel": "Tap In"
+        },
+        "ownerUid": "LYuv6xiTeDNba886x2vSyTysXeD2",
+        "reviewReturn": false,
+        "result": {
+          "circleId": "dDpi7cMFcotb7fS1ym9n",
+          "membership": "active"
+        }
+      }
+    }
+  },
+  "version": 1
+}

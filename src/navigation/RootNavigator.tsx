@@ -82,7 +82,7 @@ export function RootNavigator(): React.JSX.Element {
           options={{
             animation: 'slide_from_bottom',
             headerShown: false,
-            presentation: 'modal',
+            presentation: 'fullScreenModal',
           }}
         />
       ) : null}
@@ -221,7 +221,7 @@ export function RootNavigator(): React.JSX.Element {
         component={CreateCircleScreen}
         name="CreateCircle"
         options={{
-          presentation: 'modal',
+          presentation: 'fullScreenModal',
           headerShown: false,
         }}
       />

@@ -1,9 +1,34 @@
+import {
+  getQuantityConfig,
+  getCommitmentType,
+  getInputCommitmentPace,
+  getStoredCommitmentFrequency,
+} from './commitments';
+import {
+  normalizeCategory,
+  readAppearance,
+  type CommitmentAppearance,
+} from './commitment-appearance';
 import {randomBytes} from 'node:crypto';
 
 export type CircleInviteJoinMode = 'invite_only' | 'open' | 'request_to_join';
 
 export type CircleInvitePreview = {
   cadenceLabel: string;
+  commitmentCadence?: 'daily' | 'weekly' | 'monthly';
+  commitmentFrequency?: {
+    tapInsPerWeek: number;
+    opportunitiesPerPeriod?: number;
+  };
+  commitmentType?: 'build' | 'limit' | 'avoid';
+  buildTrackingMode?: 'confirmation' | 'quantity';
+  targetValue?: number;
+  minimumValue?: number;
+  maximumValue?: number;
+  unitLabel?: string;
+  timezone?: string;
+  category: string;
+  appearance?: CommitmentAppearance;
   circleId: string;
   commitment: string;
   isFull: boolean;
@@ -86,7 +111,23 @@ export function buildCircleInvitePreview(
       : 'Daily';
 
   return {
+    ...getQuantityConfig(circle),
+    commitmentType: getCommitmentType(circle),
+    commitmentCadence: getInputCommitmentPace(
+      circle.commitmentCadence,
+      circle.commitmentFrequency as {tapInsPerWeek?: unknown} | undefined,
+    ),
+    commitmentFrequency: getStoredCommitmentFrequency(
+      getInputCommitmentPace(
+        circle.commitmentCadence,
+        circle.commitmentFrequency as {tapInsPerWeek?: unknown} | undefined,
+      ),
+      circle.commitmentFrequency as {tapInsPerWeek?: unknown} | undefined,
+    ),
+    timezone: asNonEmptyString(circle.timezone) ?? 'UTC',
     cadenceLabel,
+    category: normalizeCategory(circle.category),
+    appearance: readAppearance(circle.appearance),
     circleId,
     commitment,
     isFull: memberCount >= maxSize,

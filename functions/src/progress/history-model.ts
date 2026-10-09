@@ -1,3 +1,8 @@
+import {
+  normalizeCategory,
+  readAppearance,
+  type CommitmentAppearance,
+} from '../shared/commitment-appearance';
 import {getDateKey} from '../profile/streak';
 import {isCoveredCheckInData} from '../shared/commitments';
 
@@ -13,6 +18,7 @@ export type ProgressActivity = {
   dateKey: string;
   title: string;
   category: string;
+  appearance?: CommitmentAppearance;
   status:
     | 'completed'
     | 'partial'
@@ -88,7 +94,9 @@ export function activityFromRecord(
       ? 'completed'
       : undefined;
   const dateKey = recordDate(record, timezone);
-  if (!status || !validDateKey(dateKey)) return undefined;
+  if (!status || !validDateKey(dateKey)) {
+    return undefined;
+  }
   const labels = {
     completed: 'Completed',
     partial: 'Partial',
@@ -110,7 +118,8 @@ export function activityFromRecord(
     dateKey,
     status,
     title: metadata.title || data.title || 'Past commitment',
-    category: metadata.category || data.category || 'Custom',
+    category: normalizeCategory(metadata.category || data.category),
+    appearance: readAppearance(metadata.appearance ?? data.appearance),
     description: labels[status] + quantity,
     ...(typeof data.note === 'string' && data.note ? {note: data.note} : {}),
     ...(typeof data.photoUrl === 'string' && data.photoUrl

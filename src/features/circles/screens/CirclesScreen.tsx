@@ -565,6 +565,7 @@ function CirclesScreenContent({navigation}: Props) {
         <DSCommitmentPreview
           action={action}
           category={item.category}
+          appearance={item.appearance}
           context={memberContext(item)}
           description={item.commitment}
           expanded

@@ -1,3 +1,7 @@
+import {
+  CircularEmoji,
+  type CircularEmojiKind,
+} from '../../../design/components/CircularEmoji';
 import React, {type ReactNode, type RefObject} from 'react';
 import {
   KeyboardAvoidingView,
@@ -127,9 +131,11 @@ export function ProfileScaffold({
 }
 export function ProfileIcon({
   icon: Icon,
+  emojiKind,
   tone = 'blue',
 }: {
   icon: LucideIcon;
+  emojiKind?: CircularEmojiKind;
   tone?: 'blue' | 'green' | 'orange' | 'purple' | 'neutral' | 'danger' | 'gold';
 }) {
   const theme = useSystemTheme();
@@ -149,6 +155,17 @@ export function ProfileIcon({
       : tone === 'danger'
       ? theme.danger
       : theme.category[tone].foreground;
+  if (emojiKind) {
+    return (
+      <CircularEmoji
+        kind={emojiKind}
+        size={36}
+        emojiSize={18}
+        backgroundColor={background}
+        style={styles.icon}
+      />
+    );
+  }
   return (
     <View
       accessible={false}

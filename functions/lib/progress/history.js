@@ -1,6 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.getProgressDayActivity = exports.getProgressMonth = void 0;
+const commitment_appearance_1 = require("../shared/commitment-appearance");
 const auth_1 = require("firebase-admin/auth");
 const firestore_1 = require("firebase-admin/firestore");
 const https_1 = require("firebase-functions/v2/https");
@@ -17,12 +18,14 @@ async function pages(query) {
     let after;
     while (true) {
         let next = query.orderBy(firestore_1.FieldPath.documentId()).limit(500);
-        if (after)
+        if (after) {
             next = next.startAfter(after);
+        }
         const page = await next.get();
         docs.push(...page.docs);
-        if (page.size < 500)
+        if (page.size < 500) {
             return docs;
+        }
         after = page.docs[page.size - 1];
     }
 }
@@ -35,11 +38,13 @@ async function owner(authUid, idToken) {
             throw new https_1.HttpsError('unauthenticated', 'Sign in to view your stats.');
         }
     }
-    if (!authUid)
+    if (!authUid) {
         throw new https_1.HttpsError('unauthenticated', 'Sign in to view your stats.');
+    }
     const profile = (await firebase_1.db.doc(`users/${authUid}`).get()).data();
-    if (!profile || profile.onboardingStatus !== 'complete')
+    if (!profile || profile.onboardingStatus !== 'complete') {
         throw new https_1.HttpsError('failed-precondition', 'Complete your profile first.');
+    }
     return { uid: authUid, timezone: (0, history_model_1.resolveTimezone)(profile.timezone) };
 }
 async function readActivity(uid, timezone, monthKey) {
@@ -52,11 +57,12 @@ async function readActivity(uid, timezone, monthKey) {
     past.forEach(doc => metadata.set(doc.data().circleId || doc.id, doc.data()));
     opportunities.forEach(doc => {
         const data = doc.data();
-        if (data.circleId)
+        if (data.circleId) {
             metadata.set(data.circleId, {
                 ...metadata.get(data.circleId),
                 title: data.title || metadata.get(data.circleId)?.title,
             });
+        }
     });
     const circleIds = [
         ...new Set(checks
@@ -82,6 +88,7 @@ async function readActivity(uid, timezone, monthKey) {
                     ...metadata.get(id),
                     title: circle.data()?.title,
                     category: circle.data()?.category,
+                    appearance: (0, commitment_appearance_1.readAppearance)(circle.data()?.appearance),
                 });
             }
         });
@@ -90,8 +97,9 @@ async function readActivity(uid, timezone, monthKey) {
     const seen = new Set();
     checks.forEach(doc => {
         const circleId = doc.data().circleId || doc.ref.parent.parent?.parent.parent?.id;
-        if (!circleId || doc.data().uid !== uid)
+        if (!circleId || doc.data().uid !== uid) {
             return;
+        }
         const originalDate = doc.ref.parent.parent?.id || '';
         const savedSlot = opportunities
             .find(slot => slot.data().circleId === circleId &&
@@ -128,8 +136,9 @@ async function readActivity(uid, timezone, monthKey) {
     for (const circleId of [
         ...new Set(candidates.map(doc => doc.data().circleId)),
     ]) {
-        if (typeof circleId !== 'string' || circleId.includes('/'))
+        if (typeof circleId !== 'string' || circleId.includes('/')) {
             continue;
+        }
         const [history, member] = await Promise.all([
             pages(firebase_1.db.collection(`circles/${circleId}/membershipHistory/${uid}/periods`)),
             firebase_1.db.doc(`circles/${circleId}/members/${uid}`).get(),
@@ -155,21 +164,24 @@ async function readActivity(uid, timezone, monthKey) {
                     member: { ...period, status: 'active' },
                     slot,
                     timezone: zone,
-                })))
+                }))) {
             return;
+        }
         // A closed stored opportunity is evidence. Never synthesize old schedules.
         const effectiveDate = (0, streak_1.getDateKey)(new Date((0, model_1.localNoon)(data.expiresDateKey, zone)), timezone);
         // Coverage supersedes the gap; partial and failed entries remain visible.
         if (activities.some(item => item.circleId === data.circleId &&
             item.dateKey === effectiveDate &&
-            ['completed', 'skipped', 'restored'].includes(item.status)))
+            ['completed', 'skipped', 'restored'].includes(item.status))) {
             return;
+        }
         activities.push({
             id: `opportunity:${doc.id}`,
             circleId: data.circleId,
             dateKey: effectiveDate,
             title: metadata.get(data.circleId)?.title || data.title || 'Past commitment',
-            category: metadata.get(data.circleId)?.category || 'Custom',
+            category: (0, commitment_appearance_1.normalizeCategory)(metadata.get(data.circleId)?.category),
+            appearance: (0, commitment_appearance_1.readAppearance)(metadata.get(data.circleId)?.appearance),
             status: 'missed',
             description: 'Missed opportunity',
             cadence: data.cadence || 'daily',
@@ -195,10 +207,12 @@ const daySchema = zod_1.z
 exports.getProgressMonth = (0, https_1.onCall)({ timeoutSeconds: 120 }, async (request) => {
     const account = await owner(request.auth?.uid, request.data?.idToken);
     const input = monthSchema.safeParse(request.data);
-    if (!input.success)
+    if (!input.success) {
         throw new https_1.HttpsError('invalid-argument', 'Choose a valid month.');
-    if (input.data.monthKey > (0, streak_1.getDateKey)(new Date(), account.timezone).slice(0, 7))
+    }
+    if (input.data.monthKey > (0, streak_1.getDateKey)(new Date(), account.timezone).slice(0, 7)) {
         throw new https_1.HttpsError('invalid-argument', 'Future months are unavailable.');
+    }
     const { activities } = await readActivity(account.uid, account.timezone, input.data.monthKey);
     return (0, history_model_1.monthSummary)(input.data.monthKey, account.timezone, activities);
 });
@@ -206,8 +220,9 @@ exports.getProgressDayActivity = (0, https_1.onCall)({ timeoutSeconds: 120 }, as
     const account = await owner(request.auth?.uid, request.data?.idToken);
     const input = daySchema.safeParse(request.data);
     if (!input.success ||
-        input.data.dateKey > (0, streak_1.getDateKey)(new Date(), account.timezone))
+        input.data.dateKey > (0, streak_1.getDateKey)(new Date(), account.timezone)) {
         throw new https_1.HttpsError('invalid-argument', 'Choose a valid past or current day.');
+    }
     let after;
     if (input.data.cursor) {
         try {
@@ -215,8 +230,9 @@ exports.getProgressDayActivity = (0, https_1.onCall)({ timeoutSeconds: 120 }, as
             if (cursor.uid !== account.uid ||
                 cursor.dateKey !== input.data.dateKey ||
                 cursor.timezone !== account.timezone ||
-                typeof cursor.after !== 'string')
+                typeof cursor.after !== 'string') {
                 throw new Error();
+            }
             after = cursor.after;
         }
         catch {

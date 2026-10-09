@@ -5,6 +5,7 @@ import renderer, {act} from 'react-test-renderer';
 import {HoystButton} from '../src/design/components/HoystButton';
 import {HoystInput} from '../src/design/components/HoystInput';
 import {CommitmentTypeIcon} from '../src/design/components/CommitmentTypeVisual';
+import {SetupOptionList, commitmentTypeOptions} from '../src/features/create-circle/components/CommitmentSetupFields';
 import {EditCircleScreen} from '../src/features/circles/screens/EditCircleScreen';
 import type {CircleDetailModel} from '../src/types/models';
 
@@ -189,6 +190,8 @@ describe('EditCircleScreen refresh', () => {
     expect(output).not.toContain('Members');
     expect(
       tree.root
+        .findAllByType(SetupOptionList)
+        .find(node => node.props.options === commitmentTypeOptions)!
         .findAllByType(CommitmentTypeIcon)
         .map(icon => icon.props.commitmentType),
     ).toEqual(['build', 'limit', 'avoid']);
@@ -197,6 +200,18 @@ describe('EditCircleScreen refresh', () => {
         .findAllByType(HoystButton)
         .find(button => button.props.label === 'Save changes')?.props.disabled,
     ).toBe(true);
+  });
+
+  it('shares the grouped unit editor and labeled preview while retaining a custom numeric unit', async () => {
+    const {tree} = renderScreen(detail({buildTrackingMode: 'quantity', targetValue: 1, unitLabel: 'laps'}));
+    const group = tree.root.findByProps({testID: 'goal-unit-group'});
+    expect(group.findByType(HoystInput).props.value).toBe('laps');
+    expect(tree.root.findByProps({testID: 'goal-preview'}).findAllByType(require('react-native').Text)
+      .some(node => node.props.children === 'Tap In preview')).toBe(true);
+    const pages = group.findAllByType(require('react-native').Pressable)
+      .find(node => node.props.accessibilityLabel === 'pages')!;
+    await act(async () => pages.props.onPress());
+    expect(tree.root.findByProps({testID: 'goal-unit-group'}).findByType(HoystInput).props.value).toBe('pages');
   });
 
   it('shows group access, capacity, and member-cap validation', () => {

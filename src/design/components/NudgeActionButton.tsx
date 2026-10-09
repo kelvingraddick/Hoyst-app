@@ -40,7 +40,6 @@ const sizeSpecs = {
     minWidth: 136,
     paddingHorizontal: 14,
     showIcon: true,
-    strokeWidth: 5,
   },
   compact: {
     fontSize: 14,
@@ -52,7 +51,6 @@ const sizeSpecs = {
     minWidth: 104,
     paddingHorizontal: 12,
     showIcon: true,
-    strokeWidth: 5,
   },
   mini: {
     fontSize: 14,
@@ -64,7 +62,6 @@ const sizeSpecs = {
     minWidth: 96,
     paddingHorizontal: 12,
     showIcon: false,
-    strokeWidth: 5,
   },
 } as const;
 
@@ -182,11 +179,7 @@ export function NudgeActionButton({
                   width: spec.iconSlotSize,
                 },
               ]}>
-              <NudgeMark
-                color={foregroundColor}
-                size={spec.iconSize}
-                strokeWidth={spec.strokeWidth}
-              />
+              <NudgeMark size={spec.iconSize} />
             </View>
           ) : null}
           <HoystText

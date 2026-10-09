@@ -254,7 +254,10 @@ export function ComposerHeader({
   const theme = useSystemTheme();
   const [headerHeight, setHeaderHeight] = useState(0);
   const fadeId = useId().replace(/:/g, '');
-  const category = getCircleCategoryVisual(detail?.category ?? 'General');
+  const category = getCircleCategoryVisual(
+    detail?.category ?? 'General',
+    detail?.appearance,
+  );
   return (
     <View
       onLayout={event => setHeaderHeight(event.nativeEvent.layout.height)}
@@ -292,6 +295,7 @@ export function ComposerHeader({
           <View style={styles.titleRow}>
             <CircleCategoryIcon
               category={detail.category}
+              appearance={detail.appearance}
               size={34}
               showBackplate={false}
             />

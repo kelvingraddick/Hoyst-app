@@ -1,0 +1,71 @@
+[
+  {
+    "scenario": "live profile completion",
+    "status": "passed",
+    "detail": {
+      "uid": "idobshV0qWTHvpSkAfIi7hjQZnG2"
+    }
+  },
+  {
+    "scenario": "username conflict rejects duplicate handle",
+    "status": "passed",
+    "detail": {}
+  },
+  {
+    "scenario": "numeric one, capacity two and idempotent creation",
+    "status": "passed",
+    "detail": {
+      "circleId": "BOeVSBQtWzhLaIsxYcg2"
+    }
+  },
+  {
+    "scenario": "guest discovery returns eligible QA public Circle",
+    "status": "passed",
+    "detail": {
+      "circleId": "BOeVSBQtWzhLaIsxYcg2",
+      "count": 1
+    }
+  },
+  {
+    "scenario": "join once, repeat membership and full Circle rejection",
+    "status": "passed",
+    "detail": {
+      "circleId": "BOeVSBQtWzhLaIsxYcg2"
+    }
+  },
+  {
+    "scenario": "monthly Limit and pending approval",
+    "status": "passed",
+    "detail": {
+      "circleId": "oGWDiqTsbgkCdYCx17bV"
+    }
+  },
+  {
+    "scenario": "personal name, Avoid and private discovery exclusion",
+    "status": "passed",
+    "detail": {
+      "circleId": "A9tnmgzbhpfIOWTKnbK7"
+    }
+  },
+  {
+    "scenario": "cleanup racer",
+    "status": "passed",
+    "detail": {
+      "uid": "5dRgCg1rX0NHgJaYVFL87x3fGdI2"
+    }
+  },
+  {
+    "scenario": "cleanup member",
+    "status": "passed",
+    "detail": {
+      "uid": "lEbH7NtydgQ1Kc0oVShuMpwN4FG2"
+    }
+  },
+  {
+    "scenario": "cleanup owner",
+    "status": "passed",
+    "detail": {
+      "uid": "idobshV0qWTHvpSkAfIi7hjQZnG2"
+    }
+  }
+]

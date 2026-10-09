@@ -1,7 +1,11 @@
+import {
+  CircularEmoji,
+  type CircularEmojiKind,
+} from '../../../design/components/CircularEmoji';
 import React, {useEffect, useState} from 'react';
 import {ActivityIndicator, Pressable, StyleSheet, View} from 'react-native';
 import {DateTime} from 'luxon';
-import {ChevronRight, Trophy, BarChart3} from 'lucide-react-native';
+import {ChevronRight} from 'lucide-react-native';
 import {
   DSSurface,
   DSText,
@@ -280,7 +284,7 @@ export function ProgressStatsSection({
         <View style={styles.bestRow}>
           {[
             {
-              Icon: Trophy,
+              kind: 'milestone' as CircularEmojiKind,
               color: '#E8A600',
               label: 'Best streak',
               value: preview
@@ -292,7 +296,7 @@ export function ProgressStatsSection({
                 : '…',
             },
             {
-              Icon: BarChart3,
+              kind: 'tapIns' as CircularEmojiKind,
               color: '#18B9FF',
               label: 'Lifetime Tap Ins',
               value: preview
@@ -303,7 +307,7 @@ export function ProgressStatsSection({
                 ? 'Unavailable'
                 : '…',
             },
-          ].map(({Icon, color, label, value}, index) => (
+          ].map(({kind, color, label, value}, index) => (
             <View
               key={label}
               style={[
@@ -313,9 +317,13 @@ export function ProgressStatsSection({
                   borderLeftColor: theme.border,
                 },
               ]}>
-              <View style={[styles.icon, {backgroundColor: color + '18'}]}>
-                <Icon size={22} color={color} />
-              </View>
+              <CircularEmoji
+                kind={kind}
+                size={32}
+                emojiSize={22}
+                backgroundColor={color + '18'}
+                style={styles.icon}
+              />
               <View style={styles.bestCopy}>
                 <DSText style={styles.bestValue}>{value}</DSText>
                 <DSText tone="muted" style={styles.caption}>

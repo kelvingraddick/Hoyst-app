@@ -1,0 +1,30 @@
+{
+  "updatedAt": "2026-10-08T22:26:53.481604+00:00",
+  "scope": "Dedicated QA iOS Settings; Hoyst Apple provider success not yet verified",
+  "firstCandidate": {
+    "reachedTerms": true,
+    "laterObservedError": "User name or password is incorrect.",
+    "termsAcceptedByAgent": false
+  },
+  "secondCandidate": {
+    "source": "User supplied second test account",
+    "status": "Agent submitted Apple3 credentials; user separately signed in manually with Japan sandbox tester",
+    "displayedIdentityMatchesRequested": false,
+    "identityClarificationPending": false,
+    "termsCurrentlyVisible": false,
+    "termsAcceptedByAgent": false,
+    "agentVerifiedApple3Success": false
+  },
+  "activeTester": {
+    "label": "Japan Sandbox Tester",
+    "signedInBy": "user manually",
+    "authorizedForHoystTesting": true
+  },
+  "hoystAuthorization": {
+    "testerLabel": "Japan Sandbox Tester",
+    "providerSheetPresented": true,
+    "emailChoice": "Share My Email",
+    "passwordSubmitted": true,
+    "result": "success; native Profile opened; backend apple.com provider verified"
+  }
+}

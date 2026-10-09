@@ -1,3 +1,4 @@
+import {resolveAppearance} from '../shared/commitment-appearance';
 import {HttpsError, onCall, onRequest} from 'firebase-functions/v2/https';
 import {FieldValue} from 'firebase-admin/firestore';
 import {z} from 'zod';
@@ -145,6 +146,13 @@ function renderPage({
     ? `
       <section class="invite-card" aria-label="Circle invitation">
         <div class="eyebrow">You’re invited to a Circle</div>
+        <div style="color:${
+          resolveAppearance(preview.category, preview.appearance).foreground
+        };background:${
+        resolveAppearance(preview.category, preview.appearance).background
+      };border-radius:20px;padding:8px 12px;display:inline-block">${escapeHtml(
+        resolveAppearance(preview.category, preview.appearance).emoji,
+      )} ${escapeHtml(preview.category)}</div>
         <h1>${escapeHtml(preview.title)}</h1>
         <p class="commitment">${escapeHtml(preview.commitment)}</p>
         <div class="meta">
@@ -310,6 +318,22 @@ export const resolveCircleInvite = onCall(async request => {
     throw new HttpsError('not-found', 'Invite no longer available.');
   }
 
+  if (request.auth?.uid) {
+    const membership = await db
+      .collection('circles')
+      .doc(preview.circleId)
+      .collection('members')
+      .doc(request.auth.uid)
+      .get();
+    const status = membership.data()?.status;
+    return {
+      ...preview,
+      viewerUid: request.auth.uid,
+      ...(status === 'active' || status === 'pending'
+        ? {viewerMembershipStatus: status}
+        : {}),
+    };
+  }
   return preview;
 });
 

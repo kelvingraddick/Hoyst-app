@@ -1,0 +1,318 @@
+{
+  "runId": "20261008T074728Z",
+  "project": "hoyst-firebase-app",
+  "sourceRevision": "21171ec71e2334ecd6e5be163d550380c8afc344",
+  "workingTreeFingerprint": "858d00d5aae3f5fa5d12abceb3641d39448e38bde5839fbe6369543165847148",
+  "devices": {
+    "primary": "8950B805-5711-4EFC-B4DD-8771E4C2537F",
+    "small": "45379E94-3B42-438A-887A-FEF40505F742",
+    "androidQA": "emulator-5556 / Hoyst_QA_20261008"
+  },
+  "app": "/private/tmp/hoyst-onboarding-ios/Build/Products/Debug-iphonesimulator/Hoyst.app",
+  "accounts": [
+    {
+      "actor": "email-main",
+      "email": "qa.hoyst.20261008.074728@example.com",
+      "status": "deleted",
+      "createdInRun": true,
+      "uid": "0Kn1CerJtegU4hQAqY0lxjbsQ3V2",
+      "createdAt": "1791448047810",
+      "providers": [
+        "password"
+      ],
+      "cleanup": "deleted",
+      "cleanupVerified": true,
+      "cleanupPrivateVerified": true
+    },
+    {
+      "actor": "service-owner",
+      "uid": "idobshV0qWTHvpSkAfIi7hjQZnG2",
+      "email": "qa.hoyst.20261008.074728.owner@example.com",
+      "status": "deleted",
+      "createdInRun": true,
+      "createdAt": "2026-10-08T08:38:45.394Z",
+      "cleanup": "deleted",
+      "cleanupVerified": true,
+      "cleanupPrivateVerified": true
+    },
+    {
+      "actor": "service-member",
+      "uid": "lEbH7NtydgQ1Kc0oVShuMpwN4FG2",
+      "email": "qa.hoyst.20261008.074728.member@example.com",
+      "status": "deleted",
+      "createdInRun": true,
+      "createdAt": "2026-10-08T08:38:49.372Z",
+      "cleanup": "deleted",
+      "cleanupVerified": true,
+      "cleanupPrivateVerified": true
+    },
+    {
+      "actor": "service-racer",
+      "uid": "5dRgCg1rX0NHgJaYVFL87x3fGdI2",
+      "email": "qa.hoyst.20261008.074728.racer@example.com",
+      "status": "deleted",
+      "createdInRun": true,
+      "createdAt": "2026-10-08T08:38:50.312Z",
+      "cleanup": "deleted",
+      "cleanupVerified": true,
+      "cleanupPrivateVerified": true
+    },
+    {
+      "actor": "service-onboarding",
+      "uid": "rbm8zSv2d6biQGe5bUUg1QYFFOs2",
+      "email": "qa.hoyst.20261008.074728.onboarding@example.com",
+      "status": "deleted",
+      "createdInRun": true,
+      "createdAt": "2026-10-08T08:44:29.499Z",
+      "cleanup": "deleted",
+      "cleanupVerified": true,
+      "cleanupPrivateVerified": true
+    },
+    {
+      "actor": "native-invite-member",
+      "uid": "A25lQWhu4ggBZxnK3LkEHQl5Noz1",
+      "email": "qa.hoyst.20261008.074728.nativejoin@example.com",
+      "createdInRun": true,
+      "status": "deleted",
+      "cleanup": "deleted",
+      "cleanupVerified": true,
+      "cleanupPrivateVerified": true
+    },
+    {
+      "actor": "native-pathowner",
+      "uid": "0zY3jlPZnXhvgr7NrzGUBQL2SF72",
+      "email": "qa.hoyst.20261008.074728.pathowner@example.com",
+      "createdInRun": true,
+      "status": "deleted",
+      "cleanup": "deleted",
+      "cleanupVerified": true,
+      "cleanupPrivateVerified": true
+    },
+    {
+      "actor": "native-pathfiller",
+      "uid": "vh7gvdH1lWW63KYbBOkDVaHLcrq2",
+      "email": "qa.hoyst.20261008.074728.pathfiller@example.com",
+      "createdInRun": true,
+      "status": "deleted",
+      "cleanup": "deleted",
+      "cleanupVerified": true,
+      "cleanupPrivateVerified": true
+    },
+    {
+      "actor": "phone-main",
+      "uid": "LYuv6xiTeDNba886x2vSyTysXeD2",
+      "phoneLabel": "authorized test SMS number ending 1425",
+      "createdInRun": true,
+      "status": "profile-completed",
+      "cleanup": "pending"
+    },
+    {
+      "actor": "apple-japan",
+      "uid": "IYZInpxmlZgNYZY9MWUU59eh6go1",
+      "testerLabel": "Japan Sandbox Tester",
+      "createdInRun": true,
+      "status": "profile-completed",
+      "cleanup": "pending"
+    },
+    {
+      "actor": "email-recovery",
+      "uid": "SfhrVsU7u3WeRhr8psQCJAK8lie2",
+      "email": "development.wavelink@gmail.com",
+      "createdInRun": true,
+      "status": "profile-completed",
+      "cleanup": "pending"
+    },
+    {
+      "actor": "approval-approve",
+      "uid": "zw4qSaCzW5T7QBVCO4dsh97zX792",
+      "email": "qa.hoyst.20261009.074728.approve@example.com",
+      "createdInRun": true,
+      "status": "deleted",
+      "cleanup": "deleted"
+    },
+    {
+      "actor": "approval-decline",
+      "uid": "KWXlttYHLHh4I7MLG2MLyM58ilQ2",
+      "email": "qa.hoyst.20261009.074728.decline@example.com",
+      "createdInRun": true,
+      "status": "deleted",
+      "cleanup": "deleted"
+    },
+    {
+      "actor": "native-review",
+      "uid": "WWurAHuULEgaoFHNAXrosLWWVO22",
+      "email": "qa.hoyst.20261009.074728.nativereview@example.com",
+      "createdInRun": true,
+      "status": "deleted",
+      "cleanup": "deleted"
+    },
+    {
+      "actor": "beta-fix-member",
+      "uid": "qPabYXu7o2cQ8kTNf05IJ9Sdor83",
+      "email": "qa.hoyst.20261009.betafixes@example.com",
+      "createdInRun": true,
+      "status": "auth-created",
+      "cleanup": "pending"
+    }
+  ],
+  "circles": [
+    {
+      "circleId": "BOeVSBQtWzhLaIsxYcg2",
+      "ownerUid": "idobshV0qWTHvpSkAfIi7hjQZnG2",
+      "title": "QA 074728 Public Numeric One",
+      "public": true,
+      "cleanup": "deleted"
+    },
+    {
+      "circleId": "oGWDiqTsbgkCdYCx17bV",
+      "ownerUid": "idobshV0qWTHvpSkAfIi7hjQZnG2",
+      "title": "QA 074728 Monthly Limit Approval",
+      "public": true,
+      "cleanup": "deleted"
+    },
+    {
+      "circleId": "A9tnmgzbhpfIOWTKnbK7",
+      "ownerUid": "idobshV0qWTHvpSkAfIi7hjQZnG2",
+      "title": "QA 074728 Personal Independent Name",
+      "public": false,
+      "cleanup": "deleted"
+    },
+    {
+      "circleId": "3jkcZVudDoh3XzQT9LHY",
+      "ownerUid": "rbm8zSv2d6biQGe5bUUg1QYFFOs2",
+      "title": "QA 074728 Onboarding Capacity Two",
+      "public": true,
+      "cleanup": "deleted"
+    },
+    {
+      "circleId": "HzSd98Kuo4CDyhoSBWVL",
+      "ownerUid": "0Kn1CerJtegU4hQAqY0lxjbsQ3V2",
+      "title": "QA 0747 Personal Reader Edited",
+      "public": false,
+      "cleanup": "deleted"
+    },
+    {
+      "circleId": "b5fs8dzZq4GI0xTph6Aa",
+      "ownerUid": "0Kn1CerJtegU4hQAqY0lxjbsQ3V2",
+      "title": "QA 074728 Shared limit",
+      "public": true,
+      "cleanup": "deleted"
+    },
+    {
+      "circleId": "GEQaqqfVjjYvHwH5ecjV",
+      "ownerUid": "0zY3jlPZnXhvgr7NrzGUBQL2SF72",
+      "title": "QA 074728 Native full",
+      "public": false,
+      "cleanup": "deleted"
+    },
+    {
+      "circleId": "QZa54xofiWS62J3cpg1h",
+      "ownerUid": "0zY3jlPZnXhvgr7NrzGUBQL2SF72",
+      "title": "QA 074728 Native active",
+      "public": false,
+      "cleanup": "deleted"
+    },
+    {
+      "circleId": "efI7nuIj3kddGDalXqcK",
+      "ownerUid": "IYZInpxmlZgNYZY9MWUU59eh6go1",
+      "title": "QA Apple Edited Name",
+      "public": false,
+      "cleanup": "pending"
+    },
+    {
+      "circleId": "NvA0wQ6tTNRjig3m0JZN",
+      "ownerUid": "LYuv6xiTeDNba886x2vSyTysXeD2",
+      "title": "QA Phone Avoid",
+      "public": false,
+      "cleanup": "pending"
+    },
+    {
+      "circleId": "dDpi7cMFcotb7fS1ym9n",
+      "ownerUid": "LYuv6xiTeDNba886x2vSyTysXeD2",
+      "title": "QA Recovery",
+      "public": false,
+      "cleanup": "pending"
+    },
+    {
+      "circleId": "VRtrB51oSsbvx9JuOT6c",
+      "ownerUid": "SfhrVsU7u3WeRhr8psQCJAK8lie2",
+      "title": "QA Approval Lifecycle",
+      "public": false,
+      "cleanup": "deleted"
+    },
+    {
+      "circleId": "AYfqJxjOn8suzItNdhGq",
+      "ownerUid": "SfhrVsU7u3WeRhr8psQCJAK8lie2",
+      "title": "QA Native Review",
+      "public": false,
+      "cleanup": "deleted"
+    },
+    {
+      "circleId": "F27PELF7oRBh3qBIGewn",
+      "ownerUid": "SfhrVsU7u3WeRhr8psQCJAK8lie2",
+      "title": "QA Beta Fixes",
+      "public": false,
+      "cleanup": "pending"
+    }
+  ],
+  "status": "waiting-for-unlock-recovery-test",
+  "google": "excluded",
+  "signing": "Fresh Xcode Debug build with temporary Simulator signing entitlements. Native launch and authenticated cold restart passed.",
+  "blockers": [
+    "Mac locked; manual unlock required",
+    "Password recovery needs dedicated inbox and user password-change handoff",
+    "Android native UI attachment unavailable"
+  ],
+  "completedChecks": {
+    "jest": 220,
+    "emulator": 10,
+    "liveFunctionalScenarios": 10,
+    "targetedLint": {
+      "errors": 0,
+      "warnings": 113
+    },
+    "androidBuild": "passed",
+    "additionalCalendarJest": 16,
+    "calendarBoundaryHelpers": 10
+  },
+  "accountCleanupSummary": {
+    "deletedAccounts": 8,
+    "deletedCircles": 8,
+    "retainedNativeAccounts": 3,
+    "retainedNativeCircles": 3,
+    "retainedAvatarObjects": 0,
+    "momentumCleanupRequiredRetry": true,
+    "primaryMomentumOrphanRequiredExplicitCleanup": true,
+    "retainedProofPhotoObjects": 1
+  },
+  "lastUpdatedAt": "2026-10-09T04:54:31.367233+00:00",
+  "nativeCompletedPaths": [
+    "personal quantity-one commitment with uploaded profile photo and first Tap In",
+    "regular shared monthly Limit with approval and capacity two",
+    "guest invite sign-in and profile to pending approval, View Circle and selective cleanup",
+    "full-Circle recovery to Suggestions",
+    "active invitation with complete profile skipped Account/Profile",
+    "future-window completion to Home",
+    "fresh SMS verification to Profile",
+    "profile-only phone completion to Home and empty journey store",
+    "explicit notification Allow path",
+    "Apple authentication with Japan sandbox tester",
+    "Apple Finish setup recovery and selective cleanup",
+    "personal Just show up creation and first confirmation Tap In",
+    "existing editor first amount activation defaults to minutes",
+    "existing editor validation, preset matching and mode retention",
+    "independent personal name and quantity-one editing",
+    "historical confirmation Tap In unchanged after goal edit",
+    "returning Apple sign-in skips Profile and retains edited commitment",
+    "wrong SMS code rejected and valid-code recovery",
+    "returning phone sign-in skips Profile and restores saved draft",
+    "native Avoid creation and confirmation Tap In with proof photo"
+  ],
+  "nativeFailedPaths": [
+    "enlarged Suggestions text clipping",
+    "focused custom field hidden with software keyboard",
+    "active member repeated invite shown as full",
+    "unavailable invite persisted render failure",
+    "Apple profile-only handoff dismisses before Reminders"
+  ]
+}

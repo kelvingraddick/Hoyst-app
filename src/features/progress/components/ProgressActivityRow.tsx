@@ -69,7 +69,11 @@ export function ProgressActivityRow({
         {opacity: pressed ? 0.72 : 1, borderBottomColor: theme.border},
       ]}
       testID={`progress-activity-${entry.id}`}>
-      <CircleCategoryIcon category={entry.category} size={32} />
+      <CircleCategoryIcon
+        category={entry.category}
+        appearance={entry.appearance}
+        size={32}
+      />
       <View style={styles.copy}>
         <DSText style={styles.title}>{entry.title}</DSText>
         <DSText tone="muted" style={styles.description}>

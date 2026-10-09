@@ -1,3 +1,4 @@
+import {categories, palettes} from '../../../shared/commitment-appearance';
 import React from 'react';
 import {
   Pressable,
@@ -33,7 +34,7 @@ import {
 import {HoystText} from '../../../design/components/HoystText';
 import {radius} from '../../../design/tokens/radius';
 import type {HoystTheme} from '../../../design/tokens/colors';
-import {useHoystTheme} from '../../../design/theme/useHoystTheme';
+import {useSetupTheme} from '../services/setup-presentation';
 import type {
   CircleJoinMode,
   CircleMode,
@@ -47,7 +48,16 @@ import {
   getTimezonePickerOptions,
 } from '../../auth/services/timezone-options';
 
-export type SetupTone = 'blue' | 'green' | 'neutral' | 'orange' | 'purple';
+export type SetupTone =
+  | 'blue'
+  | 'green'
+  | 'neutral'
+  | 'orange'
+  | 'purple'
+  | 'pink'
+  | 'teal'
+  | 'gold'
+  | 'red';
 
 export type SetupOption<T extends string> = {
   category?: string;
@@ -65,7 +75,7 @@ export const circleModeOptions: SetupOption<CircleMode>[] = [
     icon: UsersRound,
     id: 'group',
     label: 'Create a circle',
-    tone: 'purple',
+    tone: 'blue',
   },
   {
     description: 'Keep this Commitment private and just for you.',
@@ -78,7 +88,7 @@ export const circleModeOptions: SetupOption<CircleMode>[] = [
 
 export const commitmentTypeOptions: SetupOption<CommitmentType>[] = [
   {
-    description: 'Reach at least the Goal value for each Opportunity.',
+    description: 'Reach the goal for each Tap In.',
     commitmentType: 'build',
     id: 'build',
     label: 'Build',
@@ -92,55 +102,28 @@ export const commitmentTypeOptions: SetupOption<CommitmentType>[] = [
     tone: 'orange',
   },
   {
-    description: 'Confirm you stayed clear for the Opportunity.',
+    description: 'Confirm you stayed clear for each Tap In.',
     commitmentType: 'avoid',
     id: 'avoid',
     label: 'Avoid',
-    tone: 'purple',
+    tone: 'blue',
   },
 ];
 
-export const categoryOptions: SetupOption<string>[] = [
-  {
-    category: 'Fitness',
-    description: 'Training plans, walks, lifts, runs, and recovery.',
-    id: 'Fitness',
-    label: 'Fitness',
-    tone: getCircleCategoryVisual('Fitness').tone,
-  },
-  {
-    category: 'Wellness',
-    description: 'Sleep, mindfulness, nutrition, and care routines.',
-    id: 'Wellness',
-    label: 'Wellness',
-    tone: getCircleCategoryVisual('Wellness').tone,
-  },
-  {
-    category: 'Deep Work',
-    description: 'Focused sessions, study blocks, and maker momentum.',
-    id: 'Deep Work',
-    label: 'Deep work',
-    tone: getCircleCategoryVisual('Deep Work').tone,
-  },
-  {
-    category: 'Sobriety',
-    description: 'Private, steady check-ins for staying grounded.',
-    id: 'Sobriety',
-    label: 'Sobriety',
-    tone: getCircleCategoryVisual('Sobriety').tone,
-  },
-  {
-    category: 'Custom',
-    description: 'A flexible category for any other kind of Commitment.',
-    id: 'Custom',
-    label: 'Custom',
-    tone: getCircleCategoryVisual('Custom').tone,
-  },
-];
+export const categoryOptions: SetupOption<string>[] = categories.map(
+  ({label}) => ({
+    category: label,
+    id: label,
+    label,
+    description: '',
+    tone: getCircleCategoryVisual(label).tone,
+  }),
+);
 
 export const privacyOptions: SetupOption<CirclePrivacyMode>[] = [
   {
-    description: 'Discoverable in Explore. New Tap Ins may show your member name, profile avatar, and timestamp publicly. Notes and photos stay in the circle.',
+    description:
+      'Discoverable in Explore. New Tap Ins may show your member name, profile avatar, and timestamp publicly. Notes and photos stay in the circle.',
     icon: Globe2,
     id: 'public',
     label: 'Public',
@@ -158,7 +141,7 @@ export const privacyOptions: SetupOption<CirclePrivacyMode>[] = [
     icon: Lock,
     id: 'private',
     label: 'Private',
-    tone: 'purple',
+    tone: 'blue',
   },
 ];
 
@@ -190,14 +173,14 @@ export const commitmentPaceOptions: SetupOption<CommitmentPace>[] = [
     tone: 'green',
   },
   {
-    description: 'Cover a set number of Tap In days each week.',
+    description: 'Set your Tap Ins per week.',
     icon: CalendarRange,
     id: 'weekly',
     label: 'Weekly',
     tone: 'blue',
   },
   {
-    description: 'Use a set number of Opportunities across each month.',
+    description: 'Set your Tap Ins per month.',
     icon: CalendarCheck,
     id: 'monthly',
     label: 'Monthly',
@@ -219,20 +202,12 @@ export function getModeAwareSetupCopy(circleMode: CircleMode) {
   };
 }
 
-export function getSetupToneColor(theme: HoystTheme, tone: SetupTone) {
-  if (tone === 'green') {
-    return theme.successForeground;
-  }
-  if (tone === 'orange') {
-    return theme.warningForeground;
-  }
-  if (tone === 'blue') {
-    return theme.accentTertiaryForeground;
-  }
-  if (tone === 'neutral') {
-    return theme.textMuted;
-  }
-  return theme.accentSecondaryForeground;
+export function getSetupToneColor(
+  theme: Pick<HoystTheme, 'isDark'>,
+  tone: SetupTone,
+) {
+  const palette = palettes[tone === 'neutral' ? 'gray' : tone];
+  return theme.isDark ? palette.darkForeground : palette.foreground;
 }
 
 export function SetupIconButton({
@@ -246,7 +221,7 @@ export function SetupIconButton({
   icon: LucideIcon;
   onPress: () => void;
 }): React.JSX.Element {
-  const theme = useHoystTheme();
+  const theme = useSetupTheme();
 
   return (
     <Pressable
@@ -277,7 +252,7 @@ export function SetupOptionCard<T extends string>({
   onPress: () => void;
   option: SetupOption<T>;
 }): React.JSX.Element {
-  const theme = useHoystTheme();
+  const theme = useSetupTheme();
   const accentColor = getSetupToneColor(theme, option.tone);
   const Icon = option.icon;
   const checkBackgroundColor = isSelected ? accentColor : 'transparent';
@@ -388,7 +363,7 @@ export function SetupNumericStepper({
   onChange: (value: number) => void;
   value: number;
 }): React.JSX.Element {
-  const theme = useHoystTheme();
+  const theme = useSetupTheme();
   const update = (nextValue: number) =>
     onChange(Math.min(max, Math.max(min, Math.round(nextValue))));
 
@@ -396,7 +371,10 @@ export function SetupNumericStepper({
     <View
       style={[
         styles.stepper,
-        {backgroundColor: theme.glassSurfaceStrong, borderColor: theme.glassBorder},
+        {
+          backgroundColor: theme.glassSurfaceStrong,
+          borderColor: theme.glassBorder,
+        },
       ]}>
       <View style={styles.stepperCopy}>
         <HoystText tone="muted" variant="label">
@@ -474,9 +452,9 @@ export function formatSkipSummary(allowance: number, windowDays: number) {
   if (allowance <= 0) {
     return 'No skips';
   }
-  return `${allowance} ${allowance === 1 ? 'skip' : 'skips'} every ${windowDays} ${
-    windowDays === 1 ? 'day' : 'days'
-  }`;
+  return `${allowance} ${
+    allowance === 1 ? 'skip' : 'skips'
+  } every ${windowDays} ${windowDays === 1 ? 'day' : 'days'}`;
 }
 
 export function formatPaceSummary(
@@ -493,9 +471,9 @@ export function formatPaceSummary(
       : frequency.tapInsPerWeek;
   const tapInLabel = count === 1 ? 'Tap In' : 'Tap Ins';
 
-  return `${pace === 'monthly' ? 'Monthly' : 'Weekly'} · ${count} ${tapInLabel} per ${
-    pace === 'monthly' ? 'month' : 'week'
-  }`;
+  return `${
+    pace === 'monthly' ? 'Monthly' : 'Weekly'
+  } · ${count} ${tapInLabel} per ${pace === 'monthly' ? 'month' : 'week'}`;
 }
 
 export function formatCommitmentRulesSummary({
@@ -567,7 +545,10 @@ export function formatTimezoneSummary(timezoneId: string, now = new Date()) {
     now,
   }).find(item => item.id === timezoneId);
 
-  return option?.label ?? `${timezoneId} (${getTimezoneOffsetLabel(timezoneId, now)})`;
+  return (
+    option?.label ??
+    `${timezoneId} (${getTimezoneOffsetLabel(timezoneId, now)})`
+  );
 }
 
 const styles = StyleSheet.create({

@@ -3,7 +3,10 @@ import {Image, StyleSheet, View} from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
 import Svg, {Defs, Pattern, Rect} from 'react-native-svg';
 
-import {getCircleCategoryVisual} from '../../../design/components/CircleCategoryIcon';
+import {
+  CircleCategoryIcon,
+  getCircleCategoryVisual,
+} from '../../../design/components/CircleCategoryIcon';
 import {BrandMark} from '../../../design/components/BrandMark';
 import {HoystText} from '../../../design/components/HoystText';
 import {radius} from '../../../design/tokens/radius';
@@ -175,6 +178,12 @@ function StoryContent({
           </HoystText>
         </View>
 
+        <CircleCategoryIcon
+          category={story.category}
+          appearance={story.appearance}
+          size={40}
+          showBackplate={false}
+        />
         <View style={styles.supportingStack}>
           <StoryStats
             story={story}
@@ -213,7 +222,7 @@ function TapInMomentStory({
   story,
 }: Pick<TapInStoryTemplateCardProps, 'onPhotoSettled' | 'story'>) {
   const hasPhoto = Boolean(story.photoUri);
-  const category = getCircleCategoryVisual(story.category);
+  const category = getCircleCategoryVisual(story.category, story.appearance);
 
   return (
     <View

@@ -13,6 +13,7 @@ import {radius} from '../tokens/radius';
 import {useHoystTheme} from '../theme/useHoystTheme';
 
 type SetupProgressBarProps = {
+  accentColor?: string;
   current: number;
   style?: StyleProp<ViewStyle>;
   testID?: string;
@@ -36,6 +37,7 @@ export function getSetupProgress(current: number, total: number) {
 }
 
 export function SetupProgressBar({
+  accentColor,
   current,
   style,
   testID = 'setup-progress-bar',
@@ -62,13 +64,15 @@ export function SetupProgressBar({
         {
           backgroundColor: theme.surfaceMuted,
           borderColor: theme.borderStrong,
-          shadowColor: theme.accentSecondaryForeground,
+          shadowColor: accentColor ?? theme.accentSecondaryForeground,
         },
         style,
       ]}
       testID={testID}>
       <LinearGradient
-        colors={[...gradients.purpleButton]}
+        colors={
+          accentColor ? [accentColor, accentColor] : [...gradients.purpleButton]
+        }
         end={{x: 1, y: 0}}
         start={{x: 0, y: 0}}
         style={[styles.fill, {width: fillWidth}]}

@@ -1,0 +1,16 @@
+{
+  "at": "2026-10-09T05:30:48.140Z",
+  "circleId": "VRtrB51oSsbvx9JuOT6c",
+  "memberCount": 2,
+  "approved": {
+    "uid": "zw4qSaCzW5T7QBVCO4dsh97zX792",
+    "status": "active",
+    "opportunityEligibility": "next_opening",
+    "request": "approved"
+  },
+  "declined": {
+    "uid": "KWXlttYHLHh4I7MLG2MLyM58ilQ2",
+    "memberMissing": true,
+    "request": "declined"
+  }
+}

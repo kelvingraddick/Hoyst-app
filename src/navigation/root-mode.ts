@@ -21,6 +21,7 @@ type AccountRouteRegistrationInput = {
 };
 
 type ReadyOnboardingInput = {
+  hasActiveSetupJourney?: boolean;
   currentStep?: OnboardingStep;
   hasPendingProfileCompletion?: boolean;
   hasPendingStarterCircleSetup?: boolean;
@@ -54,6 +55,7 @@ export function getRootNavigatorMode({
 }
 
 export function hasActiveReadyOnboarding({
+  hasActiveSetupJourney,
   currentStep,
   hasPendingProfileCompletion,
   hasPendingStarterCircleSetup,
@@ -62,11 +64,12 @@ export function hasActiveReadyOnboarding({
 }: ReadyOnboardingInput): boolean {
   return (
     status === 'authenticatedReady' &&
-    !hasSeenOnboarding &&
-    (hasPendingProfileCompletion ||
-      hasPendingStarterCircleSetup ||
-      currentStep === 'notifications' ||
-      currentStep === 'auth')
+    (hasActiveSetupJourney ||
+      (!hasSeenOnboarding &&
+        (hasPendingProfileCompletion ||
+          hasPendingStarterCircleSetup ||
+          currentStep === 'notifications' ||
+          currentStep === 'auth')))
   );
 }
 
@@ -108,10 +111,9 @@ export function getRootAuthPresentation({
   if (
     status === 'authenticatedReady' &&
     !hasSeenOnboarding &&
-    hasPendingProfileCompletion &&
-    currentStep === 'finishProfile'
+    hasPendingProfileCompletion
   ) {
-    return 'finishProfile';
+    return currentStep === 'finishProfile' ? 'finishProfile' : 'onboarding';
   }
 
   if (

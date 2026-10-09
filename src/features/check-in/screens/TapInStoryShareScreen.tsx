@@ -230,6 +230,7 @@ function TapInStoryShareController({
   const snapshotDetail = useMemo(
     () => ({
       category: route.params.category,
+      appearance: route.params.appearance,
       commitment: route.params.commitment ?? "Today's Tap In",
       commitmentType: route.params.commitmentType,
       inviteUrl: route.params.inviteUrl,
@@ -245,6 +246,7 @@ function TapInStoryShareController({
   );
   const category = getCircleCategoryVisual(
     snapshotDetail.category ?? 'General',
+    snapshotDetail.appearance,
   );
   const safeTopPadding = Math.max(insets.top, MIN_TOP_SAFE_PADDING) + 4;
   const safeBottomPadding = Math.max(insets.bottom, 12) + 8;

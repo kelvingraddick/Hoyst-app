@@ -74,14 +74,18 @@ function Content({navigation}: Props) {
   const stats = overview.stats;
   const earned = getEarnedProfileMilestones(overview.progress);
   const onGetStarted = () => {
-    if (preview) return;
+    if (preview) {
+      return;
+    }
     const session = useSessionStore.getState();
     session.clearPendingAction();
     session.beginAuthFlow();
     const onboarding = useOnboardingStore.getState();
-    if (overview.status === 'incomplete')
+    if (overview.status === 'incomplete') {
       onboarding.setCurrentStep('finishProfile');
-    else onboarding.startOnboardingWizard();
+    } else {
+      onboarding.startOnboardingWizard();
+    }
     navigateToAuthWelcome(root);
   };
   useEffect(() => {
@@ -94,7 +98,7 @@ function Content({navigation}: Props) {
     }
   }, [preview?.captureBottom]);
   const trailing = profile ? (
-    <View style={[styles.gear, {backgroundColor: theme.surface}]}>
+    <View style={styles.gear}>
       <DSIconButton
         label="Settings"
         onPress={() => root?.navigate('Settings')}
@@ -104,7 +108,7 @@ function Content({navigation}: Props) {
     </View>
   ) : undefined;
   const leading = profile ? (
-    <View style={[styles.gear, {backgroundColor: theme.surface}]}>
+    <View style={styles.gear}>
       <DSIconButton
         label="Share profile"
         onPress={() => root?.navigate('ProfileShare')}
@@ -245,10 +249,18 @@ function Content({navigation}: Props) {
               testID="profile-commitments">
               <View style={styles.categoryIcons}>
                 {overview.categories?.length ? (
-                  overview.categories.map(category => (
+                  (
+                    overview.commitmentAppearances ??
+                    overview.categories.map(category => ({
+                      id: category,
+                      category,
+                      appearance: undefined,
+                    }))
+                  ).map(({id, category, appearance}) => (
                     <CircleCategoryIcon
-                      key={category}
+                      key={id}
                       category={category}
+                      appearance={appearance}
                       size={32}
                     />
                   ))
@@ -296,7 +308,11 @@ function Content({navigation}: Props) {
                     styles.bestMetric,
                     stackBests && styles.bestMetricStack,
                   ]}>
-                  <ProfileIcon icon={Trophy} tone="gold" />
+                  <ProfileIcon
+                    emojiKind="milestone"
+                    icon={Trophy}
+                    tone="gold"
+                  />
                   <View style={styles.grow}>
                     <DSText variant="statistic">
                       {stats
@@ -315,7 +331,11 @@ function Content({navigation}: Props) {
                     styles.bestMetric,
                     stackBests && styles.bestMetricStack,
                   ]}>
-                  <ProfileIcon icon={CalendarCheck} tone="green" />
+                  <ProfileIcon
+                    emojiKind="tapIns"
+                    icon={CalendarCheck}
+                    tone="green"
+                  />
                   <View style={styles.grow}>
                     <DSText variant="statistic">
                       {stats ? stats.totalTapIns.toLocaleString() : '-'}

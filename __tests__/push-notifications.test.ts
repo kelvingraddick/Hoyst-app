@@ -109,7 +109,7 @@ describe('push notification subscription repair', () => {
     expect(mockRepairPushSubscription).not.toHaveBeenCalled();
   });
 
-  it('requests OS permission during login repair when iOS can still prompt', async () => {
+  it('waits for explicit opt-in even when iOS can still prompt', async () => {
     const {mockOneSignal, mockRepairPushSubscription, notifications} =
       loadNotificationsModule({
         canRequestPermission: true,
@@ -120,6 +120,9 @@ describe('push notification subscription repair', () => {
     await notifications.identifyPushUser('user-1');
 
     expect(mockOneSignal.login).toHaveBeenCalledWith('user-1');
+    expect(mockOneSignal.Notifications.requestPermission).not.toHaveBeenCalled();
+    expect(mockRepairPushSubscription).not.toHaveBeenCalled();
+    await notifications.requestPushNotificationPermission();
     expect(mockOneSignal.Notifications.requestPermission).toHaveBeenCalledWith(
       true,
     );

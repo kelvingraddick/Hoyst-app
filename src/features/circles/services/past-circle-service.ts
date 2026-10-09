@@ -1,3 +1,8 @@
+import {
+  normalizeCategory,
+  readAppearance,
+  type CommitmentAppearance,
+} from '../../../shared/commitment-appearance';
 import type {FirebaseFirestoreTypes} from '@react-native-firebase/firestore';
 
 import {firebaseFirestore} from '../../../lib/firebase/firestore';
@@ -10,6 +15,7 @@ import type {
 
 export type PastCircleSummary = {
   category: string;
+  appearance?: CommitmentAppearance;
   circleId: string;
   circleMode: CircleMode;
   commitment: string;
@@ -77,7 +83,8 @@ function mapPastCircle(
   }
 
   return {
-    category: asString(data.category, 'Custom'),
+    category: normalizeCategory(data.category),
+    appearance: readAppearance(data.appearance),
     circleId,
     circleMode: data.circleMode === 'personal' ? 'personal' : 'group',
     commitment,

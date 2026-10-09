@@ -1,0 +1,44 @@
+{
+  "at": "2026-10-09T05:30:30.837Z",
+  "results": [
+    {
+      "test": "request approve",
+      "result": {
+        "status": "pending"
+      }
+    },
+    {
+      "test": "request decline",
+      "result": {
+        "status": "pending"
+      }
+    },
+    {
+      "test": "requester cannot approve self",
+      "status": "passed",
+      "code": "PERMISSION_DENIED"
+    },
+    {
+      "test": "owner approves",
+      "result": {
+        "status": "approved"
+      }
+    },
+    {
+      "test": "capacity rechecked on approval",
+      "status": "passed",
+      "code": "RESOURCE_EXHAUSTED"
+    },
+    {
+      "test": "owner declines while full",
+      "result": {
+        "status": "declined"
+      }
+    },
+    {
+      "test": "approved request cannot be approved twice",
+      "status": "passed",
+      "code": "NOT_FOUND"
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "circleId": "AYfqJxjOn8suzItNdhGq",
+  "uid": "WWurAHuULEgaoFHNAXrosLWWVO22",
+  "httpStatus": 400,
+  "result": null,
+  "error": {
+    "message": "No Opportunity is open for this Commitment yet.",
+    "status": "FAILED_PRECONDITION"
+  }
+}

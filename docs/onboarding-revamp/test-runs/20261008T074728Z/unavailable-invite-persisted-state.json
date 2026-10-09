@@ -1,0 +1,256 @@
+{
+  "hoyst-circle-invite-v1": {
+    "state": {
+      "consented": false,
+      "inviteCode": "0000000000740728"
+    },
+    "version": 1
+  },
+  "hoyst-setup-journeys-v1": {
+    "state": {
+      "records": {
+        "invite:15ebe33f61455806": {
+          "step": "full",
+          "draft": {
+            "category": "Fitness",
+            "circleMode": "group",
+            "commitment": "",
+            "commitmentCadence": "daily",
+            "commitmentFrequency": {
+              "tapInsPerWeek": 7
+            },
+            "buildTrackingMode": "confirmation",
+            "commitmentType": "build",
+            "graceRules": {
+              "skip": {
+                "allowance": 2,
+                "windowDays": 7
+              }
+            },
+            "inviteCode": "",
+            "joinMode": "open",
+            "maxSize": 10,
+            "privacy": "public",
+            "privacyMode": "public",
+            "stepValue": 1,
+            "targetValue": 1,
+            "timezone": "Europe/London",
+            "title": "",
+            "unitLabel": "Tap In"
+          },
+          "interests": [],
+          "customText": "",
+          "requestId": "setup-muzs84a3-zxz9pmoxja",
+          "status": "editing",
+          "deferred": false,
+          "completed": false,
+          "needsReminders": false,
+          "profileDraft": {
+            "name": "QA Native Reader",
+            "handle": "qa074728native",
+            "avatarUrl": "https://firebasestorage.googleapis.com/v0/b/hoyst-firebase-app.firebasestorage.app/o/users%2F0Kn1CerJtegU4hQAqY0lxjbsQ3V2%2Favatar%2Fprofile-1791470591358-icpqfao3r4i.jpg?alt=media&token=7d5a3ac8-5ce3-450b-acbf-3d4d5895b4f2"
+          },
+          "selection": {
+            "kind": "circle",
+            "circle": {
+              "id": "GEQaqqfVjjYvHwH5ecjV",
+              "title": "QA 074728 Native full",
+              "commitment": "QA-only invitation test",
+              "category": "General",
+              "appearance": {},
+              "memberCount": 2,
+              "maxSize": 2,
+              "joinMode": "invite_only",
+              "groupStreakDays": 0,
+              "commitmentCadence": "daily",
+              "commitmentFrequency": {
+                "tapInsPerWeek": 7
+              },
+              "commitmentType": "build",
+              "buildTrackingMode": "confirmation",
+              "targetValue": 1,
+              "unitLabel": "Tap In",
+              "timezone": "UTC"
+            },
+            "inviteCode": "15ebe33f61455806"
+          }
+        },
+        "onboarding": {
+          "step": "joinPreview",
+          "draft": {
+            "category": "Fitness",
+            "circleMode": "group",
+            "commitment": "",
+            "commitmentCadence": "daily",
+            "commitmentFrequency": {
+              "tapInsPerWeek": 7
+            },
+            "buildTrackingMode": "confirmation",
+            "commitmentType": "build",
+            "graceRules": {
+              "skip": {
+                "allowance": 2,
+                "windowDays": 7
+              }
+            },
+            "inviteCode": "",
+            "joinMode": "open",
+            "maxSize": 10,
+            "privacy": "public",
+            "privacyMode": "public",
+            "stepValue": 1,
+            "targetValue": 1,
+            "timezone": "Europe/London",
+            "title": "",
+            "unitLabel": "Tap In"
+          },
+          "interests": [],
+          "customText": "",
+          "requestId": "setup-muzs84d9-uw54b6tql5",
+          "status": "editing",
+          "deferred": false,
+          "completed": false,
+          "needsReminders": false,
+          "profileDraft": {
+            "name": "QA Native Reader",
+            "handle": "qa074728native",
+            "avatarUrl": "https://firebasestorage.googleapis.com/v0/b/hoyst-firebase-app.firebasestorage.app/o/users%2F0Kn1CerJtegU4hQAqY0lxjbsQ3V2%2Favatar%2Fprofile-1791470591358-icpqfao3r4i.jpg?alt=media&token=7d5a3ac8-5ce3-450b-acbf-3d4d5895b4f2"
+          },
+          "selection": {
+            "kind": "circle",
+            "circle": {
+              "id": "QZa54xofiWS62J3cpg1h",
+              "title": "QA 074728 Native active",
+              "commitment": "QA-only invitation test",
+              "category": "General",
+              "appearance": {},
+              "memberCount": 1,
+              "maxSize": 2,
+              "joinMode": "invite_only",
+              "groupStreakDays": 0,
+              "commitmentCadence": "daily",
+              "commitmentFrequency": {
+                "tapInsPerWeek": 7
+              },
+              "commitmentType": "build",
+              "buildTrackingMode": "confirmation",
+              "targetValue": 1,
+              "unitLabel": "Tap In",
+              "timezone": "UTC"
+            },
+            "inviteCode": "7ecdda14961465af"
+          }
+        },
+        "invite:7ecdda14961465af": {
+          "step": "full",
+          "draft": {
+            "category": "Fitness",
+            "circleMode": "group",
+            "commitment": "",
+            "commitmentCadence": "daily",
+            "commitmentFrequency": {
+              "tapInsPerWeek": 7
+            },
+            "buildTrackingMode": "confirmation",
+            "commitmentType": "build",
+            "graceRules": {
+              "skip": {
+                "allowance": 2,
+                "windowDays": 7
+              }
+            },
+            "inviteCode": "",
+            "joinMode": "open",
+            "maxSize": 10,
+            "privacy": "public",
+            "privacyMode": "public",
+            "stepValue": 1,
+            "targetValue": 1,
+            "timezone": "Europe/London",
+            "title": "",
+            "unitLabel": "Tap In"
+          },
+          "interests": [],
+          "customText": "",
+          "requestId": "setup-muzsajuk-qy1fiypms9",
+          "status": "editing",
+          "deferred": true,
+          "completed": false,
+          "needsReminders": false,
+          "profileDraft": {
+            "name": "QA Native Reader",
+            "handle": "qa074728native",
+            "avatarUrl": "https://firebasestorage.googleapis.com/v0/b/hoyst-firebase-app.firebasestorage.app/o/users%2F0Kn1CerJtegU4hQAqY0lxjbsQ3V2%2Favatar%2Fprofile-1791470591358-icpqfao3r4i.jpg?alt=media&token=7d5a3ac8-5ce3-450b-acbf-3d4d5895b4f2"
+          },
+          "selection": {
+            "kind": "circle",
+            "circle": {
+              "id": "QZa54xofiWS62J3cpg1h",
+              "title": "QA 074728 Native active",
+              "commitment": "QA-only invitation test",
+              "category": "General",
+              "appearance": {},
+              "memberCount": 2,
+              "maxSize": 2,
+              "joinMode": "invite_only",
+              "groupStreakDays": 0,
+              "commitmentCadence": "daily",
+              "commitmentFrequency": {
+                "tapInsPerWeek": 7
+              },
+              "commitmentType": "build",
+              "buildTrackingMode": "confirmation",
+              "targetValue": 1,
+              "unitLabel": "Tap In",
+              "timezone": "UTC"
+            },
+            "inviteCode": "7ecdda14961465af"
+          }
+        },
+        "invite:0000000000740728": {
+          "step": "unavailable",
+          "draft": {
+            "category": "Fitness",
+            "circleMode": "group",
+            "commitment": "",
+            "commitmentCadence": "daily",
+            "commitmentFrequency": {
+              "tapInsPerWeek": 7
+            },
+            "buildTrackingMode": "confirmation",
+            "commitmentType": "build",
+            "graceRules": {
+              "skip": {
+                "allowance": 2,
+                "windowDays": 7
+              }
+            },
+            "inviteCode": "",
+            "joinMode": "open",
+            "maxSize": 10,
+            "privacy": "public",
+            "privacyMode": "public",
+            "stepValue": 1,
+            "targetValue": 1,
+            "timezone": "Europe/London",
+            "title": "",
+            "unitLabel": "Tap In"
+          },
+          "interests": [],
+          "customText": "",
+          "requestId": "setup-muzsde29-7zxtf4w4t4",
+          "status": "editing",
+          "deferred": false,
+          "completed": false,
+          "needsReminders": false,
+          "profileDraft": {
+            "name": "QA Native Reader",
+            "handle": "qa074728native",
+            "avatarUrl": "https://firebasestorage.googleapis.com/v0/b/hoyst-firebase-app.firebasestorage.app/o/users%2F0Kn1CerJtegU4hQAqY0lxjbsQ3V2%2Favatar%2Fprofile-1791470591358-icpqfao3r4i.jpg?alt=media&token=7d5a3ac8-5ce3-450b-acbf-3d4d5895b4f2"
+          }
+        }
+      }
+    },
+    "version": 1
+  }
+}

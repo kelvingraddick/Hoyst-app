@@ -1,3 +1,7 @@
+import {
+  normalizeCategory,
+  readAppearance,
+} from '../../../shared/commitment-appearance';
 import type {FirebaseFirestoreTypes} from '@react-native-firebase/firestore';
 
 import {firebaseFirestore} from '../../../lib/firebase/firestore';
@@ -299,7 +303,8 @@ export function mapPublicCircleIndexSnapshot(
     : [];
 
   return {
-    category: asString(data.category, 'General'),
+    category: normalizeCategory(data.category),
+    appearance: readAppearance(data.appearance),
     circleMode: 'group',
     completionLabel: progressLabel,
     completionRate,

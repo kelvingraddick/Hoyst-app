@@ -408,6 +408,7 @@ function TapInComposerController({
 
       navigation.replace('TapInComplete', {
         category: detail.category,
+        appearance: detail.appearance,
         circleId: route.params.circleId,
         circleTitle: detail.title,
         commitment: detail.commitment,
@@ -514,6 +515,7 @@ function TapInComposerController({
   const shareStory = () => {
     navigation.navigate('TapInStoryShare', {
       category: detail.category,
+      appearance: detail.appearance,
       circleId: route.params.circleId,
       circleTitle: detail.title,
       commitment: detail.commitment,
@@ -531,7 +533,10 @@ function TapInComposerController({
     });
   };
 
-  const category = getCircleCategoryVisual(detail.category).tone;
+  const category = getCircleCategoryVisual(
+    detail.category,
+    detail.appearance,
+  ).tone;
   const blocked = isSubmitting || isRemovingTapIn;
   const detailsEditor =
     viewerTodayCheckIn?.dateKey && detail.viewerTodayStatus !== 'skip' ? (

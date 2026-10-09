@@ -223,7 +223,7 @@ describe('public discovery backend', () => {
     assert.equal(fourth.nextCursor, undefined);
     const filtered = await call({query: 'foc deep', category: 'All'});
     assert.equal(filtered.total, 33);
-    assert.deepEqual(filtered.categories, ['Deep Work', 'Fitness']);
+    assert.deepEqual(filtered.categories, ['Fitness', 'Work']);
     const exact = await call({query: 'Circle 0', category: 'All'});
     assert.equal(exact.total, 1); // oldest record, beyond the old limit
     await assert.rejects(() =>

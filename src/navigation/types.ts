@@ -1,3 +1,4 @@
+import type {CommitmentAppearance} from '../shared/commitment-appearance';
 import type {NavigatorScreenParams} from '@react-navigation/native';
 import type {
   CheckInCoverageStatus,
@@ -19,12 +20,13 @@ export type SignInEntryPoint = 'welcome' | 'profile';
 export type SignInMethod = 'email' | 'phone';
 
 export type SignInRouteParams = {
+  setupKey?: string;
   entryPoint?: SignInEntryPoint;
   method?: SignInMethod;
 };
 
 export type AuthStackParamList = {
-  Welcome: undefined;
+  Welcome: {setupKey?: string} | undefined;
   SignIn: SignInRouteParams | undefined;
 };
 
@@ -74,6 +76,7 @@ export type RootStackParamList = {
   TapInComposer: {circleId: string; source: TapInSource};
   TapInComplete: {
     category?: string;
+    appearance?: CommitmentAppearance;
     circleId: string;
     dateKey: string;
     circleTitle?: string;
@@ -104,6 +107,7 @@ export type RootStackParamList = {
   };
   TapInStoryShare: {
     category?: string;
+    appearance?: CommitmentAppearance;
     circleId: string;
     circleTitle?: string;
     commitment?: string;

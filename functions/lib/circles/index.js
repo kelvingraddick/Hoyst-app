@@ -2,6 +2,8 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.deleteCircle = exports.unarchiveCircle = exports.archiveCircle = exports.updateCircle = exports.convertPersonalCircle = exports.leaveCircle = exports.nudgeCircleMembers = exports.reviewJoinRequest = exports.joinCircle = exports.createCircle = void 0;
 const node_crypto_1 = require("node:crypto");
+const commitment_appearance_1 = require("../shared/commitment-appearance");
+const node_crypto_2 = require("node:crypto");
 const auth_1 = require("firebase-admin/auth");
 const firestore_1 = require("firebase-admin/firestore");
 const storage_1 = require("firebase-admin/storage");
@@ -29,12 +31,31 @@ const commitmentFrequencySchema = zod_1.z.object({
 });
 const createCircleSchema = zod_1.z
     .object({
-    category: zod_1.z.string().trim().min(1).max(40),
+    requestId: zod_1.z
+        .string()
+        .regex(/^[a-zA-Z0-9_-]{1,120}$/)
+        .optional(),
+    category: zod_1.z.string().trim().min(1).max(40).transform(commitment_appearance_1.normalizeCategory),
+    appearance: zod_1.z
+        .object({
+        emoji: zod_1.z
+            .string()
+            .refine(value => commitment_appearance_1.selectableEmojis.includes(value), 'Unsupported emoji')
+            .optional(),
+        palette: zod_1.z
+            .string()
+            .refine(value => Object.prototype.hasOwnProperty.call(commitment_appearance_1.palettes, value), 'Unsupported palette')
+            .optional(),
+    })
+        .strict()
+        .optional(),
+    independentTitle: zod_1.z.boolean().optional(),
     circleMode: zod_1.z.enum(['personal', 'group']).optional().default('group'),
     commitment: zod_1.z.string().trim().min(1).max(160),
     commitmentCadence: zod_1.z.enum(['daily', 'weekly', 'monthly']).optional(),
     commitmentFrequency: commitmentFrequencySchema,
     commitmentType: zod_1.z.enum(['build', 'limit', 'avoid']).default('build'),
+    buildTrackingMode: zod_1.z.enum(['confirmation', 'quantity']).optional(),
     graceRules: zod_1.z
         .object({
         skip: graceRuleSchema,
@@ -52,6 +73,24 @@ const createCircleSchema = zod_1.z
     unitLabel: zod_1.z.string().trim().min(1).max(32).default('Tap In'),
 })
     .superRefine((input, context) => {
+    if (input.commitmentType === 'build' &&
+        input.buildTrackingMode === 'quantity' &&
+        (!input.targetValue || input.targetValue < 1)) {
+        context.addIssue({
+            code: zod_1.z.ZodIssueCode.custom,
+            message: 'Enter a positive goal amount.',
+            path: ['targetValue'],
+        });
+    }
+    if (input.commitmentType === 'limit' &&
+        typeof input.minimumValue === 'number' &&
+        input.minimumValue > (input.maximumValue ?? input.targetValue ?? 1)) {
+        context.addIssue({
+            code: zod_1.z.ZodIssueCode.custom,
+            message: 'Minimum cannot exceed maximum.',
+            path: ['minimumValue'],
+        });
+    }
     if (input.circleMode !== 'group') {
         return;
     }
@@ -436,7 +475,20 @@ async function backfillDepartedMemberActivity({ circleId, uid, }) {
 }
 exports.createCircle = (0, https_1.onCall)({ secrets: [notifications_1.oneSignalRestApiKey] }, async (request) => {
     const { profile, uid } = await requireCompletedProfile(request.auth?.uid);
-    const input = createCircleSchema.parse(request.data);
+    const parsedInput = createCircleSchema.safeParse(request.data);
+    if (!parsedInput.success)
+        throw new https_1.HttpsError('invalid-argument', parsedInput.error.issues.map(issue => issue.message).join(' '));
+    const input = parsedInput.data;
+    const requestRef = input.requestId
+        ? firebase_1.db
+            .collection('userPrivate')
+            .doc(uid)
+            .collection('createCircleRequests')
+            .doc(input.requestId)
+        : undefined;
+    const fingerprint = (0, node_crypto_1.createHash)('sha256')
+        .update(JSON.stringify(input))
+        .digest('hex');
     const circleRef = firebase_1.db.collection('circles').doc();
     const memberRef = circleRef.collection('members').doc(uid);
     const membershipHistoryRef = circleRef
@@ -453,14 +505,20 @@ exports.createCircle = (0, https_1.onCall)({ secrets: [notifications_1.oneSignal
     const joinMode = isPersonal ? 'invite_only' : input.joinMode;
     const maxSize = isPersonal ? 1 : input.maxSize;
     const privacy = isPersonal ? 'private' : input.privacy;
-    const title = isPersonal ? input.commitment : input.title;
+    const title = input.title ?? input.commitment.slice(0, 80);
     const commitmentPace = (0, commitments_1.getInputCommitmentPace)(input.commitmentCadence, input.commitmentFrequency);
     const commitmentFrequency = (0, commitments_1.getStoredCommitmentFrequency)(commitmentPace, input.commitmentFrequency);
     const commitmentType = (0, commitments_1.getCommitmentType)(input);
     const quantityConfig = (0, commitments_1.getQuantityConfig)(input);
     const circle = {
         category: input.category,
+        ...(input.appearance !== undefined ? { appearance: input.appearance } : {}),
         circleMode,
+        ...(isPersonal
+            ? {
+                independentTitle: input.independentTitle ?? title !== input.commitment,
+            }
+            : {}),
         createdAt: now,
         commitment: input.commitment,
         commitmentCadence: commitmentPace,
@@ -492,69 +550,110 @@ exports.createCircle = (0, https_1.onCall)({ secrets: [notifications_1.oneSignal
             : {}),
         title,
         timezone: input.timezone ?? profile.timezone ?? 'UTC',
+        ...(quantityConfig.buildTrackingMode
+            ? { buildTrackingMode: quantityConfig.buildTrackingMode }
+            : {}),
         unitLabel: quantityConfig.unitLabel,
         updatedAt: now,
     };
-    const batch = firebase_1.db.batch();
-    batch.set(circleRef, circle);
-    batch.set(memberRef, {
-        avatarUrl: profile.avatarUrl ?? null,
-        displayName: profile.displayName,
-        handle: profile.handle,
-        joinedAt: now,
-        membershipPeriodId: membershipPeriodRef.id,
-        opportunityEligibility: 'include_current',
-        role: 'owner',
-        status: 'active',
-        uid,
-    });
-    batch.set(membershipHistoryRef, {
-        currentPeriodId: membershipPeriodRef.id,
-        firstJoinedAt: now,
-        lastJoinedAt: now,
-        lastRole: 'owner',
-        status: 'active',
-        uid,
-        updatedAt: now,
-    });
-    batch.set(membershipPeriodRef, {
-        circleId: circleRef.id,
-        joinedAt: now,
-        opportunityEligibility: 'include_current',
-        periodId: membershipPeriodRef.id,
-        role: 'owner',
-        uid,
-    });
-    if (!isPersonal && privacy === 'public') {
-        batch.set(publicIndexRef, {
-            category: input.category,
-            circleMode,
-            commitment: input.commitment,
-            commitmentCadence: commitmentPace,
-            commitmentFrequency,
-            commitmentType,
-            groupStreakDays: 0,
-            joinMode,
-            lifecycleStatus: 'active',
-            ...(typeof quantityConfig.maximumValue === 'number'
-                ? { maximumValue: quantityConfig.maximumValue }
-                : {}),
-            ...(typeof quantityConfig.minimumValue === 'number'
-                ? { minimumValue: quantityConfig.minimumValue }
-                : {}),
-            maxSize,
-            memberCount: 1,
-            members: [buildMemberPublicPreview(profile, uid)],
-            stepValue: quantityConfig.stepValue,
-            ...(typeof quantityConfig.targetValue === 'number'
-                ? { targetValue: quantityConfig.targetValue }
-                : {}),
-            title,
-            unitLabel: quantityConfig.unitLabel,
+    const created = await firebase_1.db.runTransaction(async (batch) => {
+        if (requestRef) {
+            const prior = await batch.get(requestRef);
+            if (prior.exists) {
+                const result = prior.data();
+                if (result.fingerprint !== fingerprint)
+                    throw new https_1.HttpsError('failed-precondition', 'This setup was already submitted. Resume its saved result before making changes.');
+                return {
+                    circleId: String(result.circleId),
+                    ...(result.inviteCode
+                        ? { inviteCode: String(result.inviteCode) }
+                        : {}),
+                    reused: true,
+                };
+            }
+        }
+        batch.set(circleRef, circle);
+        batch.set(memberRef, {
+            avatarUrl: profile.avatarUrl ?? null,
+            displayName: profile.displayName,
+            handle: profile.handle,
+            joinedAt: now,
+            membershipPeriodId: membershipPeriodRef.id,
+            opportunityEligibility: 'include_current',
+            role: 'owner',
+            status: 'active',
+            uid,
+        });
+        batch.set(membershipHistoryRef, {
+            currentPeriodId: membershipPeriodRef.id,
+            firstJoinedAt: now,
+            lastJoinedAt: now,
+            lastRole: 'owner',
+            status: 'active',
+            uid,
             updatedAt: now,
         });
-    }
-    await batch.commit();
+        batch.set(membershipPeriodRef, {
+            circleId: circleRef.id,
+            joinedAt: now,
+            opportunityEligibility: 'include_current',
+            periodId: membershipPeriodRef.id,
+            role: 'owner',
+            uid,
+        });
+        if (!isPersonal && privacy === 'public') {
+            batch.set(publicIndexRef, {
+                category: input.category,
+                ...(input.appearance !== undefined
+                    ? { appearance: input.appearance }
+                    : {}),
+                circleMode,
+                commitment: input.commitment,
+                commitmentCadence: commitmentPace,
+                commitmentFrequency,
+                commitmentType,
+                groupStreakDays: 0,
+                joinMode,
+                lifecycleStatus: 'active',
+                ...(typeof quantityConfig.maximumValue === 'number'
+                    ? { maximumValue: quantityConfig.maximumValue }
+                    : {}),
+                ...(typeof quantityConfig.minimumValue === 'number'
+                    ? { minimumValue: quantityConfig.minimumValue }
+                    : {}),
+                maxSize,
+                memberCount: 1,
+                members: [buildMemberPublicPreview(profile, uid)],
+                stepValue: quantityConfig.stepValue,
+                ...(typeof quantityConfig.targetValue === 'number'
+                    ? { targetValue: quantityConfig.targetValue }
+                    : {}),
+                title,
+                ...(quantityConfig.buildTrackingMode
+                    ? { buildTrackingMode: quantityConfig.buildTrackingMode }
+                    : {}),
+                unitLabel: quantityConfig.unitLabel,
+                updatedAt: now,
+            });
+        }
+        if (requestRef)
+            batch.set(requestRef, {
+                circleId: circleRef.id,
+                inviteCode: inviteCode ?? null,
+                fingerprint,
+                createdAt: now,
+            });
+        return {
+            circleId: circleRef.id,
+            ...(inviteCode ? { inviteCode } : {}),
+            reused: false,
+        };
+    });
+    if (created.reused)
+        return {
+            circleId: created.circleId,
+            ...(created.inviteCode ? { inviteCode: created.inviteCode } : {}),
+        };
     await (0, momentum_1.materializeCurrentCircleOpportunities)(circleRef.id).catch(error => console.error('materialize_created_circle_opportunities_failed', error));
     if (!isPersonal) {
         await (0, notifications_1.notifyMemberCircleCreated)({
@@ -587,7 +686,7 @@ exports.joinCircle = (0, https_1.onCall)({ secrets: [notifications_1.oneSignalRe
     const membershipHistoryRef = circleRef
         .collection('membershipHistory')
         .doc(uid);
-    const membershipPeriodId = (0, node_crypto_1.randomUUID)();
+    const membershipPeriodId = (0, node_crypto_2.randomUUID)();
     const membershipPeriodRef = membershipHistoryRef
         .collection('periods')
         .doc(membershipPeriodId);
@@ -597,7 +696,7 @@ exports.joinCircle = (0, https_1.onCall)({ secrets: [notifications_1.oneSignalRe
         .collection('pastCircles')
         .doc(input.circleId);
     const now = firestore_1.FieldValue.serverTimestamp();
-    const requestToken = (0, node_crypto_1.randomUUID)();
+    const requestToken = (0, node_crypto_2.randomUUID)();
     const result = await firebase_1.db.runTransaction(async (transaction) => {
         const [circleSnapshot, memberSnapshot, joinRequestSnapshot, membershipHistorySnapshot,] = await Promise.all([
             transaction.get(circleRef),
@@ -777,7 +876,7 @@ exports.reviewJoinRequest = (0, https_1.onCall)({ secrets: [notifications_1.oneS
     const requesterHistoryRef = circleRef
         .collection('membershipHistory')
         .doc(input.requesterId);
-    const membershipPeriodId = (0, node_crypto_1.randomUUID)();
+    const membershipPeriodId = (0, node_crypto_2.randomUUID)();
     const requesterPeriodRef = requesterHistoryRef
         .collection('periods')
         .doc(membershipPeriodId);
@@ -1118,7 +1217,8 @@ exports.leaveCircle = (0, https_1.onCall)(async (request) => {
                 uid,
             }, { merge: true });
             transaction.set(pastCircleRef, {
-                category: circle?.category ?? 'Custom',
+                category: (0, commitment_appearance_1.normalizeCategory)(circle?.category),
+                appearance: (0, commitment_appearance_1.readAppearance)(circle?.appearance),
                 circleId: input.circleId,
                 circleMode: (0, circle_mode_1.getCircleMode)(circle),
                 commitment: circle?.commitment ?? circle?.title ?? 'Commitment',
@@ -1263,7 +1363,8 @@ exports.convertPersonalCircle = (0, https_1.onCall)(async (request) => {
         });
         if (input.privacy === 'public') {
             transaction.set(publicIndexRef, {
-                category: latestCircle?.category ?? 'General',
+                category: (0, commitment_appearance_1.normalizeCategory)(latestCircle?.category),
+                appearance: (0, commitment_appearance_1.readAppearance)(latestCircle?.appearance),
                 circleMode: 'group',
                 commitment,
                 commitmentCadence: commitmentPace,
@@ -1286,6 +1387,11 @@ exports.convertPersonalCircle = (0, https_1.onCall)(async (request) => {
                     ? { targetValue: latestCircle.targetValue }
                     : {}),
                 title: input.title,
+                ...((0, commitments_1.getCommitmentType)(latestCircle) === 'build'
+                    ? {
+                        buildTrackingMode: (0, commitments_1.getQuantityConfig)(latestCircle).buildTrackingMode,
+                    }
+                    : {}),
                 unitLabel: latestCircle?.unitLabel ?? 'Tap In',
                 updatedAt: now,
             });
@@ -1335,7 +1441,12 @@ exports.updateCircle = (0, https_1.onCall)(async (request) => {
         : 0;
     const memberCount = Math.max(storedMemberCount, activeMemberSnapshots.size);
     const maxSize = isPersonal ? 1 : input.maxSize;
-    const title = isPersonal ? input.commitment : input.title;
+    const title = isPersonal &&
+        circle?.independentTitle &&
+        !input.independentTitle &&
+        input.title === input.commitment
+        ? circle.title
+        : input.title ?? circle?.title ?? input.commitment.slice(0, 80);
     const joinMode = isPersonal ? 'invite_only' : input.joinMode;
     const privacy = isPersonal ? 'private' : input.privacy;
     if (maxSize < memberCount) {
@@ -1347,8 +1458,17 @@ exports.updateCircle = (0, https_1.onCall)(async (request) => {
     const commitmentType = (0, commitments_1.getCommitmentType)(input);
     const quantityConfig = (0, commitments_1.getQuantityConfig)(input);
     const circleUpdate = {
+        ...(isPersonal
+            ? {
+                independentTitle: input.independentTitle ??
+                    circle?.independentTitle ??
+                    title !== input.commitment,
+            }
+            : {}),
+        buildTrackingMode: quantityConfig.buildTrackingMode ?? firestore_1.FieldValue.delete(),
         ...(privacy !== circle?.privacy ? { publicActivityEpoch: now } : {}),
         category: input.category,
+        ...(input.appearance !== undefined ? { appearance: input.appearance } : {}),
         circleMode,
         commitment: input.commitment,
         commitmentCadence: commitmentPace,
@@ -1375,14 +1495,19 @@ exports.updateCircle = (0, https_1.onCall)(async (request) => {
             : firestore_1.FieldValue.delete(),
         title,
         timezone: input.timezone ?? circle?.timezone ?? 'UTC',
+        ...(quantityConfig.buildTrackingMode
+            ? { buildTrackingMode: quantityConfig.buildTrackingMode }
+            : {}),
         unitLabel: quantityConfig.unitLabel,
         updatedAt: now,
     };
     const batch = firebase_1.db.batch();
     batch.update(circleRef, circleUpdate);
     if (!isPersonal && privacy === 'public') {
-        batch.set(publicIndexRef, {
+        const publicUpdate = {
+            buildTrackingMode: quantityConfig.buildTrackingMode ?? firestore_1.FieldValue.delete(),
             category: input.category,
+            appearance: input.appearance ?? (0, commitment_appearance_1.readAppearance)(circle?.appearance),
             circleMode,
             commitment: input.commitment,
             commitmentCadence: commitmentPace,
@@ -1405,9 +1530,15 @@ exports.updateCircle = (0, https_1.onCall)(async (request) => {
                 ? quantityConfig.targetValue
                 : firestore_1.FieldValue.delete(),
             title,
+            ...(quantityConfig.buildTrackingMode
+                ? { buildTrackingMode: quantityConfig.buildTrackingMode }
+                : {}),
             unitLabel: quantityConfig.unitLabel,
             updatedAt: now,
-        }, { merge: true });
+        };
+        batch.set(publicIndexRef, publicUpdate, {
+            mergeFields: Object.keys(publicUpdate),
+        });
     }
     else {
         batch.delete(publicIndexRef);
@@ -1617,7 +1748,8 @@ exports.unarchiveCircle = (0, https_1.onCall)({ secrets: [notifications_1.oneSig
             const commitmentPace = (0, commitments_1.getCommitmentPace)(circle);
             const commitmentFrequency = (0, commitments_1.getStoredCommitmentFrequency)(commitmentPace, circle?.commitmentFrequency);
             transaction.set(publicIndexRef, {
-                category: circle?.category ?? 'General',
+                category: (0, commitment_appearance_1.normalizeCategory)(circle?.category),
+                appearance: (0, commitment_appearance_1.readAppearance)(circle?.appearance),
                 circleMode,
                 commitment: circle?.commitment ?? circle?.title ?? 'Commitment',
                 commitmentCadence: commitmentPace,

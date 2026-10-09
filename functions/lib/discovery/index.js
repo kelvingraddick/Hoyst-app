@@ -1,7 +1,9 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.refreshPublicActivityProfile = exports.refreshPublicActivityCircle = exports.refreshPublicActivityMembership = exports.projectPublicTapIn = exports.maintainPublicCircleSearch = exports.searchPublicCircles = void 0;
+exports.refreshPublicActivityProfile = exports.refreshPublicActivityCircle = exports.refreshPublicActivityMembership = exports.projectPublicTapIn = exports.maintainPublicCircleSearch = exports.searchPublicCircles = exports.suggestPublicCircles = void 0;
 exports.reconcilePublicActivity = reconcilePublicActivity;
+const commitments_1 = require("../shared/commitments");
+const commitment_appearance_1 = require("../shared/commitment-appearance");
 const node_crypto_1 = require("node:crypto");
 const firestore_1 = require("firebase-admin/firestore");
 const firestore_2 = require("firebase-functions/v2/firestore");
@@ -16,6 +18,109 @@ const requestSchema = zod_1.z.object({
 });
 const pageSize = 20;
 const index = () => firebase_1.db.collection('publicCircleIndex');
+const suggestionSchema = zod_1.z.object({
+    query: zod_1.z.string().trim().max(120).default(''),
+    categories: zod_1.z.array(zod_1.z.string().trim().min(1).max(40)).max(3).default([]),
+});
+/** Small, guest-readable recommendation projection. Authority is checked live. */
+exports.suggestPublicCircles = (0, https_1.onCall)(async (request) => {
+    const parsed = suggestionSchema.safeParse(request.data ?? {});
+    if (!parsed.success)
+        throw new https_1.HttpsError('invalid-argument', 'Invalid suggestions request.');
+    const categories = parsed.data.categories.map(commitment_appearance_1.normalizeCategory);
+    const ignored = new Set([
+        'a',
+        'an',
+        'the',
+        'for',
+        'to',
+        'of',
+        'my',
+        'each',
+        'minutes',
+        'minute',
+        'days',
+        'day',
+    ]);
+    const words = (0, model_1.searchWords)(parsed.data.query)
+        .filter(word => !ignored.has(word) && !/^\d+$/.test(word))
+        .slice(0, 3);
+    const base = index()
+        .where('circleMode', '==', 'group')
+        .where('lifecycleStatus', '==', 'active');
+    const queries = words.map(word => base
+        .where('searchTokens', 'array-contains', word)
+        .orderBy('updatedAt', 'desc')
+        .limit(30)
+        .get());
+    queries.push((categories.length
+        ? base.where('category', 'in', [
+            ...new Set(categories.flatMap(commitment_appearance_1.categorySearchNames)),
+        ])
+        : base)
+        .orderBy('updatedAt', 'desc')
+        .limit(30)
+        .get());
+    const pages = await Promise.all(queries);
+    const candidates = [
+        ...new Map(pages.flatMap(page => page.docs.map(doc => [doc.id, doc]))).values(),
+    ];
+    const live = candidates.length
+        ? await firebase_1.db.getAll(...candidates.map(doc => firebase_1.db.collection('circles').doc(doc.id)))
+        : [];
+    const membershipSnapshots = request.auth?.uid && candidates.length
+        ? await firebase_1.db.getAll(...candidates.map(doc => firebase_1.db
+            .collection('circles')
+            .doc(doc.id)
+            .collection('members')
+            .doc(request.auth.uid)))
+        : [];
+    const alreadyJoined = new Set(membershipSnapshots
+        .filter(doc => ['active', 'pending'].includes(doc.data()?.status))
+        .map(doc => doc.ref.parent.parent.id));
+    const circles = live
+        .filter(doc => {
+        const circle = doc.data();
+        return (!alreadyJoined.has(doc.id) &&
+            (0, model_1.isPublicActive)(circle) &&
+            typeof circle?.title === 'string' &&
+            typeof circle?.commitment === 'string' &&
+            circle?.joinMode !== 'invite_only' &&
+            Number(circle?.memberCount ?? 0) < Number(circle?.maxSize ?? 10));
+    })
+        .map(doc => {
+        const circle = doc.data();
+        const tokens = (0, model_1.searchTokens)(circle);
+        return {
+            id: doc.id,
+            circle,
+            score: words.filter(word => tokens.includes(word)).length * 10 +
+                (categories.includes((0, commitment_appearance_1.normalizeCategory)(circle.category)) ? 1 : 0),
+        };
+    })
+        .filter(candidate => candidate.score > 0 || (!words.length && !categories.length))
+        .sort((a, b) => b.score - a.score ||
+        (0, model_1.millis)(b.circle.updatedAt) - (0, model_1.millis)(a.circle.updatedAt) ||
+        b.id.localeCompare(a.id))
+        .slice(0, 3)
+        .map(({ id, circle }) => ({
+        id,
+        title: String(circle.title),
+        commitment: String(circle.commitment),
+        category: (0, commitment_appearance_1.normalizeCategory)(circle.category),
+        appearance: (0, commitment_appearance_1.readAppearance)(circle.appearance),
+        memberCount: Math.max(0, Number(circle.memberCount) || 0),
+        maxSize: Number(circle.maxSize) || 10,
+        groupStreakDays: Number(circle.groupStreakDays) || 0,
+        joinMode: circle.joinMode ?? 'request_to_join',
+        commitmentCadence: circle.commitmentCadence ?? 'daily',
+        commitmentFrequency: circle.commitmentFrequency ?? { tapInsPerWeek: 7 },
+        ...(0, commitments_1.getQuantityConfig)(circle),
+        commitmentType: (0, commitments_1.getCommitmentType)(circle),
+        timezone: circle.timezone ?? 'UTC',
+    }));
+    return { circles };
+});
 /** One indexed prefix narrows candidates; remaining terms are AND matched on the server.
  * No first-50 cutoff. Counts cover the entire candidate query, not just the current page. */
 exports.searchPublicCircles = (0, https_1.onCall)(async (request) => {
@@ -53,7 +158,7 @@ exports.searchPublicCircles = (0, https_1.onCall)(async (request) => {
         .where('circleMode', '==', 'group')
         .where('lifecycleStatus', '==', 'active');
     if (input.category !== 'All') {
-        query = query.where('category', '==', input.category);
+        query = query.where('category', 'in', (0, commitment_appearance_1.categorySearchNames)(input.category));
     }
     if (words.length) {
         query = query.where('searchTokens', 'array-contains', [...words].sort((a, b) => b.length - a.length)[0]);
@@ -121,7 +226,8 @@ exports.searchPublicCircles = (0, https_1.onCall)(async (request) => {
         return {
             id: doc.id,
             title: String(data.title),
-            category: String(data.category ?? 'General'),
+            category: (0, commitment_appearance_1.normalizeCategory)(data.category),
+            appearance: (0, commitment_appearance_1.readAppearance)(data.appearance),
             commitment: String(data.commitment),
             memberCount: Math.max(0, Number(data.memberCount) || 0),
             maxSize: Math.max(1, Number(data.maxSize) || 10),
@@ -135,7 +241,7 @@ exports.searchPublicCircles = (0, https_1.onCall)(async (request) => {
         circles,
         total: matches.length,
         categories: [
-            ...new Set(categorySnapshot.docs.map(doc => String(doc.data().category ?? 'General'))),
+            ...new Set(categorySnapshot.docs.map(doc => (0, commitment_appearance_1.normalizeCategory)(doc.data().category))),
         ].sort(),
         ...(remaining.length > pageSize && last
             ? {

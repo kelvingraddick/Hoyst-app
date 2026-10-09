@@ -211,7 +211,7 @@ describe('Circle invite backend helpers', () => {
         ownerUid: 'private-owner',
         title: 'Morning Movers',
       }),
-    ).toEqual(preview);
+    ).toEqual({...preview, category:'General', appearance:{}, buildTrackingMode:'confirmation', commitmentType:'build', commitmentCadence:'daily', commitmentFrequency:{tapInsPerWeek:7}, targetValue:1,stepValue:1,unitLabel:'Tap In',timezone:'UTC'});
   });
 
   it('requires matching links for private and invite-only Circles', () => {

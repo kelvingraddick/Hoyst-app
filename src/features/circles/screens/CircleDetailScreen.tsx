@@ -1,4 +1,5 @@
 import {shareCircleInvitation} from '../../progress/services/progress-service';
+import {isFirstTapInPending} from '../services/member-tap-in-eligibility';
 import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {
   ActivityIndicator,
@@ -309,11 +310,7 @@ function CircleNudgeAllRow({
               styles.nudgeAllIconTile,
               {backgroundColor: theme.category.purple.surface},
             ]}>
-            <NudgeMark
-              color={theme.category.purple.foreground}
-              size={18}
-              strokeWidth={4.4}
-            />
+            <NudgeMark size={18} />
           </View>
         }
         onPress={isReady ? onPress : undefined}
@@ -511,10 +508,11 @@ function CircleDetailHero({
   statusPill?: DetailStatusPill;
 }) {
   const theme = useHoystTheme();
-  const visual = getCircleCategoryVisual(detail.category);
+  const visual = getCircleCategoryVisual(detail.category, detail.appearance);
   const categoryColor = getCircleCategoryForegroundColor(
     detail.category,
     theme,
+    detail.appearance,
   );
   const isPersonal = detail.circleMode === 'personal';
   const statusPalette = statusPill
@@ -568,6 +566,7 @@ function CircleDetailHero({
             <View testID="circle-detail-title-category-icon">
               <CircleCategoryIcon
                 category={detail.category}
+                appearance={detail.appearance}
                 showBackplate={false}
                 size={34}
               />
@@ -1004,6 +1003,10 @@ function CircleDetailScreenContent({
 
     return {
       ...baseDetail,
+      members: baseDetail.members.map(member => ({
+        ...member,
+        firstTapInPending: isFirstTapInPending(member, baseDetail),
+      })),
       groupStreakDays: memberCircle
         ? groupStreakDays
         : publicCircle?.groupStreakDays ?? baseDetail.groupStreakDays ?? 0,
@@ -1103,6 +1106,7 @@ function CircleDetailScreenContent({
       detail?.members.filter(
         member =>
           member.membershipStatus !== 'pending' &&
+          !member.firstTapInPending &&
           member.cycleGoalMet !== true &&
           !member.todayStatus &&
           member.id !== user?.uid,
@@ -1311,7 +1315,10 @@ function CircleDetailScreenContent({
     Boolean(detail.inviteUrl) &&
     (detail.viewerRole === 'owner' || detail.viewerRole === 'admin');
   const detailStatusPill = getDetailStatusPill(detail);
-  const nudgeTargetCount = detail.nudgeTargetCount ?? nudgeTargetMembers.length;
+  const nudgeTargetCount = Math.min(
+    detail.nudgeTargetCount ?? nudgeTargetMembers.length,
+    nudgeTargetMembers.length,
+  );
   const canNudgeTargets = nudgeTargetCount > 0;
   const joinActionLabel = joinRequested
     ? detail.joinLabel === 'Open seats'
@@ -1376,8 +1383,12 @@ function CircleDetailScreenContent({
   const categoryProgressColor = getCircleCategoryForegroundColor(
     detail.category,
     theme,
+    detail.appearance,
   );
-  const categoryVisual = getCircleCategoryVisual(detail.category);
+  const categoryVisual = getCircleCategoryVisual(
+    detail.category,
+    detail.appearance,
+  );
   const categoryAction = systemTheme.category[categoryVisual.tone];
   const tapInHeroPalette = {
     backgroundColor: categoryAction.foreground,
@@ -1433,6 +1444,7 @@ function CircleDetailScreenContent({
   const shareFeedTapIn = (item: CircleThreadItem) => {
     navigation.navigate('TapInStoryShare', {
       category: detail.category,
+      appearance: detail.appearance,
       circleId: detail.id,
       circleTitle: detail.title,
       commitment: detail.commitment,
@@ -1572,7 +1584,7 @@ function CircleDetailScreenContent({
       Alert.alert(
         result.status === 'approved' ? 'Request approved' : 'Request declined',
         result.status === 'approved'
-          ? 'They can Tap In with the Circle now.'
+          ? 'Their first Tap In starts at the next window.'
           : 'The request has been declined.',
       );
     } catch (error) {
@@ -1650,6 +1662,7 @@ function CircleDetailScreenContent({
     selectedMember && !isArchived
       ? selectedMember.id === user?.uid &&
         isMemberCircle &&
+        !selectedMember.firstTapInPending &&
         !canRemoveTodayCheckIn
         ? {
             accessibilityLabel: `Tap In for ${selectedMember.name}`,
@@ -1672,6 +1685,7 @@ function CircleDetailScreenContent({
           }
         : isMemberCircle &&
           selectedMember.membershipStatus !== 'pending' &&
+          !selectedMember.firstTapInPending &&
           selectedMember.cycleGoalMet !== true &&
           !selectedMember.todayStatus &&
           selectedMember.id !== user?.uid

@@ -1,3 +1,8 @@
+import {
+  normalizeCategory,
+  readAppearance,
+  type CommitmentAppearance,
+} from '../../../shared/commitment-appearance';
 import type {FirebaseFirestoreTypes} from '@react-native-firebase/firestore';
 
 import {firebaseFirestore} from '../../../lib/firebase/firestore';
@@ -13,6 +18,7 @@ type PlainData = Record<string, unknown>;
 export type ArchivedCircleSummary = {
   archivedAt?: Date;
   category: string;
+  appearance?: CommitmentAppearance;
   circleMode: CircleMode;
   commitment: string;
   id: string;
@@ -41,9 +47,7 @@ function asDate(value: unknown) {
     : undefined;
 }
 
-function getCircleId(
-  snapshot: FirebaseFirestoreTypes.QueryDocumentSnapshot,
-) {
+function getCircleId(snapshot: FirebaseFirestoreTypes.QueryDocumentSnapshot) {
   return snapshot.ref.parent.parent?.id;
 }
 
@@ -77,7 +81,8 @@ export function mapArchivedCircle({
 
   return {
     archivedAt: asDate(circleData.archivedAt),
-    category: asString(circleData.category, 'Custom'),
+    category: normalizeCategory(circleData.category),
+    appearance: readAppearance(circleData.appearance),
     circleMode: circleData.circleMode === 'personal' ? 'personal' : 'group',
     commitment,
     id: circleId,
@@ -135,7 +140,10 @@ export function subscribeToArchivedCircles({
           .doc(circleId)
           .onSnapshot(
             snapshot => {
-              circleData.set(circleId, snapshot.data() as PlainData | undefined);
+              circleData.set(
+                circleId,
+                snapshot.data() as PlainData | undefined,
+              );
               emit();
             },
             error => onError?.(error),

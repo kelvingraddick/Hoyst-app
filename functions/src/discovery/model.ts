@@ -1,3 +1,4 @@
+import {categorySearchNames} from '../shared/commitment-appearance';
 /** Shared pure discovery rules. No feed text, notes or Tap In media enter this projection. */
 type Data = Record<string, any>;
 export function millis(value: unknown): number {
@@ -24,7 +25,12 @@ export function searchWords(value: string): string[] {
 }
 export function searchTokens(circle: Data): string[] {
   const words = searchWords(
-    [circle.title, circle.category, circle.commitment]
+    [
+      circle.title,
+      ...categorySearchNames(circle.category),
+      circle.category,
+      circle.commitment,
+    ]
       .filter(value => typeof value === 'string')
       .join(' '),
   );

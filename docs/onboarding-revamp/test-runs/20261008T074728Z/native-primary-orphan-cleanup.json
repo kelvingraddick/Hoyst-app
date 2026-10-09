@@ -1,0 +1,7 @@
+{
+  "at": "2026-10-08T17:41:27.395Z",
+  "removed": [
+    "projects/hoyst-firebase-app/databases/(default)/documents/userPrivate/0Kn1CerJtegU4hQAqY0lxjbsQ3V2/momentum/current"
+  ],
+  "method": "Explicit removal of confirmed QA-only orphan after evidence capture; no source changes"
+}

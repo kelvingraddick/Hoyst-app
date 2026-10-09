@@ -1,0 +1,214 @@
+[
+  {
+    "document": {
+      "name": "projects/hoyst-firebase-app/databases/(default)/documents/circles/HzSd98Kuo4CDyhoSBWVL",
+      "fields": {
+        "category": {
+          "stringValue": "Learning"
+        },
+        "appearance": {
+          "mapValue": {
+            "fields": {
+              "palette": {
+                "stringValue": "purple"
+              }
+            }
+          }
+        },
+        "circleMode": {
+          "stringValue": "personal"
+        },
+        "independentTitle": {
+          "booleanValue": true
+        },
+        "commitment": {
+          "stringValue": "Read one QA page"
+        },
+        "commitmentCadence": {
+          "stringValue": "daily"
+        },
+        "commitmentFrequency": {
+          "mapValue": {
+            "fields": {
+              "tapInsPerWeek": {
+                "integerValue": "7"
+              }
+            }
+          }
+        },
+        "commitmentType": {
+          "stringValue": "build"
+        },
+        "graceRules": {
+          "mapValue": {
+            "fields": {
+              "skip": {
+                "mapValue": {
+                  "fields": {
+                    "allowance": {
+                      "integerValue": "2"
+                    },
+                    "windowDays": {
+                      "integerValue": "7"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "lifecycleStatus": {
+          "stringValue": "active"
+        },
+        "joinMode": {
+          "stringValue": "invite_only"
+        },
+        "maxSize": {
+          "integerValue": "1"
+        },
+        "memberCount": {
+          "integerValue": "1"
+        },
+        "ownerId": {
+          "stringValue": "0Kn1CerJtegU4hQAqY0lxjbsQ3V2"
+        },
+        "privacy": {
+          "stringValue": "private"
+        },
+        "stepValue": {
+          "integerValue": "1"
+        },
+        "targetValue": {
+          "integerValue": "1"
+        },
+        "title": {
+          "stringValue": "QA 0747 Personal Reader Edited"
+        },
+        "timezone": {
+          "stringValue": "Europe/London"
+        },
+        "buildTrackingMode": {
+          "stringValue": "quantity"
+        },
+        "unitLabel": {
+          "stringValue": "page"
+        },
+        "createdAt": {
+          "timestampValue": "2026-10-08T14:43:15.956Z"
+        },
+        "updatedAt": {
+          "timestampValue": "2026-10-08T14:43:15.956Z"
+        }
+      },
+      "createTime": "2026-10-08T14:43:16.000287Z",
+      "updateTime": "2026-10-08T14:43:16.000287Z"
+    },
+    "readTime": "2026-10-08T15:44:24.887809Z"
+  },
+  {
+    "document": {
+      "name": "projects/hoyst-firebase-app/databases/(default)/documents/circles/b5fs8dzZq4GI0xTph6Aa",
+      "fields": {
+        "category": {
+          "stringValue": "Money"
+        },
+        "appearance": {
+          "mapValue": {}
+        },
+        "circleMode": {
+          "stringValue": "group"
+        },
+        "commitment": {
+          "stringValue": "QA 074728 Shared limit"
+        },
+        "commitmentCadence": {
+          "stringValue": "monthly"
+        },
+        "commitmentFrequency": {
+          "mapValue": {
+            "fields": {
+              "opportunitiesPerPeriod": {
+                "integerValue": "16"
+              },
+              "tapInsPerWeek": {
+                "integerValue": "4"
+              }
+            }
+          }
+        },
+        "commitmentType": {
+          "stringValue": "limit"
+        },
+        "groupStreakDays": {
+          "integerValue": "0"
+        },
+        "graceRules": {
+          "mapValue": {
+            "fields": {
+              "skip": {
+                "mapValue": {
+                  "fields": {
+                    "allowance": {
+                      "integerValue": "2"
+                    },
+                    "windowDays": {
+                      "integerValue": "7"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "lifecycleStatus": {
+          "stringValue": "active"
+        },
+        "inviteCode": {
+          "stringValue": "a307ba4c3fbffc89"
+        },
+        "joinMode": {
+          "stringValue": "request_to_join"
+        },
+        "maximumValue": {
+          "integerValue": "1"
+        },
+        "minimumValue": {
+          "integerValue": "0"
+        },
+        "maxSize": {
+          "integerValue": "2"
+        },
+        "memberCount": {
+          "integerValue": "1"
+        },
+        "ownerId": {
+          "stringValue": "0Kn1CerJtegU4hQAqY0lxjbsQ3V2"
+        },
+        "privacy": {
+          "stringValue": "public"
+        },
+        "stepValue": {
+          "integerValue": "1"
+        },
+        "title": {
+          "stringValue": "QA 074728 Shared limit"
+        },
+        "timezone": {
+          "stringValue": "Europe/London"
+        },
+        "unitLabel": {
+          "stringValue": "cups"
+        },
+        "createdAt": {
+          "timestampValue": "2026-10-08T15:43:46.944Z"
+        },
+        "updatedAt": {
+          "timestampValue": "2026-10-08T15:43:46.944Z"
+        }
+      },
+      "createTime": "2026-10-08T15:43:47.000559Z",
+      "updateTime": "2026-10-08T15:43:47.000559Z"
+    },
+    "readTime": "2026-10-08T15:44:24.887809Z"
+  }
+]

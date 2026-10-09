@@ -17,6 +17,7 @@ import {HoystButton} from '../../../design/components/HoystButton';
 import {HoystText} from '../../../design/components/HoystText';
 import {SetupProgressBar} from '../../../design/components/SetupProgressBar';
 import {SetupIconButton} from './CommitmentSetupFields';
+import {useSetupTheme} from '../services/setup-presentation';
 
 type SetupAction = {
   disabled?: boolean;
@@ -50,6 +51,7 @@ export function CommitmentSetupScaffold({
   stepKey,
   title,
 }: CommitmentSetupScaffoldProps): React.JSX.Element {
+  const theme = useSetupTheme();
   const scrollRef = useRef<ScrollView>(null);
 
   useEffect(() => {
@@ -60,7 +62,7 @@ export function CommitmentSetupScaffold({
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <FrostedBackdrop />
+      <FrostedBackdrop topAccentColor={theme.accentSecondary} />
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.keyboardView}>
@@ -72,6 +74,7 @@ export function CommitmentSetupScaffold({
           />
           {progress ? (
             <SetupProgressBar
+              accentColor={theme.accentSecondary}
               current={progress.current}
               testID="commitment-setup-progress"
               total={progress.total}
@@ -113,6 +116,9 @@ export function CommitmentSetupScaffold({
         <View style={styles.footerWrap}>
           <GlassPanel padding="compact" style={styles.footer} variant="nav">
             <HoystButton
+              backgroundColor={theme.accent}
+              borderColor={theme.accent}
+              textColor="#FFFFFF"
               disabled={primaryAction.disabled}
               label={primaryAction.label}
               onPress={primaryAction.onPress}
@@ -120,6 +126,7 @@ export function CommitmentSetupScaffold({
             />
             {secondaryAction ? (
               <HoystButton
+                textColor={theme.accentForeground}
                 disabled={secondaryAction.disabled}
                 label={secondaryAction.label}
                 onPress={secondaryAction.onPress}

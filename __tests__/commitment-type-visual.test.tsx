@@ -1,5 +1,5 @@
 import React from 'react';
-import {Image, StyleSheet} from 'react-native';
+import {StyleSheet, View} from 'react-native';
 import renderer, {act} from 'react-test-renderer';
 
 import {
@@ -54,9 +54,12 @@ describe('commitment type visuals', () => {
       const pill = tree!.root.findByProps({
         testID: `commitment-type-pill-${commitmentType}`,
       });
-      const icon = tree!.root.findByProps({
-        testID: `commitment-type-icon-${commitmentType}`,
-      });
+      const icon = tree!.root
+        .findAllByType(View)
+        .find(
+          node =>
+            node.props.testID === `commitment-type-icon-${commitmentType}`,
+        )!;
 
       expect(pill.props.accessibilityLabel).toBe(
         `${label[0]}${label.slice(1).toLowerCase()} commitment type`,
@@ -72,7 +75,9 @@ describe('commitment type visuals', () => {
           width: 18,
         }),
       );
-      expect(tree!.root.findAllByType(Image)).toHaveLength(1);
+      expect(JSON.stringify(tree!.toJSON())).toContain(
+        {build: '🧱', limit: '🎚️', avoid: '🚫'}[commitmentType],
+      );
       expect(JSON.stringify(tree!.toJSON())).toContain(label);
     },
   );
@@ -86,7 +91,9 @@ describe('commitment type visuals', () => {
       );
     });
 
-    const icon = tree!.root.findByProps({testID: 'commitment-type-icon-build'});
+    const icon = tree!.root
+      .findAllByType(View)
+      .find(node => node.props.testID === 'commitment-type-icon-build')!;
 
     expect(icon.props.accessibilityLabel).toBe('Build commitment type');
     expect(icon.props.accessibilityRole).toBe('image');

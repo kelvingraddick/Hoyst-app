@@ -10,12 +10,18 @@ import {
   TriangleAlert,
 } from 'lucide-react-native';
 import Svg, {Path} from 'react-native-svg';
-import {homeTypography} from '../tokens/home';
 import type {HoyState} from '../../features/home/services/hoy-state';
 import {useHoystTheme} from '../theme/useHoystTheme';
 import {BrandMark} from './BrandMark';
 import {HoystText} from './HoystText';
 import {HoyOrb} from './HoyOrb';
+import {
+  getHoyMessageSurfaceColors,
+  hoyMessageSurface,
+  HoyMessageText,
+} from './HoyMessage';
+
+export {getHoyMessageParts as getHomeMessageParts} from './HoyMessage';
 
 export const homeHoyVisuals = {
   getting_started: {tint: '#C8B5FA', accent: '#9470E8', Icon: Sparkles},
@@ -27,32 +33,6 @@ export const homeHoyVisuals = {
   risk_attention: {tint: '#FFE69A', accent: '#E8A600', Icon: TriangleAlert},
   tap_in_needed: {tint: '#FFD4AE', accent: '#FF8A3D', Icon: Clock3},
 } as const;
-
-export function getHomeMessageParts(text: string, emphasis: readonly string[]) {
-  const spans = emphasis
-    .filter(Boolean)
-    .flatMap(value => {
-      const start = text.indexOf(value);
-      return start < 0 ? [] : [{start, end: start + value.length}];
-    })
-    .sort((a, b) => a.start - b.start);
-  const result: {text: string; bold: boolean}[] = [];
-  let cursor = 0;
-  for (const span of spans) {
-    if (span.start < cursor) {
-      continue;
-    }
-    if (span.start > cursor) {
-      result.push({text: text.slice(cursor, span.start), bold: false});
-    }
-    result.push({text: text.slice(span.start, span.end), bold: true});
-    cursor = span.end;
-  }
-  if (cursor < text.length) {
-    result.push({text: text.slice(cursor), bold: false});
-  }
-  return result;
-}
 
 export function HomeHeroHeader({
   bubbleText,
@@ -86,10 +66,10 @@ export function HomeHeroHeader({
   const visual = homeHoyVisuals[state];
   const Icon = visual.Icon;
   const orbSize = width < 390 ? 68 : 72;
-  const bubbleColor = theme.isDark ? '#252527' : '#FFFFFF';
+  const bubbleColors = getHoyMessageSurfaceColors(theme.isDark);
+  const bubbleColor = bubbleColors.backgroundColor;
   const stacked = fontScale >= 1.6;
   const messageOpacity = isHoyActionDisabled ? 0.8 : 1;
-  const bubbleShadow = theme.isDark ? '#000000' : '#92723E';
   return (
     <View
       onLayout={onLayout}
@@ -112,28 +92,14 @@ export function HomeHeroHeader({
             {
               opacity: messageOpacity,
               width: stacked ? width - 44 : width - 44 - orbSize - 12 - 16,
-              shadowColor: bubbleShadow,
-              backgroundColor: bubbleColor,
+              ...bubbleColors,
             },
           ]}
           testID="home-hero-hoy-action">
           <View testID="home-hero-bubble-surface">
             <View testID="home-hero-bubble-fill">
               {bubbleText ? (
-                <HoystText style={styles.message}>
-                  {getHomeMessageParts(bubbleText, emphasis).map(
-                    (part, index) => (
-                      <HoystText
-                        key={index}
-                        style={[
-                          styles.message,
-                          part.bold && styles.messageBold,
-                        ]}>
-                        {part.text}
-                      </HoystText>
-                    ),
-                  )}
-                </HoystText>
+                <HoyMessageText message={bubbleText} emphasis={emphasis} />
               ) : (
                 <View
                   accessibilityElementsHidden
@@ -283,19 +249,7 @@ const styles = StyleSheet.create({
   logo: {width: 92, height: 44},
   heroRow: {flexDirection: 'row', alignItems: 'center', gap: 16, marginTop: 12},
   heroStacked: {flexDirection: 'column-reverse', alignItems: 'stretch'},
-  bubbleSurface: {
-    flexShrink: 1,
-    borderRadius: 18,
-    padding: 16,
-    minHeight: 80,
-    justifyContent: 'center',
-    shadowOffset: {width: 0, height: 6},
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 3,
-  },
-  message: homeTypography.message,
-  messageBold: {fontWeight: '700'},
+  bubbleSurface: hoyMessageSurface,
   tail: {
     position: 'absolute',
     right: -9,

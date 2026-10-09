@@ -22,6 +22,7 @@ import {
 } from '../services/timezone-options';
 
 type TimezonePickerProps = {
+  actionColors?: {fill: string; foreground: string};
   helperText?: string;
   label?: string;
   modalTitle?: string;
@@ -104,6 +105,7 @@ function TimezoneOptionCard({
 }
 
 export function TimezonePicker({
+  actionColors,
   helperText,
   label = 'Timezone',
   modalTitle = 'Timezone',
@@ -164,7 +166,9 @@ export function TimezonePicker({
               },
             ]}>
             <Globe2
-              color={theme.accentSecondaryForeground}
+              color={
+                actionColors?.foreground ?? theme.accentSecondaryForeground
+              }
               size={20}
               strokeWidth={2.3}
             />
@@ -217,7 +221,9 @@ export function TimezonePicker({
                     },
                   ]}>
                   <Globe2
-                    color={theme.accentSecondaryForeground}
+                    color={
+                      actionColors?.foreground ?? theme.accentSecondaryForeground
+                    }
                     size={19}
                     strokeWidth={2.3}
                   />
@@ -268,6 +274,8 @@ export function TimezonePicker({
                 )}
               </ScrollView>
               <HoystButton
+                borderColor={actionColors?.fill}
+                textColor={actionColors?.foreground}
                 label="Cancel"
                 onPress={closePicker}
                 variant="outline"

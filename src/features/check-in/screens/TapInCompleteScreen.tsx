@@ -88,6 +88,7 @@ type CompletionDetailSnapshot = Pick<
     Pick<
       CircleDetailModel,
       | 'category'
+      | 'appearance'
       | 'commitmentType'
       | 'inviteUrl'
       | 'memberCount'
@@ -423,6 +424,7 @@ function TapInCompleteController({
 
     return {
       ...(category ? {category} : {}),
+      appearance: route.params.appearance,
       commitment: commitment ?? "Today's Tap In",
       ...(route.params.commitmentType
         ? {commitmentType: route.params.commitmentType}
@@ -438,6 +440,7 @@ function TapInCompleteController({
     };
   }, [
     route.params.category,
+    route.params.appearance,
     route.params.circleTitle,
     route.params.commitment,
     route.params.commitmentType,
@@ -671,6 +674,7 @@ function TapInCompleteController({
   const shareStory = useCallback(() => {
     navigation.navigate('TapInStoryShare', {
       category: displayDetail?.category,
+      appearance: displayDetail?.appearance,
       circleId: route.params.circleId,
       circleTitle: displayDetail?.title ?? route.params.circleTitle,
       commitment: displayDetail?.commitment ?? route.params.commitment,
@@ -898,7 +902,10 @@ function TapInCompleteController({
     : quantityCoverageStatus === 'partial'
     ? 'No note added. Your Progress was saved.'
     : 'No note added. Your Tap In still counts.';
-  const category = getCircleCategoryVisual(detail?.category ?? 'General');
+  const category = getCircleCategoryVisual(
+    detail?.category ?? 'General',
+    detail?.appearance,
+  );
   const commitmentType = detail
     ? getCommitmentType(detail)
     : route.params.commitmentType;
@@ -1110,11 +1117,25 @@ function TapInCompleteController({
               </Animated.View>
             </View>
 
-            {xpFeedback && xpFeedback.xpEarned > 0 ? <DSText accessibilityLiveRegion="polite" tone="success" variant="title">+{xpFeedback.xpEarned} XP{xpFeedback.rewards.skips ? ` · ${xpFeedback.rewards.skips} skip earned` : ''}{xpFeedback.rewards.restores ? ` · ${xpFeedback.rewards.restores} restore earned` : ''}</DSText> : null}
+            {xpFeedback && xpFeedback.xpEarned > 0 ? (
+              <DSText
+                accessibilityLiveRegion="polite"
+                tone="success"
+                variant="title">
+                +{xpFeedback.xpEarned} XP
+                {xpFeedback.rewards.skips
+                  ? ` · ${xpFeedback.rewards.skips} skip earned`
+                  : ''}
+                {xpFeedback.rewards.restores
+                  ? ` · ${xpFeedback.rewards.restores} restore earned`
+                  : ''}
+              </DSText>
+            ) : null}
             <Animated.View style={[styles.detailsStack, contentAnimatedStyle]}>
               <View style={styles.commitmentRow}>
                 <CircleCategoryIcon
                   category={detail?.category ?? 'General'}
+                  appearance={detail?.appearance}
                   showBackplate={false}
                   size={34}
                 />

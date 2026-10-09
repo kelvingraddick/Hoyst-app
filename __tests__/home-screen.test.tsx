@@ -1,3 +1,5 @@
+jest.mock('../src/store/circle-invite-store', () => ({useCircleInviteStore: jest.fn()}));
+jest.mock('../src/store/setup-journey-store', () => ({useSetupJourneyStore: (selector: (state: {records: object}) => unknown) => selector({records:{}})}));
 import React from 'react';
 import {Image, ScrollView, StyleSheet} from 'react-native';
 import renderer, {act} from 'react-test-renderer';

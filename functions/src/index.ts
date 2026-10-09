@@ -59,6 +59,7 @@ export const healthcheck = onRequest((request, response) => {
 });
 
 export {
+  suggestPublicCircles,
   searchPublicCircles,
   maintainPublicCircleSearch,
   projectPublicTapIn,

@@ -1,0 +1,170 @@
+{
+  "at": "2026-10-09T00:49:29.917Z",
+  "circleId": "efI7nuIj3kddGDalXqcK",
+  "stage": "after",
+  "circle": {
+    "name": "projects/hoyst-firebase-app/databases/(default)/documents/circles/efI7nuIj3kddGDalXqcK",
+    "fields": {
+      "commitmentType": {
+        "stringValue": "build"
+      },
+      "appearance": {
+        "mapValue": {}
+      },
+      "maxSize": {
+        "integerValue": "1"
+      },
+      "title": {
+        "stringValue": "QA Apple Edited Name"
+      },
+      "stepValue": {
+        "integerValue": "1"
+      },
+      "joinMode": {
+        "stringValue": "invite_only"
+      },
+      "commitmentFrequency": {
+        "mapValue": {
+          "fields": {
+            "tapInsPerWeek": {
+              "integerValue": "7"
+            }
+          }
+        }
+      },
+      "category": {
+        "stringValue": "General"
+      },
+      "commitment": {
+        "stringValue": "QA Apple show up"
+      },
+      "memberCount": {
+        "integerValue": "1"
+      },
+      "createdAt": {
+        "timestampValue": "2026-10-08T22:37:44.512Z"
+      },
+      "unitLabel": {
+        "stringValue": "page"
+      },
+      "independentTitle": {
+        "booleanValue": true
+      },
+      "commitmentCadence": {
+        "stringValue": "daily"
+      },
+      "updatedAt": {
+        "timestampValue": "2026-10-09T00:48:16.765Z"
+      },
+      "privacy": {
+        "stringValue": "private"
+      },
+      "ownerId": {
+        "stringValue": "IYZInpxmlZgNYZY9MWUU59eh6go1"
+      },
+      "graceRules": {
+        "mapValue": {
+          "fields": {
+            "skip": {
+              "mapValue": {
+                "fields": {
+                  "windowDays": {
+                    "integerValue": "7"
+                  },
+                  "allowance": {
+                    "integerValue": "2"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "buildTrackingMode": {
+        "stringValue": "quantity"
+      },
+      "circleMode": {
+        "stringValue": "personal"
+      },
+      "lifecycleStatus": {
+        "stringValue": "active"
+      },
+      "timezone": {
+        "stringValue": "America/New_York"
+      },
+      "targetValue": {
+        "integerValue": "1"
+      }
+    },
+    "createTime": "2026-10-08T22:37:44.555375Z",
+    "updateTime": "2026-10-09T00:48:16.799967Z"
+  },
+  "checkIns": {
+    "documents": [
+      {
+        "name": "projects/hoyst-firebase-app/databases/(default)/documents/circles/efI7nuIj3kddGDalXqcK/days/2026-10-08/checkIns/IYZInpxmlZgNYZY9MWUU59eh6go1",
+        "fields": {
+          "circleId": {
+            "stringValue": "efI7nuIj3kddGDalXqcK"
+          },
+          "status": {
+            "stringValue": "done"
+          },
+          "displayName": {
+            "stringValue": "QA Apple Tester"
+          },
+          "unitLabel": {
+            "stringValue": "Tap In"
+          },
+          "currentValue": {
+            "integerValue": "1"
+          },
+          "commitmentType": {
+            "stringValue": "build"
+          },
+          "stepValue": {
+            "integerValue": "1"
+          },
+          "photoUrl": {
+            "nullValue": null
+          },
+          "createdAt": {
+            "timestampValue": "2026-10-08T22:40:26.515Z"
+          },
+          "coverageStatus": {
+            "stringValue": "covered"
+          },
+          "progressEventId": {
+            "stringValue": "4c128d98-0e4d-45a3-aef4-e080e8c06ef5"
+          },
+          "avatarUrl": {
+            "nullValue": null
+          },
+          "targetValue": {
+            "integerValue": "1"
+          },
+          "coverageRevision": {
+            "integerValue": "1"
+          },
+          "updatedAt": {
+            "timestampValue": "2026-10-08T22:40:26.515Z"
+          },
+          "handle": {
+            "stringValue": "qa074728apple"
+          },
+          "buildTrackingMode": {
+            "stringValue": "confirmation"
+          },
+          "note": {
+            "nullValue": null
+          },
+          "uid": {
+            "stringValue": "IYZInpxmlZgNYZY9MWUU59eh6go1"
+          }
+        },
+        "createTime": "2026-10-08T22:40:26.565503Z",
+        "updateTime": "2026-10-08T22:40:26.565503Z"
+      }
+    ]
+  }
+}

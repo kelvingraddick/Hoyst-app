@@ -1,6 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.invitePage = exports.rotateCircleInvite = exports.resolveCircleInvite = void 0;
+const commitment_appearance_1 = require("../shared/commitment-appearance");
 const https_1 = require("firebase-functions/v2/https");
 const firestore_1 = require("firebase-admin/firestore");
 const zod_1 = require("zod");
@@ -108,6 +109,7 @@ function renderPage({ description, inviteCode, preview, statusCode, title, }) {
         ? `
       <section class="invite-card" aria-label="Circle invitation">
         <div class="eyebrow">You’re invited to a Circle</div>
+        <div style="color:${(0, commitment_appearance_1.resolveAppearance)(preview.category, preview.appearance).foreground};background:${(0, commitment_appearance_1.resolveAppearance)(preview.category, preview.appearance).background};border-radius:20px;padding:8px 12px;display:inline-block">${escapeHtml((0, commitment_appearance_1.resolveAppearance)(preview.category, preview.appearance).emoji)} ${escapeHtml(preview.category)}</div>
         <h1>${escapeHtml(preview.title)}</h1>
         <p class="commitment">${escapeHtml(preview.commitment)}</p>
         <div class="meta">
@@ -266,6 +268,22 @@ exports.resolveCircleInvite = (0, https_1.onCall)(async (request) => {
     const preview = await findCircleInvite(inviteCode);
     if (!preview) {
         throw new https_1.HttpsError('not-found', 'Invite no longer available.');
+    }
+    if (request.auth?.uid) {
+        const membership = await firebase_1.db
+            .collection('circles')
+            .doc(preview.circleId)
+            .collection('members')
+            .doc(request.auth.uid)
+            .get();
+        const status = membership.data()?.status;
+        return {
+            ...preview,
+            viewerUid: request.auth.uid,
+            ...(status === 'active' || status === 'pending'
+                ? { viewerMembershipStatus: status }
+                : {}),
+        };
     }
     return preview;
 });

@@ -1,3 +1,4 @@
+import {DateTime} from 'luxon';
 export type CuratedTimezoneOption = {
   aliases?: string[];
   id: string;
@@ -111,37 +112,7 @@ function isValidTimezone(timezoneId: string) {
 
 export function getTimezoneOffsetLabel(timezoneId: string, date = new Date()) {
   try {
-    const parts = Intl.DateTimeFormat('en-US', {
-      day: '2-digit',
-      hour: '2-digit',
-      hour12: false,
-      hourCycle: 'h23',
-      minute: '2-digit',
-      month: '2-digit',
-      second: '2-digit',
-      timeZone: timezoneId,
-      year: 'numeric',
-    })
-      .formatToParts(date)
-      .reduce<Record<string, number>>((values, part) => {
-        if (part.type !== 'literal') {
-          values[part.type] = Number.parseInt(part.value, 10);
-        }
-
-        return values;
-      }, {});
-    const timezoneTimestamp = Date.UTC(
-      parts.year,
-      parts.month - 1,
-      parts.day,
-      parts.hour === 24 ? 0 : parts.hour,
-      parts.minute,
-      parts.second,
-    );
-    const offsetMinutes = Math.round(
-      (timezoneTimestamp - date.getTime()) / 60_000,
-    );
-
+    const offsetMinutes = DateTime.fromJSDate(date).setZone(timezoneId).offset;
     if (!Number.isFinite(offsetMinutes) || offsetMinutes === 0) {
       return 'UTC';
     }

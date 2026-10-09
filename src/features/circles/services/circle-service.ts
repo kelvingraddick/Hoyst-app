@@ -1,3 +1,4 @@
+import type {CommitmentAppearance} from '../../../shared/commitment-appearance';
 import {getFirebaseApp} from '../../../lib/firebase/app';
 import {firebaseAuth} from '../../../lib/firebase/auth';
 import {firebaseFunctions} from '../../../lib/firebase/functions';
@@ -12,11 +13,15 @@ import type {
 } from '../../../types/models';
 
 export type CreateCircleInput = {
+  independentTitle?: boolean;
+  requestId?: string;
   category: string;
+  appearance?: CommitmentAppearance;
   circleMode?: CircleMode;
   commitment: string;
   commitmentCadence: CommitmentPace;
   commitmentFrequency: CommitmentFrequency;
+  buildTrackingMode?: 'confirmation' | 'quantity';
   commitmentType: CommitmentType;
   graceRules: {
     skip: GraceRule;

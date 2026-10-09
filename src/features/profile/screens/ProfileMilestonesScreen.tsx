@@ -54,7 +54,9 @@ function Content({navigation}: Props) {
               key={milestone.id}
               title={milestone.label}
               subtitle={milestone.detail}
-              leading={<ProfileIcon icon={Trophy} tone="gold" />}
+              leading={
+                <ProfileIcon emojiKind="milestone" icon={Trophy} tone="gold" />
+              }
               testID={`earned-${milestone.id}`}
             />
           ))}

@@ -1,3 +1,4 @@
+import type {CommitmentAppearance} from '../../../shared/commitment-appearance';
 import {firebaseFunctions} from '../../../lib/firebase/functions';
 
 export type PublicTapInPreview = {
@@ -11,6 +12,7 @@ export type DiscoverableCircle = {
   id: string;
   title: string;
   category: string;
+  appearance?: CommitmentAppearance;
   commitment: string;
   memberCount: number;
   maxSize: number;
@@ -33,6 +35,11 @@ export async function searchPublicCircles(
     input,
   );
   return result.data as ExplorePage;
+}
+
+export async function suggestPublicCircles(input: {query: string; categories: string[]}) {
+  const result = await firebaseFunctions().httpsCallable('suggestPublicCircles')(input);
+  return (result.data as {circles: import('../../create-circle/services/setup-journey').CircleSuggestion[]}).circles;
 }
 
 export function formatPublicTapInTime(iso: string, now = Date.now()) {

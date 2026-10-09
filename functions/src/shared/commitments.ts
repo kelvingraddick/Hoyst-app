@@ -15,6 +15,7 @@ type CommitmentInput = {
     opportunitiesPerPeriod?: unknown;
     tapInsPerWeek?: unknown;
   };
+  buildTrackingMode?: unknown;
   commitmentType?: unknown;
   maximumValue?: unknown;
   minimumValue?: unknown;
@@ -29,6 +30,7 @@ type CheckInInput = {
 };
 
 export type CommitmentQuantityConfig = {
+  buildTrackingMode?: 'confirmation' | 'quantity';
   maximumValue?: number;
   minimumValue?: number;
   stepValue: number;
@@ -102,6 +104,14 @@ export function getQuantityConfig(
 
   return {
     stepValue,
+    buildTrackingMode:
+      circle?.buildTrackingMode === 'quantity'
+        ? 'quantity'
+        : circle?.buildTrackingMode === 'confirmation'
+        ? 'confirmation'
+        : typeof circle?.targetValue === 'number' && circle.targetValue > 1
+        ? 'quantity'
+        : 'confirmation',
     targetValue: clampPositiveNumber(circle?.targetValue, 1),
     unitLabel,
   };
@@ -113,8 +123,7 @@ export function isSingleTapInCommitment(circle: CommitmentInput | undefined) {
 
   return (
     commitmentType === 'build' &&
-    (quantityConfig.targetValue ?? 1) <= 1 &&
-    quantityConfig.stepValue === 1
+    quantityConfig.buildTrackingMode === 'confirmation'
   );
 }
 

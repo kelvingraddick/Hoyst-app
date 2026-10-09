@@ -68,9 +68,7 @@ export function getOnboardingSteps(
   );
 }
 
-export function getOnboardingProgressSteps(
-  circleMode: 'personal' | 'group',
-) {
+export function getOnboardingProgressSteps(circleMode: 'personal' | 'group') {
   return getOnboardingSteps(circleMode).filter(step => step !== 'welcome');
 }
 
@@ -121,14 +119,12 @@ export function getOptionLabel<T extends string>(
   return options.find(option => option.id === id)?.label ?? fallback;
 }
 
-export function getLegacyFocusAreaCategory(
-  focusArea?: OnboardingFocusArea,
-) {
+export function getLegacyFocusAreaCategory(focusArea?: OnboardingFocusArea) {
   if (focusArea === 'fitness') {
     return 'Fitness';
   }
   if (focusArea === 'focus') {
-    return 'Deep Work';
+    return 'Work';
   }
   if (focusArea === 'wellness') {
     return 'Wellness';
@@ -136,5 +132,5 @@ export function getLegacyFocusAreaCategory(
   if (focusArea === 'sobriety') {
     return 'Sobriety';
   }
-  return 'Custom';
+  return 'General';
 }

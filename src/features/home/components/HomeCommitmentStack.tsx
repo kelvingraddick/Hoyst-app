@@ -76,7 +76,11 @@ function Action({
 }) {
   const theme = useHoystTheme();
   const action = getHomeDailyAction(card);
-  const color = getCircleCategoryForegroundColor(card.category, theme);
+  const color = getCircleCategoryForegroundColor(
+    card.category,
+    theme,
+    card.appearance,
+  );
   if (action !== 'tap_in' && action !== 'nudge') {
     return (
       <View
@@ -193,8 +197,12 @@ export function HomeCommitmentStack({
     <View style={styles.list} testID="home-commitments-stack">
       {cards.map(card => {
         const isFocused = card.id === focused?.id;
-        const color = getCircleCategoryForegroundColor(card.category, theme);
-        const visual = getCircleCategoryVisual(card.category);
+        const color = getCircleCategoryForegroundColor(
+          card.category,
+          theme,
+          card.appearance,
+        );
+        const visual = getCircleCategoryVisual(card.category, card.appearance);
         const action = getHomeDailyAction(card);
         const actionable = action === 'tap_in' || action === 'nudge';
         const goal = getCommitmentGoalPresentation(card);
@@ -232,6 +240,7 @@ export function HomeCommitmentStack({
                   testID={`home-commitment-details-${card.id}`}>
                   <CircleCategoryIcon
                     category={card.category}
+                    appearance={card.appearance}
                     showBackplate={false}
                     size={HOME_ROW_ICON_SIZE}
                   />
@@ -311,6 +320,7 @@ export function HomeCommitmentStack({
               testID={`home-commitment-collapsed-${card.id}`}>
               <CircleCategoryIcon
                 category={card.category}
+                appearance={card.appearance}
                 size={HOME_ROW_ICON_SIZE}
               />
               <View style={styles.copy}>

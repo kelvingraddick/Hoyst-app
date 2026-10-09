@@ -1,3 +1,6 @@
+import {GoalEditor} from '../../create-circle/components/SetupStepContent';
+import {validateSetup} from '../../create-circle/services/setup-journey';
+import {CommitmentAppearanceControl} from '../../../design/components/CommitmentAppearanceControl';
 import React, {useEffect, useMemo, useRef, useState} from 'react';
 import {Alert, Pressable, StyleSheet, View} from 'react-native';
 import {ArrowLeft} from 'lucide-react-native';
@@ -11,7 +14,7 @@ import {HoystScreen} from '../../../design/components/HoystScreen';
 import {HoystText} from '../../../design/components/HoystText';
 import {CircleCategoryPill} from '../../../design/components/CircleCategoryIcon';
 import {radius} from '../../../design/tokens/radius';
-import {useHoystTheme} from '../../../design/theme/useHoystTheme';
+import {useSetupTheme} from '../../create-circle/services/setup-presentation';
 import type {RootStackParamList} from '../../../navigation/types';
 import {useSessionStore} from '../../../store/session-store';
 import {useUserProfileStore} from '../../../store/profile-store';
@@ -60,7 +63,7 @@ export function EditCircleScreen({
   navigation,
   route,
 }: Props): React.JSX.Element {
-  const theme = useHoystTheme();
+  const theme = useSetupTheme();
   const allowExitRef = useRef(false);
   const profile = useUserProfileStore(state => state.profile);
   const user = useSessionStore(state => state.user);
@@ -133,6 +136,7 @@ export function EditCircleScreen({
       timezoneLength > 0 &&
       timezoneLength <= 80 &&
       !maxSizeError &&
+      !validateSetup(draft) &&
       payloadKey !== originalPayloadKey &&
       !isSaving,
   );
@@ -197,17 +201,6 @@ export function EditCircleScreen({
         : current,
     );
   };
-  const setQuantityField = (
-    key: 'maximumValue' | 'minimumValue' | 'targetValue',
-    value: string,
-  ) => {
-    const parsedValue = Number.parseInt(value, 10);
-    const nextValue =
-      Number.isFinite(parsedValue) && parsedValue >= 0 ? parsedValue : 0;
-
-    setField(key, nextValue);
-  };
-
   const selectPrivacyMode = (privacyMode: CirclePrivacyMode) => {
     setDraft(current => {
       if (!current) {
@@ -263,6 +256,7 @@ export function EditCircleScreen({
   };
 
   const handleSave = async () => {
+    if (draft && validateSetup(draft)) { Alert.alert('Check your setup', validateSetup(draft)); return; }
     if (!canSave || !payload) {
       return;
     }
@@ -353,17 +347,26 @@ export function EditCircleScreen({
       <GlassPanel>
         <View style={styles.sectionHeader}>
           <HoystText variant="title">Basics</HoystText>
-          <CircleCategoryPill category={draft.category} />
+          <CircleCategoryPill
+            category={draft.category}
+            appearance={draft.appearance}
+          />
         </View>
         <SetupOptionList
           onSelect={value => setField('category', value)}
           options={setupCategoryOptions}
           selected={draft.category}
         />
-        {!isPersonal ? (
+        <CommitmentAppearanceControl
+          title={draft.title || draft.commitment}
+          category={draft.category}
+          appearance={draft.appearance}
+          onChange={value => setField('appearance', value)}
+        />
+        {draft ? (
           <View style={styles.fieldBlock}>
             <HoystText tone="muted" variant="label">
-              Circle name
+              {isPersonal ? 'Commitment name' : 'Circle name'}
             </HoystText>
             <HoystInput
               autoCapitalize="words"
@@ -496,7 +499,7 @@ export function EditCircleScreen({
               draft.commitmentType === 'limit'
                 ? 'orange'
                 : draft.commitmentType === 'avoid'
-                ? 'purple'
+                ? 'blue'
                 : 'green'
             }
           />
@@ -506,75 +509,8 @@ export function EditCircleScreen({
           options={setupCommitmentTypeOptions}
           selected={draft.commitmentType}
         />
-        {draft.commitmentType !== 'avoid' ? (
-          <View style={styles.nestedBlock}>
-            <View style={styles.sectionHeader}>
-              <HoystText variant="bodyStrong">
-                {draft.commitmentType === 'limit' ? 'Goal range' : 'Goal value'}
-              </HoystText>
-              <HoystChip
-                label={draft.commitmentType === 'limit' ? 'Limit' : 'Goal'}
-                tone={draft.commitmentType === 'limit' ? 'orange' : 'green'}
-              />
-            </View>
-            {draft.commitmentType === 'build' ? (
-              <View style={styles.fieldBlock}>
-                <HoystText tone="muted" variant="label">
-                  Goal value
-                </HoystText>
-                <HoystInput
-                  keyboardType="number-pad"
-                  onChangeText={value => setQuantityField('targetValue', value)}
-                  value={`${draft.targetValue ?? 1}`}
-                />
-              </View>
-            ) : (
-              <>
-                <View style={styles.fieldBlock}>
-                  <HoystText tone="muted" variant="label">
-                    Minimum amount
-                  </HoystText>
-                  <HoystInput
-                    keyboardType="number-pad"
-                    onChangeText={value =>
-                      setQuantityField('minimumValue', value)
-                    }
-                    value={`${draft.minimumValue ?? 0}`}
-                  />
-                </View>
-                <View style={styles.fieldBlock}>
-                  <HoystText tone="muted" variant="label">
-                    Maximum amount
-                  </HoystText>
-                  <HoystInput
-                    keyboardType="number-pad"
-                    onChangeText={value =>
-                      setQuantityField('maximumValue', value)
-                    }
-                    value={`${draft.maximumValue ?? draft.targetValue ?? 1}`}
-                  />
-                </View>
-              </>
-            )}
-            <View style={styles.fieldBlock}>
-              <HoystText tone="muted" variant="label">
-                Unit label
-              </HoystText>
-              <HoystInput
-                maxLength={32}
-                onChangeText={value => setField('unitLabel', value)}
-                placeholder="pages, glasses, minutes"
-                value={draft.unitLabel}
-              />
-            </View>
-          </View>
-        ) : (
-          <HoystText tone="muted">
-            {isPersonal
-              ? 'Avoid Commitments stay binary. Tap In once to confirm you stayed clear.'
-              : 'Avoid Circles stay binary. Each Member taps in once to confirm they stayed clear.'}
-          </HoystText>
-        )}
+        <HoystText variant="bodyStrong">Goal for each Tap In</HoystText>
+        <GoalEditor draft={draft} onChange={setDraft} disabled={isSaving}/>
       </GlassPanel>
 
       <GlassPanel>
@@ -634,7 +570,7 @@ export function EditCircleScreen({
               }
             />
             <HoystText tone="muted">
-              Monthly Opportunities are spaced across the selected timezone.
+              Tap In windows are spaced across the month in the selected timezone.
             </HoystText>
           </>
         ) : (
@@ -645,6 +581,7 @@ export function EditCircleScreen({
           </HoystText>
         )}
         <TimezonePicker
+          actionColors={{fill: theme.accent, foreground: theme.accentForeground}}
           helperText={`This controls when each Tap In day resets for this ${
             isPersonal ? 'Commitment' : 'Circle'
           }.`}

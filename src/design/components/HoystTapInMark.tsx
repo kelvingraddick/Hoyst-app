@@ -3,7 +3,6 @@ import {
   AccessibilityInfo,
   Animated,
   Easing,
-  Image,
   StyleSheet,
   View,
   type StyleProp,
@@ -16,7 +15,7 @@ import Svg, {
   Stop,
 } from 'react-native-svg';
 
-import {getBrandIcon} from '../brand/usage';
+import {BrandMark} from './BrandMark';
 import {useHoystTheme} from '../theme/useHoystTheme';
 
 export type HoystTapInMarkProps = {
@@ -257,11 +256,8 @@ export function HoystTapInMark({
           },
         ]}
         testID="hoyst-tap-in-mark-logo">
-        <Image
-          accessibilityIgnoresInvertColors
-          key={theme.isDark ? 'dark' : 'light'}
-          resizeMode="contain"
-          source={getBrandIcon(theme.isDark)}
+        <BrandMark
+          isDark={theme.isDark}
           style={{height: size, width: size}}
           testID="hoyst-tap-in-mark-image"
         />

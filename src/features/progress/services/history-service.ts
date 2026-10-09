@@ -1,3 +1,4 @@
+import type {CommitmentAppearance} from '../../../shared/commitment-appearance';
 import {authenticatedCallable} from '../../../lib/firebase/authenticated-callable';
 import {firebaseFirestore} from '../../../lib/firebase/firestore';
 export type ProgressActivity = {
@@ -6,6 +7,7 @@ export type ProgressActivity = {
   dateKey: string;
   title: string;
   category: string;
+  appearance?: CommitmentAppearance;
   status:
     | 'completed'
     | 'partial'

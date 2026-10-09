@@ -17,7 +17,7 @@ export type StarterCircleProfileInput = CreateCircleInput & {
 };
 
 export type CompleteProfileInput = {
-  avatarUrl?: string;
+  avatarUrl?: string | null;
   displayName: string;
   handle: string;
   onboardingPreferences?: OnboardingPreferences;

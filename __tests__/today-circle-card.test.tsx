@@ -90,12 +90,12 @@ describe('TodayCircleCard', () => {
     expect(output).toContain('42% tapped-in today');
     expect(tapInButton.props.ringState).toBe('active');
     expect(ring.props).toMatchObject({
-      flatColor: '#07763E',
+      flatColor: '#A83A00',
       progress: 0.42,
       size: 18,
       strokeWidth: 3,
     });
-    expect(companionIcon.props.color).toBe('#07763E');
+    expect(companionIcon.props.color).toBe('#A83A00');
     expect(companionIcon.props.color).not.toBe(lightTheme.accentForeground);
   });
 
@@ -260,7 +260,7 @@ describe('TodayCircleCard', () => {
     const tapInButton = tree!.root.findByProps({
       testID: 'attention-tap-in-button',
     });
-    const categoryColor = '#5A1CFF';
+    const categoryColor = '#07763E';
     const tapInButtonSurface = tapInButton.find(node => {
       const flattenedStyle = StyleSheet.flatten(node.props.style);
 
@@ -278,7 +278,7 @@ describe('TodayCircleCard', () => {
       const flattenedStyle = StyleSheet.flatten(node.props.style);
 
       return (
-        flattenedStyle?.backgroundColor === '#F0ECFF' &&
+        flattenedStyle?.backgroundColor === '#E7F8EF' &&
         flattenedStyle.height === 36 &&
         flattenedStyle.width === 36
       );
@@ -339,7 +339,7 @@ describe('TodayCircleCard', () => {
       const flattenedStyle = StyleSheet.flatten(node.props.style);
 
       return (
-        flattenedStyle?.backgroundColor === '#F0ECFF' &&
+        flattenedStyle?.backgroundColor === '#E7F8EF' &&
         flattenedStyle.height === 36 &&
         flattenedStyle.width === 36
       );

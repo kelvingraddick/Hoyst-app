@@ -35,6 +35,8 @@ jest.mock('react-native-safe-area-context', () => {
 
 import {HoystButton} from '../src/design/components/HoystButton';
 import {CommitmentSetupScaffold} from '../src/features/create-circle/components/CommitmentSetupScaffold';
+import {useSettingsStore} from '../src/store/settings-store';
+import {FrostedBackdrop} from '../src/design/components/FrostedBackdrop';
 
 function renderScaffold(stepKey = 'commitment') {
   const scrollTo = jest
@@ -60,6 +62,13 @@ function renderScaffold(stepKey = 'commitment') {
 }
 
 describe('CommitmentSetupScaffold', () => {
+  it.each(['light', 'dark'] as const)('uses a blue editing action and backdrop in %s', appearance => {
+    useSettingsStore.setState({appearance});
+    const {tree} = renderScaffold();
+    expect(tree.root.findByType(HoystButton).props).toMatchObject({backgroundColor: '#086CA8', textColor: '#FFFFFF', borderColor: '#086CA8'});
+    expect(tree.root.findByType(FrostedBackdrop).props.topAccentColor).toBe('#18B9FF');
+    act(() => tree.unmount());
+  });
   afterEach(() => {
     jest.restoreAllMocks();
   });

@@ -1,3 +1,4 @@
+import {CircularEmoji} from '../src/design/components/CircularEmoji';
 import React from 'react';
 import {Alert, Image, Pressable, Switch, Text, TextInput} from 'react-native';
 import renderer, {act} from 'react-test-renderer';
@@ -476,4 +477,23 @@ it('retries an availability failure without clearing the username draft', async 
     false,
   );
   expect(mockAvailability).toHaveBeenCalledTimes(2);
+});
+
+it('uses decorative emoji in Profile and share stats but preserves every Settings icon', () => {
+  mount(ProfileScreen);
+  expect(screen.root.findAllByType(CircularEmoji).length).toBeGreaterThan(0);
+  act(() => screen.unmount());
+  mount(ProfileShareScreen);
+  expect(
+    screen.root.findAllByType(CircularEmoji).map(node => node.props.kind),
+  ).toEqual(expect.arrayContaining(['streak', 'momentum', 'tapIns']));
+  for (const Component of [
+    SettingsScreen,
+    NotificationSettingsScreen,
+    AccountSettingsScreen,
+  ]) {
+    act(() => screen.unmount());
+    mount(Component);
+    expect(screen.root.findAllByType(CircularEmoji)).toHaveLength(0);
+  }
 });

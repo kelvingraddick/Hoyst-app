@@ -1,0 +1,26 @@
+{
+  "uid": "rbm8zSv2d6biQGe5bUUg1QYFFOs2",
+  "documents": [
+    {
+      "path": "userPrivate/rbm8zSv2d6biQGe5bUUg1QYFFOs2/momentum/current",
+      "createTime": "2026-10-08T08:44:40.257412Z",
+      "updateTime": "2026-10-08T08:44:40.401106Z",
+      "fieldNames": [
+        "completedOpportunities",
+        "updatedAt",
+        "rollingMomentum",
+        "tapInOpportunities",
+        "bestStreak",
+        "availableOpportunities",
+        "periodKey",
+        "status",
+        "percentage",
+        "label",
+        "skippedOpportunities",
+        "currentStreak",
+        "creditedOpportunities"
+      ]
+    }
+  ],
+  "hasMore": false
+}

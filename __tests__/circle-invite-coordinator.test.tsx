@@ -165,7 +165,7 @@ describe('CircleInviteCoordinator', () => {
     act(() => tree.unmount());
   });
 
-  it('completes an automatic join after its joining state is set', async () => {
+  it('leaves an accepted invitation for the shared wizard to finish', async () => {
     useOnboardingStore.getState().setHasHydrated(true);
     useSessionStore.setState({
       status: 'authenticatedReady',
@@ -197,21 +197,9 @@ describe('CircleInviteCoordinator', () => {
       await Promise.resolve();
     });
 
-    expect(mockJoinCircle).toHaveBeenCalledWith('circle-1', 'abc123xy');
-    expect(useCircleInviteStore.getState().inviteCode).toBeUndefined();
-    expect(dispatch).toHaveBeenCalledWith({
-      payload: {
-        index: 1,
-        routes: [
-          {name: 'MainTabs'},
-          {
-            name: 'CircleDetail',
-            params: {circleId: 'circle-1'},
-          },
-        ],
-      },
-      type: 'RESET',
-    });
+    expect(mockJoinCircle).not.toHaveBeenCalled();
+    expect(useCircleInviteStore.getState().inviteCode).toBe('abc123xy');
+    expect(dispatch).not.toHaveBeenCalled();
 
     act(() => tree.unmount());
   });

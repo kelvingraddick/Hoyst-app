@@ -1,3 +1,7 @@
+import {
+  CircularEmoji,
+  type CircularEmojiKind,
+} from '../../../design/components/CircularEmoji';
 import React, {
   createContext,
   useContext,
@@ -106,16 +110,28 @@ export function ProgressScreen(props: Props) {
 }
 export function ProgressBadge({
   icon: Icon,
+  emojiKind,
   tone = 'blue',
   size = 40,
   color,
 }: {
   icon: LucideIcon;
+  emojiKind?: CircularEmojiKind;
   tone?: 'blue' | 'green' | 'orange' | 'neutral';
   size?: number;
   color?: string;
 }) {
   const theme = useSystemTheme();
+  if (emojiKind) {
+    return (
+      <CircularEmoji
+        kind={emojiKind}
+        size={size}
+        emojiSize={size / 2}
+        backgroundColor={theme.category[tone].surface}
+      />
+    );
+  }
   return (
     <View
       style={{
@@ -165,17 +181,19 @@ export function ProgressRow({
   title,
   subtitle,
   icon,
+  emojiKind,
   onPress,
 }: {
   title: string;
   subtitle?: string;
   icon: LucideIcon;
+  emojiKind?: CircularEmojiKind;
   onPress: () => void;
 }) {
   const theme = useSystemTheme();
   return (
     <Pressable accessibilityRole="button" onPress={onPress} style={styles.row}>
-      <ProgressBadge icon={icon} />
+      <ProgressBadge icon={icon} emojiKind={emojiKind} />
       <View style={styles.grow}>
         <DSText variant="body">{title}</DSText>
         {subtitle ? (
@@ -346,7 +364,6 @@ function ProgressContent({navigation}: Props) {
             style={[
               styles.history,
               boostHorizontal && styles.headerHistory,
-              {backgroundColor: theme.surface},
             ]}>
             <History size={21} color={theme.text} />
           </Pressable>
@@ -453,7 +470,7 @@ function ProgressContent({navigation}: Props) {
                   !boostHorizontal && styles.boostVertical,
                 ]}>
                 <View style={[styles.earnTask, boostHorizontal && styles.grow]}>
-                  <ProgressBadge icon={Users} size={44} />
+                  <ProgressBadge emojiKind="members" icon={Users} size={44} />
                   <View style={styles.grow}>
                     <DSText variant="message" style={styles.taskTitle}>
                       {nextTask?.title ||
@@ -677,6 +694,7 @@ function ProgressContent({navigation}: Props) {
                     style={styles.rewardBody}>
                     <View style={[styles.row, styles.rewardHeader]}>
                       <ProgressBadge
+                        emojiKind={reward.item === 'skips' ? 'skip' : 'restore'}
                         icon={reward.icon}
                         tone={reward.category}
                         color={reward.color}

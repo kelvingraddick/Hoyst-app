@@ -55,11 +55,7 @@ function requireComplete(profile) {
 exports.checkProfileUsername = (0, https_1.onCall)(async (request) => {
     const uid = requireUid(request.auth?.uid);
     const handle = parse(handleSchema, request.data?.handle);
-    const [user, candidate] = await Promise.all([
-        firebase_1.db.doc(`users/${uid}`).get(),
-        firebase_1.db.doc(`handles/${handle}`).get(),
-    ]);
-    requireComplete(user.data());
+    const candidate = await firebase_1.db.doc(`handles/${handle}`).get();
     return {
         handle,
         available: !candidate.exists || candidate.data()?.uid === uid,

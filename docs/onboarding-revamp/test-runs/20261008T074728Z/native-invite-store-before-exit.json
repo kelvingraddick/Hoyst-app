@@ -1,0 +1,16 @@
+[
+  {
+    "key": "onboarding",
+    "step": "suggestions",
+    "completed": false,
+    "customText": "QA retained custom while joining",
+    "submissionId": null
+  },
+  {
+    "key": "invite:a307ba4c3fbffc89",
+    "step": "finish",
+    "completed": false,
+    "customText": "",
+    "submissionId": null
+  }
+]

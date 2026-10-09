@@ -252,8 +252,15 @@ export function TodayCircleCard({
     Math.min(100, Number.isFinite(completionRate) ? completionRate : 0),
   );
   const progressTone = getProgressTone(theme, completionRate);
-  const categoryVisual = getCircleCategoryVisual(card.category);
-  const categoryColor = getCircleCategoryForegroundColor(card.category, theme);
+  const categoryVisual = getCircleCategoryVisual(
+    card.category,
+    card.appearance,
+  );
+  const categoryColor = getCircleCategoryForegroundColor(
+    card.category,
+    theme,
+    card.appearance,
+  );
   const statusLabel = getStatusLabel(card);
   const statusTone = getStatusTone(statusLabel);
   const othersNeededLabel = getRemainingTapInsLabel(
@@ -439,6 +446,7 @@ export function TodayCircleCard({
               <View style={styles.attentionTitleCluster}>
                 <CircleCategoryIcon
                   category={card.category}
+                  appearance={card.appearance}
                   shape="roundedSquare"
                   size={36}
                   style={styles.categoryTitleIcon}
@@ -537,6 +545,7 @@ export function TodayCircleCard({
             <View style={styles.upcomingBody}>
               <CircleCategoryIcon
                 category={card.category}
+                appearance={card.appearance}
                 shape="roundedSquare"
                 size={52}
                 style={styles.categoryTitleIcon}
@@ -618,6 +627,7 @@ export function TodayCircleCard({
               <View style={styles.listTitleCluster}>
                 <CircleCategoryIcon
                   category={card.category}
+                  appearance={card.appearance}
                   shape="roundedSquare"
                   size={38}
                   style={styles.categoryTitleIcon}
@@ -689,6 +699,7 @@ export function TodayCircleCard({
             <View style={styles.titleCluster}>
               <CircleCategoryIcon
                 category={card.category}
+                appearance={card.appearance}
                 shape="roundedSquare"
                 size={30}
                 style={styles.categoryTitleIcon}
@@ -712,7 +723,10 @@ export function TodayCircleCard({
           </View>
 
           <View style={styles.activeCopy}>
-            <CircleCategoryPill category={card.category} />
+            <CircleCategoryPill
+              category={card.category}
+              appearance={card.appearance}
+            />
             <HoystText numberOfLines={2} tone="muted" variant="caption">
               {description}
             </HoystText>
@@ -747,6 +761,7 @@ export function TodayCircleCard({
               <View style={styles.titleCluster}>
                 <CircleCategoryIcon
                   category={card.category}
+                  appearance={card.appearance}
                   shape="roundedSquare"
                   size={34}
                   style={styles.categoryTitleIcon}
@@ -757,7 +772,10 @@ export function TodayCircleCard({
           </View>
 
           <View style={styles.todayMetaRow}>
-            <CircleCategoryPill category={card.category} />
+            <CircleCategoryPill
+              category={card.category}
+              appearance={card.appearance}
+            />
             <HoystChip label={statusLabel} tone={statusTone} />
           </View>
 

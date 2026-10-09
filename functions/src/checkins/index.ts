@@ -1112,6 +1112,7 @@ async function submitTapInHandler(request: CallableRequest) {
     }
 
     if (input.status === 'done') {
+      checkInPayload.buildTrackingMode = quantityConfig.buildTrackingMode ?? FieldValue.delete();
       checkInPayload.commitmentType = commitmentType;
       checkInPayload.currentValue = currentValue;
       checkInPayload.stepValue = quantityConfig.stepValue;
@@ -1135,6 +1136,7 @@ async function submitTapInHandler(request: CallableRequest) {
         checkInPayload.minimumValue = FieldValue.delete();
       }
     } else {
+      checkInPayload.buildTrackingMode = quantityConfig.buildTrackingMode ?? FieldValue.delete();
       checkInPayload.commitmentType = commitmentType;
       checkInPayload.currentValue = FieldValue.delete();
       checkInPayload.maximumValue = FieldValue.delete();

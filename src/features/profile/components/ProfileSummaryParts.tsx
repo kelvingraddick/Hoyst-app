@@ -105,7 +105,9 @@ export function ProfileStats({
       key: 'tap-ins',
       value: tapIns,
       label: 'Total Tap Ins',
-      icon: <ProfileIcon icon={CalendarCheck} tone="green" />,
+      icon: (
+        <ProfileIcon emojiKind="tapIns" icon={CalendarCheck} tone="green" />
+      ),
     },
   ];
   return (
@@ -181,7 +183,7 @@ export function ProfileTextLink({
   );
 }
 export function ProfileBestIcon() {
-  return <ProfileIcon icon={Trophy} tone="gold" />;
+  return <ProfileIcon emojiKind="milestone" icon={Trophy} tone="gold" />;
 }
 const styles = StyleSheet.create({
   xp: {gap: 6},

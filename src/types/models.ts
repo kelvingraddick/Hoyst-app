@@ -1,3 +1,4 @@
+import type {CommitmentAppearance} from '../shared/commitment-appearance';
 import type {ImageSourcePropType} from 'react-native';
 
 export type CirclePrivacy = 'private' | 'public';
@@ -24,6 +25,7 @@ export type CommitmentPace = 'daily' | 'weekly' | 'monthly';
  * `commitmentCadence` wire key. Use CommitmentPace for application logic.
  */
 export type CommitmentCadence = CommitmentPace;
+export type BuildTrackingMode = 'confirmation' | 'quantity';
 export type CommitmentType = 'build' | 'limit' | 'avoid';
 export type OpportunityStatus =
   | 'upcoming'
@@ -71,6 +73,7 @@ export type CommitmentFrequency = {
 };
 
 export type CommitmentQuantityConfig = {
+  buildTrackingMode?: BuildTrackingMode;
   maximumValue?: number;
   minimumValue?: number;
   stepValue: number;
@@ -126,7 +129,9 @@ export type Circle = {
   archivedAt?: Date;
   title: string;
   category: string;
+  appearance?: CommitmentAppearance;
   commitment: string;
+  buildTrackingMode?: BuildTrackingMode;
   commitmentType?: CommitmentType;
   commitmentCadence: CommitmentPace;
   commitmentFrequency: CommitmentFrequency;
@@ -153,6 +158,9 @@ export type CircleMemberStatus = {
   avatarImage?: ImageSourcePropType;
   avatarUrl?: string;
   membershipStatus?: CircleMembershipStatus;
+  joinedAt?: Date;
+  opportunityEligibility?: 'include_current' | 'next_opening';
+  firstTapInPending?: boolean;
   state: CircleMemberState;
   badgeCount?: number;
   todayStatus?: Exclude<CheckInStatus, 'rest'>;
@@ -302,7 +310,9 @@ export type CircleSummary = {
   archivedAt?: Date;
   title: string;
   category: string;
+  appearance?: CommitmentAppearance;
   commitment: string;
+  buildTrackingMode?: BuildTrackingMode;
   commitmentType?: CommitmentType;
   commitmentCadence?: CommitmentPace;
   commitmentFrequency?: CommitmentFrequency;
@@ -396,7 +406,9 @@ export type CircleDetailModel = CircleSummary & {
 
 export type CreateCircleDraft = {
   category: string;
+  appearance?: CommitmentAppearance;
   circleMode: CircleMode;
+  buildTrackingMode?: BuildTrackingMode;
   commitmentType: CommitmentType;
   commitmentCadence: CommitmentPace;
   graceRules: {

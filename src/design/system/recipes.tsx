@@ -1,3 +1,4 @@
+import type {CommitmentAppearance} from '../../shared/commitment-appearance';
 import React, {type ReactNode} from 'react';
 import {
   Pressable,
@@ -26,6 +27,7 @@ import {useSystemTheme} from './theme';
 export type CommitmentPreviewProps = {
   title: string;
   category: string;
+  appearance?: CommitmentAppearance;
   description: string;
   goal?: {
     label: string;
@@ -52,6 +54,7 @@ export type CommitmentPreviewProps = {
 export function DSCommitmentPreview({
   title,
   category,
+  appearance,
   description,
   goal,
   context,
@@ -63,9 +66,13 @@ export function DSCommitmentPreview({
   action,
 }: CommitmentPreviewProps) {
   const theme = useSystemTheme();
-  const visual = getCircleCategoryVisual(category);
+  const visual = getCircleCategoryVisual(category, appearance);
   const icon = (
-    <CircleCategoryIcon category={category} size={layout.iconBackplate} />
+    <CircleCategoryIcon
+      category={category}
+      appearance={appearance}
+      size={layout.iconBackplate}
+    />
   );
   const button = action ? (
     <DSButton
@@ -102,6 +109,7 @@ export function DSCommitmentPreview({
           style={styles.headerTarget}>
           <CircleCategoryIcon
             category={category}
+            appearance={appearance}
             showBackplate={false}
             size={layout.iconBackplate}
           />

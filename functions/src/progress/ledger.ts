@@ -42,7 +42,7 @@ export async function readEconomy(
   const wallet = snapshot.exists
     ? (snapshot.data() as Wallet)
     : starterWallet(now);
-  if (flags.inventory) wallet.inventoryEnforcedAt ??= now;
+  if (flags.inventory) {wallet.inventoryEnforcedAt ??= now;}
   flags.inventory ||= Boolean(wallet.inventoryEnforcedAt);
   if (
     flags.earning &&
@@ -144,7 +144,7 @@ export async function prepareSuccessfulOpportunity(
   transaction: Transaction,
   economy: Economy,
   opportunityId: string,
-  timezone: string,
+  _timezone: string,
 ) {
   const id = 'opportunity_' + key(opportunityId);
   const record = await transaction.get(ledgerRef(economy.uid, id));

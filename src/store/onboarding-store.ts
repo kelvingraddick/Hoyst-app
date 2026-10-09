@@ -1,3 +1,4 @@
+import {normalizeCategory} from '../shared/commitment-appearance';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {create} from 'zustand';
 import {createJSONStorage, persist} from 'zustand/middleware';
@@ -42,6 +43,7 @@ export type OnboardingStoreState = OnboardingIntentDraft & {
   timezone: string;
   clearStarterCircleSetup: () => void;
   clearProfileCompletion: () => void;
+  completeSavedSetup: (requestId: string) => void;
   getPreferences: () => OnboardingPreferences | undefined;
   markSeen: () => void;
   nextStep: () => void;
@@ -119,7 +121,12 @@ export function normalizeOnboardingStepForMode(
   value: unknown,
   circleMode: 'personal' | 'group',
 ): OnboardingStep {
-  const normalizedStep = value === 'circleGrace' ? circleMode === 'personal' ? 'circleTimezone' : 'circlePrivacy' : normalizeOnboardingStep(value);
+  const normalizedStep =
+    value === 'circleGrace'
+      ? circleMode === 'personal'
+        ? 'circleTimezone'
+        : 'circlePrivacy'
+      : normalizeOnboardingStep(value);
   const availableSteps = getOnboardingSteps(circleMode);
 
   if (availableSteps.includes(normalizedStep)) {
@@ -139,6 +146,8 @@ function getNextStep(
   direction: 1 | -1,
   circleMode: 'personal' | 'group',
 ) {
+  if (currentStep === 'circleGrace')
+    return normalizeOnboardingStepForMode(currentStep, circleMode);
   const steps = getOnboardingSteps(circleMode);
   const currentIndex = steps.indexOf(currentStep);
   const nextIndex = Math.max(
@@ -170,9 +179,10 @@ export function migratePersistedOnboardingState(persistedState: unknown) {
   );
   const starterCircleDraft = {
     ...normalizedStarterCircleDraft,
-    category:
-      normalizedStarterCircleDraft.category?.trim() ||
-      getLegacyFocusAreaCategory(focusArea),
+    category: normalizeCategory(
+      normalizedStarterCircleDraft.category ||
+        getLegacyFocusAreaCategory(focusArea),
+    ),
   };
 
   return {
@@ -206,9 +216,24 @@ export const useOnboardingStore = create<OnboardingStoreState>()(
         set({
           hasPendingProfileCompletion: false,
         }),
+      completeSavedSetup: requestId =>
+        set(state => ({
+          hasSeenOnboarding: true,
+          ...(state.starterCircleSetupId === requestId
+            ? {
+                currentStep: 'welcome' as const,
+                firstCircleSkipped: false,
+                hasPendingProfileCompletion: false,
+                hasPendingStarterCircleSetup: false,
+                journey: 'standard' as const,
+                starterCircleDraft: createInitialStarterCircleDraft(),
+                starterCircleSetupId: undefined,
+              }
+            : {}),
+        })),
       getPreferences: () =>
         buildOnboardingPreferences({
-          categories: [get().starterCircleDraft.category],
+          categories: get().categories ?? [get().starterCircleDraft.category],
           focusArea: get().focusArea,
         }),
       markSeen: () =>

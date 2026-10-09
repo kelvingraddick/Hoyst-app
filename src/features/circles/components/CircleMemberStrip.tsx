@@ -75,6 +75,7 @@ function getMemberStatusLabel(
   if (member.membershipStatus === 'pending') {
     return 'Pending approval';
   }
+  if (member.firstTapInPending) return 'Starts next window';
 
   if (isCycleGoalMet(member, commitmentCadence)) {
     return 'Goal met';
@@ -98,6 +99,7 @@ function getCompactMemberStatusLabel(
   if (member.membershipStatus === 'pending') {
     return 'Pending';
   }
+  if (member.firstTapInPending) return 'UPCOMING';
 
   if (isCycleGoalMet(member, commitmentCadence)) {
     return 'GOAL MET';
@@ -119,6 +121,14 @@ export function getMemberProgressConfig(
   theme: ReturnType<typeof useHoystTheme>,
   commitmentCadence?: CommitmentPace,
 ) {
+  if (member.firstTapInPending) {
+    return {
+      labelColor: theme.textMuted,
+      progress: 0,
+      ringColor: theme.textMuted,
+      trackColor: theme.border,
+    };
+  }
   if (member.membershipStatus === 'pending') {
     return {
       labelColor: theme.accentSecondaryForeground,
@@ -189,6 +199,7 @@ function StatusBadge({
       {showsCheck ? (
         <Check color="#FFFFFF" size={11} strokeWidth={3.1} />
       ) : !member.todayStatus &&
+        !member.firstTapInPending &&
         !hasSkippedToday(member) &&
         member.membershipStatus !== 'pending' ? (
         <ArrowUp color="#FFFFFF" size={12} strokeWidth={3} />

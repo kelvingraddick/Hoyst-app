@@ -1,3 +1,4 @@
+import {palettes} from '../../shared/commitment-appearance';
 import {Platform, type TextStyle} from 'react-native';
 
 /** Opt-in v1. Home and legacy tokens deliberately do not import this module. */
@@ -64,7 +65,16 @@ export const palette = {
   orange: '#FF6D00',
   red: '#FF3B30',
 } as const;
-export type CategoryTone = 'blue' | 'purple' | 'green' | 'orange' | 'neutral';
+export type CategoryTone =
+  | 'blue'
+  | 'purple'
+  | 'green'
+  | 'orange'
+  | 'neutral'
+  | 'teal'
+  | 'gold'
+  | 'pink'
+  | 'red';
 export type SemanticTone =
   | 'text'
   | 'muted'
@@ -97,6 +107,36 @@ export function getSystemTheme(scheme: SystemScheme) {
     track: isDark ? '#303036' : '#E9E9ED',
     shadow: isDark ? '#000000' : '#92723E',
     category: {
+      teal: {
+        surface: isDark
+          ? palettes.teal.accent + '20'
+          : palettes.teal.background,
+        foreground: isDark
+          ? palettes.teal.darkForeground
+          : palettes.teal.foreground,
+      },
+      gold: {
+        surface: isDark
+          ? palettes.gold.accent + '20'
+          : palettes.gold.background,
+        foreground: isDark
+          ? palettes.gold.darkForeground
+          : palettes.gold.foreground,
+      },
+      pink: {
+        surface: isDark
+          ? palettes.pink.accent + '20'
+          : palettes.pink.background,
+        foreground: isDark
+          ? palettes.pink.darkForeground
+          : palettes.pink.foreground,
+      },
+      red: {
+        surface: isDark ? palettes.red.accent + '20' : palettes.red.background,
+        foreground: isDark
+          ? palettes.red.darkForeground
+          : palettes.red.foreground,
+      },
       blue: {
         surface: isDark ? '#133240' : '#E7F8FF',
         foreground: isDark ? '#8FE2FF' : '#086CA8',

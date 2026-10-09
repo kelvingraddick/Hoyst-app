@@ -1,6 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.deleteAccount = exports.completeProfile = void 0;
+const commitment_appearance_1 = require("../shared/commitment-appearance");
 const auth_1 = require("firebase-admin/auth");
 const firestore_1 = require("firebase-admin/firestore");
 const storage_1 = require("firebase-admin/storage");
@@ -26,13 +27,29 @@ const commitmentFrequencySchema = zod_1.z.object({
     opportunitiesPerPeriod: zod_1.z.number().int().min(1).max(31).optional(),
     tapInsPerWeek: zod_1.z.number().int().min(1).max(7),
 });
-const starterCircleSchema = zod_1.z.object({
-    category: zod_1.z.string().trim().min(1).max(40),
+const starterCircleSchema = zod_1.z
+    .object({
+    category: zod_1.z.string().trim().min(1).max(40).transform(commitment_appearance_1.normalizeCategory),
+    appearance: zod_1.z
+        .object({
+        emoji: zod_1.z
+            .string()
+            .refine(value => commitment_appearance_1.selectableEmojis.includes(value), 'Unsupported emoji')
+            .optional(),
+        palette: zod_1.z
+            .string()
+            .refine(value => Object.prototype.hasOwnProperty.call(commitment_appearance_1.palettes, value), 'Unsupported palette')
+            .optional(),
+    })
+        .strict()
+        .optional(),
+    independentTitle: zod_1.z.boolean().optional(),
     circleMode: zod_1.z.enum(['personal', 'group']).optional().default('group'),
     commitment: zod_1.z.string().trim().min(1).max(160),
     commitmentCadence: zod_1.z.enum(['daily', 'weekly', 'monthly']).optional(),
     commitmentFrequency: commitmentFrequencySchema,
     commitmentType: zod_1.z.enum(['build', 'limit', 'avoid']).default('build'),
+    buildTrackingMode: zod_1.z.enum(['confirmation', 'quantity']).optional(),
     graceRules: zod_1.z
         .object({
         skip: graceRuleSchema,
@@ -49,6 +66,29 @@ const starterCircleSchema = zod_1.z.object({
     timezone: zod_1.z.string().trim().min(1).max(80).optional(),
     title: zod_1.z.string().trim().min(1).max(80),
     unitLabel: zod_1.z.string().trim().min(1).max(32).default('Tap In'),
+})
+    .superRefine((input, context) => {
+    if (input.commitmentType === 'build' &&
+        input.buildTrackingMode === 'quantity' &&
+        (!input.targetValue || input.targetValue < 1))
+        context.addIssue({
+            code: zod_1.z.ZodIssueCode.custom,
+            message: 'Enter a positive goal amount.',
+            path: ['targetValue'],
+        });
+    if (input.circleMode === 'group' && input.maxSize < 2)
+        context.addIssue({
+            code: zod_1.z.ZodIssueCode.custom,
+            message: 'Capacity must be at least 2.',
+            path: ['maxSize'],
+        });
+    if (input.commitmentType === 'limit' &&
+        (input.minimumValue ?? 0) > (input.maximumValue ?? 1))
+        context.addIssue({
+            code: zod_1.z.ZodIssueCode.custom,
+            message: 'Minimum cannot exceed maximum.',
+            path: ['minimumValue'],
+        });
 });
 const starterCircleHiddenDefaults = {
     graceRules: {
@@ -60,7 +100,7 @@ const starterCircleHiddenDefaults = {
     maxSize: 10,
 };
 const completeProfileSchema = zod_1.z.object({
-    avatarUrl: zod_1.z.string().url().optional(),
+    avatarUrl: zod_1.z.string().url().nullable().optional(),
     displayName: zod_1.z.string().trim().min(1).max(60),
     handle: zod_1.z
         .string()
@@ -302,7 +342,10 @@ async function deleteAuthUser(uid) {
 }
 exports.completeProfile = (0, https_1.onCall)(async (request) => {
     const uid = requireAuthUid(request.auth?.uid);
-    const input = completeProfileSchema.parse(request.data);
+    const parsedInput = completeProfileSchema.safeParse(request.data);
+    if (!parsedInput.success)
+        throw new https_1.HttpsError('invalid-argument', parsedInput.error.issues.map(issue => issue.message).join(' '));
+    const input = parsedInput.data;
     const userRecord = request.auth?.token;
     const userRef = firebase_1.db.collection('users').doc(uid);
     const userPrivateRef = firebase_1.db.collection('userPrivate').doc(uid);
@@ -322,7 +365,9 @@ exports.completeProfile = (0, https_1.onCall)(async (request) => {
         const existingStarterCircleId = asOptionalString(userPrivate?.onboardingStarterCircleId);
         const existingStarterCircleSetupId = asOptionalString(userPrivate?.onboardingStarterCircleSetupId);
         const profileData = {
-            avatarUrl: input.avatarUrl ?? authAvatarUrl ?? null,
+            avatarUrl: input.avatarUrl === null
+                ? null
+                : input.avatarUrl ?? authAvatarUrl ?? null,
             displayName: input.displayName,
             handle: input.handle,
             onboardingStatus: 'complete',
@@ -394,18 +439,26 @@ exports.completeProfile = (0, https_1.onCall)(async (request) => {
             const joinMode = isPersonal
                 ? 'invite_only'
                 : input.starterCircle.joinMode;
-            const maxSize = isPersonal ? 1 : starterCircleHiddenDefaults.maxSize;
+            const maxSize = isPersonal ? 1 : input.starterCircle.maxSize;
             const privacy = isPersonal ? 'private' : input.starterCircle.privacy;
-            const title = isPersonal
-                ? input.starterCircle.commitment
-                : input.starterCircle.title;
+            const title = input.starterCircle.title ||
+                input.starterCircle.commitment.slice(0, 80);
             const commitmentPace = (0, commitments_1.getInputCommitmentPace)(input.starterCircle.commitmentCadence, input.starterCircle.commitmentFrequency);
             const commitmentFrequency = (0, commitments_1.getStoredCommitmentFrequency)(commitmentPace, input.starterCircle.commitmentFrequency);
             const commitmentType = (0, commitments_1.getCommitmentType)(input.starterCircle);
             const quantityConfig = (0, commitments_1.getQuantityConfig)(input.starterCircle);
             const circle = {
                 category: input.starterCircle.category,
+                ...(input.starterCircle.appearance !== undefined
+                    ? { appearance: input.starterCircle.appearance }
+                    : {}),
                 circleMode,
+                ...(isPersonal
+                    ? {
+                        independentTitle: input.starterCircle.independentTitle ??
+                            title !== input.starterCircle.commitment,
+                    }
+                    : {}),
                 createdAt: now,
                 commitment: input.starterCircle.commitment,
                 commitmentCadence: commitmentPace,
@@ -431,6 +484,9 @@ exports.completeProfile = (0, https_1.onCall)(async (request) => {
                     : {}),
                 title,
                 timezone: input.starterCircle.timezone ?? input.timezone,
+                ...(quantityConfig.buildTrackingMode
+                    ? { buildTrackingMode: quantityConfig.buildTrackingMode }
+                    : {}),
                 unitLabel: quantityConfig.unitLabel,
                 updatedAt: now,
             };
@@ -466,6 +522,9 @@ exports.completeProfile = (0, https_1.onCall)(async (request) => {
             if (!isPersonal && privacy === 'public') {
                 transaction.set(publicIndexRef, {
                     category: input.starterCircle.category,
+                    ...(input.starterCircle.appearance !== undefined
+                        ? { appearance: input.starterCircle.appearance }
+                        : {}),
                     circleMode,
                     commitment: input.starterCircle.commitment,
                     commitmentCadence: commitmentPace,
@@ -494,6 +553,9 @@ exports.completeProfile = (0, https_1.onCall)(async (request) => {
                         ? { targetValue: quantityConfig.targetValue }
                         : {}),
                     title,
+                    ...(quantityConfig.buildTrackingMode
+                        ? { buildTrackingMode: quantityConfig.buildTrackingMode }
+                        : {}),
                     unitLabel: quantityConfig.unitLabel,
                     updatedAt: now,
                 });
@@ -552,6 +614,15 @@ exports.completeProfile = (0, https_1.onCall)(async (request) => {
 });
 exports.deleteAccount = (0, https_1.onCall)(async (request) => {
     const uid = requireAuthUid(request.auth?.uid);
+    await firebase_1.db.runTransaction(async (transaction) => {
+        const profileRef = firebase_1.db.collection('users').doc(uid);
+        const profile = await transaction.get(profileRef);
+        if (profile.exists) {
+            transaction.update(profileRef, {
+                accountDeletionStartedAt: firestore_1.FieldValue.serverTimestamp(),
+            });
+        }
+    });
     const ownedCircleSnapshots = await firebase_1.db
         .collection('circles')
         .where('ownerId', '==', uid)

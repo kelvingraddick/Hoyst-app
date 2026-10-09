@@ -162,3 +162,108 @@ The XP level pills on Progress and Profile now use white backgrounds in both the
 Removed the main Profile heading, moved Share to a circular top-left control matching Settings, reduced the avatar pencil face to 32 points with a 16-point icon and 48-point touch target, and centered a white Edit profile pill with black text in both themes. Subpage headings, the avatar, tint, summary sections, and tab bar retain their existing behavior. The Profile scaffold supports an optional leading control and heading without changing other screens.
 
 Forty focused Profile tests, typecheck, formatting, and whitespace checks pass. Scoped lint has zero errors and five existing warnings. Native iOS checks confirm the new Share destination, full Edit form, photo-edit route, and accessibility labels. Updated Profile reference captures include `ios-light.png`, `ios-dark.png`, `ios-light-360.png`, `ios-dark-360-accessibility-large.png`, bottom scrolling, guest/incomplete/loading states, and the live account. Simulator text size and preview appearance were restored. Android was not rerun for this follow-up; its previous share/photo interaction gate remains unchanged.
+
+
+## Onboarding revamp, 2026-10-07
+
+**Final result: passed** for the captured native visual comparison. Broader release verification remains incomplete, as listed below.
+
+### Visual truth and normalization
+
+The source is the latest approved onboarding mock set. Its app-content panels are preserved on the left side of `docs/onboarding-revamp/qa/comparison-suggestions.jpg`, `comparison-build-goal.jpg`, `comparison-profile.jpg`, and `comparison-ios-reminders.jpg`. Each file contains the actual approved source and its matching rendered native state together. These are comparison images, not recreated illustrations. Source app content is 390 x 844 pixels. iOS screenshots are 1206 x 2622 pixels, representing 402 x 874 points at 3x. Native comparison panels crop the OS safe areas (186 top and 102 bottom pixels), then scale width to 390 while preserving aspect ratio. The resulting native panel is 390 x 754 pixels. Height is not stretched to match the source. Android captures are 1080 x 2424 pixels from the emulator. Device chrome remains native.
+
+State: light-theme Suggestions with the walking starter selected and an eligible public Circle; Build quantity 20 minutes with weekly four; combined profile with illustrative name and available username; iOS reminder preview. Native-only captures additionally cover weekly/monthly configuration, privacy, open seats, capacity, timezone, appearance, personal/shared Review, basic Build, Limit, type choice, joining, email and phone forms. `ios-limit-goal-final.png` is the post-fix dark Limit state with an inactive Build quantity choice retained. No fixture created a production Circle, uploaded a photo, sent an SMS, or requested OS permission. Temporary registration code was removed and the real app relaunched.
+
+Full-view evidence: the four `comparison-*.jpg` files. Focused comparisons examined each source/native heading and Hoy bubble, selected recommendation card, custom alternative/input, amount/unit controls, profile fields/availability, and platform notification preview. These regions are readable in the paired captures. Configuration contact sheets 1 through 4 supplement those comparisons.
+
+### Fidelity surfaces
+
+- Typography: native HoystText uses the app's existing fonts, weights and text colors. The heading hierarchy, equally styled suggestion/custom headings, independent name/commitment fields, and per-Tap-In labels are retained. Native font rendering and minimum input sizes replace raster mock typography.
+- Spacing: persistent footer actions stay outside the scroll area; OS safe areas and the keyboard are honored. Inputs use the app's existing radii and heights. The compact numeric Build layout keeps amount and unit together and the preview visible at the captured size. Longer configuration content scrolls.
+- Color: the light canvas, lavender top tint, purple primary actions, semantic green selection, and tinted recommendation cards follow the approved direction. Dark captures use the app's existing dark surfaces and foregrounds. Solid native buttons replace the mock's gradient for consistency with current app controls.
+- Assets: the actual Hoyst logo and existing raster Hoy are reused. Native emoji render Build, Limit and Avoid consistently with the rest of the app. The official Google sign-in mark is reused without alteration. Public Circle previews honor their stored appearance.
+- Copy: screen subtitles and selected-interest chips are removed. Welcome actions, separated custom option, Goal for each Tap In, Tap Ins per week/month, optional photo, inline availability, privacy disclosure, and platform reminder preview match the approved behavior. Recommendations intentionally vary with the query, interests and current public availability.
+
+### Comparison history and fixes
+
+| Earlier finding | Fix | Post-fix evidence |
+| --- | --- | --- |
+| P1: Welcome rendered the icon instead of the Hoyst wordmark. | Use the existing logo BrandMark. | `ios-welcome-light.png` |
+| P1: The modal presentation reduced usable wizard height. | Use full-screen native presentation. | All final configuration and comparison captures |
+| P1: A conditional text child produced a native raw-text warning. | Correct conditional rendering. | Final live native flow and configuration sheets |
+| P2: Numeric Build controls pushed its preview below the initial viewport. | Compact tracking choices and put amount/unit beside each other. | `comparison-build-goal.jpg`, `ios-build-goal-keyboard.png` |
+| P2: A retained scroll position hid the goal heading after keyboard testing. | Reset the wizard scroll on step changes and recapture the neutral state. | `comparison-build-goal.jpg` |
+| P2: Review's privacy disclosure could be missed below long details. | Place it beside the persistent review action. | `ios-review-light.png`, `ios-review-personal-light.png`, `android-review-light.png` |
+| P2: Limit's emoji was omitted when an inactive Build quantity mode remained. | Scope the header suppression specifically to numeric Build. | `ios-limit-goal-final.png` |
+| P2: Timezone offset display was inaccurate in Hermes. | Use Luxon timezone offsets. | `ios-timezone-light.png` and three timezone tests |
+
+### Interactions and verification limits
+
+Native iOS checks exercised the welcome/custom/starter configuration path, Save for later and Home resume, configuration choices, profile/auth forms without sending credentials, keyboard behavior, and review. Android light Review/reminder and dark goal rendering were captured and inspected. Automated tests cover journey ordering/skips, mode and pace retention, Review edits, migration, restart recovery, auth cancellation, retained invite/custom intent, duplicate submission prevention, permission opt-in, pending membership, full-Circle races and contextual composer handoff.
+
+The Mac locked during the last interactive pass. Earlier captures and interactions remain valid; final code checks and the dark Limit capture were completed independently. Android's headless emulator was unavailable to the computer-use tool, so its gesture/back, keyboard, photo-picker and accessibility interactions are not claimed as verified. Small-screen/enlarged-text device checks and physical Apple/Google/SMS, photo picking/upload, OS permission delivery, and TestFlight checks remain release tasks. No store build was distributed.
+
+### Follow-up polish
+
+P3: The compact native Hoy and photo placeholder place more emphasis on fields than the generated mock. They reuse the current app's component scale. A later visual iteration can increase their emphasis if desired. Mock gradient/shadow refinements are optional because native controls deliberately use the current app's tokens.
+
+### Implementation checklist
+
+- [x] Shared native onboarding/create/invite configuration and explicit completion ownership.
+- [x] Matched source/native visual comparison and post-fix captures.
+- [x] Client/server validation, emulator checks, native Debug builds and selective backend deployment.
+- [ ] Physical-device authentication, photos and notification delivery on an internal build.
+- [ ] Android interaction and small-screen/enlarged-text accessibility pass before wider release.
+
+final result: passed
+
+
+## October 7 follow-up: Hoy messages and Welcome polish
+
+The shared Hoy message surface and emphasized-text renderer now power Home and the complete onboarding scaffold, including configuration, account/profile, invite, recovery and completion states. Copy provides explicit emphasis phrases without formatting characters. Goal emphasizes the selected pace. Home's surface radius, padding, warm light shadow, black dark shadow and theme foreground are preserved; the existing Home interactions and onboarding's 58-point Hoy remain intact. At accessibility font scales of 1.6 or greater, onboarding stacks Hoy above the full-width message to keep text readable.
+
+Welcome now has an opaque white card in light mode and Home's #1D1D20 card surface in dark mode, a subtle border and soft shadow. Get started remains the only filled button. The whole centered account prompt is tappable, with muted regular prompt text and a purple semibold Sign in span. Browse for now is a smaller muted link. The links have 44-point iOS and 48-point Android minimum targets and naturally wrapping text.
+
+### Native evidence
+
+- `docs/onboarding-revamp/qa/polish/ios-polish-matrix.jpg` and `docs/onboarding-revamp/qa/polish/android-polish-matrix.jpg` contain native Welcome, Suggestions, numeric Goal, Profile, account method selection and save-recovery states in both light and dark mode. All 24 full-resolution captures are in the same directory. Captures use production screen components with local, non-persistent fixture state and blocked submission gateways. No account, Circle, SMS, photo upload or OS permission was submitted.
+- `docs/onboarding-revamp/qa/polish/home-message-comparison.jpg` puts the exact pre-polish Home component, the shared-renderer Home component and Welcome side by side at the same width. Home's message-area pixels are identical in the paired iOS captures, excluding status-bar time. The compared full-resolution region is x=0..1206 and y=160..650. Home's bubble/shadow/text and orb position are unchanged.
+- `docs/onboarding-revamp/qa/polish/ios-welcome-small-light.png` and `docs/onboarding-revamp/qa/polish/android-welcome-small-light.png` render Welcome inside a 360-by-680-point content region. The message, preview and all three footer actions remain visible. This is a constrained native content viewport on the existing simulators, not a separate physical small device.
+
+Native images were normalized by width without stretching height and visually inspected together. Light bubbles have Home's white surface, primary foreground, bold emphasis and warm shadow. Dark bubbles use Home's #252527 surface and light foreground. Welcome's preview is clearly separated from the canvas in both themes. The selected goal pace, profile instruction, saved account intent and recovery status have visible emphasis. The compact footer uses the approved hierarchy without secondary pill backgrounds.
+
+### Behavior and automated verification
+
+- App TypeScript checking and targeted ESLint passed with zero errors.
+- Five focused Jest suites passed: create-circle-screen, circle-invite-screen, setup-journey, auth and auth-phone, totaling 131 tests. New checks exercise the Welcome footer's single filled button, original Sign in/Get started destinations, Browse preserving a deferred custom setup and stable identifier, and the actual monthly pace as the only goal-message emphasis.
+- Home's existing suite passed 52 tests and retained the same two baseline failures: actorless activity meaning-icon expectation and the legacy PERSONAL label expectation. Neither failure is caused by the shared message extraction.
+- Native iOS Get started, Interests skip, Suggestions selection and subsequent setup navigation were exercised. Existing navigation and draft persistence callbacks remain unchanged by this presentation update.
+
+### Remaining verification
+
+The Mac locked during the last interactive accessibility pass. One preferred-text-size increment was exercised and restored, but the full enlarged-text, wrapping, scroll and keyboard interaction checks could not be completed. Android rendering is verified in both themes; its footer gesture and keyboard pass remains pending. No claim is made that those blocked interaction checks passed. The temporary fixture registration was removed, the real entry point restored and both native apps cold-launched with their original persisted settings and setup intent.
+
+Implementation and captured visual comparison: passed. Interactive accessibility/keyboard acceptance: needs follow-up after unlocking the Mac.
+
+## October 7 follow-up: safe areas and Back controls
+
+Earlier standalone polish captures did not exercise the real native modal boundaries. The actual onboarding route reproduced the reported overlap. The shared scaffold now measures each native screen locally, applies live top and horizontal insets once, and pads the footer by the bottom inset plus 8 points. A keyboard with positive height uses only the 8-point gap. Floating zero-height input toolbars retain the system inset. iOS owns keyboard avoidance; Android retains native adjustResize. Automatic scroll-view insets are disabled.
+
+Back retains the existing transition handler and submission guards. Android subscribes only while focused, leaving covering authentication screens in control of Back. Navigation targets are 44 points on iOS and 48 on Android. Personal now uses the shared 40-point 👤 emoji with a purple surface. Larger text gets wider phase-label space.
+
+### Actual native route checks
+
+- [Before/after comparison](docs/onboarding-revamp/qa/safe-area/safe-area-comparison.jpg): actual iOS onboarding before/after and Android onboarding after. Both header controls clear the status area; Continue clears the system gesture area.
+- iOS: Back returned from Mode to Suggestions with the selected starter retained. With the software keyboard open, the custom field scrolled into view and Make it mine stayed tappable above the keyboard. Five preferred-text-size increments were checked after a fresh app load. Heading/message wrapping, scrolling to Personal, and the persistent footer passed. Text size and keyboard preferences were restored.
+- Android: Home's actual onboarding entry exercised Welcome, Interests, Suggestions and Mode in dark mode. The emoji, header and footer passed.
+- Creation and invite: actual RootNavigator CreateCircle full-screen modal and CircleInvite routes were exercised on both native apps. Creation was inspected in iOS dark mode and Android light mode. Synthetic invite metadata was used locally with persistence disabled. Temporary navigation selected the real routes with their original providers and native boundaries, then was removed. No Circle was created or joined.
+- Android hardware Back cancelled covering sign-in, returned to the retained invite Account step, then returned to the same invite preview. See android-auth-cancel.png and android-invite-back.png in the safe-area capture directory.
+- Android's floating handwriting toolbar exposed a zero-height keyboard edge case. The footer fix and focused regression address it. Floating input rendering was inspected; it does not establish a docked-keyboard resize pass.
+
+### Verification and limits
+
+TypeScript and targeted ESLint passed. Seven affected suites passed with 154 tests: setup-journey-frame, create-circle-screen, circle-invite-screen, circular-emoji, setup-journey, auth and auth-phone. Added coverage checks nonzero/rotated insets, visible-keyboard mounting/dismissal, floating input, retained values and identifiers on Back, conditional skips, Review return, focused Android subscriptions and 👤 selection.
+
+The smaller iPhone 17e simulator installed the Debug app but failed to launch it, including after a restart. Its actual-route checks remain unverified. Android docked-keyboard/enlarged-text interactions and the full theme/viewport matrix remain release QA tasks. Constrained standalone captures do not substitute for those checks. Original persisted setup intent and unrelated checkout changes were preserved. No backend or stored-data change was required.
+
+Implementation, focused verification and completed native checks: passed. Full device matrix: incomplete as described above.

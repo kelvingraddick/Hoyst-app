@@ -1,0 +1,70 @@
+{
+  "checkedAt": "2026-10-08T17:41:27.050Z",
+  "uid": "0Kn1CerJtegU4hQAqY0lxjbsQ3V2",
+  "documents": [
+    {
+      "name": "projects/hoyst-firebase-app/databases/(default)/documents/userPrivate/0Kn1CerJtegU4hQAqY0lxjbsQ3V2/momentum/current",
+      "fields": {
+        "status": {
+          "stringValue": "getting_started"
+        },
+        "currentStreak": {
+          "integerValue": "0"
+        },
+        "completedOpportunities": {
+          "integerValue": "0"
+        },
+        "skippedOpportunities": {
+          "integerValue": "0"
+        },
+        "bestStreak": {
+          "integerValue": "0"
+        },
+        "periodKey": {
+          "stringValue": "current"
+        },
+        "updatedAt": {
+          "timestampValue": "2026-10-08T17:39:40.454Z"
+        },
+        "percentage": {
+          "integerValue": "0"
+        },
+        "creditedOpportunities": {
+          "integerValue": "0"
+        },
+        "rollingMomentum": {
+          "mapValue": {
+            "fields": {
+              "windowDays": {
+                "integerValue": "14"
+              },
+              "percentage": {
+                "integerValue": "0"
+              },
+              "hasUnrecoveredMiss": {
+                "booleanValue": false
+              },
+              "status": {
+                "stringValue": "getting_started"
+              },
+              "resolvedOpportunityCount": {
+                "integerValue": "0"
+              }
+            }
+          }
+        },
+        "tapInOpportunities": {
+          "integerValue": "0"
+        },
+        "label": {
+          "stringValue": "Getting Started"
+        },
+        "availableOpportunities": {
+          "integerValue": "0"
+        }
+      },
+      "createTime": "2026-10-08T17:39:40.489803Z",
+      "updateTime": "2026-10-08T17:39:40.489803Z"
+    }
+  ]
+}

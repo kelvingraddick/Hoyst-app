@@ -432,6 +432,17 @@ describe('root navigator mode policy', () => {
 });
 
 describe('root auth modal policy', () => {
+  it('keeps a live shared setup open through ready-profile handoff even when legacy resume flags are cleared', () => {
+    expect(
+      shouldDismissAuthModal({
+        status: 'authenticatedReady',
+        hasSeenOnboarding: true,
+        hasPendingProfileCompletion: false,
+        hasPendingStarterCircleSetup: false,
+        hasActiveSetupJourney: true,
+      }),
+    ).toBe(false);
+  });
   it('auto-presents onboarding for first-run guests without pending actions', () => {
     expect(
       getRootAuthPresentation({
@@ -771,7 +782,6 @@ describe('onboarding store', () => {
       'circleMode',
       'circleCategory',
       'circleRules',
-      'circleGrace',
       'circleTimezone',
       'circleReview',
       'notifications',
@@ -786,7 +796,6 @@ describe('onboarding store', () => {
       'circleCategory',
       'circleTitle',
       'circleRules',
-      'circleGrace',
       'circlePrivacy',
       'circleCapacity',
       'circleTimezone',
@@ -795,8 +804,8 @@ describe('onboarding store', () => {
       'auth',
       'finishProfile',
     ]);
-    expect(getOnboardingProgressSteps('personal')).toHaveLength(11);
-    expect(getOnboardingProgressSteps('group')).toHaveLength(14);
+    expect(getOnboardingProgressSteps('personal')).toHaveLength(10);
+    expect(getOnboardingProgressSteps('group')).toHaveLength(13);
   });
 
   it('uses exact mode-aware onboarding copy', () => {
@@ -891,7 +900,7 @@ describe('onboarding store', () => {
     store.setFirstCircleSkipped(true);
 
     expect(useOnboardingStore.getState().starterCircleDraft).toMatchObject({
-      category: 'Deep Work',
+      category: 'Work',
       commitment: 'Ship one focused block',
       title: 'Maker Mornings',
     });
@@ -957,7 +966,7 @@ describe('onboarding store', () => {
     store.startOnboardingWizard();
 
     expect(useOnboardingStore.getState().starterCircleDraft).toMatchObject({
-      category: 'Deep Work',
+      category: 'Work',
       commitmentCadence: 'daily',
       commitmentFrequency: {tapInsPerWeek: 7},
       commitment: '',
@@ -982,9 +991,7 @@ describe('onboarding store', () => {
     expect(normalizeOnboardingStep('categories')).toBe('circleCategory');
     expect(normalizeOnboardingStep('focusArea')).toBe('circleCategory');
     expect(normalizeOnboardingStep('circleFrequency')).toBe('circleRules');
-    expect(normalizeOnboardingStep('commitmentFrequency')).toBe(
-      'circleRules',
-    );
+    expect(normalizeOnboardingStep('commitmentFrequency')).toBe('circleRules');
     expect(normalizeOnboardingStep('reminders')).toBe('circleTitle');
     expect(normalizeOnboardingStep('pace')).toBe('circleTitle');
     expect(normalizeOnboardingStep('profile')).toBe('circleTitle');
@@ -1015,10 +1022,10 @@ describe('onboarding store', () => {
     });
 
     expect(migrated).toMatchObject({
-      categories: ['Deep Work'],
+      categories: ['Work'],
       currentStep: 'circleRules',
       starterCircleDraft: {
-        category: 'Deep Work',
+        category: 'Work',
         graceRules: {skip: {allowance: 3, windowDays: 10}},
         maxSize: 25,
         privacyMode: 'private',

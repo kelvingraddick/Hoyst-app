@@ -179,7 +179,7 @@ export async function identifyPushUser(uid: string): Promise<void> {
   pushUserId = uid;
   await syncPushSubscription({
     forceServerRepair: true,
-    requestPermissionIfPossible: true,
+    requestPermissionIfPossible: false,
   });
 }
 

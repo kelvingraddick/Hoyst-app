@@ -7,6 +7,7 @@ import {
   View,
   type StyleProp,
   type ViewStyle,
+  type ImageSourcePropType,
 } from 'react-native';
 import {
   Check,
@@ -37,6 +38,7 @@ const hoyAssetSources: Record<HoyState, number> = {
 const confettiSource = require('../../assets/hoy/confetti.png');
 
 export type HoyOrbProps = {
+  artworkSource?: ImageSourcePropType;
   animated?: boolean;
   presentation?: 'default' | 'home';
   shadowTone?: 'light' | 'dark';
@@ -100,6 +102,7 @@ function getGlyph(state: HoyState, size: number) {
 }
 
 export function HoyOrb({
+  artworkSource,
   animated = true,
   presentation = 'default',
   shadowTone = 'light',
@@ -442,7 +445,7 @@ export function HoyOrb({
           <Animated.Image
             accessibilityIgnoresInvertColors
             resizeMode="contain"
-            source={getHoyAssetSource(previousState)}
+            source={artworkSource ?? getHoyAssetSource(previousState)}
             style={[
               styles.orbImage,
               {
@@ -470,7 +473,7 @@ export function HoyOrb({
         <Animated.Image
           accessibilityIgnoresInvertColors
           resizeMode="contain"
-          source={getHoyAssetSource(displayedState)}
+          source={artworkSource ?? getHoyAssetSource(displayedState)}
           style={[
             styles.orbImage,
             {

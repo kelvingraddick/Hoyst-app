@@ -1,0 +1,50 @@
+{
+  "at": "2026-10-09T05:21:34.410Z",
+  "actors": [
+    {
+      "uid": "LYuv6xiTeDNba886x2vSyTysXeD2",
+      "profileStatus": 200,
+      "displayName": "QA Phone Tester",
+      "handle": "qa074728phone",
+      "circles": [
+        {
+          "circleId": "NvA0wQ6tTNRjig3m0JZN",
+          "title": "QA Phone Avoid",
+          "commitment": "Avoid QA distractions",
+          "type": "avoid",
+          "targetValue": "1",
+          "unit": "Tap In",
+          "privacy": "private"
+        },
+        {
+          "circleId": "dDpi7cMFcotb7fS1ym9n",
+          "title": "QA Recovery",
+          "commitment": "QA Recovery",
+          "type": "build",
+          "tracking": "confirmation",
+          "targetValue": "1",
+          "unit": "Tap In",
+          "privacy": "private"
+        }
+      ]
+    },
+    {
+      "uid": "IYZInpxmlZgNYZY9MWUU59eh6go1",
+      "profileStatus": 200,
+      "displayName": "QA Apple Tester",
+      "handle": "qa074728apple",
+      "circles": [
+        {
+          "circleId": "efI7nuIj3kddGDalXqcK",
+          "title": "QA Apple Edited Name",
+          "commitment": "QA Apple show up",
+          "type": "build",
+          "tracking": "quantity",
+          "targetValue": "1",
+          "unit": "page",
+          "privacy": "private"
+        }
+      ]
+    }
+  ]
+}

@@ -5,6 +5,8 @@ exports.normalizeInviteCode = normalizeInviteCode;
 exports.getCircleInviteUrl = getCircleInviteUrl;
 exports.requiresMatchingCircleInvite = requiresMatchingCircleInvite;
 exports.buildCircleInvitePreview = buildCircleInvitePreview;
+const commitments_1 = require("./commitments");
+const commitment_appearance_1 = require("./commitment-appearance");
 const node_crypto_1 = require("node:crypto");
 const inviteCodePattern = /^[a-z0-9]{6,32}$/;
 function asNonEmptyString(value) {
@@ -55,7 +57,14 @@ function buildCircleInvitePreview(circleId, circle) {
             ? 'Weekly'
             : 'Daily';
     return {
+        ...(0, commitments_1.getQuantityConfig)(circle),
+        commitmentType: (0, commitments_1.getCommitmentType)(circle),
+        commitmentCadence: (0, commitments_1.getInputCommitmentPace)(circle.commitmentCadence, circle.commitmentFrequency),
+        commitmentFrequency: (0, commitments_1.getStoredCommitmentFrequency)((0, commitments_1.getInputCommitmentPace)(circle.commitmentCadence, circle.commitmentFrequency), circle.commitmentFrequency),
+        timezone: asNonEmptyString(circle.timezone) ?? 'UTC',
         cadenceLabel,
+        category: (0, commitment_appearance_1.normalizeCategory)(circle.category),
+        appearance: (0, commitment_appearance_1.readAppearance)(circle.appearance),
         circleId,
         commitment,
         isFull: memberCount >= maxSize,

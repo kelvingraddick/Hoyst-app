@@ -1,3 +1,6 @@
+jest.mock('../src/features/progress/services/progress-service', () => ({
+  recordProgressTask: jest.fn().mockResolvedValue(undefined),
+}));
 import React from 'react';
 import {
   ActivityIndicator,
@@ -452,6 +455,31 @@ describe('CircleDetailScreen reference redesign', () => {
     ).toHaveLength(0);
     expect(outputOf(tree)).not.toContain('Circle unavailable');
   });
+  it('shows a future-window approved member as upcoming without offering a nudge', () => {
+    mockMemberDetail = detail({
+      members: [
+        {
+          id: 'future-member',
+          name: 'New member',
+          initials: 'NM',
+          state: 'pending',
+          membershipStatus: 'active',
+          joinedAt: new Date(),
+          opportunityEligibility: 'next_opening',
+        },
+      ],
+      nudgeTargetCount: 1,
+    });
+    const {tree} = renderScreen();
+    selectMember(tree, 'future-member');
+    expect(outputOf(tree)).toContain('Starts next window');
+    expect(
+      tree.root.findAllByProps({testID: 'circle-nudge-all-action'}),
+    ).toHaveLength(0);
+    expect(
+      tree.root.findAllByProps({accessibilityLabel: 'Nudge New member'}),
+    ).toHaveLength(0);
+  });
 
   it('waits for the public source after the member source resolves empty', () => {
     mockMemberDetail = undefined;
@@ -633,7 +661,7 @@ describe('CircleDetailScreen reference redesign', () => {
     });
     expect(
       tree.root.findByProps({testID: 'circle-detail-top-tint'}).props.colors,
-    ).toEqual(['#10B96724', '#FAFAF7']);
+    ).toEqual(['#FF6D0024', '#FAFAF7']);
     expect(
       tree.root.findByProps({testID: 'circle-detail-top-tint'}).props.locations,
     ).toEqual([0, 1]);
@@ -872,11 +900,11 @@ describe('CircleDetailScreen reference redesign', () => {
   it('derives the hero Tap In palette from every Circle category in both themes', () => {
     const categories = [
       {category: 'Deep Work', light: '#086CA8', dark: '#8FE2FF'},
-      {category: 'Writing', light: '#086CA8', dark: '#8FE2FF'},
-      {category: 'Fitness', light: '#07763E', dark: '#70E2A3'},
-      {category: 'Sobriety', light: '#A83A00', dark: '#FFB36B'},
-      {category: 'Wellness', light: '#5A1CFF', dark: '#B8A5FF'},
-      {category: 'Custom', light: '#5A1CFF', dark: '#B8A5FF'},
+      {category: 'Writing', light: '#0F766E', dark: '#5EEAD4'},
+      {category: 'Fitness', light: '#A83A00', dark: '#FFB36B'},
+      {category: 'Sobriety', light: '#5A1CFF', dark: '#B8A5FF'},
+      {category: 'Wellness', light: '#07763E', dark: '#70E2A3'},
+      {category: 'Custom', light: '#4D5873', dark: '#B4BCD1'},
       {category: 'General', light: '#4D5873', dark: '#B4BCD1'},
       {category: 'Unknown category', light: '#4D5873', dark: '#B4BCD1'},
     ] as const;

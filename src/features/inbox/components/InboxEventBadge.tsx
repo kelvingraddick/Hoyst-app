@@ -1,3 +1,7 @@
+import {
+  CircularEmoji,
+  type CircularEmojiKind,
+} from '../../../design/components/CircularEmoji';
 import React from 'react';
 import {StyleSheet, View} from 'react-native';
 import {
@@ -56,6 +60,26 @@ const inboxEventIcons: Record<InboxEventType, LucideIcon> = {
   nudge: Bell,
   tap_in_final_warning: AlarmClock,
   tap_in_midday_reminder: Clock3,
+};
+
+const inboxEventEmoji: Partial<Record<InboxEventType, CircularEmojiKind>> = {
+  circle_archived: 'archive',
+  circle_discovery_suggestion: 'discovery',
+  circle_nudge_prompt: 'nudge',
+  circle_restored: 'restore',
+  streak_restored: 'restore',
+  member_due_prompt: 'reminder',
+  member_joined: 'members',
+  nudge: 'nudge',
+  tap_in_midday_reminder: 'reminder',
+  tap_in_final_warning: 'reminder',
+  evening_summary: 'notification',
+  [legacyCircleActivityEventTypes.achievementUnlocked]: 'milestone',
+  [legacyCircleActivityEventTypes.circleCreated]: 'members',
+  [legacyCircleActivityEventTypes.circleJoined]: 'members',
+  [legacyCircleActivityEventTypes.momentumLevelUp]: 'momentum',
+  [legacyCircleActivityEventTypes.skipped]: 'skip',
+  [legacyCircleActivityEventTypes.streakMilestone]: 'streak',
 };
 
 export function getInboxEventTone(type: InboxEventType): InboxIconTone {
@@ -121,6 +145,19 @@ export function InboxEventBadge({
     warning: theme.category.orange.surface,
   }[tone];
 
+  const kind = inboxEventEmoji[type];
+  if (kind) {
+    return (
+      <CircularEmoji
+        kind={kind}
+        size={28}
+        emojiSize={16}
+        backgroundColor={backgroundColor}
+        style={styles.badge}
+        testID="inbox-event-icon"
+      />
+    );
+  }
   return (
     <View
       accessible={false}

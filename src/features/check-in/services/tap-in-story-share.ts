@@ -1,3 +1,8 @@
+import {
+  normalizeCategory,
+  readAppearance,
+  type CommitmentAppearance,
+} from '../../../shared/commitment-appearance';
 import type {RefObject} from 'react';
 import {NativeModules, TurboModuleRegistry, type View} from 'react-native';
 import type {ShareSingleOptions, Social} from 'react-native-share';
@@ -15,6 +20,7 @@ export type TapInStoryTemplateId = 'tapInMoment' | 'transparentOverlay';
 
 export type TapInStoryShareData = {
   category: string;
+  appearance?: CommitmentAppearance;
   circleTitle: string;
   commitmentType?: CommitmentType;
   ctaLabel: string;
@@ -37,6 +43,7 @@ type TapInStoryShareDetail = Pick<CircleDetailModel, 'commitment' | 'title'> &
     Pick<
       CircleDetailModel,
       | 'category'
+      | 'appearance'
       | 'commitmentType'
       | 'completionRate'
       | 'inviteUrl'
@@ -168,7 +175,10 @@ export function buildTapInStoryShareData({
     : `I tapped in with ${circleTitle} on Hoyst.`;
 
   return {
-    category,
+    category: normalizeCategory(category),
+    ...(detail?.appearance
+      ? {appearance: readAppearance(detail.appearance)}
+      : {}),
     circleTitle,
     ...(detail?.commitmentType ? {commitmentType: detail.commitmentType} : {}),
     ctaLabel,
@@ -292,8 +302,9 @@ export async function shareTapInStoryImage(
   try {
     capturedUri = await captureRef(storyCardRef, storyCaptureOptions);
 
-    if (canOpenShare && !canOpenShare())
+    if (canOpenShare && !canOpenShare()) {
       throw new Error('Your account changed. Reopen the share preview.');
+    }
 
     await shareOpen({
       failOnCancel: false,

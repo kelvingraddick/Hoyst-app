@@ -1,3 +1,7 @@
+import {
+  normalizeCategory,
+  readAppearance,
+} from '../shared/commitment-appearance';
 import {getAuth} from 'firebase-admin/auth';
 import {
   FieldPath,
@@ -26,10 +30,14 @@ async function pages(query: Query) {
   let after: QueryDocumentSnapshot | undefined;
   while (true) {
     let next = query.orderBy(FieldPath.documentId()).limit(500);
-    if (after) next = next.startAfter(after);
+    if (after) {
+      next = next.startAfter(after);
+    }
     const page = await next.get();
     docs.push(...page.docs);
-    if (page.size < 500) return docs;
+    if (page.size < 500) {
+      return docs;
+    }
     after = page.docs[page.size - 1];
   }
 }
@@ -41,11 +49,13 @@ async function owner(authUid?: string, idToken?: unknown) {
       throw new HttpsError('unauthenticated', 'Sign in to view your stats.');
     }
   }
-  if (!authUid)
+  if (!authUid) {
     throw new HttpsError('unauthenticated', 'Sign in to view your stats.');
+  }
   const profile = (await db.doc(`users/${authUid}`).get()).data();
-  if (!profile || profile.onboardingStatus !== 'complete')
+  if (!profile || profile.onboardingStatus !== 'complete') {
     throw new HttpsError('failed-precondition', 'Complete your profile first.');
+  }
   return {uid: authUid, timezone: resolveTimezone(profile.timezone)};
 }
 async function readActivity(uid: string, timezone: string, monthKey: string) {
@@ -58,11 +68,12 @@ async function readActivity(uid: string, timezone: string, monthKey: string) {
   past.forEach(doc => metadata.set(doc.data().circleId || doc.id, doc.data()));
   opportunities.forEach(doc => {
     const data = doc.data();
-    if (data.circleId)
+    if (data.circleId) {
       metadata.set(data.circleId, {
         ...metadata.get(data.circleId),
         title: data.title || metadata.get(data.circleId)?.title,
       });
+    }
   });
   const circleIds = [
     ...new Set(
@@ -97,6 +108,7 @@ async function readActivity(uid: string, timezone: string, monthKey: string) {
           ...metadata.get(id),
           title: circle.data()?.title,
           category: circle.data()?.category,
+          appearance: readAppearance(circle.data()?.appearance),
         });
       }
     });
@@ -106,7 +118,9 @@ async function readActivity(uid: string, timezone: string, monthKey: string) {
   checks.forEach(doc => {
     const circleId =
       doc.data().circleId || doc.ref.parent.parent?.parent.parent?.id;
-    if (!circleId || doc.data().uid !== uid) return;
+    if (!circleId || doc.data().uid !== uid) {
+      return;
+    }
     const originalDate = doc.ref.parent.parent?.id || '';
     const savedSlot = opportunities
       .find(
@@ -157,7 +171,9 @@ async function readActivity(uid: string, timezone: string, monthKey: string) {
   for (const circleId of [
     ...new Set(candidates.map(doc => doc.data().circleId)),
   ]) {
-    if (typeof circleId !== 'string' || circleId.includes('/')) continue;
+    if (typeof circleId !== 'string' || circleId.includes('/')) {
+      continue;
+    }
     const [history, member] = await Promise.all([
       pages(
         db.collection(`circles/${circleId}/membershipHistory/${uid}/periods`),
@@ -193,8 +209,9 @@ async function readActivity(uid: string, timezone: string, monthKey: string) {
             timezone: zone,
           }),
       )
-    )
+    ) {
       return;
+    }
     // A closed stored opportunity is evidence. Never synthesize old schedules.
     const effectiveDate = getDateKey(
       new Date(localNoon(data.expiresDateKey, zone)),
@@ -208,15 +225,17 @@ async function readActivity(uid: string, timezone: string, monthKey: string) {
           item.dateKey === effectiveDate &&
           ['completed', 'skipped', 'restored'].includes(item.status),
       )
-    )
+    ) {
       return;
+    }
     activities.push({
       id: `opportunity:${doc.id}`,
       circleId: data.circleId,
       dateKey: effectiveDate,
       title:
         metadata.get(data.circleId)?.title || data.title || 'Past commitment',
-      category: metadata.get(data.circleId)?.category || 'Custom',
+      category: normalizeCategory(metadata.get(data.circleId)?.category),
+      appearance: readAppearance(metadata.get(data.circleId)?.appearance),
       status: 'missed',
       description: 'Missed opportunity',
       cadence: data.cadence || 'daily',
@@ -242,12 +261,14 @@ const daySchema = z
 export const getProgressMonth = onCall({timeoutSeconds: 120}, async request => {
   const account = await owner(request.auth?.uid, request.data?.idToken);
   const input = monthSchema.safeParse(request.data);
-  if (!input.success)
+  if (!input.success) {
     throw new HttpsError('invalid-argument', 'Choose a valid month.');
+  }
   if (
     input.data.monthKey > getDateKey(new Date(), account.timezone).slice(0, 7)
-  )
+  ) {
     throw new HttpsError('invalid-argument', 'Future months are unavailable.');
+  }
   const {activities} = await readActivity(
     account.uid,
     account.timezone,
@@ -263,11 +284,12 @@ export const getProgressDayActivity = onCall(
     if (
       !input.success ||
       input.data.dateKey > getDateKey(new Date(), account.timezone)
-    )
+    ) {
       throw new HttpsError(
         'invalid-argument',
         'Choose a valid past or current day.',
       );
+    }
     let after: string | undefined;
     if (input.data.cursor) {
       try {
@@ -279,8 +301,9 @@ export const getProgressDayActivity = onCall(
           cursor.dateKey !== input.data.dateKey ||
           cursor.timezone !== account.timezone ||
           typeof cursor.after !== 'string'
-        )
+        ) {
           throw new Error();
+        }
         after = cursor.after;
       } catch {
         throw new HttpsError(

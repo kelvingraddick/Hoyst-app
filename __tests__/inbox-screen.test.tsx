@@ -6,9 +6,6 @@ import {
   Bell,
   Check,
   ChevronRight,
-  Clock3,
-  Compass,
-  Moon,
   Sparkle,
   TriangleAlert,
 } from 'lucide-react-native';
@@ -17,6 +14,7 @@ import 'react-native-css-interop/dist/runtime/components';
 
 import {HoystChip} from '../src/design/components/HoystChip';
 import {DSText} from '../src/design/system';
+import {CircularEmoji} from '../src/design/components/CircularEmoji';
 import {clearDeliveredNotifications} from '../src/lib/notifications';
 import {InboxScreen} from '../src/features/inbox/screens/InboxScreen';
 import {
@@ -483,7 +481,7 @@ describe('InboxScreen', () => {
     expect(nativeNodes(tree, 'inbox-avatar-image')).toHaveLength(0);
   });
 
-  it('uses distinct icons for reminders, warnings, suggestions, and recaps', () => {
+  it('uses alarm emoji for reminders and final warnings while preserving status icons', () => {
     mockInboxEvents = [
       eventForType('tap_in_midday_reminder'),
       eventForType('tap_in_final_warning'),
@@ -494,11 +492,16 @@ describe('InboxScreen', () => {
 
     const {tree} = renderInbox();
 
-    expect(tree.root.findAllByType(Clock3)).toHaveLength(1);
-    expect(tree.root.findAllByType(AlarmClock)).toHaveLength(1);
+    expect(JSON.stringify(tree.toJSON())).toContain('⏰');
+    expect(tree.root.findAllByType(AlarmClock)).toHaveLength(0);
+    expect(
+      tree.root
+        .findAllByType(CircularEmoji)
+        .filter(node => node.props.kind === 'reminder'),
+    ).toHaveLength(2);
     expect(tree.root.findAllByType(TriangleAlert)).toHaveLength(1);
-    expect(tree.root.findAllByType(Compass)).toHaveLength(1);
-    expect(tree.root.findAllByType(Moon)).toHaveLength(1);
+    expect(JSON.stringify(tree.toJSON())).toContain('🧭');
+    expect(JSON.stringify(tree.toJSON())).toContain('🔔');
   });
 
   it('shows a green celebration icon instead of CC for Circle complete', () => {
@@ -568,9 +571,16 @@ describe('InboxScreen', () => {
         expect(StyleSheet.flatten(icon.props.style).backgroundColor).toBe(
           expected[index]?.[0],
         );
-        expect(
-          icon.findAll(node => typeof node.type !== 'string')[0]?.props.color,
-        ).toBe(expected[index]?.[1]);
+        if (index === 0) {
+          expect(icon.findByType(TriangleAlert).props.color).toBe(
+            expected[index]?.[1],
+          );
+        } else {
+          expect(
+            icon.findAll(node => node.props.children === ['', '🧭', '🫵'][index])
+              .length,
+          ).toBeGreaterThan(0);
+        }
       });
     },
   );

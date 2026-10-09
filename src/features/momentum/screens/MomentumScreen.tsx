@@ -1,3 +1,4 @@
+import {CircularEmoji} from '../../../design/components/CircularEmoji';
 import React, {useEffect, useMemo, useRef, useState} from 'react';
 import {ScrollView, StyleSheet, View} from 'react-native';
 import {useQuery} from '@tanstack/react-query';
@@ -8,14 +9,10 @@ import {HoystScreen} from '../../../design/components/HoystScreen';
 import {HoystText} from '../../../design/components/HoystText';
 import {SectionHeader} from '../../../design/components/SectionHeader';
 import {
-  MomentumAchievementFlameIllustration,
-  MomentumCalendarIllustration,
   MomentumCompleteIllustration,
   MomentumLightningIllustration,
-  MomentumLockedMedalIllustration,
   MomentumMiniTrophyIllustration,
   MomentumStarIllustration,
-  MomentumStreakIllustration,
 } from '../../../design/components/MomentumIllustrations';
 import {MomentumStageIcon} from '../../../design/components/MomentumStageIcon';
 import {MomentumStatusPill} from '../../../design/components/MomentumStatusPill';
@@ -84,24 +81,24 @@ function getAchievementIcon(
   visual: (typeof achievementSpecs)[number]['visual'],
   value: number,
 ) {
-  if (visual === 'calendar') {
-    return <MomentumCalendarIllustration size={58} />;
-  }
-
-  if (visual === 'lightning') {
-    return <MomentumLightningIllustration size={60} />;
-  }
-
-  if (visual === 'medal') {
-    return <MomentumLockedMedalIllustration size={60} />;
-  }
-
   return (
-    <MomentumAchievementFlameIllustration
-      size={66}
-      value={value}
-      variant={visual === 'purple_flame' ? 'purple' : 'orange'}
-    />
+    <View>
+      <CircularEmoji kind="milestone" size={66} emojiSize={44} />
+      {visual === 'orange_flame' || visual === 'purple_flame' ? (
+        <HoystText
+          accessible={false}
+          style={{
+            position: 'absolute',
+            bottom: 0,
+            alignSelf: 'center',
+            fontSize: 12,
+            lineHeight: 16,
+            fontWeight: '800',
+          }}>
+          {value}
+        </HoystText>
+      ) : null}
+    </View>
   );
 }
 
@@ -482,9 +479,16 @@ export function MomentumScreen({
                 currentStreakDays,
               )} current streak`}
               style={styles.currentStreakIconWrap}>
-              <MomentumStreakIllustration
+              <CircularEmoji
+                kind="streak"
                 size={MOMENTUM_ICON_SIZE}
-                streakDays={currentStreakDays}
+                backgroundColor={
+                  currentStreakDays <= 0
+                    ? '#EAF4FF'
+                    : currentStreakDays < 7
+                    ? '#FFF2E8'
+                    : '#FFF0E5'
+                }
               />
             </View>
             <View style={styles.currentStreakCopy}>

@@ -1,0 +1,115 @@
+{
+  "checkedAt": "2026-10-08T17:44:01.402Z",
+  "accounts": [
+    {
+      "uid": "0zY3jlPZnXhvgr7NrzGUBQL2SF72",
+      "authAbsent": true,
+      "profileStatus": 404,
+      "privateRootStatus": 404,
+      "privateCollectionsStatus": 200,
+      "privateCollections": []
+    },
+    {
+      "uid": "vh7gvdH1lWW63KYbBOkDVaHLcrq2",
+      "authAbsent": true,
+      "profileStatus": 404,
+      "privateRootStatus": 404,
+      "privateCollectionsStatus": 200,
+      "privateCollections": []
+    },
+    {
+      "uid": "A25lQWhu4ggBZxnK3LkEHQl5Noz1",
+      "authAbsent": true,
+      "profileStatus": 404,
+      "privateRootStatus": 404,
+      "privateCollectionsStatus": 200,
+      "privateCollections": []
+    },
+    {
+      "uid": "0Kn1CerJtegU4hQAqY0lxjbsQ3V2",
+      "authAbsent": true,
+      "profileStatus": 404,
+      "privateRootStatus": 404,
+      "privateCollectionsStatus": 200,
+      "privateCollections": []
+    },
+    {
+      "uid": "5dRgCg1rX0NHgJaYVFL87x3fGdI2",
+      "authAbsent": true,
+      "profileStatus": 404,
+      "privateRootStatus": 404,
+      "privateCollectionsStatus": 200,
+      "privateCollections": []
+    },
+    {
+      "uid": "lEbH7NtydgQ1Kc0oVShuMpwN4FG2",
+      "authAbsent": true,
+      "profileStatus": 404,
+      "privateRootStatus": 404,
+      "privateCollectionsStatus": 200,
+      "privateCollections": []
+    },
+    {
+      "uid": "idobshV0qWTHvpSkAfIi7hjQZnG2",
+      "authAbsent": true,
+      "profileStatus": 404,
+      "privateRootStatus": 404,
+      "privateCollectionsStatus": 200,
+      "privateCollections": []
+    },
+    {
+      "uid": "rbm8zSv2d6biQGe5bUUg1QYFFOs2",
+      "authAbsent": true,
+      "profileStatus": 404,
+      "privateRootStatus": 404,
+      "privateCollectionsStatus": 200,
+      "privateCollections": []
+    }
+  ],
+  "circles": [
+    {
+      "circleId": "GEQaqqfVjjYvHwH5ecjV",
+      "status": 404,
+      "indexStatus": 404
+    },
+    {
+      "circleId": "b5fs8dzZq4GI0xTph6Aa",
+      "status": 404,
+      "indexStatus": 404
+    },
+    {
+      "circleId": "QZa54xofiWS62J3cpg1h",
+      "status": 404,
+      "indexStatus": 404
+    },
+    {
+      "circleId": "HzSd98Kuo4CDyhoSBWVL",
+      "status": 404,
+      "indexStatus": 404
+    },
+    {
+      "circleId": "A9tnmgzbhpfIOWTKnbK7",
+      "status": 404,
+      "indexStatus": 404
+    },
+    {
+      "circleId": "BOeVSBQtWzhLaIsxYcg2",
+      "status": 404,
+      "indexStatus": 404
+    },
+    {
+      "circleId": "oGWDiqTsbgkCdYCx17bV",
+      "status": 404,
+      "indexStatus": 404
+    },
+    {
+      "circleId": "3jkcZVudDoh3XzQT9LHY",
+      "status": 404,
+      "indexStatus": 404
+    }
+  ],
+  "primaryAvatarStorage": {
+    "status": 200,
+    "objectCount": 0
+  }
+}

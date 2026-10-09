@@ -1,3 +1,4 @@
+import {categories as commitmentCategories} from '../../../shared/commitment-appearance';
 import React, {useCallback, useEffect, useRef, useState} from 'react';
 import {
   ActivityIndicator,
@@ -54,15 +55,7 @@ import {
 } from '../services/explore-service';
 
 type Props = BottomTabScreenProps<AppTabsParamList, 'Explore'>;
-const categoryOrder = [
-  'Fitness',
-  'Wellness',
-  'Deep Work',
-  'Writing',
-  'Sobriety',
-  'Custom',
-  'General',
-];
+const categoryOrder: string[] = commitmentCategories.map(item => item.label);
 
 function CircleResult({
   circle,
@@ -72,7 +65,7 @@ function CircleResult({
   onDetails: () => void;
 }) {
   const theme = useSystemTheme();
-  const tone = getCircleCategoryVisual(circle.category).tone;
+  const tone = getCircleCategoryVisual(circle.category, circle.appearance).tone;
   const activity = circle.latestPublicTapIn;
   const timestamp = activity ? formatPublicTapInTime(activity.occurredAt) : '';
   const avatarSource = React.useMemo(
@@ -98,7 +91,11 @@ function CircleResult({
         onPress={onDetails}
         style={styles.cardDetails}>
         <View style={styles.row}>
-          <CircleCategoryIcon category={circle.category} size={40} />
+          <CircleCategoryIcon
+            category={circle.category}
+            appearance={circle.appearance}
+            size={40}
+          />
           <View style={styles.grow}>
             <DSText variant="title">{circle.title}</DSText>
             <DSText
@@ -266,17 +263,7 @@ function ExploreContent({navigation}: Props) {
         }
       });
   }, [page, loading, query, category]);
-  const categories = [
-    'All',
-    ...[...(page?.categories ?? [])].sort((a, b) => {
-      const indexA = categoryOrder.indexOf(a);
-      const indexB = categoryOrder.indexOf(b);
-      return (
-        (indexA < 0 ? 99 : indexA) - (indexB < 0 ? 99 : indexB) ||
-        a.localeCompare(b)
-      );
-    }),
-  ];
+  const categories = ['All', ...categoryOrder];
   if (!categories.includes(category)) {
     categories.push(category);
   }
@@ -290,9 +277,22 @@ function ExploreContent({navigation}: Props) {
             dark={theme.isDark}
           />
           <View style={[styles.headingCopy, styles.grow]}>
-            <DSText variant="screenTitle" accessibilityRole="header">
-              Explore
-            </DSText>
+            <View style={styles.titleRow}>
+              <DSText
+                variant="screenTitle"
+                accessibilityRole="header"
+                style={styles.title}>
+                Explore
+              </DSText>
+              <DSIconButton
+                label="Friends"
+                icon={<Users size={22} strokeWidth={2.2} color={theme.text} />}
+                onPress={() =>
+                  Alert.alert('Friends', 'Coming soon', [{text: 'OK'}])
+                }
+                style={styles.friends}
+              />
+            </View>
             <DSText
               testID="explore-subtitle"
               accessibilityLabel="Find circles moving at your pace.">
@@ -301,15 +301,6 @@ function ExploreContent({navigation}: Props) {
             </DSText>
           </View>
         </View>
-        <DSIconButton
-          label="Friends"
-          icon={<Users size={18} strokeWidth={1.8} color={theme.text} />}
-          onPress={() => Alert.alert('Friends', 'Coming soon', [{text: 'OK'}])}
-          style={[
-            styles.friends,
-            {backgroundColor: theme.surface, borderColor: theme.border},
-          ]}
-        />
       </View>
       <View
         style={[
@@ -549,13 +540,16 @@ const styles = StyleSheet.create({
   header: {gap: space.lg, paddingBottom: space.lg},
   headingRow: {flexDirection: 'row', alignItems: 'flex-start', gap: space.md},
   headingCopy: {gap: 6},
+  titleRow: {flexDirection: 'row', alignItems: 'center'},
+  title: {flex: 1, paddingRight: minimumTarget() + space.md},
   headingGroup: {flexDirection: 'row', alignItems: 'center', gap: 8},
   subtitleEmphasis: {fontWeight: '700'},
   friends: {
+    position: 'absolute',
+    right: 0,
     flexShrink: 0,
     width: minimumTarget(),
     height: minimumTarget(),
-    borderWidth: 1,
     borderRadius: radii.pill,
   },
   search: {
