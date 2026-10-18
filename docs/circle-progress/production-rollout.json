@@ -1,0 +1,101 @@
+{
+  "status": "completed",
+  "verifiedAt": "2026-10-17T21:18:30.841Z",
+  "project": "hoyst-firebase-app",
+  "baselineCommit": "b843a2bbe9d0497c8859bbe3ac2946cde1d11241",
+  "functions": {
+    "created": [
+      "refreshCircleProgress",
+      "reconcileCircleProgressCheckIn",
+      "reconcileCircleProgressMembership",
+      "reconcileCircleProgressConfiguration",
+      "reconcileCircleProgressRollover"
+    ],
+    "updated": [
+      "submitTapIn",
+      "removeTapIn",
+      "processTapInSideEffects",
+      "createCircle",
+      "joinCircle",
+      "reviewJoinRequest",
+      "leaveCircle",
+      "unarchiveCircle",
+      "archiveCircle",
+      "updateCircle",
+      "convertPersonalCircle",
+      "deleteCircle",
+      "nudgeCircleMembers",
+      "completeProfile",
+      "deleteAccount",
+      "materializeMomentumOpportunities",
+      "backfillMomentumOpportunities",
+      "getRestoreOptions",
+      "restoreStreak",
+      "reconcileProgressRestore",
+      "getProgressMonth",
+      "getProgressDayActivity",
+      "sendMiddayTapInReminders",
+      "sendFinalTapInWarnings",
+      "sendRoutineEngagementNotifications",
+      "searchPublicCircles",
+      "suggestPublicCircles"
+    ],
+    "verifiedActive": 32,
+    "totalActive": 63,
+    "region": "us-central1",
+    "runtime": "nodejs22",
+    "unselectedSourceHashesUnchanged": 31
+  },
+  "rules": {
+    "before": "projects/hoyst-firebase-app/rulesets/2abe223e-d0f2-4702-be3a-42520a9558b4",
+    "after": "projects/hoyst-firebase-app/rulesets/0613c9fa-23ef-4bbd-af81-6e2ff0e2cb7e",
+    "scope": "Three additive Circle read permissions; prior production permissions preserved"
+  },
+  "migration": {
+    "phases": ["daily-coverage", "period-outcomes", "summaries"],
+    "dryRunCircles": 13,
+    "canaryVerified": true,
+    "verification": {
+      "circles": 13,
+      "dailyAggregates": 1005,
+      "groupPeriods": 803,
+      "privatePeriods": 1209,
+      "personalSummaries": 19,
+      "publicSummaries": 8,
+      "economyOwners": 9
+    },
+    "failures": [],
+    "unavailableCircles": 0,
+    "unchanged": [
+      "dated check-ins",
+      "legacy Circle streak fields",
+      "legacy member streak fields",
+      "wallets",
+      "rewards ledgers"
+    ]
+  },
+  "sourceHashes": {
+    "checkins/index.ts": "8622b65074c74a42b5b41d220a73101629d4ddf4fdcbee69765749f44c65ec18",
+    "discovery/index.ts": "ba28d4eec5dc558b996894065d385e12d687b6f4172828542e2b5fe3e404dcc5",
+    "momentum/index.ts": "449c4dbfa4fa19ca0abd68d461bc6c3c20cb817c8c1bc6fe6eb1f55298245088",
+    "momentum/schedule.ts": "37d12f3a44361dfaf0fdaa0ccd68cd0a834da2388be00ba9c1af18155bbf9a5f",
+    "momentum/eligibility.ts": "64ff2666ce1aff830901579cb283cf625c73eb9bb4648673985a9fac06f80972",
+    "notifications/index.ts": "44b088bb3620a494047b6e4972fbc75f22dbeab16f00830d6d4558998fe40bd4",
+    "progress/restores.ts": "e843c5242e92902e142ddbdcdcf5ac7b542833942a3606bf8189d8533590470b",
+    "progress/restores-model.ts": "7a94f07cb88af7248746c41718cd4e182b80573d64ece88075af67c7fdb8e1e7",
+    "circles/progress.ts": "7ebe9804e8af1ffc323b8f0412abef4d96d72625264132a25c445f6f72372dbb",
+    "shared/circle-progress.ts": "8cae4359b9be9a304e32e691241555189725e7d061500c23bdb6bda0b3e3d489"
+  },
+  "mobileClientReleased": false,
+  "notes": [
+    "Unrelated auth, legal, and profile working changes excluded from deployed source.",
+    "Android visual acceptance remains pending."
+  ],
+  "liveChecks": {
+    "refreshEndpointUnauthenticatedStatus": 401,
+    "refreshEndpointUnauthenticatedResult": "UNAUTHENTICATED",
+    "runtimeLogEntriesReviewed": 41,
+    "runtimeErrors": 0,
+    "logScope": "Five new Circle Functions since 2026-10-17T21:00:00Z"
+  }
+}

@@ -248,3 +248,13 @@ it('reports only user-driven composer editor expansion changes', async () => {
   });
   expect(onExpansionChange).toHaveBeenLastCalledWith(false);
 });
+
+
+it('allows replacing completed required proof but hides removal in the editor', async () => {
+  let tree!: renderer.ReactTestRenderer;
+  await act(async () => {tree = mount({photoRequired: true, proofRequiredForCompletion: true, initialPhotoUrl: 'https://example.test/proof.jpg'});});
+  await act(async () => tree.root.findByType(ComposerDisclosure).props.onPress());
+  expect(tree.root.findAllByType(DSButton).some(item => item.props.label === 'Remove photo')).toBe(false);
+  expect(tree.root.findByProps({testID: 'tap-in-details-photo-picker'}).props.disabled).toBe(false);
+  await act(async () => tree.unmount());
+});

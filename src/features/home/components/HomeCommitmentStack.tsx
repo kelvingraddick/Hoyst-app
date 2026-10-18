@@ -1,3 +1,4 @@
+import {CircleCardStreaks} from '../../circles/components/CircleCardStreaks';
 import React from 'react';
 import {
   ActivityIndicator,
@@ -289,6 +290,7 @@ export function HomeCommitmentStack({
                     {statusCopy(card)}
                   </HoystText>
                 )}
+                <CircleCardStreaks circle={card} />
                 <View style={styles.footer}>
                   <Members card={card} />
                   <Action

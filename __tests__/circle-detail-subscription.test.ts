@@ -96,3 +96,120 @@ describe('Circle Detail initial snapshot resolution', () => {
     expect(unsubscribe).toHaveBeenCalledTimes(2);
   });
 });
+
+it.each(['user-1', 'user-2'])(
+  'keeps joined Circle data when profile %s is unreadable',
+  failedUid => {
+    let circleSnapshot: (snapshot: unknown) => void = () => undefined;
+    let membershipSnapshot: (snapshot: unknown) => void = () => undefined;
+    let membersSnapshot: (snapshot: unknown) => void = () => undefined;
+    const profileErrors = new Map<string, (error: Error) => void>();
+    const auxiliaryRef: {
+      collection: () => typeof auxiliaryRef;
+      doc: () => typeof auxiliaryRef;
+      onSnapshot: () => () => void;
+    } = {
+      collection: jest.fn(() => auxiliaryRef),
+      doc: jest.fn(() => auxiliaryRef),
+      onSnapshot: jest.fn(() => jest.fn()),
+    };
+    const membersRef = {
+      onSnapshot: (next: typeof membersSnapshot) => {
+        membersSnapshot = next;
+        return jest.fn();
+      },
+      doc: jest.fn(() => ({
+        onSnapshot: (next: typeof membershipSnapshot) => {
+          membershipSnapshot = next;
+          return jest.fn();
+        },
+      })),
+    };
+    const circleRef = {
+      onSnapshot: (next: typeof circleSnapshot) => {
+        circleSnapshot = next;
+        return jest.fn();
+      },
+      collection: (name: string) =>
+        name === 'members' ? membersRef : auxiliaryRef,
+    };
+    jest.mocked(firebaseFirestore).mockReturnValue({
+      collection: (name: string) => ({
+        doc: (id: string) =>
+          name === 'circles'
+            ? circleRef
+            : {
+                onSnapshot: (_next: unknown, error: (error: Error) => void) => {
+                  profileErrors.set(id, error);
+                  return jest.fn();
+                },
+              },
+      }),
+    } as never);
+    const onDetail = jest.fn();
+    const onError = jest.fn();
+    const stop = subscribeToMemberCircleDetail({
+      circleId: 'circle-1',
+      uid: 'user-1',
+      timezone: 'UTC',
+      onDetail,
+      onError,
+    });
+    circleSnapshot({
+      data: () => ({
+        title: 'Joined Circle',
+        commitment: 'Move',
+        commitmentCadence: 'daily',
+      }),
+    });
+    membershipSnapshot({
+      data: () => ({
+        uid: 'user-1',
+        status: 'active',
+        role: 'member',
+        displayName: 'Alex',
+      }),
+    });
+    membersSnapshot({
+      docs: [
+        {
+          id: 'user-1',
+          data: () => ({
+            uid: 'user-1',
+            status: 'active',
+            role: 'member',
+            displayName: 'Alex',
+          }),
+        },
+        {
+          id: 'user-2',
+          data: () => ({
+            uid: 'user-2',
+            status: 'active',
+            role: 'member',
+            displayName: 'Sam',
+          }),
+        },
+      ],
+    });
+    expect(onDetail).toHaveBeenLastCalledWith(
+      expect.objectContaining({viewerMembershipStatus: 'active'}),
+    );
+
+    profileErrors.get(failedUid)!(
+      new Error('Missing or insufficient permissions'),
+    );
+
+    expect(onError).not.toHaveBeenCalled();
+    expect(onDetail).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        viewerMembershipStatus: 'active',
+        members: [
+          expect.objectContaining({id: 'user-1', name: 'Alex'}),
+          expect.objectContaining({id: 'user-2', name: 'Sam'}),
+        ],
+      }),
+    );
+    stop();
+  },
+);

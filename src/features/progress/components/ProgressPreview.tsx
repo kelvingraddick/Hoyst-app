@@ -38,6 +38,13 @@ export type ProgressPreviewMode =
   | 'light'
   | 'dark'
   | 'guest'
+  | 'guest-dark'
+  | 'guest-narrow'
+  | 'guest-dark-narrow'
+  | 'guest-bottom'
+  | 'guest-dark-bottom'
+  | 'guest-narrow-bottom'
+  | 'guest-dark-narrow-bottom'
   | 'loading'
   | 'error'
   | 'zero'
@@ -116,7 +123,7 @@ export function ProgressPreview({
                       ? {skips: 0, restores: 0}
                       : summary.inventory,
                   },
-            guest: mode === 'guest',
+            guest: mode.startsWith('guest'),
             loading: mode === 'loading',
             error:
               mode === 'error'

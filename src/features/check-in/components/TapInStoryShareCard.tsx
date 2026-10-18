@@ -1,4 +1,5 @@
 import React from 'react';
+import {Flame} from 'lucide-react-native';
 import {Image, StyleSheet, View} from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
 import Svg, {Defs, Pattern, Rect} from 'react-native-svg';
@@ -17,6 +18,7 @@ import type {
 
 type TapInStoryTemplateCardProps = {
   onPhotoSettled?: () => void;
+  onImageSettled?: (uri: string) => void;
   showTransparencyGrid?: boolean;
   story: TapInStoryShareData;
   templateId: TapInStoryTemplateId;
@@ -24,6 +26,7 @@ type TapInStoryTemplateCardProps = {
 
 type TapInStoryShareCardProps = {
   onPhotoSettled?: () => void;
+  onImageSettled?: (uri: string) => void;
   story: TapInStoryShareData;
 };
 
@@ -32,8 +35,9 @@ export const tapInStoryShareCardSize = {
   width: 360,
 } as const;
 
-function formatNumber(value: number) {
-  return Number.isFinite(value) ? String(Math.max(0, Math.round(value))) : '0';
+// Both preview and export use fixed typography within the 1080 x 1920 image.
+function StoryText(props: React.ComponentProps<typeof HoystText>) {
+  return <HoystText {...props} allowFontScaling={false} />;
 }
 
 function TransparencyGrid() {
@@ -68,10 +72,12 @@ function MemberCluster({
   members,
   memberCount,
   textColor,
+  onImageSettled,
 }: {
   members: TapInStoryShareData['members'];
   memberCount: number;
   textColor: string;
+  onImageSettled?: (uri: string) => void;
 }) {
   const remaining = Math.max(0, memberCount - members.length);
 
@@ -91,20 +97,26 @@ function MemberCluster({
                 index > 0 ? styles.memberAvatarOverlap : undefined,
               ]}>
               {source ? (
-                <Image source={source} style={styles.memberAvatarImage} />
+                <Image
+                  source={source}
+                  style={styles.memberAvatarImage}
+                  onLoadEnd={() =>
+                    member.avatarUrl && onImageSettled?.(member.avatarUrl)
+                  }
+                />
               ) : (
-                <HoystText style={[styles.memberInitials, {color: textColor}]}>
+                <StoryText style={styles.memberInitials}>
                   {member.initials}
-                </HoystText>
+                </StoryText>
               )}
             </View>
           );
         })}
         {remaining > 0 ? (
           <View style={styles.memberRemainder}>
-            <HoystText style={[styles.memberRemainderText, {color: textColor}]}>
+            <StoryText style={[styles.memberRemainderText, {color: textColor}]}>
               +{remaining}
-            </HoystText>
+            </StoryText>
           </View>
         ) : null}
       </View>
@@ -112,31 +124,137 @@ function MemberCluster({
   );
 }
 
-function StoryStats({
-  story,
+function StoryStreak({
+  label,
+  value,
   textColor,
   mutedColor,
 }: {
-  story: TapInStoryShareData;
+  label: string;
+  value: string;
   textColor: string;
   mutedColor: string;
 }) {
   return (
-    <View style={styles.statsRow}>
-      {[
-        {label: 'STREAK', value: formatNumber(story.streakDays)},
-        {label: 'TAP INS', value: formatNumber(story.totalTapIns)},
-        {label: 'MEMBERS', value: formatNumber(story.memberCount)},
-      ].map(stat => (
-        <View key={stat.label} style={styles.stat}>
-          <HoystText style={[styles.statValue, {color: textColor}]}>
-            {stat.value}
-          </HoystText>
-          <HoystText style={[styles.statLabel, {color: mutedColor}]}>
-            {stat.label}
-          </HoystText>
+    <View style={styles.stat}>
+      <StoryText style={[styles.statLabel, {color: mutedColor}]}>
+        {label}
+      </StoryText>
+      <View style={styles.streakRow}>
+        <Flame
+          accessible={false}
+          color="#FF8A00"
+          fill="#FFB638"
+          size={17}
+          strokeWidth={1.8}
+        />
+        <StoryText
+          adjustsFontSizeToFit
+          minimumFontScale={0.8}
+          numberOfLines={1}
+          style={[styles.streakValue, {color: textColor}]}>
+          {value}
+        </StoryText>
+      </View>
+    </View>
+  );
+}
+
+function StoryProgress({
+  story,
+  textColor,
+  mutedColor,
+  transparent,
+}: {
+  story: TapInStoryShareData;
+  textColor: string;
+  mutedColor: string;
+  transparent: boolean;
+}) {
+  const dividerStyle = transparent
+    ? styles.transparentDivider
+    : styles.neutralDivider;
+  return (
+    <View style={styles.progressBlock}>
+      <View style={styles.progressSection} testID="tap-in-story-your-progress">
+        <StoryText style={[styles.sectionLabel, {color: textColor}]}>
+          {story.personalProgress.label}
+        </StoryText>
+        <View style={styles.statsRow}>
+          <View style={styles.stat} testID="tap-in-story-this-tap-in">
+            <StoryText style={[styles.statLabel, {color: mutedColor}]}>
+              This Tap In
+            </StoryText>
+            <StoryText
+              numberOfLines={2}
+              style={[styles.statValue, {color: textColor}]}>
+              {story.result.quantityLabel ?? story.result.statusLabel}
+            </StoryText>
+            {story.result.quantityLabel ? (
+              <StoryText
+                numberOfLines={2}
+                style={[styles.statDetail, {color: mutedColor}]}>
+                {story.result.statusLabel}
+              </StoryText>
+            ) : null}
+          </View>
+          <View style={[styles.statDivider, dividerStyle]} />
+          <View style={styles.stat}>
+            <StoryText
+              numberOfLines={2}
+              style={[styles.statLabel, {color: mutedColor}]}>
+              {story.personalProgress.periodLabel}
+            </StoryText>
+            <StoryText
+              numberOfLines={2}
+              style={[styles.statValue, {color: textColor}]}>
+              {story.personalProgress.value}
+            </StoryText>
+            {story.personalProgress.unitLabel ? (
+              <StoryText style={[styles.statDetail, {color: mutedColor}]}>
+                {story.personalProgress.unitLabel}
+              </StoryText>
+            ) : null}
+          </View>
+          <View style={[styles.statDivider, dividerStyle]} />
+          <StoryStreak
+            label="Your streak"
+            value={story.personalProgress.streak}
+            textColor={textColor}
+            mutedColor={mutedColor}
+          />
         </View>
-      ))}
+      </View>
+      {story.groupProgress ? (
+        <View
+          style={[styles.progressSection, styles.groupSection, dividerStyle]}
+          testID="tap-in-story-group-progress">
+          <StoryText style={[styles.sectionLabel, {color: textColor}]}>
+            {story.groupProgress.label}
+          </StoryText>
+          <View style={styles.statsRow}>
+            <View style={[styles.stat, styles.groupPeriod]}>
+              <StoryText
+                numberOfLines={2}
+                style={[styles.statLabel, {color: mutedColor}]}>
+                {story.groupProgress.periodLabel}
+              </StoryText>
+              <StoryText
+                numberOfLines={2}
+                style={[styles.groupValue, {color: textColor}]}>
+                {story.groupProgress.value}
+              </StoryText>
+            </View>
+            <View style={[styles.statDivider, dividerStyle]} />
+            <StoryStreak
+              label="Group streak"
+              value={story.groupProgress.streak}
+              textColor={textColor}
+              mutedColor={mutedColor}
+            />
+          </View>
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -144,13 +262,14 @@ function StoryStats({
 function StoryContent({
   story,
   transparent = false,
+  onImageSettled,
 }: {
   story: TapInStoryShareData;
   transparent?: boolean;
+  onImageSettled?: (uri: string) => void;
 }) {
   const textColor = transparent ? '#FFFFFF' : '#070B1A';
-  const mutedColor = transparent ? 'rgba(255,255,255,0.82)' : '#4D5873';
-
+  const mutedColor = transparent ? 'rgba(255,255,255,0.86)' : '#4D5873';
   return (
     <View
       style={[
@@ -159,58 +278,67 @@ function StoryContent({
       ]}>
       <View style={styles.contentGroup} testID="tap-in-story-content-group">
         <View style={styles.identityStack}>
+          <StoryText
+            style={[styles.header, {color: mutedColor}]}
+            testID="tap-in-story-header">
+            {story.headerLabel.replace(' MY ', ' MY\n')}
+          </StoryText>
           <View style={styles.titleGroup} testID="tap-in-story-title-group">
-            <HoystText
-              style={[styles.circleEyebrow, {color: mutedColor}]}
-              testID="tap-in-story-eyebrow">
-              ACCOUNTABILITY CIRCLE
-            </HoystText>
-            <HoystText
-              style={[styles.circleTitle, {color: textColor}]}
-              testID="tap-in-story-title">
-              {story.circleTitle}
-            </HoystText>
+            <View style={styles.identityRow}>
+              <StoryText
+                numberOfLines={2}
+                style={[styles.circleTitle, {color: textColor}]}
+                testID="tap-in-story-title">
+                {story.circleTitle}
+              </StoryText>
+              <CircleCategoryIcon
+                category={story.category}
+                appearance={story.appearance}
+                size={26}
+                showBackplate={false}
+              />
+            </View>
+            <StoryText
+              numberOfLines={2}
+              style={[styles.commitment, {color: mutedColor}]}>
+              {story.commitment}
+            </StoryText>
           </View>
-          <HoystText
-            numberOfLines={3}
-            style={[styles.commitment, {color: mutedColor}]}>
-            {story.commitment}
-          </HoystText>
         </View>
-
-        <CircleCategoryIcon
-          category={story.category}
-          appearance={story.appearance}
-          size={40}
-          showBackplate={false}
+        <StoryProgress
+          story={story}
+          textColor={textColor}
+          mutedColor={mutedColor}
+          transparent={transparent}
         />
-        <View style={styles.supportingStack}>
-          <StoryStats
-            story={story}
-            textColor={textColor}
-            mutedColor={mutedColor}
-          />
-          <MemberCluster
-            members={story.members}
-            memberCount={story.memberCount}
-            textColor={textColor}
-          />
-        </View>
-
-        <View
-          style={[
-            styles.ctaPill,
-            transparent ? styles.transparentCta : undefined,
-          ]}
-          testID="tap-in-story-cta">
-          <HoystText style={[styles.ctaText, {color: textColor}]}>
-            {'Join this Circle on '}
-            <BrandMark
-              isDark={transparent}
-              kind="logo"
-              style={styles.ctaWordmark}
+        <View style={styles.footer}>
+          {story.circleMode !== 'personal' && story.memberCount > 0 ? (
+            <MemberCluster
+              members={story.members}
+              memberCount={story.memberCount}
+              textColor={textColor}
+              onImageSettled={onImageSettled}
             />
-          </HoystText>
+          ) : null}
+          <View
+            style={[
+              styles.ctaPill,
+              transparent ? styles.transparentCta : undefined,
+            ]}
+            testID="tap-in-story-cta">
+            <StoryText style={[styles.ctaText, {color: textColor}]}>
+              {story.circleMode === 'personal'
+                ? 'Tapped in on '
+                : story.hasInviteUrl
+                ? 'Join this Circle on '
+                : 'Tap in with '}
+              <BrandMark
+                isDark={transparent}
+                kind="logo"
+                style={styles.ctaWordmark}
+              />
+            </StoryText>
+          </View>
         </View>
       </View>
     </View>
@@ -219,8 +347,12 @@ function StoryContent({
 
 function TapInMomentStory({
   onPhotoSettled,
+  onImageSettled,
   story,
-}: Pick<TapInStoryTemplateCardProps, 'onPhotoSettled' | 'story'>) {
+}: Pick<
+  TapInStoryTemplateCardProps,
+  'onPhotoSettled' | 'onImageSettled' | 'story'
+>) {
   const hasPhoto = Boolean(story.photoUri);
   const category = getCircleCategoryVisual(story.category, story.appearance);
 
@@ -230,7 +362,12 @@ function TapInMomentStory({
       {hasPhoto ? (
         <>
           <Image
-            onLoadEnd={onPhotoSettled}
+            onLoadEnd={() => {
+              onPhotoSettled?.();
+              if (story.photoUri) {
+                onImageSettled?.(story.photoUri);
+              }
+            }}
             resizeMode="cover"
             source={{uri: story.photoUri}}
             style={styles.backgroundPhoto}
@@ -240,7 +377,11 @@ function TapInMomentStory({
             locations={[0.08, 0.88]}
             style={StyleSheet.absoluteFill}
           />
-          <StoryContent story={story} transparent />
+          <StoryContent
+            story={story}
+            transparent
+            onImageSettled={onImageSettled}
+          />
         </>
       ) : (
         <>
@@ -249,7 +390,7 @@ function TapInMomentStory({
             locations={[0, 0.66]}
             style={StyleSheet.absoluteFill}
           />
-          <StoryContent story={story} />
+          <StoryContent story={story} onImageSettled={onImageSettled} />
         </>
       )}
     </View>
@@ -258,18 +399,23 @@ function TapInMomentStory({
 
 function TransparentOverlayStory({
   showTransparencyGrid = false,
+  onImageSettled,
   story,
-}: Pick<TapInStoryTemplateCardProps, 'showTransparencyGrid' | 'story'>) {
+}: Pick<
+  TapInStoryTemplateCardProps,
+  'showTransparencyGrid' | 'onImageSettled' | 'story'
+>) {
   return (
     <View style={[styles.card, styles.transparentCard]}>
       {showTransparencyGrid ? <TransparencyGrid /> : null}
-      <StoryContent story={story} transparent />
+      <StoryContent story={story} transparent onImageSettled={onImageSettled} />
     </View>
   );
 }
 
 export function TapInStoryTemplateCard({
   onPhotoSettled,
+  onImageSettled,
   showTransparencyGrid,
   story,
   templateId,
@@ -277,21 +423,30 @@ export function TapInStoryTemplateCard({
   if (templateId === 'transparentOverlay') {
     return (
       <TransparentOverlayStory
+        onImageSettled={onImageSettled}
         showTransparencyGrid={showTransparencyGrid}
         story={story}
       />
     );
   }
 
-  return <TapInMomentStory onPhotoSettled={onPhotoSettled} story={story} />;
+  return (
+    <TapInMomentStory
+      onPhotoSettled={onPhotoSettled}
+      onImageSettled={onImageSettled}
+      story={story}
+    />
+  );
 }
 
 export function TapInStoryShareCard({
   onPhotoSettled,
+  onImageSettled,
   story,
 }: TapInStoryShareCardProps): React.JSX.Element {
   return (
     <TapInStoryTemplateCard
+      onImageSettled={onImageSettled}
       onPhotoSettled={onPhotoSettled}
       story={story}
       templateId="tapInMoment"
@@ -300,87 +455,97 @@ export function TapInStoryShareCard({
 }
 
 const styles = StyleSheet.create({
-  backgroundPhoto: {
-    height: '100%',
-    position: 'absolute',
-    width: '100%',
-  },
+  backgroundPhoto: {height: '100%', position: 'absolute', width: '100%'},
   card: {
     height: tapInStoryShareCardSize.height,
-    overflow: 'hidden',
     width: tapInStoryShareCardSize.width,
+    overflow: 'hidden',
   },
-  circleEyebrow: {
-    fontSize: 10,
-    fontWeight: '700',
-    letterSpacing: 0.6,
-    lineHeight: 14,
-  },
-  circleTitle: {fontSize: 21, fontWeight: '700', lineHeight: 26},
-  commitment: {fontSize: 14, fontWeight: '400', lineHeight: 20},
+  header: {fontSize: 10, fontWeight: '600', letterSpacing: 0.2, lineHeight: 14},
+  circleTitle: {fontSize: 20, fontWeight: '700', lineHeight: 24, flex: 1},
+  commitment: {fontSize: 12, lineHeight: 16},
   ctaPill: {
     alignSelf: 'flex-start',
-    borderColor: 'rgba(7,11,26,0.18)',
+    borderColor: 'rgba(7,11,26,0.28)',
     borderRadius: radius.pill,
     borderWidth: 1,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
   },
-  ctaText: {fontSize: 14, fontWeight: '600', lineHeight: 20},
-  ctaWordmark: {
-    height: 18,
-    transform: [{translateY: 7.75}],
-    width: 44,
-  },
-  contentGroup: {gap: 20},
-  identityStack: {gap: 14},
+  ctaText: {fontSize: 11, fontWeight: '600', lineHeight: 18},
+  ctaWordmark: {height: 14, transform: [{translateY: 5.5}], width: 35},
+  contentGroup: {gap: 14},
+  identityStack: {gap: 8},
+  identityRow: {flexDirection: 'row', alignItems: 'center', gap: 8},
+  titleGroup: {gap: 5},
   memberAvatar: {
     alignItems: 'center',
     backgroundColor: '#F1F1EE',
     borderColor: '#FFFFFF',
     borderRadius: radius.pill,
-    borderWidth: 2,
-    height: 30,
+    borderWidth: 1.5,
+    height: 26,
     justifyContent: 'center',
     overflow: 'hidden',
-    width: 30,
+    width: 26,
   },
   memberAvatarImage: {height: '100%', resizeMode: 'cover', width: '100%'},
-  memberAvatarOverlap: {marginLeft: -8},
+  memberAvatarOverlap: {marginLeft: -9},
   memberAvatars: {alignItems: 'center', flexDirection: 'row'},
   memberCluster: {alignItems: 'center', flexDirection: 'row'},
-  memberInitials: {fontSize: 10, fontWeight: '700', lineHeight: 12},
+  memberInitials: {
+    fontSize: 9,
+    fontWeight: '700',
+    lineHeight: 12,
+    color: '#26324B',
+  },
   memberRemainder: {
     alignItems: 'center',
     backgroundColor: 'rgba(255,255,255,0.56)',
     borderColor: '#FFFFFF',
     borderRadius: radius.pill,
-    borderWidth: 2,
-    height: 30,
+    borderWidth: 1.5,
+    height: 26,
     justifyContent: 'center',
-    marginLeft: -8,
-    width: 30,
+    marginLeft: -9,
+    width: 26,
   },
-  memberRemainderText: {fontSize: 10, fontWeight: '700', lineHeight: 12},
+  memberRemainderText: {fontSize: 9, fontWeight: '700', lineHeight: 12},
   neutralCard: {backgroundColor: '#FAFAF7'},
   photoCard: {backgroundColor: '#101218'},
-  stat: {flex: 1, gap: 2},
-  statLabel: {
-    fontSize: 9,
-    fontWeight: '700',
-    letterSpacing: 0.7,
-    lineHeight: 12,
+  stat: {flex: 1, gap: 4},
+  statLabel: {fontSize: 10, lineHeight: 13},
+  sectionLabel: {fontSize: 11, fontWeight: '700', lineHeight: 15},
+  statValue: {fontSize: 15, fontWeight: '700', lineHeight: 20},
+  statDetail: {fontSize: 10, lineHeight: 13},
+  groupValue: {fontSize: 13, fontWeight: '700', lineHeight: 18},
+  streakValue: {fontSize: 14, fontWeight: '700', lineHeight: 20, flexShrink: 1},
+  streakRow: {flexDirection: 'row', alignItems: 'center', gap: 4},
+  statsRow: {flexDirection: 'row', gap: 10, alignItems: 'stretch'},
+  progressBlock: {gap: 10},
+  progressSection: {gap: 8},
+  groupSection: {borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 12},
+  groupPeriod: {flex: 2.25},
+  statDivider: {
+    width: StyleSheet.hairlineWidth,
+    borderLeftWidth: StyleSheet.hairlineWidth,
   },
-  statValue: {fontSize: 22, fontWeight: '700', lineHeight: 27},
-  statsRow: {flexDirection: 'row', gap: 12},
+  transparentDivider: {borderColor: 'rgba(255,255,255,0.35)'},
+  neutralDivider: {borderColor: 'rgba(7,11,26,0.2)'},
   storyContent: {
     flex: 1,
-    justifyContent: 'center',
-    paddingHorizontal: 30,
-    paddingVertical: 34,
+    justifyContent: 'flex-end',
+    paddingHorizontal: 28,
+    paddingTop: 28,
+    paddingBottom: 40,
   },
-  supportingStack: {gap: 16},
-  titleGroup: {gap: 2},
+  footer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+    marginTop: 6,
+  },
   transparentCard: {backgroundColor: 'transparent'},
   transparentContent: {
     shadowColor: '#000000',
@@ -388,5 +553,5 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.54,
     shadowRadius: 3,
   },
-  transparentCta: {borderColor: 'rgba(255,255,255,0.72)'},
+  transparentCta: {borderColor: 'rgba(255,255,255,0.64)'},
 });

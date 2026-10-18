@@ -1043,14 +1043,20 @@ const styles = StyleSheet.create({
   },
   likeButton: {
     alignItems: 'center',
-    flexDirection: 'row',
-    gap: 4,
+    flexDirection: 'column',
+    gap: 2,
     justifyContent: 'center',
     minHeight: 44,
     minWidth: 44,
     paddingHorizontal: 4,
   },
-  likeCount: {fontSize: 12, fontWeight: '600', lineHeight: 16},
+  likeCount: {
+    fontSize: 12,
+    fontWeight: '600',
+    lineHeight: 16,
+    minWidth: 18,
+    textAlign: 'center',
+  },
   loadingRow: {
     alignItems: 'center',
     flexDirection: 'row',

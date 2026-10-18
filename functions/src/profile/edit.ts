@@ -3,6 +3,7 @@ import {onDocumentWritten} from 'firebase-functions/v2/firestore';
 import {HttpsError, onCall} from 'firebase-functions/v2/https';
 import {z} from 'zod';
 import {db} from '../firebase';
+import {publicProfile} from './public';
 
 const handleSchema = z
   .string()
@@ -76,6 +77,11 @@ export const updateProfile = onCall(async request => {
     const user = await transaction.get(userRef);
     const previous = user.data();
     requireComplete(previous);
+    if (previous?.accountDeletionStartedAt)
+      throw new HttpsError(
+        'failed-precondition',
+        'Account deletion is in progress.',
+      );
     const oldHandle = previous!.handle as string;
     const newHandle = input.handle ?? oldHandle;
     if (newHandle !== oldHandle) {
@@ -100,6 +106,10 @@ export const updateProfile = onCall(async request => {
     }
     const updates = {...input, updatedAt: FieldValue.serverTimestamp()};
     transaction.update(userRef, updates);
+    transaction.set(
+      db.doc(`publicProfiles/${uid}`),
+      publicProfile({...previous, ...updates}),
+    );
     return {
       id: uid,
       name: input.displayName ?? previous!.displayName,

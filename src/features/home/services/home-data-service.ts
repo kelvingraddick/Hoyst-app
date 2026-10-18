@@ -1,3 +1,5 @@
+import {readProofRequirement} from '../../../shared/tap-in-proof';
+import {readCircleProgress, circleDateKey, circlePeriodForDate, evaluateMemberPeriod, shiftCircleDate, type CircleProgressSummary} from '../../../shared/circle-progress';
 import {
   normalizeCategory,
   readAppearance,
@@ -1522,6 +1524,13 @@ export function mapHomeCircleFromData({
         ])
       : periodStatuses;
   const memberCoveredCounts = getPeriodCoveredCounts(scoringStatuses);
+  const currentPeriod = circlePeriodForDate(circleDateKey(asString(circleData.timezone, 'UTC')), commitmentPace);
+  const memberTarget = (data: PlainData) => {
+    const joined = asDate(data.joinedAt);
+    const joinedKey = joined ? circleDateKey(asString(circleData.timezone, 'UTC'), joined) : currentPeriod.start;
+    const eligible = joined && data.opportunityEligibility !== 'include_current' ? shiftCircleDate(joinedKey, 1) : joinedKey;
+    return evaluateMemberPeriod({period: currentPeriod, uid: asString(data.uid), spans: [{uid: asString(data.uid), start: eligible, runId: 'current'}], intervals: [{start: currentPeriod.start}], target: requiredTapIns, coveredDates: new Set(), today: circleDateKey(asString(circleData.timezone, 'UTC'))}).required;
+  };
   const isPending = membershipStatus === 'pending';
   const memberRecords = membersData.length > 0 ? membersData : [membershipData];
   const activeMemberCount = memberRecords.filter(
@@ -1534,7 +1543,7 @@ export function mapHomeCircleFromData({
         memberData,
         memberCoveredCounts,
         coveredCheckIns,
-        requiredTapIns,
+        memberTarget(memberData),
       ),
     )
     .filter((member): member is CircleMemberStatus => Boolean(member));
@@ -1644,8 +1653,12 @@ export function mapHomeCircleFromData({
   });
 
   return {
+    viewerUid: uid,
+    viewerCircleProgress: readCircleProgress(membershipData.circleProgress, circleData),
+    groupStreak: readCircleProgress(circleData.groupStreak, circleData),
     category: normalizeCategory(circleData.category),
     appearance: readAppearance(circleData.appearance),
+    proofRequirement: readProofRequirement(circleData.proofRequirement),
     buildTrackingMode: circleData.buildTrackingMode === 'quantity' ? 'quantity' : circleData.buildTrackingMode === 'confirmation' ? 'confirmation' : undefined,
     circleMode,
     completionRate: progressPercent,
@@ -1721,7 +1734,7 @@ export function mapHomeCircleFromData({
       : {}),
     viewerRemainingTapIns,
     viewerCycleCoveredCount: cappedViewerCoveredCount,
-    viewerCycleRequiredCount: requiredTapIns,
+    viewerCycleRequiredCount: memberTarget(membershipData),
     viewerRole: normalizeMemberRole(membershipData.role),
     ...(visibleViewerTodayCheckIn
       ? {viewerTodayCheckIn: visibleViewerTodayCheckIn}
@@ -2026,12 +2039,10 @@ function syncCircleOpportunityListener({
 
 function syncMemberProfileListeners({
   memberRecords,
-  onError,
   onUpdate,
   state,
 }: {
   memberRecords: PlainData[];
-  onError: (error: Error) => void;
   onUpdate: () => void;
   state: CircleSubscriptionState;
 }) {
@@ -2056,19 +2067,27 @@ function syncMemberProfileListeners({
     }
 
     const unsubscribe = firestore
-      .collection(collections.users)
+      .collection(collections.publicProfiles)
       .doc(memberUid)
-      .onSnapshot(snapshot => {
-        const profileData = snapshotData(snapshot);
+      .onSnapshot(
+        snapshot => {
+          const profileData = snapshotData(snapshot);
 
-        if (profileData) {
-          state.memberProfiles.set(memberUid, profileData);
-        } else {
+          if (profileData) {
+            state.memberProfiles.set(memberUid, profileData);
+          } else {
+            state.memberProfiles.delete(memberUid);
+          }
+
+          onUpdate();
+        },
+        () => {
+          // Profile enrichment is optional. An unavailable profile must not
+          // discard authoritative membership or the Circle's progress.
           state.memberProfiles.delete(memberUid);
-        }
-
-        onUpdate();
-      }, onError);
+          onUpdate();
+        },
+      );
 
     state.memberProfileUnsubscribes.set(memberUid, unsubscribe);
   });
@@ -2138,6 +2157,7 @@ function getViewerTodayCheckInFromSnapshot(
   return {
     dateKey,
     status,
+    proofRequirement: readProofRequirement(data.proofRequirement),
     ...(coverageStatus ? {coverageStatus} : {}),
     ...(typeof currentValue === 'number' ? {currentValue} : {}),
     ...(typeof maximumValue === 'number' ? {maximumValue} : {}),
@@ -2400,6 +2420,7 @@ export function subscribeToHomeData({
   const memberships = new Map<string, PlainData>();
   const states = new Map<string, CircleSubscriptionState>();
   const viewerOpenOpportunities = new Map<string, PlainData>();
+  const viewerProgress = new Map<string, CircleProgressSummary>();
   let hasLoadedViewerOpportunities = false;
   let sharedSkips: number | undefined;
   let circleUnsubscribes: Array<() => void> = [];
@@ -2444,7 +2465,7 @@ export function subscribeToHomeData({
         .map(([circleId, membershipData]) =>
           buildCircleFromState(
             circleId,
-            membershipData,
+            {...membershipData, circleProgress: viewerProgress.get(circleId)},
             states.get(circleId),
             viewerOpenOpportunities.get(circleId),
           ),
@@ -2521,7 +2542,6 @@ export function subscribeToHomeData({
       states.set(circleId, state);
       syncMemberProfileListeners({
         memberRecords: [membershipData],
-        onError,
         onUpdate: emit,
         state,
       });
@@ -2570,7 +2590,6 @@ export function subscribeToHomeData({
           state.hasLoadedMembers = true;
           syncMemberProfileListeners({
             memberRecords: state.membersData,
-            onError,
             onUpdate: emit,
             state,
           });
@@ -2658,6 +2677,12 @@ export function subscribeToHomeData({
       emit();
     }, onError);
 
+  const unsubscribeCircleProgress = firestore.collection(collections.userPrivate).doc(uid).collection('circleProgress').onSnapshot(snapshot => {
+    viewerProgress.clear();
+    snapshot.docs.forEach(doc => {const summary = readCircleProgress(doc.data()); if (summary) viewerProgress.set(doc.id, summary);});
+    emit();
+  }, onError);
+
   const unsubscribeInventory = firestore
     .collection(collections.userPrivate)
     .doc(uid)
@@ -2670,6 +2695,7 @@ export function subscribeToHomeData({
 
   return () => {
     unsubscribeInventory();
+    unsubscribeCircleProgress();
     unsubscribeMemberships();
     unsubscribeViewerOpportunities();
     stopCircleListeners();
@@ -2756,7 +2782,6 @@ export function subscribeToMemberCircleDetail({
     state.membersData = membershipData ? [membershipData] : undefined;
     syncMemberProfileListeners({
       memberRecords: state.membersData ?? [],
-      onError,
       onUpdate: emit,
       state,
     });
@@ -2787,7 +2812,6 @@ export function subscribeToMemberCircleDetail({
           );
         syncMemberProfileListeners({
           memberRecords: state.membersData,
-          onError,
           onUpdate: emit,
           state,
         });

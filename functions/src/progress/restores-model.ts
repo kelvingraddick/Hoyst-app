@@ -1,4 +1,6 @@
 export type RestoreSlot = {
+  policyVersion?: 2;
+  restoreDateKey?: string;
   id: string;
   circleId: string;
   availableDateKey: string;

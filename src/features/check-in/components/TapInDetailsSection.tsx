@@ -49,6 +49,8 @@ export type TapInDetailsSaveState = {
 
 type Props = {
   presentation?: 'legacy' | 'composer';
+  photoRequired?: boolean;
+  proofRequiredForCompletion?: boolean;
   category?: CategoryTone;
   autoSaveInitialPhoto?: boolean;
   circleId: string;
@@ -70,6 +72,8 @@ function isRemotePhoto(value?: string) {
 
 export function TapInDetailsSection({
   presentation = 'legacy',
+  photoRequired = false,
+  proofRequiredForCompletion = false,
   category = 'neutral',
   autoSaveInitialPhoto = false,
   circleId,
@@ -263,6 +267,10 @@ export function TapInDetailsSection({
         return;
       }
 
+      if (photoRequired && !visiblePhotoUri) {
+        setSaveError('Replace the required photo, or remove the whole Tap In.');
+        return;
+      }
       saveLock.current = true;
       setIsSaving(true);
       setSaveError(undefined);
@@ -318,6 +326,8 @@ export function TapInDetailsSection({
       isPhotoRemoved,
       localPhotoUri,
       onSaved,
+      photoRequired,
+      visiblePhotoUri,
       savedPhotoUrl,
       trimmedDraft,
       user?.uid,
@@ -361,6 +371,8 @@ export function TapInDetailsSection({
     ? 'Saving photo...'
     : isRetryingInitialPhoto
     ? 'Retry photo upload'
+    : proofRequiredForCompletion && !visiblePhotoUri
+    ? 'Add Photo proof'
     : hasSavedDetails
     ? 'Edit details'
     : 'Add details';
@@ -368,6 +380,10 @@ export function TapInDetailsSection({
     ? 'Your Tap In is already saved'
     : isRetryingInitialPhoto
     ? 'Tap In saved. Photo needs another try.'
+    : photoRequired
+    ? 'Required Photo proof. You can replace the photo or edit your note.'
+    : proofRequiredForCompletion
+    ? 'Add Photo proof to complete this Tap In.'
     : 'Optional note or photo';
   const openDetails = () => {
     if (isSaving) {
@@ -389,6 +405,8 @@ export function TapInDetailsSection({
       <ComposerDetailsPresentation
         {...{
           category,
+          photoRequired,
+          proofRequiredForCompletion,
           isExpanded,
           isSaving,
           isDirty,
@@ -583,17 +601,21 @@ export function TapInDetailsSection({
             style={styles.previewImage}
             testID="tap-in-details-photo-preview"
           />
-          <Pressable
-            accessibilityLabel="Remove photo"
-            accessibilityRole="button"
-            onPress={() => {
-              setLocalPhotoUri(undefined);
-              setIsPhotoRemoved(true);
-              setSaveError(undefined);
-            }}
-            style={styles.removePhotoButton}>
-            <Trash2 color="#FFFFFF" size={16} strokeWidth={2.3} />
-          </Pressable>
+          {!photoRequired ? (
+            <Pressable
+              disabled={photoRequired}
+              accessibilityState={{disabled: photoRequired}}
+              accessibilityLabel="Remove photo"
+              accessibilityRole="button"
+              onPress={() => {
+                setLocalPhotoUri(undefined);
+                setIsPhotoRemoved(true);
+                setSaveError(undefined);
+              }}
+              style={styles.removePhotoButton}>
+              <Trash2 color="#FFFFFF" size={16} strokeWidth={2.3} />
+            </Pressable>
+          ) : null}
         </View>
       ) : null}
 
@@ -743,6 +765,8 @@ const styles = StyleSheet.create({
 
 export function ComposerDetailsPresentation({
   category,
+  photoRequired = false,
+  proofRequiredForCompletion = false,
   isExpanded,
   isSaving,
   isDirty,
@@ -760,6 +784,8 @@ export function ComposerDetailsPresentation({
   onRemovePhoto,
 }: {
   category: CategoryTone;
+  photoRequired?: boolean;
+  proofRequiredForCompletion?: boolean;
   isExpanded: boolean;
   isSaving: boolean;
   isDirty: boolean;
@@ -821,7 +847,13 @@ export function ComposerDetailsPresentation({
       />
       <ComposerDisclosure
         title={visiblePhotoUri ? 'Change photo' : 'Add photo'}
-        subtitle="Optional proof for your Circle"
+        subtitle={
+          photoRequired
+            ? 'Required proof. Replace the photo or remove the whole Tap In.'
+            : proofRequiredForCompletion
+            ? 'Required to complete this Tap In'
+            : 'Optional proof for your Circle'
+        }
         onPress={onAddPhoto}
         disabled={isSaving}
         testID="tap-in-details-photo-picker"
@@ -836,12 +868,14 @@ export function ComposerDetailsPresentation({
             testID="tap-in-details-photo-preview"
             accessibilityLabel="Tap In photo"
           />
-          <DSButton
-            label="Remove photo"
-            variant="quiet"
-            disabled={isSaving}
-            onPress={onRemovePhoto}
-          />
+          {!photoRequired ? (
+            <DSButton
+              label="Remove photo"
+              variant="quiet"
+              disabled={isSaving}
+              onPress={onRemovePhoto}
+            />
+          ) : null}
         </>
       ) : null}
       {saveError ? (

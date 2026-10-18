@@ -1,0 +1,122 @@
+[
+  {
+    "platform": "ios",
+    "mode": "light",
+    "size": [
+      1080,
+      1920
+    ],
+    "alpha": [
+      255,
+      255
+    ]
+  },
+  {
+    "platform": "ios",
+    "mode": "long-transparent",
+    "size": [
+      1080,
+      1920
+    ],
+    "alpha": [
+      0,
+      255
+    ]
+  },
+  {
+    "platform": "ios",
+    "mode": "long-photo",
+    "size": [
+      1080,
+      1920
+    ],
+    "alpha": [
+      255,
+      255
+    ]
+  },
+  {
+    "platform": "ios",
+    "mode": "personal",
+    "size": [
+      1080,
+      1920
+    ],
+    "alpha": [
+      255,
+      255
+    ]
+  },
+  {
+    "platform": "ios",
+    "mode": "unknown",
+    "size": [
+      1080,
+      1920
+    ],
+    "alpha": [
+      255,
+      255
+    ]
+  },
+  {
+    "platform": "android",
+    "mode": "light",
+    "size": [
+      1080,
+      1920
+    ],
+    "alpha": [
+      255,
+      255
+    ]
+  },
+  {
+    "platform": "android",
+    "mode": "long-transparent",
+    "size": [
+      1080,
+      1920
+    ],
+    "alpha": [
+      0,
+      255
+    ]
+  },
+  {
+    "platform": "android",
+    "mode": "long-photo",
+    "size": [
+      1080,
+      1920
+    ],
+    "alpha": [
+      255,
+      255
+    ]
+  },
+  {
+    "platform": "android",
+    "mode": "personal",
+    "size": [
+      1080,
+      1920
+    ],
+    "alpha": [
+      255,
+      255
+    ]
+  },
+  {
+    "platform": "android",
+    "mode": "unknown",
+    "size": [
+      1080,
+      1920
+    ],
+    "alpha": [
+      255,
+      255
+    ]
+  }
+]

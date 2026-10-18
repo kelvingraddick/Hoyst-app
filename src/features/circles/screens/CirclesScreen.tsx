@@ -1,3 +1,4 @@
+import {CircleCardStreaks} from '../components/CircleCardStreaks';
 import {shareCircleInvitation} from '../../progress/services/progress-service';
 import React, {useCallback, useEffect, useMemo, useState} from 'react';
 import {
@@ -573,6 +574,7 @@ function CirclesScreenContent({navigation}: Props) {
           members={memberSources(item)}
           onDetails={() => openCircle(item.id)}
           onExpand={() => undefined}
+          streaks={<CircleCardStreaks circle={item} />}
           status={statusCopy(item, locallyNudged)}
           title={item.title}
         />

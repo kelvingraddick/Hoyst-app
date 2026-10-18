@@ -1,3 +1,5 @@
+import {readProofRequirement} from '../../../shared/tap-in-proof';
+import {readCircleProgress} from '../../../shared/circle-progress';
 import {
   normalizeCategory,
   readAppearance,
@@ -194,7 +196,7 @@ function subscribeToReadableMemberPreviews(
       }
 
       const unsubscribe = firestore
-        .collection(collections.users)
+        .collection(collections.publicProfiles)
         .doc(uid)
         .onSnapshot(
           snapshot => {
@@ -305,6 +307,7 @@ export function mapPublicCircleIndexSnapshot(
   return {
     category: normalizeCategory(data.category),
     appearance: readAppearance(data.appearance),
+    proofRequirement: readProofRequirement(data.proofRequirement),
     circleMode: 'group',
     completionLabel: progressLabel,
     completionRate,
@@ -315,6 +318,7 @@ export function mapPublicCircleIndexSnapshot(
       tapInsPerWeek,
     },
     groupStreakDays: asNumber(data.groupStreakDays, 0),
+    groupStreak: readCircleProgress(data.groupStreak, data),
     id: snapshot.id,
     joinLabel: data.joinMode === 'open' ? 'Open seats' : 'Request to join',
     joinMode:

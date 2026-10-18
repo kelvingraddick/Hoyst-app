@@ -52,7 +52,7 @@ describe('momentum summary fallback', () => {
         completedOpportunities: 2,
         currentStreak: 0,
         label: 'Strong',
-        percentage: 50,
+        percentage: 33,
         periodKey: 'current',
         skippedOpportunities: 1,
         status: 'strong_momentum',
@@ -61,7 +61,7 @@ describe('momentum summary fallback', () => {
     ).toBe('2 of 4 Opportunities covered');
   });
 
-  it('counts partial weekly Tap Ins as completed scheduled opportunities', () => {
+  it('counts covered weekly quota units against the full period target', () => {
     const summary = buildMomentumSummaryFromHomeData({
       circles: [
         circle({
@@ -92,15 +92,15 @@ describe('momentum summary fallback', () => {
     });
 
     expect(summary).toMatchObject({
-      availableOpportunities: 4,
+      availableOpportunities: 6,
       completedOpportunities: 2,
       currentStreak: 2,
-      percentage: 50,
+      percentage: 33,
       status: 'strong_momentum',
     });
   });
 
-  it('keeps upcoming weekly slots out of the fallback denominator', () => {
+  it('makes the full weekly quota available from period entry', () => {
     const summary = buildMomentumSummaryFromHomeData({
       circles: [
         circle({
@@ -114,7 +114,7 @@ describe('momentum summary fallback', () => {
     });
 
     expect(summary).toMatchObject({
-      availableOpportunities: 2,
+      availableOpportunities: 4,
       completedOpportunities: 0,
       percentage: 0,
     });
@@ -156,7 +156,7 @@ describe('momentum summary fallback', () => {
     });
 
     expect(summary).toMatchObject({
-      availableOpportunities: 2,
+      availableOpportunities: 4,
       completedOpportunities: 0,
       percentage: 0,
     });

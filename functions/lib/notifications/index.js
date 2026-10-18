@@ -1704,7 +1704,7 @@ function buildTapInReminderNotification({ dateKey, kind, reminders, uid, }) {
 }
 function getOpportunityReminderSlots({ dateKey, kind, slots, }) {
     return slots.filter(slot => kind === 'midday'
-        ? slot.availableDateKey === dateKey
+        ? slot.policyVersion === 2 ? slot.availableDateKey <= dateKey && slot.expiresDateKey >= dateKey : slot.availableDateKey === dateKey
         : slot.expiresDateKey === dateKey);
 }
 async function sendTapInReminders(kind) {
@@ -1737,7 +1737,7 @@ async function sendTapInReminders(kind) {
             .collection('opportunities')
             .doc(slot.periodKey)
             .collection('slots')
-            .doc(String(slot.slotIndex))
+            .doc(slot.policyVersion === 2 ? `v2_${slot.slotIndex}` : String(slot.slotIndex))
             .get()));
         const circleTitle = asString(circle.title, 'Your circle');
         for (const memberSnapshot of memberSnapshots.docs) {
@@ -1745,7 +1745,7 @@ async function sendTapInReminders(kind) {
             const eligibleSlotIndex = reminderSlots.findIndex((slot, index) => {
                 const expectedMemberUids = slotSnapshots[index].data()?.expectedMemberUids;
                 return Array.isArray(expectedMemberUids)
-                    ? expectedMemberUids.includes(uid)
+                    ? expectedMemberUids.includes(uid) && !(slotSnapshots[index].data()?.coveredMemberUids || []).includes(uid)
                     : (0, eligibility_1.isMemberExpectedForSlot)({
                         member: memberSnapshot.data(),
                         slot,
@@ -1760,7 +1760,7 @@ async function sendTapInReminders(kind) {
                 .collection('userPrivate')
                 .doc(uid)
                 .collection('opportunities')
-                .doc(`${circleSnapshot.id}_${slot.periodKey}_${slot.slotIndex}`)
+                .doc(`${circleSnapshot.id}_${slot.periodKey}_${slot.policyVersion === 2 ? 'v2_' : ''}${slot.slotIndex}`)
                 .get();
             const opportunityStatus = opportunitySnapshot.data()?.status;
             const userPrivateSnapshot = await firebase_1.db
@@ -1800,7 +1800,7 @@ async function sendTapInReminders(kind) {
                 dedupeKey: eligibility.dedupeKey,
                 opportunityKey: commitmentPace === 'daily'
                     ? undefined
-                    : `${circleSnapshot.id}_${slot.periodKey}_${slot.slotIndex}`,
+                    : `${circleSnapshot.id}_${slot.periodKey}_${slot.policyVersion === 2 ? 'v2_' : ''}${slot.slotIndex}`,
             });
             reminderGroups.set(groupKey, group);
         }

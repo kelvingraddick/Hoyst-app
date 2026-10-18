@@ -1,3 +1,4 @@
+import {readProofRequirement} from '../shared/tap-in-proof';
 import {createHash} from 'node:crypto';
 import {
   normalizeCategory,
@@ -100,6 +101,7 @@ const createCircleSchema = z
     commitment: z.string().trim().min(1).max(160),
     commitmentCadence: z.enum(['daily', 'weekly', 'monthly']).optional(),
     commitmentFrequency: commitmentFrequencySchema,
+    proofRequirement: z.enum(['photo', 'none']).optional(),
     commitmentType: z.enum(['build', 'limit', 'avoid']).default('build'),
     buildTrackingMode: z.enum(['confirmation', 'quantity']).optional(),
     graceRules: z
@@ -702,6 +704,7 @@ export const createCircle = onCall(
       commitment: input.commitment,
       commitmentCadence: commitmentPace,
       commitmentFrequency,
+      proofRequirement: input.proofRequirement ?? 'photo',
       commitmentType,
       ...(isPersonal ? {} : {groupStreakDays: 0}),
       graceRules: input.graceRules ?? {
@@ -795,7 +798,8 @@ export const createCircle = onCall(
           commitment: input.commitment,
           commitmentCadence: commitmentPace,
           commitmentFrequency,
-          commitmentType,
+          proofRequirement: input.proofRequirement ?? 'photo',
+      commitmentType,
           groupStreakDays: 0,
           joinMode,
           lifecycleStatus: 'active',
@@ -1850,6 +1854,7 @@ export const convertPersonalCircle = onCall(async request => {
         commitment,
         commitmentCadence: commitmentPace,
         commitmentFrequency,
+        proofRequirement: readProofRequirement(latestCircle?.proofRequirement),
         commitmentType: latestCircle?.commitmentType ?? 'build',
         groupStreakDays: 0,
         joinMode: input.joinMode,
@@ -1990,6 +1995,7 @@ export const updateCircle = onCall(async request => {
     commitment: input.commitment,
     commitmentCadence: commitmentPace,
     commitmentFrequency,
+    proofRequirement: input.proofRequirement ?? readProofRequirement(circle?.proofRequirement),
     commitmentType,
     graceRules: input.graceRules ?? {
       skip: {
@@ -2035,7 +2041,8 @@ export const updateCircle = onCall(async request => {
       commitment: input.commitment,
       commitmentCadence: commitmentPace,
       commitmentFrequency,
-      commitmentType,
+      proofRequirement: input.proofRequirement ?? readProofRequirement(circle?.proofRequirement),
+    commitmentType,
       groupStreakDays: asNumber(circle?.groupStreakDays, 0),
       joinMode,
       lifecycleStatus: 'active',
@@ -2376,6 +2383,7 @@ export const unarchiveCircle = onCall(
           commitment: circle?.commitment ?? circle?.title ?? 'Commitment',
           commitmentCadence: commitmentPace,
           commitmentFrequency,
+          proofRequirement: readProofRequirement(circle?.proofRequirement),
           commitmentType: circle?.commitmentType ?? 'build',
           groupStreakDays: asNumber(circle?.groupStreakDays, 0),
           joinMode: circle?.joinMode ?? 'invite_only',

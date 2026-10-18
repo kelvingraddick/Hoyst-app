@@ -1,3 +1,4 @@
+import type {CircleProgressSummary} from '../../../shared/circle-progress';
 import type {CommitmentAppearance} from '../../../shared/commitment-appearance';
 import {firebaseFunctions} from '../../../lib/firebase/functions';
 
@@ -17,6 +18,10 @@ export type DiscoverableCircle = {
   memberCount: number;
   maxSize: number;
   groupStreakDays: number;
+  groupStreak?: CircleProgressSummary;
+  commitmentCadence?: 'daily' | 'weekly' | 'monthly';
+  commitmentFrequency?: {tapInsPerWeek: number; opportunitiesPerPeriod?: number};
+  timezone?: string;
   joinMode: 'open' | 'request_to_join' | 'invite_only';
   latestPublicTapIn?: PublicTapInPreview;
 };

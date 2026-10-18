@@ -13,6 +13,7 @@ import type {
 } from '../../../types/models';
 
 export type CreateCircleInput = {
+  proofRequirement?: import('../../../shared/tap-in-proof').ProofRequirement;
   independentTitle?: boolean;
   requestId?: string;
   category: string;

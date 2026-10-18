@@ -1,8 +1,11 @@
+import type {CircleProgressResult} from '../shared/circle-progress';
 import type {CommitmentAppearance} from '../shared/commitment-appearance';
 import type {NavigatorScreenParams} from '@react-navigation/native';
 import type {
   CheckInCoverageStatus,
   CircleMemberStatus,
+  CircleMode,
+  CommitmentPace,
   CommitmentType,
 } from '../types/models';
 import type {PastCircleSummary} from '../features/circles/services/past-circle-service';
@@ -75,9 +78,13 @@ export type RootStackParamList = {
   ArchivedCircles: undefined;
   TapInComposer: {circleId: string; source: TapInSource};
   TapInComplete: {
+    proofRequirement?: import('../shared/tap-in-proof').ProofRequirement;
     category?: string;
     appearance?: CommitmentAppearance;
     circleId: string;
+    circleMode?: CircleMode;
+    commitmentCadence?: CommitmentPace;
+    timezone?: string;
     dateKey: string;
     circleTitle?: string;
     commitment?: string;
@@ -97,6 +104,7 @@ export type RootStackParamList = {
     streakLabel?: string;
     targetValue?: number;
     unitLabel?: string;
+    circleProgress?: CircleProgressResult;
     completionMomentum?: TapInCompletionMomentum;
     completionProgress?: {
       xpEarned: number;
@@ -109,18 +117,25 @@ export type RootStackParamList = {
     category?: string;
     appearance?: CommitmentAppearance;
     circleId: string;
+    circleMode?: CircleMode;
     circleTitle?: string;
     commitment?: string;
     commitmentType?: CommitmentType;
+    commitmentCadence?: CommitmentPace;
+    dateKey: string;
+    timezone?: string;
+    status?: TapInCompletionStatus;
+    coverageStatus?: CheckInCoverageStatus;
+    currentValue?: number;
+    minimumValue?: number;
+    maximumValue?: number;
+    targetValue?: number;
+    unitLabel?: string;
+    circleProgress?: CircleProgressResult;
     inviteUrl?: string;
     memberCount?: number;
     members?: CircleMemberStatus[];
-    periodTapInCount?: number;
-    progressLabel?: string;
     source: TapInSource;
-    streakDays?: number;
-    streakLabel?: string;
-    note?: string;
     photoUri?: string;
   };
 };

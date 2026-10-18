@@ -1,6 +1,15 @@
 import {CircularEmoji} from '../src/design/components/CircularEmoji';
 import React from 'react';
-import {Pressable, ScrollView, StyleSheet, Text, View} from 'react-native';
+import {
+  AccessibilityInfo,
+  Image,
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import renderer, {act} from 'react-test-renderer';
 import {ProgressScreen} from '../src/features/progress/screens/ProgressScreen';
 import {DSButton, DSSurface, minimumTarget} from '../src/design/system';
@@ -15,6 +24,9 @@ let mockMomentumError = false;
 let mockAppearance: 'light' | 'dark' = 'light';
 let mockDimensions = {width: 402, height: 874, scale: 3, fontScale: 1};
 let mockInsets = {top: 62, bottom: 34, left: 0, right: 0};
+const mockStatsQuery = jest.fn();
+const mockHistoryQuery = jest.fn();
+const mockMomentumSubscribe = jest.fn();
 
 jest.mock('react-native/Libraries/Utilities/useWindowDimensions', () => ({
   __esModule: true,
@@ -27,12 +39,15 @@ jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => mockInsets,
 }));
 jest.mock('@tanstack/react-query', () => ({
-  useQuery: () => ({
-    data: mockProfileError
-      ? undefined
-      : {personalStreakDays: 2, longestStreakDays: 12, totalTapIns: 147},
-    isError: mockProfileError,
-  }),
+  useQuery: (options: unknown) => {
+    mockStatsQuery(options);
+    return {
+      data: mockProfileError
+        ? undefined
+        : {personalStreakDays: 2, longestStreakDays: 12, totalTapIns: 147},
+      isError: mockProfileError,
+    };
+  },
 }));
 jest.mock('../src/features/progress/hooks/useProgressHistory', () => ({
   useProgressHistory: (
@@ -41,6 +56,7 @@ jest.mock('../src/features/progress/hooks/useProgressHistory', () => ({
     monthKey: string,
     dateKey: string,
   ) => {
+    mockHistoryQuery();
     const {
       historyFixture,
     } = require('../src/features/progress/components/ProgressStatsSection');
@@ -78,6 +94,7 @@ jest.mock('../src/features/profile/services/profile-summary-service', () => ({
 }));
 jest.mock('../src/features/momentum/services/momentum-service', () => ({
   subscribeToMomentumSummary: ({onError}: {onError: () => void}) => {
+    mockMomentumSubscribe();
     if (mockMomentumError) {
       onError();
     }
@@ -138,15 +155,16 @@ jest.mock('../src/features/progress/hooks/useProgress', () => ({
 }));
 let screen: renderer.ReactTestRenderer;
 let navigate: jest.Mock;
+const progressElement = () => (
+  <ProgressScreen
+    navigation={{getParent: () => ({navigate}), navigate} as never}
+    route={{} as never}
+  />
+);
 const mount = () =>
   act(() => {
     navigate = jest.fn();
-    screen = renderer.create(
-      <ProgressScreen
-        navigation={{getParent: () => ({navigate}), navigate} as never}
-        route={{} as never}
-      />,
-    );
+    screen = renderer.create(progressElement());
   });
 const text = () =>
   screen.root
@@ -154,7 +172,8 @@ const text = () =>
     .map(node => node.props.children)
     .flat(Infinity)
     .filter(value => ['string', 'number'].includes(typeof value))
-    .join(' ');
+    .join(' ')
+    .replace(/\s+/g, ' ');
 const button = (label: string) =>
   screen.root
     .findAllByType(Pressable)
@@ -173,6 +192,9 @@ beforeEach(() => {
   };
   mockBeginAuth.mockReset();
   mockStartWizard.mockReset();
+  mockStatsQuery.mockClear();
+  mockHistoryQuery.mockClear();
+  mockMomentumSubscribe.mockClear();
 });
 afterEach(() => act(() => screen?.unmount()));
 afterEach(() => jest.restoreAllMocks());
@@ -294,7 +316,7 @@ it('retains streak and momentum detail destinations', () => {
     .find(
       node =>
         node.props.accessibilityLabel ===
-        '2 days. Current streak. View details.',
+        '2 days. Daily Tap In streak. View details.',
     )!;
   act(() => streak.props.onPress());
   expect(navigate).toHaveBeenLastCalledWith('ProgressDetails', {
@@ -319,7 +341,7 @@ it('labels unavailable stats instead of substituting zero', () => {
   const labels = screen.root
     .findAllByType(Pressable)
     .map(node => node.props.accessibilityLabel);
-  expect(labels).toContain('Unavailable. Current streak. View details.');
+  expect(labels).toContain('Unavailable. Daily Tap In streak. View details.');
   expect(labels).toContain('Unavailable. 14-day momentum. View details.');
 });
 it('explains when the cap and all milestone bonuses are exhausted', () => {
@@ -378,7 +400,9 @@ it('gives guests a real authentication destination', () => {
   mockProgress.summary = undefined;
   mount();
   expect(text()).toContain('Get started');
-  expect(text()).toContain('Create a Circle. Invite your people.');
+  expect(text()).toContain(
+    'Create a Circle, start tapping in, and watch your progress grow.',
+  );
   act(() =>
     screen.root
       .findAllByType(Pressable)
@@ -407,6 +431,212 @@ it('starts the same onboarding flow as the Home guest action', () => {
   expect(mockBeginAuth).toHaveBeenCalledTimes(1);
   expect(navigate).toHaveBeenCalledWith('Auth', {screen: 'Welcome'});
 });
+
+it.each(['light', 'dark'] as const)(
+  'shows only starting progress in order despite stale account data in %s mode',
+  appearance => {
+    mockAppearance = appearance;
+    mockProgress.uid = undefined;
+    mockProgress.loading = true;
+    mockProgress.error = 'Cached account error';
+    mount();
+    const content = text();
+    for (const label of [
+      '0 total XP',
+      '70 XP to level up',
+      'Your journey starts here',
+      '0 days',
+      'Not started',
+      'Lifetime Tap Ins',
+    ]) {
+      expect(content).toContain(label);
+    }
+    const xp = button('Level 1. 0 of 70 XP. 70 XP to level up.');
+    expect(
+      xp.findByProps({accessibilityRole: 'progressbar'}).props
+        .accessibilityValue,
+    ).toEqual({min: 0, max: 70, now: 0});
+    expect(
+      button('Level 2. 70 XP away. 1 skip. View level details.'),
+    ).toBeTruthy();
+    expect(button('Level 3. Locked. 1 skip. View level details.')).toBeTruthy();
+    expect(content.indexOf('0 total XP')).toBeLessThan(
+      content.indexOf('Your journey starts here'),
+    );
+    expect(content.indexOf('Your journey starts here')).toBeLessThan(
+      content.indexOf('Your stats'),
+    );
+    expect(content.indexOf('Lifetime Tap Ins')).toBeLessThan(
+      content.indexOf('Create a Circle, start tapping in'),
+    );
+    expect(screen.root.findAllByType(Image)).toHaveLength(1);
+    expect(button('Reward history')).toBeUndefined();
+    for (const label of [
+      'Earn more XP',
+      'Your rewards',
+      'Buy skips',
+      'Buy restores',
+      'Loading your progress',
+      'unavailable',
+      'paused',
+      'Cached account error',
+      '120 total XP',
+      '147',
+    ]) {
+      expect(content).not.toContain(label);
+    }
+    expect(
+      screen.root.findAllByProps({testID: 'progress-calendar'}),
+    ).toHaveLength(0);
+    expect(
+      screen.root.findAllByProps({testID: 'progress-selected-day'}),
+    ).toHaveLength(0);
+    expect(
+      screen.root.findAllByProps({testID: 'progress-reward-grid'}),
+    ).toHaveLength(0);
+    expect(mockStatsQuery).toHaveBeenCalledWith(
+      expect.objectContaining({enabled: false}),
+    );
+    expect(mockHistoryQuery).not.toHaveBeenCalled();
+    expect(mockMomentumSubscribe).not.toHaveBeenCalled();
+  },
+);
+
+it.each([
+  [
+    'Level 1. 0 of 70 XP. 70 XP to level up.',
+    'XP and level rewards',
+    'Levels 4, 7, 10',
+  ],
+  [
+    'Level 2. 70 XP away. 1 skip. View level details.',
+    'XP and level rewards',
+    'A restore repairs',
+  ],
+  [
+    'Level 3. Locked. 1 skip. View level details.',
+    'XP and level rewards',
+    'Earn 70 XP',
+  ],
+  [
+    '0 days. Daily Tap In streak. View details.',
+    'Daily Tap In streak',
+    'consecutive covered days',
+  ],
+  [
+    'Not started. 14-day momentum. View details.',
+    '14-day momentum',
+    'Resolve 3 Tap In opportunities',
+  ],
+  [
+    '0. Lifetime Tap Ins. View details.',
+    'Lifetime Tap Ins',
+    'successful Tap Ins',
+  ],
+])(
+  'explains %s without account requests or navigation',
+  (label, title, detail) => {
+    mockProgress.uid = undefined;
+    mount();
+    act(() => button(label).props.onPress());
+    const sheet = screen.root.findByProps({
+      testID: 'progress-explanation-sheet',
+    });
+    expect(sheet.props.accessibilityViewIsModal).toBe(true);
+    const sheetText = sheet
+      .findAllByType(Text)
+      .map(node => node.props.children)
+      .flat()
+      .join(' ');
+    expect(sheetText).toContain(title);
+    expect(sheetText).toContain(detail);
+    expect(sheet.findAllByType(ScrollView)).toHaveLength(1);
+    expect(navigate).not.toHaveBeenCalled();
+    expect(
+      mockStatsQuery.mock.calls.every(([options]) => options.enabled === false),
+    ).toBe(true);
+    expect(mockHistoryQuery).not.toHaveBeenCalled();
+    expect(mockMomentumSubscribe).not.toHaveBeenCalled();
+    act(() =>
+      screen.root
+        .findAllByType(DSButton)
+        .find(node => node.props.label === 'Close')!
+        .props.onPress(),
+    );
+    expect(screen.root.findAllByType(Modal)).toHaveLength(0);
+  },
+);
+
+it('dismisses explanations through the backdrop and Android back and focuses the sheet heading', () => {
+  mockProgress.uid = undefined;
+  mount();
+  act(() => button('0 days. Daily Tap In streak. View details.').props.onPress());
+  jest.spyOn(require('react-native'), 'findNodeHandle').mockReturnValue(42);
+  const focus = jest
+    .spyOn(AccessibilityInfo, 'setAccessibilityFocus')
+    .mockImplementation(() => undefined);
+  act(() => screen.root.findByType(Modal).props.onShow());
+  expect(focus).toHaveBeenCalledWith(42);
+  act(() => button('Close explanation').props.onPress());
+  expect(screen.root.findAllByType(Modal)).toHaveLength(0);
+  act(() => button('0. Lifetime Tap Ins. View details.').props.onPress());
+  act(() => screen.root.findByType(Modal).props.onRequestClose());
+  expect(screen.root.findAllByType(Modal)).toHaveLength(0);
+});
+
+it('clears saved values on sign-out and removes open guest explanations on sign-in', () => {
+  mount();
+  expect(text()).toContain('120 total XP');
+  mockProgress.uid = undefined;
+  act(() => screen.update(progressElement()));
+  expect(text()).toContain('0 total XP');
+  expect(text()).not.toContain('120 total XP');
+  act(() => button('0 days. Daily Tap In streak. View details.').props.onPress());
+  expect(screen.root.findAllByType(Modal)).toHaveLength(1);
+  mockProgress.uid = 'two';
+  act(() => screen.update(progressElement()));
+  expect(screen.root.findAllByType(Modal)).toHaveLength(0);
+  expect(text()).toContain('120 total XP');
+  expect(button('Reward history')).toBeDefined();
+  mockProgress.uid = undefined;
+  act(() => screen.update(progressElement()));
+  expect(screen.root.findAllByType(Modal)).toHaveLength(0);
+});
+
+it.each([
+  {width: 360, fontScale: 1},
+  {width: 402, fontScale: 1.5},
+])(
+  'stacks guest stats at $width points and $fontScale text scale',
+  dimensions => {
+    mockDimensions = {...mockDimensions, ...dimensions};
+    mockProgress.uid = undefined;
+    mount();
+    const streak = screen.root
+      .findAllByType(DSSurface)
+      .find(
+        node =>
+          node.findAllByProps({testID: 'progress-streak-card'}).length > 0,
+      )!;
+    expect(StyleSheet.flatten(streak.props.style).flex).toBeUndefined();
+    expect(text()).toContain('Not started');
+    for (const label of ['Start your commitment', 'Already a member? Log in']) {
+      expect(
+        button(label)
+          .findAllByType(Text)
+          .some(node => StyleSheet.flatten(node.props.style)?.flexShrink === 1),
+      ).toBe(true);
+    }
+    act(() =>
+      button('Not started. 14-day momentum. View details.').props.onPress(),
+    );
+    expect(
+      screen.root
+        .findByProps({testID: 'progress-explanation-sheet'})
+        .findAllByType(ScrollView),
+    ).toHaveLength(1);
+  },
+);
 
 it('puts safe-area spacing in scrolling content without a static top strip', () => {
   mount();

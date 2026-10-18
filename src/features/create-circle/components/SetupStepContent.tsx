@@ -19,7 +19,7 @@ import {
   defaultMonthlyCommitmentFrequency,
   defaultWeeklyCommitmentFrequency,
 } from '../services/create-circle-draft';
-import {SetupNumericStepper} from './CommitmentSetupFields';
+import {proofOptions, SetupNumericStepper} from './CommitmentSetupFields';
 import {
   goalLabel,
   paceLabel,
@@ -112,6 +112,43 @@ export function SetupChoice({
         <ChevronRight color={theme.textMuted} size={20} />
       )}
     </Pressable>
+  );
+}
+
+export function ProofSelector({
+  value,
+  onChange,
+  disabled = false,
+}: {
+  value: import('../../../shared/tap-in-proof').ProofRequirement;
+  onChange: (
+    value: import('../../../shared/tap-in-proof').ProofRequirement,
+  ) => void;
+  disabled?: boolean;
+}) {
+  const theme = useSetupTheme();
+  return (
+    <View
+      accessibilityRole="radiogroup"
+      accessibilityLabel="Tap In proof"
+      style={styles.proofOptions}>
+      {proofOptions.map(option => {
+        const Icon = option.icon!;
+        return (
+          <SetupChoice
+            key={option.id}
+            title={option.label}
+            body={option.description}
+            tag={option.id === 'photo' ? 'Default' : undefined}
+            tone={option.tone === 'neutral' ? 'gray' : option.tone}
+            icon={<Icon size={24} color={theme.textMuted} />}
+            selected={value === option.id}
+            onPress={() => onChange(option.id)}
+            disabled={disabled}
+          />
+        );
+      })}
+    </View>
   );
 }
 
@@ -449,6 +486,12 @@ export function setupCopy(
       ).toLowerCase()}. What should each one cover?`,
       emphasis: [paceLabel(draft).toLowerCase()],
     },
+    proof: {
+      title: 'Tap In proof',
+      message:
+        'Choose the proof needed to complete a Tap In. You can change this later.',
+      emphasis: ['proof', 'complete a Tap In'],
+    },
     privacy: {
       title: 'Who can find your Circle?',
       message:
@@ -504,6 +547,14 @@ export function SetupStepContent({
   const typeIcon = (type: CommitmentType) => (
     <CommitmentTypeIcon commitmentType={type} />
   );
+  if (step === 'proof') {
+    return (
+      <ProofSelector
+        value={draft.proofRequirement ?? 'photo'}
+        onChange={proofRequirement => set({proofRequirement})}
+      />
+    );
+  }
   if (step === 'mode')
     return (
       <>
@@ -902,6 +953,13 @@ export function SetupStepContent({
         } · ${goalLabel(draft)}`,
         'type',
       ],
+      [
+        'Proof',
+        proofOptions.find(
+          option => option.id === (draft.proofRequirement ?? 'photo'),
+        )!.label,
+        'proof',
+      ],
       ...(!personal
         ? ([
             [
@@ -994,6 +1052,7 @@ export function SetupStepContent({
 }
 
 const styles = StyleSheet.create({
+  proofOptions: {gap: 12},
   prefixField: {
     flexDirection: 'row',
     alignItems: 'center',

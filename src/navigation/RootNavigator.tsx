@@ -40,6 +40,8 @@ import {
   getTapInPickerScreenOptions,
 } from './tap-in-sheet-options';
 
+import {LegalAcceptanceProvider} from '../features/legal/LegalAcceptanceProvider';
+
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
 function LoadingScreen(): React.JSX.Element {
@@ -61,193 +63,199 @@ export function RootNavigator(): React.JSX.Element {
   const canRegisterAccountRoutes = shouldRegisterAccountRoutes({mode, status});
 
   return (
-    <Stack.Navigator key={mode}>
-      {mode === 'loading' ? (
+    <LegalAcceptanceProvider>
+      <Stack.Navigator key={mode}>
+        {mode === 'loading' ? (
+          <Stack.Screen
+            component={LoadingScreen}
+            name="Loading"
+            options={{headerShown: false}}
+          />
+        ) : (
+          <Stack.Screen
+            component={AppTabsNavigator}
+            name="MainTabs"
+            options={{headerShown: false}}
+          />
+        )}
+        {mode === 'main' ? (
+          <Stack.Screen
+            component={AuthStackNavigator}
+            name="Auth"
+            options={{
+              animation: 'slide_from_bottom',
+              headerShown: false,
+              presentation: 'fullScreenModal',
+            }}
+          />
+        ) : null}
+        {canRegisterAccountRoutes ? (
+          <Stack.Screen
+            component={EditProfileScreen}
+            name="EditProfile"
+            options={{
+              animation: 'slide_from_right',
+              headerShown: false,
+            }}
+          />
+        ) : null}
+        {mode === 'main' ? (
+          <>
+            <Stack.Screen
+              component={SettingsScreen}
+              name="Settings"
+              options={{headerShown: false}}
+            />
+            <Stack.Screen
+              component={AppearanceSettingsScreen}
+              name="AppearanceSettings"
+              options={{headerShown: false}}
+            />
+            <Stack.Screen
+              component={AboutHoystScreen}
+              name="AboutHoyst"
+              options={{headerShown: false}}
+            />
+          </>
+        ) : null}
+        {canRegisterAccountRoutes ? (
+          <>
+            <Stack.Screen
+              component={AccountSettingsScreen}
+              name="AccountSettings"
+              options={{headerShown: false}}
+            />
+            <Stack.Screen
+              component={NotificationSettingsScreen}
+              name="NotificationSettings"
+              options={{headerShown: false}}
+            />
+            <Stack.Screen
+              component={ProfileShareScreen}
+              name="ProfileShare"
+              options={{headerShown: false}}
+            />
+            <Stack.Screen
+              component={ProfileMilestonesScreen}
+              name="ProfileMilestones"
+              options={{headerShown: false}}
+            />
+          </>
+        ) : null}
         <Stack.Screen
-          component={LoadingScreen}
-          name="Loading"
+          component={ProgressDetailsScreen}
+          name="ProgressDetails"
           options={{headerShown: false}}
         />
-      ) : (
         <Stack.Screen
-          component={AppTabsNavigator}
-          name="MainTabs"
-          options={{headerShown: false}}
+          component={CircleInviteScreen}
+          name="CircleInvite"
+          options={{
+            animation: 'fade',
+            headerShown: false,
+          }}
         />
-      )}
-      {mode === 'main' ? (
         <Stack.Screen
-          component={AuthStackNavigator}
-          name="Auth"
+          component={TapInPickerScreen}
+          name="TapInPicker"
+          options={getTapInPickerScreenOptions(theme.background)}
+        />
+        <Stack.Screen
+          component={InboxScreen}
+          name="Inbox"
+          options={{
+            animation: 'slide_from_right',
+            headerShown: false,
+          }}
+        />
+        <Stack.Screen
+          component={CirclesScreen}
+          name="Circles"
+          options={{
+            animation: 'slide_from_right',
+            headerShown: false,
+          }}
+        />
+        <Stack.Screen
+          component={CircleDetailScreen}
+          name="CircleDetail"
+          options={{
+            animation: 'slide_from_right',
+            headerShown: false,
+          }}
+        />
+        <Stack.Screen
+          component={ArchivedCirclesScreen}
+          name="ArchivedCircles"
+          options={{
+            animation: 'slide_from_right',
+            headerShown: false,
+          }}
+        />
+        <Stack.Screen
+          component={PastCircleScreen}
+          name="PastCircle"
+          options={{
+            animation: 'slide_from_right',
+            headerShown: false,
+          }}
+        />
+        <Stack.Screen
+          component={EditCircleScreen}
+          name="EditCircle"
+          options={{
+            animation: 'slide_from_right',
+            headerShown: false,
+          }}
+        />
+        <Stack.Screen
+          component={CircleToolsScreen}
+          name="CircleTools"
+          options={{
+            animation: 'slide_from_right',
+            headerShown: false,
+          }}
+        />
+        <Stack.Screen
+          component={ConvertPersonalCircleScreen}
+          name="ConvertPersonalCircle"
+          options={{
+            animation: 'slide_from_right',
+            headerShown: false,
+          }}
+        />
+        <Stack.Screen
+          component={CreateCircleScreen}
+          name="CreateCircle"
+          options={{
+            presentation: 'fullScreenModal',
+            headerShown: false,
+          }}
+        />
+        <Stack.Screen
+          component={TapInComposerScreen}
+          name="TapInComposer"
+          options={getTapInComposerScreenOptions(theme.background)}
+        />
+        <Stack.Screen
+          component={TapInCompleteScreen}
+          name="TapInComplete"
           options={{
             animation: 'slide_from_bottom',
             headerShown: false,
             presentation: 'fullScreenModal',
           }}
         />
-      ) : null}
-      {canRegisterAccountRoutes ? (
         <Stack.Screen
-          component={EditProfileScreen}
-          name="EditProfile"
+          component={TapInStoryShareScreen}
+          name="TapInStoryShare"
           options={{
-            animation: 'slide_from_right',
+            animation: 'slide_from_bottom',
             headerShown: false,
+            presentation: 'fullScreenModal',
           }}
         />
-      ) : null}
-      {canRegisterAccountRoutes ? (
-        <>
-          <Stack.Screen
-            component={SettingsScreen}
-            name="Settings"
-            options={{headerShown: false}}
-          />
-          <Stack.Screen
-            component={AccountSettingsScreen}
-            name="AccountSettings"
-            options={{headerShown: false}}
-          />
-          <Stack.Screen
-            component={NotificationSettingsScreen}
-            name="NotificationSettings"
-            options={{headerShown: false}}
-          />
-          <Stack.Screen
-            component={AppearanceSettingsScreen}
-            name="AppearanceSettings"
-            options={{headerShown: false}}
-          />
-          <Stack.Screen
-            component={AboutHoystScreen}
-            name="AboutHoyst"
-            options={{headerShown: false}}
-          />
-          <Stack.Screen
-            component={ProfileShareScreen}
-            name="ProfileShare"
-            options={{headerShown: false}}
-          />
-          <Stack.Screen
-            component={ProfileMilestonesScreen}
-            name="ProfileMilestones"
-            options={{headerShown: false}}
-          />
-        </>
-      ) : null}
-      <Stack.Screen
-        component={ProgressDetailsScreen}
-        name="ProgressDetails"
-        options={{headerShown: false}}
-      />
-      <Stack.Screen
-        component={CircleInviteScreen}
-        name="CircleInvite"
-        options={{
-          animation: 'fade',
-          headerShown: false,
-        }}
-      />
-      <Stack.Screen
-        component={TapInPickerScreen}
-        name="TapInPicker"
-        options={getTapInPickerScreenOptions(theme.background)}
-      />
-      <Stack.Screen
-        component={InboxScreen}
-        name="Inbox"
-        options={{
-          animation: 'slide_from_right',
-          headerShown: false,
-        }}
-      />
-      <Stack.Screen
-        component={CirclesScreen}
-        name="Circles"
-        options={{
-          animation: 'slide_from_right',
-          headerShown: false,
-        }}
-      />
-      <Stack.Screen
-        component={CircleDetailScreen}
-        name="CircleDetail"
-        options={{
-          animation: 'slide_from_right',
-          headerShown: false,
-        }}
-      />
-      <Stack.Screen
-        component={ArchivedCirclesScreen}
-        name="ArchivedCircles"
-        options={{
-          animation: 'slide_from_right',
-          headerShown: false,
-        }}
-      />
-      <Stack.Screen
-        component={PastCircleScreen}
-        name="PastCircle"
-        options={{
-          animation: 'slide_from_right',
-          headerShown: false,
-        }}
-      />
-      <Stack.Screen
-        component={EditCircleScreen}
-        name="EditCircle"
-        options={{
-          animation: 'slide_from_right',
-          headerShown: false,
-        }}
-      />
-      <Stack.Screen
-        component={CircleToolsScreen}
-        name="CircleTools"
-        options={{
-          animation: 'slide_from_right',
-          headerShown: false,
-        }}
-      />
-      <Stack.Screen
-        component={ConvertPersonalCircleScreen}
-        name="ConvertPersonalCircle"
-        options={{
-          animation: 'slide_from_right',
-          headerShown: false,
-        }}
-      />
-      <Stack.Screen
-        component={CreateCircleScreen}
-        name="CreateCircle"
-        options={{
-          presentation: 'fullScreenModal',
-          headerShown: false,
-        }}
-      />
-      <Stack.Screen
-        component={TapInComposerScreen}
-        name="TapInComposer"
-        options={getTapInComposerScreenOptions(theme.background)}
-      />
-      <Stack.Screen
-        component={TapInCompleteScreen}
-        name="TapInComplete"
-        options={{
-          animation: 'slide_from_bottom',
-          headerShown: false,
-          presentation: 'fullScreenModal',
-        }}
-      />
-      <Stack.Screen
-        component={TapInStoryShareScreen}
-        name="TapInStoryShare"
-        options={{
-          animation: 'slide_from_bottom',
-          headerShown: false,
-          presentation: 'fullScreenModal',
-        }}
-      />
-    </Stack.Navigator>
+      </Stack.Navigator>
+    </LegalAcceptanceProvider>
   );
 }

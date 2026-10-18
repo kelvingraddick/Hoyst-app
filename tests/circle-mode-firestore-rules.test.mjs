@@ -26,7 +26,7 @@ describe('circle mode Firestore rules', () => {
           'utf8',
         ),
       },
-      projectId: 'hoyst-firebase-app',
+      projectId: process.env.GCLOUD_PROJECT ?? 'hoyst-firebase-app',
     });
   });
 

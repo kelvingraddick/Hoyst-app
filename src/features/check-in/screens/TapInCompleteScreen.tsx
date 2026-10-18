@@ -1,3 +1,4 @@
+import {CircleCardStreaks} from '../../circles/components/CircleCardStreaks';
 import React, {
   useCallback,
   useEffect,
@@ -88,6 +89,7 @@ type CompletionDetailSnapshot = Pick<
     Pick<
       CircleDetailModel,
       | 'category'
+      | 'circleMode'
       | 'appearance'
       | 'commitmentType'
       | 'inviteUrl'
@@ -257,11 +259,9 @@ function getQuantityContextCopy({
 function getStatusCopy({
   isSkip,
   momentum,
-  streakLabel,
 }: {
   isSkip: boolean;
   momentum?: RootStackParamList['TapInComplete']['completionMomentum'];
-  streakLabel?: string;
 }) {
   if (isSkip) {
     const currentStreak = momentum?.currentStreak ?? 0;
@@ -270,8 +270,8 @@ function getStatusCopy({
       lead: 'Skip used',
       trailing:
         currentStreak > 0
-          ? `${formatDayCount(currentStreak)} streak held`
-          : 'streak held',
+          ? `${formatDayCount(currentStreak)} Daily Tap In streak held`
+          : 'Daily Tap In streak held',
     };
   }
 
@@ -282,16 +282,16 @@ function getStatusCopy({
     return {
       lead:
         streakDelta > 0
-          ? `+${formatDayCount(streakDelta)} streak`
+          ? `+${formatDayCount(streakDelta)} Daily Tap In streak`
           : currentStreak > 0
-          ? 'Streak held'
+          ? 'Daily Tap In streak held'
           : 'Momentum saved',
       trailing: currentStreak > 0 ? `${currentStreak} now` : undefined,
     };
   }
 
   return {
-    lead: cleanOptionalText(streakLabel) ?? 'Momentum saved',
+    lead: 'Tap In recorded',
     trailing: undefined,
   };
 }
@@ -355,6 +355,10 @@ function TapInCompleteController({
   const hasNote = Boolean(note);
   const visiblePhotoUri = pendingPhotoUri ?? savedDetails.photoUrl;
   const isSkip = route.params.status === 'skip';
+  const photoRequired =
+    (route.params.proofRequirement ?? detail?.viewerTodayCheckIn?.proofRequirement) === 'photo' &&
+    !isSkip &&
+    (detail?.viewerTodayCheckIn?.status ?? route.params.status ?? 'done') === 'done';
   const quantityValue = cleanQuantityValue(route.params.currentValue);
   const isQuantityCompletion =
     route.params.commitmentType !== undefined &&
@@ -683,34 +687,47 @@ function TapInCompleteController({
       inviteUrl: displayDetail?.inviteUrl ?? route.params.inviteUrl,
       memberCount: displayDetail?.memberCount ?? route.params.memberCount,
       members: displayDetail?.members,
-      periodTapInCount:
-        displayDetail?.periodTapInCount ?? route.params.periodTapInCount,
-      progressLabel: displayDetail?.progressLabel ?? route.params.progressLabel,
+      circleMode: displayDetail?.circleMode ?? route.params.circleMode,
+      commitmentCadence:
+        detail?.commitmentCadence ?? route.params.commitmentCadence,
+      dateKey: route.params.dateKey,
+      timezone: detail?.timezone ?? route.params.timezone ?? timezone,
+      status: route.params.status,
+      coverageStatus: route.params.coverageStatus,
+      currentValue: route.params.currentValue,
+      minimumValue: route.params.minimumValue,
+      maximumValue: route.params.maximumValue,
+      targetValue: route.params.targetValue,
+      unitLabel: route.params.unitLabel,
+      circleProgress: route.params.circleProgress,
       source: route.params.source,
-      streakDays:
-        route.params.completionMomentum?.currentStreak ??
-        displayDetail?.streakDays ??
-        route.params.streakDays,
-      streakLabel: displayDetail?.streakLabel ?? route.params.streakLabel,
-      note: savedDetails.note,
       photoUri: visiblePhotoUri,
     });
   }, [
     displayDetail,
+    detail?.commitmentCadence,
+    detail?.timezone,
+    timezone,
+    route.params.circleMode,
+    route.params.commitmentCadence,
+    route.params.timezone,
+    route.params.dateKey,
+    route.params.status,
+    route.params.coverageStatus,
+    route.params.currentValue,
+    route.params.minimumValue,
+    route.params.maximumValue,
+    route.params.targetValue,
+    route.params.unitLabel,
+    route.params.circleProgress,
     navigation,
     route.params.circleId,
     route.params.circleTitle,
     route.params.commitment,
     route.params.commitmentType,
-    route.params.completionMomentum?.currentStreak,
     route.params.inviteUrl,
     route.params.memberCount,
-    route.params.periodTapInCount,
-    route.params.progressLabel,
     route.params.source,
-    route.params.streakDays,
-    route.params.streakLabel,
-    savedDetails.note,
     visiblePhotoUri,
   ]);
   const promptForFailedPhoto = useCallback(
@@ -839,12 +856,14 @@ function TapInCompleteController({
     ? 'Getting the screen ready.'
     : 'Loading your circle.';
   const xpFeedback = route.params.completionProgress;
+  const circleProgress = route.params.circleProgress;
+  const circlePeriod = circleProgress?.viewer;
+  const circleCopy = circlePeriod ? {lead: circlePeriod.progress.outcome === 'unknown' ? 'Circle progress is updating' : circlePeriod.progress.outcome === 'secured' ? `${circlePeriod.cadence === 'daily' ? 'Daily' : circlePeriod.cadence === 'monthly' ? 'Monthly' : 'Weekly'} goal complete` : `${circlePeriod.progress.covered} of ${circlePeriod.progress.required} Tap Ins covered`, trailing: (circleProgress?.viewerStreakDelta ?? 0) > 0 ? 'Your Circle streak extended' : undefined} : undefined;
   const statusCopy =
-    quantityOutcomeCopy ??
+    quantityOutcomeCopy ?? circleCopy ??
     getStatusCopy({
       isSkip,
       momentum: route.params.completionMomentum,
-      streakLabel: displayDetail?.streakLabel,
     });
   const particleColors =
     completionTone === 'failed'
@@ -1117,6 +1136,7 @@ function TapInCompleteController({
               </Animated.View>
             </View>
 
+            {circleProgress ? <CircleCardStreaks circle={{viewerMembershipStatus: 'active', circleMode: displayDetail?.circleMode, viewerCircleProgress: circleProgress.viewer, groupStreak: circleProgress.group}} /> : null}
             {xpFeedback && xpFeedback.xpEarned > 0 ? (
               <DSText
                 accessibilityLiveRegion="polite"
@@ -1212,6 +1232,7 @@ function TapInCompleteController({
                   category={category.tone}
                   circleId={route.params.circleId}
                   dateKey={route.params.dateKey}
+                  photoRequired={photoRequired}
                   initialNote={savedDetails.note}
                   initialPhotoUrl={visiblePhotoUri}
                   onSavePendingDetailsReady={handleSavePendingDetailsReady}

@@ -41,7 +41,7 @@ describe('check-in service details', () => {
     });
   });
 
-  it('uploads proof to the deterministic Tap In path', async () => {
+  it('uploads proof to a unique immutable Tap In path', async () => {
     await expect(
       uploadTapInPhoto({
         circleId: 'circle-1',
@@ -52,9 +52,9 @@ describe('check-in service details', () => {
     ).resolves.toBe('https://example.com/proof.jpg');
 
     expect(mockStorageRef).toHaveBeenCalledWith(
-      'circles/circle-1/check-ins/2026-07-19/user-1/proof.jpg',
+      expect.stringMatching(/^circles\/circle-1\/check-ins\/2026-07-19\/user-1\/proof-[a-zA-Z0-9_-]+\.jpg$/),
     );
-    expect(mockPutFile).toHaveBeenCalledWith('file:///proof.jpg');
+    expect(mockPutFile).toHaveBeenCalledWith('file:///proof.jpg', {contentType: 'image/jpeg'});
   });
 
   it('sends explicit nullable detail fields to the callable', async () => {

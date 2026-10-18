@@ -6,6 +6,7 @@ const firestore_2 = require("firebase-functions/v2/firestore");
 const https_1 = require("firebase-functions/v2/https");
 const zod_1 = require("zod");
 const firebase_1 = require("../firebase");
+const public_1 = require("./public");
 const handleSchema = zod_1.z
     .string()
     .trim()
@@ -71,6 +72,8 @@ exports.updateProfile = (0, https_1.onCall)(async (request) => {
         const user = await transaction.get(userRef);
         const previous = user.data();
         requireComplete(previous);
+        if (previous?.accountDeletionStartedAt)
+            throw new https_1.HttpsError('failed-precondition', 'Account deletion is in progress.');
         const oldHandle = previous.handle;
         const newHandle = input.handle ?? oldHandle;
         if (newHandle !== oldHandle) {
@@ -93,6 +96,7 @@ exports.updateProfile = (0, https_1.onCall)(async (request) => {
         }
         const updates = { ...input, updatedAt: firestore_1.FieldValue.serverTimestamp() };
         transaction.update(userRef, updates);
+        transaction.set(firebase_1.db.doc(`publicProfiles/${uid}`), (0, public_1.publicProfile)({ ...previous, ...updates }));
         return {
             id: uid,
             name: input.displayName ?? previous.displayName,

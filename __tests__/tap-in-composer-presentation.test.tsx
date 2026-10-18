@@ -1,9 +1,11 @@
 import React from 'react';
+import * as ReactNative from 'react-native';
 import {
   AccessibilityInfo,
   Animated,
   ScrollView,
   StyleSheet,
+  TextInput,
 } from 'react-native';
 import renderer, {act} from 'react-test-renderer';
 import {
@@ -202,6 +204,93 @@ it('grows the ring for large values without disabling font scaling', async () =>
   expect(JSON.stringify(tree.toJSON())).not.toContain(
     '"allowFontScaling":false',
   );
+});
+
+it.each(['light', 'dark'] as const)(
+  'fits large editable totals on a narrow screen with large text (%s)',
+  async scheme => {
+    const dimensions = jest
+      .spyOn(ReactNative.Dimensions, 'get')
+      .mockReturnValue({width: 320, height: 568, fontScale: 2, scale: 2});
+    let tree!: renderer.ReactTestRenderer;
+    try {
+      await act(async () => {
+        tree = renderer.create(
+          <DesignSystemProvider scheme={scheme}>
+            <ComposerQuantity
+              detail={detail}
+              value={Number.MAX_SAFE_INTEGER}
+              onChangeText={() => {}}
+              onDecrease={() => {}}
+              onIncrease={() => {}}
+            />
+          </DesignSystemProvider>,
+        );
+      });
+      const ring = tree.root.findAllByProps({
+        testID: 'tap-in-composer-quantity-ring',
+      })[0];
+      expect(ring.props.style.width).toBeLessThanOrEqual(276);
+      const input = tree.root.findByType(TextInput);
+      expect(input.props.value).toBe('9007199254740991');
+      expect(input.props.allowFontScaling).not.toBe(false);
+      expect(input.props.accessibilityLabel).toContain('pages');
+      expect(input.props.accessibilityLabel).toContain("Edit today's progress");
+      const pencil = tree.root.findByProps({
+        testID: 'tap-in-composer-quantity-edit-icon',
+      });
+      expect(pencil.props.importantForAccessibility).toBe(
+        'no-hide-descendants',
+      );
+      expect(JSON.stringify(tree.toJSON())).not.toContain('Tap number to edit');
+      expect(JSON.stringify(tree.toJSON())).not.toContain('Hold + /');
+      expect(
+        tree.root
+          .findAllByType(DSIconButton)
+          .find(button => button.props.label === 'Increase quantity')!.props
+          .disabled,
+      ).toBe(true);
+    } finally {
+      await act(async () => tree?.unmount());
+      dimensions.mockRestore();
+    }
+  },
+);
+
+it('shows an inline Done control for Android numeric entry and finishes edits on blur', async () => {
+  const platform = jest.replaceProperty(ReactNative.Platform, 'OS', 'android');
+  const finish = jest.fn();
+  let tree!: renderer.ReactTestRenderer;
+  try {
+    await act(async () => {
+      tree = mount(
+        <ComposerQuantity
+          detail={detail}
+          value={20}
+          onChangeText={() => {}}
+          onEndEditing={finish}
+          onDecrease={() => {}}
+          onIncrease={() => {}}
+        />,
+      );
+    });
+    await act(async () => tree.root.findByType(TextInput).props.onFocus());
+    expect(
+      tree.root.findByType(TextInput).props.inputAccessoryViewID,
+    ).toBeUndefined();
+    expect(
+      tree.root.findAllByProps({accessibilityLabel: 'Done editing quantity'})
+        .length,
+    ).toBeGreaterThan(0);
+    await act(async () => tree.root.findByType(TextInput).props.onBlur());
+    expect(finish).toHaveBeenCalledTimes(1);
+    expect(
+      tree.root.findAllByProps({accessibilityLabel: 'Done editing quantity'}),
+    ).toHaveLength(0);
+  } finally {
+    await act(async () => tree?.unmount());
+    platform.restore();
+  }
 });
 it('measures body and footer separately and preserves user expansion after content changes', async () => {
   let listener!: (event: {data: {stable: boolean; index: number}}) => void;

@@ -1,0 +1,264 @@
+:root {
+  color-scheme: dark;
+  font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont,
+    'Segoe UI', sans-serif;
+  background: #090b12;
+  color: #e7ebf5;
+  font-synthesis: none;
+  line-height: 1.75;
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  background: radial-gradient(ellipse at 10% 0%, #34215a55, transparent 38%),
+    #090b12;
+}
+a {
+  color: #91dfff;
+  text-underline-offset: 0.2em;
+}
+a:hover {
+  color: #d2f1ff;
+}
+a:focus-visible {
+  outline: 3px solid #91dfff;
+  outline-offset: 5px;
+  border-radius: 3px;
+}
+.page {
+  width: min(1080px, calc(100% - 40px));
+  margin-inline: auto;
+}
+.skip-link {
+  position: absolute;
+  left: 20px;
+  top: -100px;
+  padding: 8px 16px;
+  background: #151923;
+}
+.skip-link:focus {
+  top: 12px;
+  z-index: 2;
+}
+.site-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 20px;
+  padding: 30px 0;
+}
+.logo {
+  display: block;
+  width: 115px;
+  height: auto;
+}
+.site-header nav,
+footer nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 24px;
+  font-size: 14px;
+}
+.site-header a[aria-current='page'] {
+  color: #fff;
+  font-weight: 700;
+}
+.draft {
+  margin: 24px 0 38px;
+  border: 1px solid #a7853c;
+  border-radius: 16px;
+  background: #322b1a;
+  padding: 18px 22px;
+  color: #f9e7ba;
+}
+.draft strong {
+  display: block;
+  color: #ffe2a0;
+}
+.draft p {
+  margin: 4px 0 0;
+  font-size: 15px;
+}
+.eyebrow {
+  color: #b4a0ff;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+h1 {
+  margin: 8px 0 16px;
+  color: #fff;
+  font-size: clamp(38px, 6vw, 64px);
+  line-height: 1.12;
+  letter-spacing: -0.04em;
+}
+.intro {
+  max-width: 720px;
+  font-size: 19px;
+  color: #c5cde0;
+}
+.date {
+  color: #aab4cb;
+  font-size: 14px;
+}
+.layout {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: 58px;
+  margin: 48px 0 70px;
+  align-items: start;
+}
+.contents {
+  font-size: 14px;
+}
+.contents h2 {
+  margin: 0 0 14px;
+  font-size: 14px;
+  color: #aab4cb;
+}
+.contents ol {
+  margin: 0;
+  padding-left: 20px;
+}
+.contents li {
+  padding: 4px 0 4px 4px;
+}
+article {
+  min-width: 0;
+  font-size: 17px;
+}
+article section {
+  margin-bottom: 40px;
+  scroll-margin-top: 24px;
+}
+h2 {
+  margin: 0 0 14px;
+  color: #fff;
+  font-size: 24px;
+  line-height: 1.3;
+  letter-spacing: -0.02em;
+}
+h3 {
+  margin: 26px 0 8px;
+  color: #fff;
+  font-size: 18px;
+  line-height: 1.4;
+}
+p {
+  margin: 12px 0;
+}
+ul {
+  padding-left: 24px;
+}
+li {
+  margin-bottom: 10px;
+}
+strong {
+  color: #fff;
+}
+.review {
+  border-left: 3px solid #c5a45e;
+  padding-left: 14px;
+  color: #f9e7ba;
+  font-size: 15px;
+}
+.placeholder {
+  color: #ffe2a0;
+  font-weight: 600;
+}
+footer {
+  padding: 28px 0 36px;
+  border-top: 1px solid #303645;
+  color: #aab4cb;
+  font-size: 14px;
+}
+footer p {
+  margin-bottom: 16px;
+}
+@media (max-width: 760px) {
+  .layout {
+    grid-template-columns: 1fr;
+    gap: 32px;
+    margin-top: 30px;
+  }
+  .contents {
+    border-bottom: 1px solid #303645;
+    padding-bottom: 24px;
+  }
+  .contents ol {
+    columns: 2;
+    column-gap: 28px;
+  }
+  .contents li {
+    break-inside: avoid;
+  }
+  .site-header {
+    padding-block: 24px;
+  }
+  .draft {
+    margin-top: 10px;
+  }
+}
+@media (max-width: 420px) {
+  .contents ol {
+    columns: 1;
+  }
+  article {
+    font-size: 16px;
+  }
+  .draft {
+    padding: 16px;
+  }
+}
+@media print {
+  :root {
+    color-scheme: light;
+  }
+  body {
+    background: #fff;
+    color: #111;
+  }
+  .page {
+    width: 100%;
+  }
+  .site-header,
+  .contents,
+  .skip-link,
+  footer nav {
+    display: none;
+  }
+  .layout {
+    display: block;
+    margin: 20px 0;
+  }
+  h1,
+  h2,
+  h3,
+  strong,
+  a {
+    color: #111;
+  }
+  .intro,
+  .date,
+  footer {
+    color: #333;
+  }
+  .draft,
+  .review,
+  .placeholder {
+    color: #111;
+    background: #fff;
+    border-color: #555;
+  }
+  article section {
+    break-inside: auto;
+  }
+  h2,
+  h3 {
+    break-after: avoid;
+  }
+}

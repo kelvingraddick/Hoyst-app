@@ -11,6 +11,7 @@ exports.getMomentumLabel = getMomentumLabel;
 exports.calculateMomentumSummary = calculateMomentumSummary;
 exports.calculateRollingMomentumSummary = calculateRollingMomentumSummary;
 exports.calculateMomentumStreaks = calculateMomentumStreaks;
+const circle_progress_1 = require("../shared/circle-progress");
 const commitments_1 = require("../shared/commitments");
 function padDatePart(value) {
     return value.toString().padStart(2, '0');
@@ -95,9 +96,7 @@ function getSlotOffsets(dayCount, opportunitiesPerPeriod) {
 }
 function normalizeCommitmentSchedule(commitment, fallbackTimezone = 'UTC') {
     const rawPace = commitment?.commitmentCadence;
-    const pace = rawPace === 'daily' ||
-        rawPace === 'weekly' ||
-        rawPace === 'monthly'
+    const pace = rawPace === 'daily' || rawPace === 'weekly' || rawPace === 'monthly'
         ? rawPace
         : typeof commitment?.commitmentFrequency?.tapInsPerWeek === 'number' &&
             commitment.commitmentFrequency.tapInsPerWeek >= 7
@@ -120,12 +119,24 @@ function normalizeCommitmentSchedule(commitment, fallbackTimezone = 'UTC') {
     return {
         pace,
         opportunitiesPerPeriod,
-        slotPolicy: 'scheduled_slots',
+        slotPolicy: pace === 'daily' ? 'scheduled_slots' : 'period_quota',
         timezone,
     };
 }
 function getOpportunitySlots(schedule, now = new Date()) {
     const period = getPeriodShape(schedule, now);
+    if (schedule.slotPolicy === 'period_quota' && schedule.pace !== 'daily') {
+        const shape = (0, circle_progress_1.circlePeriodForDate)(getDateKey(schedule.timezone, now), schedule.pace);
+        return Array.from({
+            length: Math.min(schedule.opportunitiesPerPeriod, (0, circle_progress_1.circleDates)(shape.start, shape.end).length),
+        }, (_, slotIndex) => ({
+            policyVersion: 2,
+            availableDateKey: shape.start,
+            expiresDateKey: shape.end,
+            periodKey: shape.key,
+            slotIndex,
+        }));
+    }
     const offsets = getSlotOffsets(period.dayCount, schedule.opportunitiesPerPeriod);
     return offsets.map((offset, index) => {
         const availableDateKey = addDays(period.startDateKey, offset);

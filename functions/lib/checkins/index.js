@@ -1,10 +1,14 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.removeTapIn = exports.processTapInSideEffects = exports.updateTapInDetails = exports.submitTapIn = void 0;
+const tap_in_proof_1 = require("../shared/tap-in-proof");
+const proof_1 = require("./proof");
+const progress_1 = require("../circles/progress");
+const circle_progress_1 = require("../shared/circle-progress");
 const node_crypto_1 = require("node:crypto");
 const ledger_1 = require("../progress/ledger");
 const model_1 = require("../progress/model");
-const progress_1 = require("../progress");
+const progress_2 = require("../progress");
 const model_2 = require("../discovery/model");
 const firestore_1 = require("firebase-admin/firestore");
 const auth_1 = require("firebase-admin/auth");
@@ -33,7 +37,7 @@ const submitTapInSchema = zod_1.z.object({
     progressVersion: zod_1.z.literal(1).optional(),
     currentValue: zod_1.z.number().int().min(0).max(100000).optional(),
     note: zod_1.z.string().trim().max(1000).optional(),
-    photoUrl: zod_1.z.string().trim().max(2048).optional(),
+    photoUrl: zod_1.z.string().trim().url().max(2048).optional(),
     status: zod_1.z.enum(['done', 'skip']).default('done'),
 });
 const removeTapInSchema = zod_1.z.object({
@@ -595,11 +599,16 @@ async function submitTapInHandler(request) {
     const { profile, uid } = await requireCompletedProfile(request.auth?.uid, request.data?.idToken);
     const input = submitTapInSchema.parse(request.data);
     if (input.status === 'skip')
-        await (0, progress_1.initializeXPBeforeProtection)(uid);
+        await (0, progress_2.initializeXPBeforeProtection)(uid);
     const circleRef = firebase_1.db.collection('circles').doc(input.circleId);
     const memberRef = circleRef.collection('members').doc(uid);
     const now = firestore_1.FieldValue.serverTimestamp();
     const progressRequestId = (0, node_crypto_1.randomUUID)();
+    const membership = await memberRef.get();
+    if (membership.data()?.status !== 'active')
+        throw new https_1.HttpsError('permission-denied', 'Join this circle first.');
+    await (0, momentum_1.materializeCurrentCircleOpportunities)(input.circleId);
+    const priorCircleProgress = await (0, progress_1.reconcileCircleProgress)({ circleId: input.circleId, uid });
     const result = await firebase_1.db.runTransaction(async (transaction) => {
         const [circleSnapshot, memberSnapshot, discoveryConfig] = await Promise.all([
             transaction.get(circleRef),
@@ -615,6 +624,10 @@ async function submitTapInHandler(request) {
         const circle = circleSnapshot.data();
         (0, circle_lifecycle_1.ensureActiveCircle)(circle, 'tapping in');
         const dateKey = getDateKey(circle?.timezone ?? profile.timezone ?? 'UTC');
+        const joined = memberSnapshot.data()?.joinedAt?.toDate?.();
+        if (joined && memberSnapshot.data()?.opportunityEligibility !== 'include_current' && dateKey <= getDateKeyForDate(circle?.timezone ?? 'UTC', joined)) {
+            throw new https_1.HttpsError('failed-precondition', `Your first eligible Tap In is ${(0, circle_progress_1.shiftCircleDate)(getDateKeyForDate(circle?.timezone ?? 'UTC', joined), 1)}.`);
+        }
         const checkInRef = circleRef
             .collection('days')
             .doc(dateKey)
@@ -676,6 +689,15 @@ async function submitTapInHandler(request) {
             status: input.status,
         });
         const nextStatus = (0, commitments_1.getCheckInStatusForCoverage)(coverageStatus);
+        const proofRequirement = (0, tap_in_proof_1.getTapInProofRequirement)(circle ?? {}, existingCheckIn);
+        const photoUrl = input.status === 'skip'
+            ? null : input.photoUrl ?? existingCheckIn?.photoUrl ?? null;
+        (0, proof_1.requireCompletedTapInProof)({
+            requirement: proofRequirement, status: nextStatus, photoUrl,
+        });
+        if (proofRequirement === 'photo' && nextStatus === 'done' && photoUrl) {
+            await (0, proof_1.validateProofPhoto)({ photoUrl, circleId: input.circleId, dateKey, uid });
+        }
         const nextCovered = coverageStatus === 'covered' || coverageStatus === 'skipped';
         const coverageRevision = (0, reconciliation_1.getNextCoverageRevision)({
             existingCovered,
@@ -727,6 +749,7 @@ async function submitTapInHandler(request) {
                         });
                     }
                     if (nextStatus === 'done' &&
+                        prior?.creditLocked !== true &&
                         prior?.status !== 'completed' &&
                         (!prior?.firstSuccessfulAt ||
                             prior.firstSuccessfulAt.toMillis() >=
@@ -764,8 +787,9 @@ async function submitTapInHandler(request) {
             circleId: input.circleId,
             displayName: profile.displayName,
             handle: profile.handle,
-            note: input.note ?? null,
-            photoUrl: input.photoUrl ?? null,
+            note: input.note ?? existingCheckIn?.note ?? null,
+            photoUrl,
+            proofRequirement,
             status: nextStatus,
             uid,
             updatedAt: now,
@@ -850,6 +874,8 @@ async function submitTapInHandler(request) {
             lastTapInAt: now,
         }, { merge: true });
         return {
+            proofRequirement,
+            photoUrl,
             checkInId: uid,
             coverageStatus,
             currentValue,
@@ -877,7 +903,7 @@ async function submitTapInHandler(request) {
     if (result.status === 'done' && result.coverageStatus === 'covered') {
         try {
             await (0, momentum_1.recalculateMomentumSummaryForUser)(uid);
-            await (0, progress_1.reconcileProgress)(uid, true, result.progressEventId);
+            await (0, progress_2.reconcileProgress)(uid, true, result.progressEventId);
             const bonuses = await firebase_1.db
                 .collection('userPrivate')
                 .doc(uid)
@@ -894,8 +920,17 @@ async function submitTapInHandler(request) {
             console.error('progress_completion_reconciliation_pending');
         }
     }
+    const circleProgress = await (0, progress_1.reconcileCircleProgress)({ circleId: input.circleId, uid }).catch(error => { console.error('circle_progress_pending', error); return undefined; });
+    if (circleProgress) {
+        const delta = (after, before) => after?.streak.count != null && before?.streak.count != null && after.revision === before.revision ? after.streak.count - before.streak.count : undefined;
+        circleProgress.viewerStreakDelta = delta(circleProgress.viewer, priorCircleProgress?.viewer);
+        circleProgress.groupStreakDelta = delta(circleProgress.group, priorCircleProgress?.group);
+    }
     return {
+        ...(circleProgress ? { circleProgress: JSON.parse(JSON.stringify(circleProgress)) } : {}),
         progress: result.progress,
+        proofRequirement: result.proofRequirement,
+        photoUrl: result.photoUrl,
         checkInId: result.checkInId,
         coverageStatus: result.coverageStatus,
         currentValue: result.currentValue,
@@ -936,6 +971,16 @@ async function updateTapInDetailsHandler(request) {
             note: input.note,
             photoUrl: input.photoUrl,
         });
+        const proofRequirement = (0, tap_in_proof_1.getTapInProofRequirement)({}, checkInSnapshot.data());
+        (0, proof_1.requireCompletedTapInProof)({
+            requirement: proofRequirement,
+            status: checkInSnapshot.data()?.status ?? '',
+            photoUrl: patch.photoUrl,
+        });
+        if (proofRequirement === 'photo' &&
+            checkInSnapshot.data()?.status === 'done' && patch.photoUrl) {
+            await (0, proof_1.validateProofPhoto)({ photoUrl: patch.photoUrl, circleId: input.circleId, dateKey, uid });
+        }
         const shouldDeletePhoto = Boolean(checkInSnapshot.data()?.photoUrl) && patch.photoUrl === null;
         transaction.set(checkInRef, {
             ...patch,
@@ -1024,7 +1069,7 @@ exports.processTapInSideEffects = (0, firestore_2.onDocumentWritten)({
     }
     if (status === 'done') {
         await (0, momentum_1.recalculateMomentumSummaryForUser)(event.params.uid);
-        await (0, progress_1.reconcileProgress)(event.params.uid, true, checkIn.progressEventId);
+        await (0, progress_2.reconcileProgress)(event.params.uid, true, checkIn.progressEventId);
     }
     await processTapInSideEffectsForCheckIn({
         checkIn,

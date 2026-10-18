@@ -17,6 +17,11 @@ import {firebaseAuth} from '../../../lib/firebase/auth';
 import {firebaseFirestore} from '../../../lib/firebase/firestore';
 import {requestPushNotificationPermission} from '../../../lib/notifications';
 import type {RootStackParamList} from '../../../navigation/types';
+import {
+  useHasLegalAcceptance,
+  useLegalAcceptance,
+} from '../../legal/LegalAcceptanceContext';
+import {LegalAcknowledgment} from '../../legal/LegalAcknowledgment';
 import {useSessionStore} from '../../../store/session-store';
 import {useUserProfileStore} from '../../../store/profile-store';
 import {useOnboardingStore} from '../../../store/onboarding-store';
@@ -130,6 +135,10 @@ export function CommitmentWizardScreen({
   const theme = useSetupTheme();
   const user = useSessionStore(state => state.user);
   const sessionStatus = useSessionStore(state => state.status);
+  const hasLegalAcceptance = useHasLegalAcceptance();
+  const {acknowledge: acknowledgeLegal} = useLegalAcceptance();
+  const [legalCheckedUid, setLegalCheckedUid] = useState<string>();
+  const [acknowledging, setAcknowledging] = useState(false);
   const profile = useUserProfileStore(state => state.profile);
   const hydrated = useSetupJourneyStore(state => state.hydrated);
   const ensure = useSetupJourneyStore(state => state.ensure);
@@ -579,7 +588,12 @@ export function CommitmentWizardScreen({
       current.status === 'saving'
     )
       return;
-    const draft = current.submittedDraft ?? current.draft;
+    const isLegacySubmission = current.submittedDraft &&
+      current.submittedDraft.proofRequirement === undefined;
+    const draft = current.submittedDraft ?? {
+      ...current.draft,
+      proofRequirement: current.draft.proofRequirement ?? 'photo',
+    };
     const existingProfile = useUserProfileStore.getState().profile;
     const form = current.profileDraft ?? {
       name: account.displayName ?? '',
@@ -603,6 +617,27 @@ export function CommitmentWizardScreen({
     ) {
       setError(validateSetup(draft));
       return;
+    }
+    if (!hasLegalAcceptance) {
+      if (legalCheckedUid !== account.uid) {
+        setError('Confirm you are 18 or older and agree to the Terms.');
+        return;
+      }
+      saving.current = true;
+      setAcknowledging(true);
+      try {
+        await acknowledgeLegal();
+      } catch (reason) {
+        setError(
+          reason instanceof Error
+            ? reason.message
+            : 'Could not save. Please try again.',
+        );
+        return;
+      } finally {
+        saving.current = false;
+        setAcknowledging(false);
+      }
     }
     saving.current = true;
     patch({status: 'saving', submittedDraft: draft, ownerUid: account.uid});
@@ -639,6 +674,9 @@ export function CommitmentWizardScreen({
           : {}),
         onboardingPreferences: {categories: current.interests},
       };
+      const circlePayload = buildCreateCirclePayload(draft);
+      // Preserve the exact payload for an uncertain save started before proof existed.
+      if (isLegacySubmission) { delete circlePayload.proofRequirement; }
       let result: SetupJourney['result'];
       if (current.selection?.kind === 'circle') {
         if (!existingProfile?.onboardingStatus)
@@ -657,7 +695,7 @@ export function CommitmentWizardScreen({
             {
               ...payload,
               starterCircle: {
-                ...buildCreateCirclePayload(draft),
+                ...circlePayload,
                 setupId: current.requestId,
               },
             },
@@ -667,7 +705,7 @@ export function CommitmentWizardScreen({
           result = {...completed.starterCircle, membership: 'active'};
         } else {
           const created = await (gateway?.createCircle ?? createCircle)({
-            ...buildCreateCirclePayload(draft),
+            ...circlePayload,
             requestId: current.requestId,
           });
           result = {...created, membership: 'active'};
@@ -731,7 +769,17 @@ export function CommitmentWizardScreen({
     } finally {
       saving.current = false;
     }
-  }, [finish, gateway, isOnboarding, key, patch, setStep]);
+  }, [
+    finish,
+    gateway,
+    isOnboarding,
+    key,
+    patch,
+    setStep,
+    hasLegalAcceptance,
+    legalCheckedUid,
+    acknowledgeLegal,
+  ]);
 
   useEffect(() => {
     if (
@@ -743,6 +791,19 @@ export function CommitmentWizardScreen({
     )
       return;
     if (sessionStatus === 'authenticatedReady') {
+      if (authUi.busy) return;
+      if (!hasLegalAcceptance) {
+        // Keep confirmation beside the setup being submitted, never on its own step.
+        patch({
+          step:
+            record.selection?.kind === 'circle'
+              ? 'joinPreview'
+              : record.draft.commitment.trim()
+              ? 'review'
+              : 'profile',
+        });
+        return;
+      }
       save().catch(() => undefined);
     } else {
       const form = record.profileDraft ?? {name: '', handle: ''};
@@ -757,7 +818,16 @@ export function CommitmentWizardScreen({
         step: 'profile',
       });
     }
-  }, [patch, record, save, sessionStatus, setStep, user]);
+  }, [
+    patch,
+    record,
+    save,
+    sessionStatus,
+    setStep,
+    user,
+    hasLegalAcceptance,
+    authUi.busy,
+  ]);
 
   useEffect(() => {
     if (
@@ -1678,6 +1748,33 @@ export function CommitmentWizardScreen({
             save().catch(() => undefined);
           else setStep('account');
         },
+      };
+  }
+  const needsInlineAcknowledgment =
+    !hasLegalAcceptance &&
+    Boolean(user?.uid) &&
+    (step === 'profile' ||
+      step === 'saveError' ||
+      (sessionStatus === 'authenticatedReady' &&
+        ['review', 'joinPreview'].includes(step)));
+  if (needsInlineAcknowledgment) {
+    content = (
+      <>
+        {content}
+        <LegalAcknowledgment
+          checked={legalCheckedUid === user?.uid}
+          onChange={checked =>
+            setLegalCheckedUid(checked ? user?.uid : undefined)
+          }
+          disabled={busy || acknowledging}
+        />
+      </>
+    );
+    if (primary)
+      primary = {
+        ...primary,
+        disabled:
+          primary.disabled || acknowledging || legalCheckedUid !== user?.uid,
       };
   }
   const phase = ['welcome'].includes(step)

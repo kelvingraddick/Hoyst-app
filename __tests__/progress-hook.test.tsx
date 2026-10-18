@@ -12,10 +12,12 @@ jest.mock('../src/store/session-store', () => ({
   }),
 }));
 const mockEnsure = jest.fn();
+const mockSubscribe = jest.fn();
 const mockSubscribers: Record<string, (summary: unknown) => void> = {};
 jest.mock('../src/features/progress/services/progress-service', () => ({
   ensureProgress: (...args: unknown[]) => mockEnsure(...args),
   subscribeProgress: (uid: string, callback: (summary: unknown) => void) => {
+    mockSubscribe(uid);
     mockSubscribers[uid] = callback;
     return jest.fn();
   },
@@ -47,6 +49,21 @@ afterEach(() => {
   act(() => screen?.unmount());
   jest.useRealTimers();
   mockEnsure.mockReset();
+  mockSubscribe.mockClear();
+});
+it('does not initialize or subscribe to a wallet while signed out, even on refresh', async () => {
+  mockSession = {status: 'guest', user: {uid: ''}};
+  await act(async () => {
+    screen = renderer.create(<Harness />);
+  });
+  await act(async () => {
+    await value!.refresh();
+  });
+  expect(value!.uid).toBeUndefined();
+  expect(value!.summary).toBeUndefined();
+  expect(value!.loading).toBe(false);
+  expect(mockEnsure).not.toHaveBeenCalled();
+  expect(mockSubscribe).not.toHaveBeenCalled();
 });
 it('clears account data immediately and ignores old initialization and subscription results', async () => {
   mockSession = {status: 'authenticatedReady', user: {uid: 'one'}};

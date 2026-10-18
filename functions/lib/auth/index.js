@@ -8,6 +8,10 @@ const storage_1 = require("firebase-admin/storage");
 const https_1 = require("firebase-functions/v2/https");
 const zod_1 = require("zod");
 const firebase_1 = require("../firebase");
+const greeting_data_1 = require("./greeting-data");
+const public_1 = require("../profile/public");
+const legal_1 = require("../shared/legal");
+const provider_deletion_1 = require("./provider-deletion");
 const commitments_1 = require("../shared/commitments");
 const starter_circle_plan_1 = require("./starter-circle-plan");
 const momentum_1 = require("../momentum");
@@ -48,6 +52,7 @@ const starterCircleSchema = zod_1.z
     commitment: zod_1.z.string().trim().min(1).max(160),
     commitmentCadence: zod_1.z.enum(['daily', 'weekly', 'monthly']).optional(),
     commitmentFrequency: commitmentFrequencySchema,
+    proofRequirement: zod_1.z.enum(['photo', 'none']).default('photo'),
     commitmentType: zod_1.z.enum(['build', 'limit', 'avoid']).default('build'),
     buildTrackingMode: zod_1.z.enum(['confirmation', 'quantity']).optional(),
     graceRules: zod_1.z
@@ -314,6 +319,7 @@ async function deleteAccountDocuments(uid) {
     const handleRefs = new Map();
     const batch = firebase_1.db.batch();
     batch.delete(userRef);
+    batch.delete(firebase_1.db.doc(`publicProfiles/${uid}`));
     if (typeof handle === 'string' && handle.trim()) {
         const handleRef = firebase_1.db.collection('handles').doc(handle);
         handleRefs.set(handleRef.path, handleRef);
@@ -354,14 +360,21 @@ exports.completeProfile = (0, https_1.onCall)(async (request) => {
     const authAvatarUrl = typeof userRecord?.picture === 'string' ? userRecord.picture : undefined;
     let starterCircle;
     await firebase_1.db.runTransaction(async (transaction) => {
-        const [userSnapshot, handleSnapshot, userPrivateSnapshot] = await Promise.all([
+        const [userSnapshot, handleSnapshot, userPrivateSnapshot, deletionSnapshot,] = await Promise.all([
             transaction.get(userRef),
             transaction.get(handleRef),
             transaction.get(userPrivateRef),
+            transaction.get(firebase_1.db.doc(`accountDeletions/${uid}`)),
         ]);
         const existingUser = userSnapshot.data();
         const existingHandleOwner = handleSnapshot.data()?.uid;
         const userPrivate = userPrivateSnapshot.data();
+        if (!(0, legal_1.hasCurrentLegalAcceptance)(userPrivate?.legalAcceptance)) {
+            throw new https_1.HttpsError('failed-precondition', 'Confirm you are 18 or older and agree to the Terms first.');
+        }
+        if (deletionSnapshot.exists || existingUser?.accountDeletionStartedAt) {
+            throw new https_1.HttpsError('failed-precondition', 'Account deletion is in progress.');
+        }
         const existingStarterCircleId = asOptionalString(userPrivate?.onboardingStarterCircleId);
         const existingStarterCircleSetupId = asOptionalString(userPrivate?.onboardingStarterCircleSetupId);
         const profileData = {
@@ -420,6 +433,7 @@ exports.completeProfile = (0, https_1.onCall)(async (request) => {
             uid,
         }, { merge: true });
         transaction.set(userRef, profileData, { merge: true });
+        transaction.set(firebase_1.db.doc(`publicProfiles/${uid}`), (0, public_1.publicProfile)({ ...existingUser, ...profileData }));
         if (input.starterCircle &&
             (starterCircleDecision === 'create' || starterCircleDecision === 'repair')) {
             const circleRef = firebase_1.db.collection('circles').doc();
@@ -463,6 +477,7 @@ exports.completeProfile = (0, https_1.onCall)(async (request) => {
                 commitment: input.starterCircle.commitment,
                 commitmentCadence: commitmentPace,
                 commitmentFrequency,
+                proofRequirement: input.starterCircle.proofRequirement,
                 commitmentType,
                 graceRules: starterCircleHiddenDefaults.graceRules,
                 lifecycleStatus: 'active',
@@ -529,6 +544,7 @@ exports.completeProfile = (0, https_1.onCall)(async (request) => {
                     commitment: input.starterCircle.commitment,
                     commitmentCadence: commitmentPace,
                     commitmentFrequency,
+                    proofRequirement: input.starterCircle.proofRequirement,
                     commitmentType,
                     joinMode,
                     lifecycleStatus: 'active',
@@ -612,17 +628,27 @@ exports.completeProfile = (0, https_1.onCall)(async (request) => {
     }
     return { handle: input.handle, starterCircle, uid };
 });
-exports.deleteAccount = (0, https_1.onCall)(async (request) => {
+exports.deleteAccount = (0, https_1.onCall)({ secrets: provider_deletion_1.deletionSecrets }, async (request) => {
     const uid = requireAuthUid(request.auth?.uid);
     await firebase_1.db.runTransaction(async (transaction) => {
         const profileRef = firebase_1.db.collection('users').doc(uid);
         const profile = await transaction.get(profileRef);
+        // Keep a minimal server-only tombstone to reject late in-flight signup or
+        // acknowledgment writes even after the account documents are removed.
+        transaction.set(firebase_1.db.doc(`accountDeletions/${uid}`), {
+            startedAt: firestore_1.FieldValue.serverTimestamp(),
+        });
         if (profile.exists) {
             transaction.update(profileRef, {
                 accountDeletionStartedAt: firestore_1.FieldValue.serverTimestamp(),
             });
+            transaction.delete(firebase_1.db.doc(`publicProfiles/${uid}`));
         }
     });
+    // Keep Auth and account data available if a provider fails, so the member
+    // can retry the same idempotent deletion instead of losing access mid-request.
+    await (0, provider_deletion_1.deleteProviderAccounts)(uid);
+    await (0, greeting_data_1.deleteGreetingData)(uid);
     const ownedCircleSnapshots = await firebase_1.db
         .collection('circles')
         .where('ownerId', '==', uid)

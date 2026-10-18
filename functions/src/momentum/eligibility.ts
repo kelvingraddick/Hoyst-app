@@ -1,3 +1,4 @@
+import {circleDates, shiftCircleDate} from '../shared/circle-progress';
 import type {DocumentData} from 'firebase-admin/firestore';
 
 import {getDateKey, type OpportunitySlot} from './schedule';
@@ -56,6 +57,22 @@ export function isMemberExpectedForSlot({
   const joinedDateKey = getMembershipDateKey(member.joinedAt, timezone);
   const leftDateKey = getMembershipDateKey(member.leftAt, timezone);
 
+  if (slot.policyVersion === 2) {
+    if (leftDateKey && leftDateKey <= slot.expiresDateKey) {
+      return false;
+    }
+    const first = joinedDateKey
+      ? member.opportunityEligibility === 'include_current'
+        ? joinedDateKey
+        : shiftCircleDate(joinedDateKey, 1)
+      : slot.availableDateKey;
+    const start = first > slot.availableDateKey ? first : slot.availableDateKey;
+    return (
+      start <= slot.expiresDateKey &&
+      slot.slotIndex < circleDates(start, slot.expiresDateKey).length
+    );
+  }
+
   if (leftDateKey && slot.expiresDateKey >= leftDateKey) {
     return false;
   }
@@ -90,8 +107,14 @@ export function getEligibleOpenSlot({
 }) {
   return slots.find(slot => {
     const status = existingStatuses.get(slot.slotIndex);
+    const joined = getMembershipDateKey(member?.joinedAt, timezone);
+    const first =
+      joined && member?.opportunityEligibility !== 'include_current'
+        ? shiftCircleDate(joined, 1)
+        : joined;
 
     return (
+      (!first || slot.policyVersion !== 2 || dateKey >= first) &&
       isMemberExpectedForSlot({member, slot, timezone}) &&
       slot.availableDateKey <= dateKey &&
       slot.expiresDateKey >= dateKey &&

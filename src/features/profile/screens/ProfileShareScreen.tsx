@@ -207,7 +207,7 @@ function ShareCard({
               value: `${stats.personalStreakDays} ${
                 stats.personalStreakDays === 1 ? 'day' : 'days'
               }`,
-              label: 'Current streak',
+              label: 'Daily Tap In streak',
               icon: <ProgressStatBadge tone="orange" />,
             },
             {

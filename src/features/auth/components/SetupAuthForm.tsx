@@ -1,4 +1,9 @@
-import React, {useEffect, useState, type MutableRefObject} from 'react';
+import React, {
+  useCallback,
+  useEffect,
+  useState,
+  type MutableRefObject,
+} from 'react';
 import {
   Image,
   Modal,
@@ -26,6 +31,9 @@ import {
   startPhoneSignIn,
 } from '../services/auth-service';
 import {formatPhoneNumberForDisplay} from '../services/phone-number';
+
+import {LegalAcknowledgment} from '../../legal/LegalAcknowledgment';
+import {acceptLegalTerms} from '../../legal/policy-service';
 
 export type AuthFormState = {
   title: string;
@@ -62,6 +70,7 @@ export function SetupAuthForm({
   const [confirmation, setConfirmation] =
     useState<FirebaseAuthTypes.ConfirmationResult>();
   const [busy, setBusy] = useState(false);
+  const [legalChecked, setLegalChecked] = useState(false);
   const [error, setError] = useState<string>();
   const [resetSent, setResetSent] = useState(false);
   const destination = phone.trim().startsWith('+')
@@ -70,23 +79,32 @@ export function SetupAuthForm({
   const phoneDisplay = phone.trim().startsWith('+')
     ? phone
     : `${country.code} ${phone}`;
-  const run = async (action: () => Promise<unknown>) => {
-    setError(undefined);
-    setBusy(true);
-    try {
-      await action();
-    } catch (failure) {
-      const value = failure as {code?: string; message?: string};
-      setError(
-        value.code?.includes('account-exists-with-different-credential')
-          ? 'This email already uses a different sign-in method. Sign in with that method.'
-          : value.message ??
-              'Could not continue. Check your details and try again.',
-      );
-    } finally {
-      setBusy(false);
-    }
-  };
+  const run = useCallback(
+    async (action: () => Promise<unknown>, authenticates = false) => {
+      if (creating && method !== 'reset' && !legalChecked) {
+        setError('Confirm you are 18 or older and agree to the Terms.');
+        return;
+      }
+      setError(undefined);
+      setBusy(true);
+      try {
+        const result = (await action()) as {user?: {uid: string}} | undefined;
+        if (creating && legalChecked && authenticates)
+          await acceptLegalTerms(result?.user?.uid);
+      } catch (failure) {
+        const value = failure as {code?: string; message?: string};
+        setError(
+          value.code?.includes('account-exists-with-different-credential')
+            ? 'This email already uses a different sign-in method. Sign in with that method.'
+            : value.message ??
+                'Could not continue. Check your details and try again.',
+        );
+      } finally {
+        setBusy(false);
+      }
+    },
+    [creating, legalChecked, method],
+  );
   const label = busy
     ? 'Working...'
     : method === 'reset'
@@ -114,6 +132,7 @@ export function SetupAuthForm({
         return false;
       };
     actionRef.current = () => {
+      if (busy || (creating && method !== 'reset' && !legalChecked)) return;
       if (method === 'reset') {
         if (resetSent) {
           setMethod('email');
@@ -126,16 +145,19 @@ export function SetupAuthForm({
         }
       }
       if (method === 'email')
-        run(() =>
-          creating
-            ? registerWithEmail(email, password)
-            : signInWithEmail(email, password),
+        run(
+          () =>
+            creating
+              ? registerWithEmail(email, password)
+              : signInWithEmail(email, password),
+          true,
         ).catch(() => undefined);
       if (method === 'phone')
         run(async () => {
-          if (confirmation) await confirmPhoneSignIn(confirmation, code);
-          else setConfirmation(await startPhoneSignIn(destination));
-        }).catch(() => undefined);
+          if (confirmation) return confirmPhoneSignIn(confirmation, code);
+          setConfirmation(await startPhoneSignIn(destination));
+          return undefined;
+        }, Boolean(confirmation)).catch(() => undefined);
     };
     onState({
       method,
@@ -143,6 +165,7 @@ export function SetupAuthForm({
       busy,
       disabled:
         busy ||
+        (creating && method !== 'reset' && !legalChecked) ||
         !method ||
         (method === 'email'
           ? !email.trim() || password.length < (creating ? 6 : 1)
@@ -204,6 +227,8 @@ export function SetupAuthForm({
     destination,
     backRef,
     resetSent,
+    legalChecked,
+    run,
   ]);
   const select = (next: 'email' | 'phone' | undefined) => {
     setMethod(next);
@@ -211,17 +236,24 @@ export function SetupAuthForm({
   };
   return (
     <View style={styles.stack}>
+      {creating && method !== 'reset' ? (
+        <LegalAcknowledgment
+          checked={legalChecked}
+          onChange={setLegalChecked}
+          disabled={busy}
+        />
+      ) : null}
       {!method && (
         <>
           {Platform.OS === 'ios' && (
             <HoystButton
               label="Continue with Apple"
-              disabled={busy}
+              disabled={busy || (creating && !legalChecked)}
               icon={<Apple color="#FFFFFF" size={20} />}
               backgroundColor="#070B1A"
               textColor="#FFFFFF"
               onPress={() => {
-                run(signInWithApple).catch(() => undefined);
+                run(signInWithApple, true).catch(() => undefined);
               }}
             />
           )}
@@ -234,12 +266,12 @@ export function SetupAuthForm({
                   style={{width: 20, height: 20}}
                 />
               }
-              disabled={busy}
+              disabled={busy || (creating && !legalChecked)}
               backgroundColor={brandColors.white}
               borderColor={brandColors.gray}
               textColor={brandColors.charcoal}
               onPress={() => {
-                run(signInWithGoogle).catch(() => undefined);
+                run(signInWithGoogle, true).catch(() => undefined);
               }}
             />
             {/* Keep the stroke above the fill without changing shared button layout. */}

@@ -3,11 +3,13 @@ import {isFirstTapInPending} from '../services/member-tap-in-eligibility';
 import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {
   ActivityIndicator,
+  AppState,
   Alert,
   Animated,
   Pressable,
   StyleSheet,
   View,
+  useWindowDimensions,
   type LayoutChangeEvent,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
@@ -36,7 +38,6 @@ import {GlassPanel} from '../../../design/components/GlassPanel';
 import {HoystButton} from '../../../design/components/HoystButton';
 import {HoystScreen} from '../../../design/components/HoystScreen';
 import {HoystText} from '../../../design/components/HoystText';
-import {MomentumFlameIllustration} from '../../../design/components/MomentumIllustrations';
 import {
   CircleCategoryIcon,
   getCircleCategoryForegroundColor,
@@ -54,7 +55,6 @@ import {firebaseFirestore} from '../../../lib/firebase/firestore';
 import {
   DesignSystemProvider,
   DSListRow,
-  DSSectionHeading,
   useSystemTheme,
 } from '../../../design/system';
 import {useProtectedAction} from '../../auth/hooks/useProtectedAction';
@@ -68,7 +68,19 @@ import {
 import {removeTapIn} from '../../check-in/services/check-in-service';
 import {getCircleDetail} from '../mockData';
 import {CircleThreadSection} from '../components/CircleThreadSection';
-import {CircleGroupWeekPath} from '../components/CircleGroupWeekPath';
+import {CircleProgressPanel} from '../components/CircleProgressPanel';
+import {
+  readCircleProgress,
+  refreshCircleProgress,
+  subscribeCircleProgress,
+  subscribeCircleDailyCoverage,
+} from '../services/circle-progress-service';
+import type {
+  CircleDayCoverage,
+  CircleProgressResult,
+  CircleProgressSummary,
+} from '../../../shared/circle-progress';
+import {circleDateKey, shiftCircleDate} from '../../../shared/circle-progress';
 import {
   CircleMemberStrip,
   type CircleMemberStripAction,
@@ -84,7 +96,6 @@ import {
   buildPublicCircleDetail,
   subscribeToMemberCircleDetail,
 } from '../../home/services/home-data-service';
-import {getCircleCycleProgressPresentation} from '../../commitments/cycle-progress-presentation';
 import {getCommitmentGoalPresentation} from '../../commitments/commitment-goal-label';
 import {collections} from '../../../types/firestore';
 import type {
@@ -492,7 +503,7 @@ function CircleDetailBackground({
   );
 }
 
-function CircleDetailHero({
+export function CircleDetailHero({
   detail,
   onBack,
   onOpenSettings,
@@ -508,6 +519,7 @@ function CircleDetailHero({
   statusPill?: DetailStatusPill;
 }) {
   const theme = useHoystTheme();
+  const {fontScale} = useWindowDimensions();
   const visual = getCircleCategoryVisual(detail.category, detail.appearance);
   const categoryColor = getCircleCategoryForegroundColor(
     detail.category,
@@ -536,7 +548,7 @@ function CircleDetailHero({
     detail.matchCopy ?? 'Preview the circle before you jump in.';
 
   return (
-    <View style={styles.circleHero}>
+    <View key={fontScale} style={styles.circleHero}>
       <View
         onLayout={onTintLayout}
         style={styles.circleHeroTintRegion}
@@ -620,6 +632,9 @@ function CircleDetailHero({
             ) : null}
           </View>
 
+          <HoystText tone="muted" variant="caption" testID="circle-detail-proof-rule">
+            {detail.proofRequirement === 'photo' ? 'Photo proof required to complete a Tap In' : 'No proof needed'}
+          </HoystText>
           <View style={styles.circleHeroMetaRow}>
             <HeroInlineMetaSegment>
               <HeroInlineMetaItem
@@ -785,128 +800,106 @@ type CircleDetailWeekCell = {
 
 function CircleStatsSection({
   detail,
-  progressColor,
   weekCells,
+  navigation,
 }: {
   detail: CircleDetailModel;
-  progressColor: string;
+  navigation: Props['navigation'];
+  progressColor?: string;
   weekCells: readonly CircleDetailWeekCell[];
 }) {
-  const theme = useHoystTheme();
-  const isPersonal = detail.circleMode === 'personal';
-  const streakSource = isPersonal
-    ? detail.streakDays ?? Number.parseInt(detail.streakLabel, 10)
-    : detail.groupStreakDays ?? 0;
-  const streakValue = Number.isFinite(streakSource)
-    ? Math.max(0, Math.round(streakSource))
-    : 0;
-  const streakDayLabel = streakValue === 1 ? 'day' : 'days';
-  const activeMembers = detail.members.filter(
-    member => member.membershipStatus !== 'pending',
+  const uid = useSessionStore(state => state.user?.uid);
+  const key = `${detail.id}:${uid ?? ''}`;
+  const [result, setResult] = useState<{
+    key: string;
+    value: CircleProgressResult;
+  }>();
+  const [daily, setDaily] = useState<{
+    key: string;
+    value: Map<string, CircleDayCoverage>;
+  }>();
+  const [today, setToday] = useState(() =>
+    circleDateKey(detail.timezone ?? 'UTC'),
   );
-  const cadence = detail.commitmentCadence ?? 'weekly';
-  const sectionTitle =
-    cadence === 'daily'
-      ? 'Today'
-      : cadence === 'monthly'
-      ? 'This month'
-      : 'This week';
-  const cycleProgress = getCircleCycleProgressPresentation(detail);
-  const todayTapInCount =
-    detail.todayTapInCount ??
-    activeMembers.filter(member =>
-      member.todayStatus
-        ? member.todayStatus !== 'skip'
-        : member.state === 'done',
-    ).length;
-  const todaySkipCount =
-    detail.todaySkipCount ??
-    activeMembers.filter(member =>
-      member.todayStatus
-        ? member.todayStatus === 'skip'
-        : member.state === 'skipped',
-    ).length;
-  const todaySummary =
-    todayTapInCount === 0 && todaySkipCount === 0
-      ? 'No Tap Ins yet today'
-      : [
-          'Today',
-          ...(todayTapInCount > 0 ? [`${todayTapInCount} tapped in`] : []),
-          ...(todaySkipCount > 0 ? [`${todaySkipCount} skipped`] : []),
-        ].join(' · ');
-  const progressTrackSurfaceStyle = {
-    backgroundColor: theme.isDark ? '#303036' : '#E9E9ED',
-  };
-
+  const timeline = useMemo(
+    () =>
+      weekCells.map((_, index) => ({
+        dateKey: shiftCircleDate(today, index - weekCells.length + 1),
+      })),
+    [today, weekCells],
+  );
+  const dates = JSON.stringify(timeline.map(day => day.dateKey));
+  useEffect(() => {
+    if (!uid || detail.viewerMembershipStatus !== 'active') return;
+    let active = true;
+    const refresh = () =>
+      refreshCircleProgress(detail.id)
+        .then(value => {
+          if (active) setResult({key, value});
+        })
+        .catch(() => undefined);
+    refresh();
+    const unsubscribe = subscribeCircleProgress(
+      detail.id,
+      uid,
+      viewer => {
+        if (active)
+          setResult(prior => ({
+            key,
+            value: {...(prior?.key === key ? prior.value : {}), viewer},
+          }));
+      },
+      () => {
+        if (active) setResult({key, value: {}});
+      },
+    );
+    const stopDays = subscribeCircleDailyCoverage(
+      detail.id,
+      JSON.parse(dates),
+      value => {
+        if (active) setDaily({key, value});
+      },
+    );
+    const checkDay = () => setToday(circleDateKey(detail.timezone ?? 'UTC'));
+    const onFocus = () => {
+      checkDay();
+      refresh();
+    };
+    const stopFocus = navigation.addListener?.('focus', onFocus);
+    const app = AppState.addEventListener('change', state => {
+      if (state === 'active') onFocus();
+    });
+    const timer = setInterval(checkDay, 60000);
+    return () => {
+      active = false;
+      unsubscribe();
+      stopDays();
+      stopFocus?.();
+      app.remove();
+      clearInterval(timer);
+    };
+  }, [
+    dates,
+    detail.id,
+    detail.timezone,
+    detail.viewerMembershipStatus,
+    key,
+    navigation,
+    uid,
+  ]);
+  const value = result?.key === key ? result.value : undefined;
+  const source = detail as unknown as Record<string, unknown>;
   return (
-    <View style={styles.statsSection} testID="circle-detail-stats-content">
-      <View style={styles.statsSummaryGrid}>
-        <View
-          style={styles.statsProgressSummary}
-          testID="circle-stats-progress">
-          <DSSectionHeading title={sectionTitle} />
-          <View style={styles.statsProgressLabelRow}>
-            <HoystText
-              style={styles.statsProgressLabel}
-              testID="circle-stats-progress-label"
-              tone="muted">
-              {cycleProgress.detailLabel}
-            </HoystText>
-          </View>
-        </View>
-        <View
-          accessibilityLabel={`${
-            isPersonal ? 'Streak' : 'Group streak'
-          } ${streakValue} ${streakDayLabel}`}
-          style={styles.statsStreakPill}
-          testID="circle-stats-streak-pill">
-          <View style={styles.statsStreakValueRow}>
-            <MomentumFlameIllustration
-              size={16}
-              testID="circle-stats-streak-icon"
-            />
-            <HoystText
-              allowFontScaling={false}
-              style={[
-                styles.statsStreakPillLabel,
-                {color: theme.streakForeground},
-              ]}
-              testID="circle-stats-streak-label">
-              {`${streakValue} ${streakDayLabel}`}
-            </HoystText>
-          </View>
-          <HoystText style={styles.statsStreakCaption} tone="muted">
-            {isPersonal ? 'Current streak' : 'Group streak'}
-          </HoystText>
-        </View>
-      </View>
-      <View
-        style={[styles.statsProgressTrack, progressTrackSurfaceStyle]}
-        testID="circle-stats-progress-track">
-        <View
-          style={[
-            styles.statsProgressFill,
-            {
-              backgroundColor: progressColor,
-              width: `${cycleProgress.percent}%`,
-            },
-          ]}
-          testID="circle-stats-progress-fill"
-        />
-      </View>
-      {cadence !== 'daily' ? (
-        <HoystText
-          style={styles.statsTodayLabel}
-          testID="circle-stats-today-summary"
-          tone="muted"
-          variant="caption">
-          {todaySummary}
-        </HoystText>
-      ) : null}
-      <View style={styles.statsWeekHistory} testID="circle-detail-week-history">
-        <CircleGroupWeekPath days={weekCells} />
-      </View>
-    </View>
+    <CircleProgressPanel
+      detail={{...detail, viewerUid: uid}}
+      viewer={readCircleProgress(
+        value?.viewer ?? detail.viewerCircleProgress,
+        source,
+      )}
+      group={readCircleProgress(value?.group ?? detail.groupStreak, source)}
+      days={timeline}
+      coverage={daily?.key === key ? daily.value : new Map()}
+    />
   );
 }
 
@@ -949,6 +942,7 @@ function CircleDetailScreenContent({
   const [groupStreakResult, setGroupStreakResult] = useState<{
     key: string;
     days: number;
+    summary?: CircleProgressSummary;
   }>();
   const [isThreadVisible, setIsThreadVisible] = useState(false);
   const [threadLoadMoreRequestToken, setThreadLoadMoreRequestToken] =
@@ -1007,11 +1001,22 @@ function CircleDetailScreenContent({
         ...member,
         firstTapInPending: isFirstTapInPending(member, baseDetail),
       })),
+      groupStreak:
+        groupStreakResult?.key === publicKey
+          ? groupStreakResult.summary
+          : baseDetail.groupStreak,
       groupStreakDays: memberCircle
         ? groupStreakDays
         : publicCircle?.groupStreakDays ?? baseDetail.groupStreakDays ?? 0,
     };
-  }, [groupStreakDays, memberCircle, publicCircle, route.params.circleId]);
+  }, [
+    groupStreakDays,
+    groupStreakResult,
+    memberCircle,
+    publicCircle,
+    publicKey,
+    route.params.circleId,
+  ]);
   const canShowThread = Boolean(
     canLoadMemberCircle &&
       user?.uid &&
@@ -1187,6 +1192,10 @@ function CircleDetailScreenContent({
             setGroupStreakResult({
               key: publicKey,
               days: normalizeGroupStreakDays(snapshot.data()?.groupStreakDays),
+              summary: readCircleProgress(
+                snapshot.data()?.groupStreak,
+                snapshot.data(),
+              ),
             });
           }
         },
@@ -1452,13 +1461,15 @@ function CircleDetailScreenContent({
       inviteUrl: detail.inviteUrl,
       memberCount: detail.memberCount,
       members: detail.members,
-      note: item.note,
-      periodTapInCount: detail.periodTapInCount,
+      circleMode: detail.circleMode,
+      commitmentCadence: detail.commitmentCadence,
+      timezone: detail.timezone,
+      dateKey:
+        item.id.match(/^tap_in_(\d{4}-\d{2}-\d{2})_/)?.[1] ??
+        circleDateKey(detail.timezone ?? 'UTC', new Date(item.createdAtMs)),
+      status: 'done',
       photoUri: item.mediaImageUrl,
-      progressLabel: detail.progressLabel,
       source: 'circle_detail',
-      streakDays: detail.streakDays,
-      streakLabel: detail.streakLabel,
     });
   };
 
@@ -1780,34 +1791,37 @@ function CircleDetailScreenContent({
             </GlassPanel>
           ) : null}
 
-          <CircleStatsSection
-            detail={detail}
-            progressColor={categoryProgressColor}
-            weekCells={weekCells}
-          />
+          <View style={styles.progressAndMembers}>
+            <CircleStatsSection
+              navigation={navigation}
+              detail={detail}
+              progressColor={categoryProgressColor}
+              weekCells={weekCells}
+            />
 
-          {!isPersonal ? (
-            <>
-              <CircleMemberStrip
-                action={selectedMemberAction}
-                belowStripAction={memberBelowStripAction}
-                commitmentCadence={detail.commitmentCadence}
-                inviteAction={
-                  !isArchived && canInvite
-                    ? {
-                        accessibilityLabel: 'Invite Members',
-                        onPress: shareInvite,
-                      }
-                    : undefined
-                }
-                members={detail.members}
-                onSelectMember={member => setSelectedMemberId(member.id)}
-                selectedMemberId={selectedMemberId}
-                subtitle={memberCountLabel}
-                viewerUid={user?.uid}
-              />
-            </>
-          ) : null}
+            {!isPersonal ? (
+              <>
+                <CircleMemberStrip
+                  action={selectedMemberAction}
+                  belowStripAction={memberBelowStripAction}
+                  commitmentCadence={detail.commitmentCadence}
+                  inviteAction={
+                    !isArchived && canInvite
+                      ? {
+                          accessibilityLabel: 'Invite Members',
+                          onPress: shareInvite,
+                        }
+                      : undefined
+                  }
+                  members={detail.members}
+                  onSelectMember={member => setSelectedMemberId(member.id)}
+                  selectedMemberId={selectedMemberId}
+                  subtitle={memberCountLabel}
+                  viewerUid={user?.uid}
+                />
+              </>
+            ) : null}
+          </View>
 
           {!isArchived && !isMemberCircle ? (
             isPendingMembership ? (
@@ -1937,6 +1951,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 22,
     paddingTop: 20,
   },
+  progressAndMembers: {gap: 12},
   circleHero: {
     gap: 4,
   },

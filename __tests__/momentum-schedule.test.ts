@@ -9,7 +9,7 @@ import {
 } from '../functions/src/momentum/schedule';
 
 describe('Momentum opportunity scheduling', () => {
-  it('normalizes monthly commitments into scheduled opportunities', () => {
+  it('normalizes monthly commitments into flexible period quotas', () => {
     const schedule = normalizeCommitmentSchedule({
       commitmentCadence: 'monthly',
       commitmentFrequency: {
@@ -22,7 +22,7 @@ describe('Momentum opportunity scheduling', () => {
     expect(schedule).toEqual({
       pace: 'monthly',
       opportunitiesPerPeriod: 4,
-      slotPolicy: 'scheduled_slots',
+      slotPolicy: 'period_quota',
       timezone: 'America/New_York',
     });
   });

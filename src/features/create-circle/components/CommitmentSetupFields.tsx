@@ -8,6 +8,8 @@ import {
   type ViewStyle,
 } from 'react-native';
 import {
+  Camera,
+  CircleCheck,
   CalendarCheck,
   CalendarDays,
   CalendarRange,
@@ -68,6 +70,25 @@ export type SetupOption<T extends string> = {
   label: string;
   tone: SetupTone;
 };
+
+export const proofOptions: SetupOption<
+  import('../../../shared/tap-in-proof').ProofRequirement
+>[] = [
+  {
+    id: 'photo',
+    label: 'Photo proof',
+    description: 'Add a photo to complete each Tap In.',
+    icon: Camera,
+    tone: 'blue',
+  },
+  {
+    id: 'none',
+    label: 'No proof needed',
+    description: 'Tap In without proof. Photos are optional.',
+    icon: CircleCheck,
+    tone: 'green',
+  },
+];
 
 export const circleModeOptions: SetupOption<CircleMode>[] = [
   {

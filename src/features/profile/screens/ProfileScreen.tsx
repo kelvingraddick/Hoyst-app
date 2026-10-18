@@ -32,7 +32,11 @@ import type {
   AppTabsParamList,
   RootStackParamList,
 } from '../../../navigation/types';
-import {navigateToAuthWelcome} from '../../../navigation/auth-modal-navigation';
+import {
+  navigateToAuthSignIn,
+  navigateToAuthWelcome,
+} from '../../../navigation/auth-modal-navigation';
+import {GuestStart} from '../../../design/components/GuestStart';
 import {useOnboardingStore} from '../../../store/onboarding-store';
 import {useSessionStore} from '../../../store/session-store';
 import {ProfileAvatar} from '../components/ProfileAvatar';
@@ -88,6 +92,15 @@ function Content({navigation}: Props) {
     }
     navigateToAuthWelcome(root);
   };
+  const onSignIn = () => {
+    if (preview) {
+      return;
+    }
+    const session = useSessionStore.getState();
+    session.clearPendingAction();
+    session.beginAuthFlow();
+    navigateToAuthSignIn(root);
+  };
   useEffect(() => {
     if (preview?.captureBottom) {
       const timer = setTimeout(
@@ -97,16 +110,17 @@ function Content({navigation}: Props) {
       return () => clearTimeout(timer);
     }
   }, [preview?.captureBottom]);
-  const trailing = profile ? (
-    <View style={styles.gear}>
-      <DSIconButton
-        label="Settings"
-        onPress={() => root?.navigate('Settings')}
-        icon={<Settings size={22} color={theme.text} />}
-        testID="profile-settings"
-      />
-    </View>
-  ) : undefined;
+  const trailing =
+    profile || overview.status === 'guest' ? (
+      <View style={styles.gear}>
+        <DSIconButton
+          label="Settings"
+          onPress={() => root?.navigate('Settings')}
+          icon={<Settings size={22} color={theme.text} />}
+          testID="profile-settings"
+        />
+      </View>
+    ) : undefined;
   const leading = profile ? (
     <View style={styles.gear}>
       <DSIconButton
@@ -123,7 +137,18 @@ function Content({navigation}: Props) {
       leading={leading}
       trailing={trailing}
       scrollRef={scrollRef}>
-      {!profile ? (
+      {!profile && overview.status === 'guest' ? (
+        <GuestStart
+          artwork={require('../../../assets/hoy/get-started-invites-network-hands.png')}
+          artworkTestID="profile-guest-get-started-artwork"
+          description="Save your identity, build commitments, and celebrate the days you show up."
+          primaryLabel="Create your profile"
+          primaryTestID="profile-get-started"
+          signInTestID="profile-log-in"
+          onGetStarted={onGetStarted}
+          onSignIn={onSignIn}
+        />
+      ) : !profile ? (
         <DSSurface raised style={styles.guest}>
           <ProfileIcon icon={UsersRound} tone="green" />
           <DSText variant="heading">

@@ -42,6 +42,8 @@ jest.mock('../src/store/settings-store', () => ({
     selector({appearance: 'light'}),
 }));
 
+jest.mock('../src/features/progress/services/progress-service', () => ({ensureProgress: jest.fn().mockResolvedValue(undefined)}));
+
 jest.mock('../src/features/circles/services/circle-service', () => ({
   convertPersonalCircle: (...args: unknown[]) =>
     mockConvertPersonalCircle(...args),

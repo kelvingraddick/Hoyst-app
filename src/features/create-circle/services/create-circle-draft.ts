@@ -1,3 +1,4 @@
+import {readProofRequirement} from '../../../shared/tap-in-proof';
 import {
   normalizeCategory,
   readAppearance,
@@ -17,6 +18,7 @@ import type {
 } from '../../../types/models';
 
 export type CreateCirclePayload = {
+  proofRequirement?: import('../../../shared/tap-in-proof').ProofRequirement;
   independentTitle?: boolean;
   category: string;
   appearance?: CommitmentAppearance;
@@ -71,6 +73,7 @@ export function getLocalTimezone() {
 
 export function createInitialCircleDraft(timezone?: string): CreateCircleDraft {
   return {
+    proofRequirement: 'photo',
     category: 'Fitness',
     circleMode: defaultCircleMode,
     commitment: '',
@@ -136,6 +139,7 @@ export function getCirclePrivacyMode({
 export function buildCircleEditDraft(
   circle: Pick<
     CircleSummary,
+    | 'proofRequirement'
     | 'category'
     | 'appearance'
     | 'circleMode'
@@ -166,6 +170,7 @@ export function buildCircleEditDraft(
 
   return {
     ...initialDraft,
+    proofRequirement: readProofRequirement(circle.proofRequirement),
     category: normalizeCategory(circle.category),
     appearance: readAppearance(circle.appearance),
     circleMode: normalizeCircleMode(circle.circleMode),
@@ -338,6 +343,7 @@ export function buildCreateCirclePayload(
 
   return {
     category: normalizeCategory(draft.category),
+    proofRequirement: draft.proofRequirement ?? 'photo',
     appearance: readAppearance(draft.appearance),
     circleMode,
     commitment: draft.commitment.trim(),

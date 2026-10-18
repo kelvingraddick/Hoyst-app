@@ -14,6 +14,10 @@ import {HttpsError, onCall} from 'firebase-functions/v2/https';
 import {z} from 'zod';
 
 import {db} from '../firebase';
+import {deleteGreetingData} from './greeting-data';
+import {publicProfile} from '../profile/public';
+import {hasCurrentLegalAcceptance} from '../shared/legal';
+import {deleteProviderAccounts, deletionSecrets} from './provider-deletion';
 import {
   getCommitmentType,
   getInputCommitmentPace,
@@ -70,6 +74,7 @@ const starterCircleSchema = z
     commitment: z.string().trim().min(1).max(160),
     commitmentCadence: z.enum(['daily', 'weekly', 'monthly']).optional(),
     commitmentFrequency: commitmentFrequencySchema,
+    proofRequirement: z.enum(['photo', 'none']).default('photo'),
     commitmentType: z.enum(['build', 'limit', 'avoid']).default('build'),
     buildTrackingMode: z.enum(['confirmation', 'quantity']).optional(),
     graceRules: z
@@ -427,6 +432,7 @@ async function deleteAccountDocuments(uid: string) {
   const batch = db.batch();
 
   batch.delete(userRef);
+  batch.delete(db.doc(`publicProfiles/${uid}`));
 
   if (typeof handle === 'string' && handle.trim()) {
     const handleRef = db.collection('handles').doc(handle);
@@ -482,15 +488,32 @@ export const completeProfile = onCall(async request => {
     | undefined;
 
   await db.runTransaction(async transaction => {
-    const [userSnapshot, handleSnapshot, userPrivateSnapshot] =
-      await Promise.all([
-        transaction.get(userRef),
-        transaction.get(handleRef),
-        transaction.get(userPrivateRef),
-      ]);
+    const [
+      userSnapshot,
+      handleSnapshot,
+      userPrivateSnapshot,
+      deletionSnapshot,
+    ] = await Promise.all([
+      transaction.get(userRef),
+      transaction.get(handleRef),
+      transaction.get(userPrivateRef),
+      transaction.get(db.doc(`accountDeletions/${uid}`)),
+    ]);
     const existingUser = userSnapshot.data();
     const existingHandleOwner = handleSnapshot.data()?.uid;
     const userPrivate = userPrivateSnapshot.data();
+    if (!hasCurrentLegalAcceptance(userPrivate?.legalAcceptance)) {
+      throw new HttpsError(
+        'failed-precondition',
+        'Confirm you are 18 or older and agree to the Terms first.',
+      );
+    }
+    if (deletionSnapshot.exists || existingUser?.accountDeletionStartedAt) {
+      throw new HttpsError(
+        'failed-precondition',
+        'Account deletion is in progress.',
+      );
+    }
     const existingStarterCircleId = asOptionalString(
       userPrivate?.onboardingStarterCircleId,
     );
@@ -571,6 +594,10 @@ export const completeProfile = onCall(async request => {
     );
 
     transaction.set(userRef, profileData, {merge: true});
+    transaction.set(
+      db.doc(`publicProfiles/${uid}`),
+      publicProfile({...existingUser, ...profileData}),
+    );
 
     if (
       input.starterCircle &&
@@ -625,6 +652,7 @@ export const completeProfile = onCall(async request => {
         commitment: input.starterCircle.commitment,
         commitmentCadence: commitmentPace,
         commitmentFrequency,
+        proofRequirement: input.starterCircle.proofRequirement,
         commitmentType,
         graceRules: starterCircleHiddenDefaults.graceRules,
         lifecycleStatus: 'active',
@@ -693,7 +721,8 @@ export const completeProfile = onCall(async request => {
           commitment: input.starterCircle.commitment,
           commitmentCadence: commitmentPace,
           commitmentFrequency,
-          commitmentType,
+          proofRequirement: input.starterCircle.proofRequirement,
+        commitmentType,
           joinMode,
           lifecycleStatus: 'active',
           ...(typeof quantityConfig.maximumValue === 'number'
@@ -793,34 +822,50 @@ export const completeProfile = onCall(async request => {
   return {handle: input.handle, starterCircle, uid};
 });
 
-export const deleteAccount = onCall(async request => {
-  const uid = requireAuthUid(request.auth?.uid);
-  await db.runTransaction(async transaction => {
-    const profileRef = db.collection('users').doc(uid);
-    const profile = await transaction.get(profileRef);
-    if (profile.exists) {
-      transaction.update(profileRef, {
-        accountDeletionStartedAt: FieldValue.serverTimestamp(),
+export const deleteAccount = onCall(
+  {secrets: deletionSecrets},
+  async request => {
+    const uid = requireAuthUid(request.auth?.uid);
+    await db.runTransaction(async transaction => {
+      const profileRef = db.collection('users').doc(uid);
+      const profile = await transaction.get(profileRef);
+      // Keep a minimal server-only tombstone to reject late in-flight signup or
+      // acknowledgment writes even after the account documents are removed.
+      transaction.set(db.doc(`accountDeletions/${uid}`), {
+        startedAt: FieldValue.serverTimestamp(),
       });
-    }
-  });
-  const ownedCircleSnapshots = await db
-    .collection('circles')
-    .where('ownerId', '==', uid)
-    .get();
-  const ownedCircleIds = new Set(
-    ownedCircleSnapshots.docs.map(snapshot => snapshot.id),
-  );
-  const nonOwnedCircleIds = await collectNonOwnedCircleIds(uid, ownedCircleIds);
+      if (profile.exists) {
+        transaction.update(profileRef, {
+          accountDeletionStartedAt: FieldValue.serverTimestamp(),
+        });
+        transaction.delete(db.doc(`publicProfiles/${uid}`));
+      }
+    });
+    // Keep Auth and account data available if a provider fails, so the member
+    // can retry the same idempotent deletion instead of losing access mid-request.
+    await deleteProviderAccounts(uid);
+    await deleteGreetingData(uid);
+    const ownedCircleSnapshots = await db
+      .collection('circles')
+      .where('ownerId', '==', uid)
+      .get();
+    const ownedCircleIds = new Set(
+      ownedCircleSnapshots.docs.map(snapshot => snapshot.id),
+    );
+    const nonOwnedCircleIds = await collectNonOwnedCircleIds(
+      uid,
+      ownedCircleIds,
+    );
 
-  await cleanNonOwnedCircleHistory(uid, nonOwnedCircleIds);
-  await deleteNonOwnedMemberships(uid, ownedCircleIds);
-  await deleteMembershipHistory(uid, ownedCircleIds);
-  await deleteJoinRequests(uid, ownedCircleIds);
-  await deleteNonOwnedCheckIns(uid, ownedCircleIds);
-  await deleteOwnedCircles(ownedCircleIds);
-  await deleteAccountDocuments(uid);
-  await deleteAuthUser(uid);
+    await cleanNonOwnedCircleHistory(uid, nonOwnedCircleIds);
+    await deleteNonOwnedMemberships(uid, ownedCircleIds);
+    await deleteMembershipHistory(uid, ownedCircleIds);
+    await deleteJoinRequests(uid, ownedCircleIds);
+    await deleteNonOwnedCheckIns(uid, ownedCircleIds);
+    await deleteOwnedCircles(ownedCircleIds);
+    await deleteAccountDocuments(uid);
+    await deleteAuthUser(uid);
 
-  return {deleted: true as const};
-});
+    return {deleted: true as const};
+  },
+);

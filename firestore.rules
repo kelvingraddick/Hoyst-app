@@ -42,8 +42,13 @@ service cloud.firestore {
         request.resource.data.readAt == request.time;
     }
 
+    match /publicProfiles/{uid} {
+      allow read: if resource.data.keys().hasOnly(['displayName', 'handle', 'avatarUrl', 'bio']);
+      allow write: if false;
+    }
+
     match /users/{uid} {
-      allow read: if true;
+      allow read: if isSelf(uid);
       allow create, delete: if false;
       allow update: if isSelf(uid) &&
         request.resource.data.diff(resource.data).affectedKeys()
@@ -80,6 +85,16 @@ service cloud.firestore {
         allow write: if false;
       }
 
+      match /circleProgress/{circleId} {
+        allow read: if isSelf(uid);
+        allow write: if false;
+      }
+
+      match /circlePeriods/{periodId} {
+        allow read: if isSelf(uid);
+        allow write: if false;
+      }
+
       match /pastCircles/{circleId} {
         allow read: if isSelf(uid);
         allow write: if false;
@@ -87,7 +102,7 @@ service cloud.firestore {
     }
 
     match /handles/{handle} {
-      allow read: if true;
+      allow read: if false;
       allow write: if false;
     }
 
@@ -137,6 +152,11 @@ service cloud.firestore {
       }
 
       match /opportunities/{periodKey} {
+        allow read: if isActiveMember(circleId);
+        allow write: if false;
+      }
+
+      match /progressPeriods/{periodKey} {
         allow read: if isActiveMember(circleId);
         allow write: if false;
       }

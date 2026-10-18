@@ -41,10 +41,12 @@ import {
 import {env} from '../../../config/env';
 import type {RootStackParamList} from '../../../navigation/types';
 import {useSettingsStore} from '../../../store/settings-store';
+import {useSessionStore} from '../../../store/session-store';
 import {
-  getProfileSummary,
-  type ProfileSummary,
-} from '../../profile/services/profile-summary-service';
+  loadTapInStoryContext,
+  unavailableTapInStoryContext,
+  type TapInStoryContext,
+} from '../services/tap-in-story-context';
 import {
   TapInStoryTemplateCard,
   tapInStoryShareCardSize,
@@ -223,10 +225,18 @@ function TapInStoryShareController({
   const [activeIndex, setActiveIndex] = useState(0);
   const [busyDestination, setBusyDestination] = useState<ShareDestination>();
   const [carouselBlockHeight, setCarouselBlockHeight] = useState(0);
-  const [isPhotoSettled, setIsPhotoSettled] = useState(!route.params.photoUri);
-  const [hasResolvedProfileSummary, setHasResolvedProfileSummary] =
-    useState(false);
-  const [profileSummary, setProfileSummary] = useState<ProfileSummary>();
+  const uid = useSessionStore(state => state.user?.uid);
+  const [loaded, setLoaded] = useState<{
+    params: Props['route']['params'];
+    uid?: string;
+    context: TapInStoryContext;
+  }>();
+  const [settledImages, setSettledImages] = useState<{
+    key: string;
+    uris: string[];
+  }>({key: '', uris: []});
+  const hasResolvedContext =
+    loaded?.params === route.params && loaded?.uid === uid;
   const snapshotDetail = useMemo(
     () => ({
       category: route.params.category,
@@ -236,10 +246,13 @@ function TapInStoryShareController({
       inviteUrl: route.params.inviteUrl,
       memberCount: route.params.memberCount,
       members: route.params.members,
-      periodTapInCount: route.params.periodTapInCount,
-      progressLabel: route.params.progressLabel,
-      streakDays: route.params.streakDays,
-      streakLabel: route.params.streakLabel,
+      circleMode: route.params.circleMode,
+      commitmentCadence: route.params.commitmentCadence,
+      currentValue: route.params.currentValue,
+      minimumValue: route.params.minimumValue,
+      maximumValue: route.params.maximumValue,
+      targetValue: route.params.targetValue,
+      unitLabel: route.params.unitLabel,
       title: route.params.circleTitle ?? 'Hoyst Circle',
     }),
     [route.params],
@@ -275,11 +288,11 @@ function TapInStoryShareController({
     () =>
       buildTapInStoryShareData({
         detail: snapshotDetail,
-        note: route.params.note,
         photoUri: route.params.photoUri,
-        profileSummary,
+        tapIn: route.params,
+        context: hasResolvedContext ? loaded?.context : undefined,
       }),
-    [profileSummary, route.params.note, route.params.photoUri, snapshotDetail],
+    [hasResolvedContext, loaded, route.params, snapshotDetail],
   );
   const templates = useMemo(
     () => getAvailableTapInStoryTemplates(storyData),
@@ -287,10 +300,25 @@ function TapInStoryShareController({
   );
   const activeTemplate: TapInStoryTemplateId =
     templates[Math.min(activeIndex, templates.length - 1)] ?? 'tapInMoment';
-  const requiresPhotoSettled =
-    activeTemplate === 'tapInMoment' && Boolean(storyData.photoUri);
+  const imageKey = `${activeTemplate}:${route.params.circleId}:${route.params.dateKey}:${hasResolvedContext}`;
+  const requiredImages = [
+    ...(activeTemplate === 'tapInMoment' && storyData.photoUri
+      ? [storyData.photoUri]
+      : []),
+    ...storyData.members.flatMap(member =>
+      !member.avatarImage && member.avatarUrl ? [member.avatarUrl] : [],
+    ),
+  ];
   const canCapture =
-    hasResolvedProfileSummary && (!requiresPhotoSettled || isPhotoSettled);
+    hasResolvedContext &&
+    requiredImages.every(
+      uri => settledImages.key === imageKey && settledImages.uris.includes(uri),
+    );
+  const handleImageSettled = (uri: string) =>
+    setSettledImages(prior => ({
+      key: imageKey,
+      uris: [...new Set([...(prior.key === imageKey ? prior.uris : []), uri])],
+    }));
   const isBusy = Boolean(busyDestination);
   useEffect(() => {
     if (activeIndex >= templates.length) {
@@ -299,26 +327,17 @@ function TapInStoryShareController({
   }, [activeIndex, templates.length]);
   useEffect(() => {
     let active = true;
-    setHasResolvedProfileSummary(false);
-    getProfileSummary()
-      .then(summary => {
+    loadTapInStoryContext(route.params, uid)
+      .catch(() => unavailableTapInStoryContext(route.params))
+      .then(context => {
         if (active) {
-          setProfileSummary(summary);
-        }
-      })
-      .catch(() => undefined)
-      .finally(() => {
-        if (active) {
-          setHasResolvedProfileSummary(true);
+          setLoaded({params: route.params, uid, context});
         }
       });
     return () => {
       active = false;
     };
-  }, []);
-  useEffect(() => {
-    setIsPhotoSettled(!storyData.photoUri || activeTemplate !== 'tapInMoment');
-  }, [activeTemplate, storyData.photoUri]);
+  }, [route.params, uid]);
   const assertCaptureReady = () => {
     if (captureRef.current && canCapture) {
       return true;
@@ -432,7 +451,8 @@ function TapInStoryShareController({
         ref={captureRef}
         style={styles.captureLayer}>
         <TapInStoryTemplateCard
-          onPhotoSettled={() => setIsPhotoSettled(true)}
+          key={imageKey}
+          onImageSettled={handleImageSettled}
           story={storyData}
           templateId={activeTemplate}
         />

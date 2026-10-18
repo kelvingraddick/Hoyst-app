@@ -1,3 +1,4 @@
+import type {CircleProgressResult} from '../../../shared/circle-progress';
 import {authenticatedCallable} from '../../../lib/firebase/authenticated-callable';
 import {firebaseFunctions} from '../../../lib/firebase/functions';
 import {firebaseAuth} from '../../../lib/firebase/auth';
@@ -14,6 +15,9 @@ export type SubmitTapInInput = {
 };
 
 export type SubmitTapInResult = {
+  proofRequirement?: import('../../../shared/tap-in-proof').ProofRequirement;
+  photoUrl?: string | null;
+  circleProgress?: CircleProgressResult;
   progress?: {xpEarned: number; rewards: {skips: number; restores: number}};
   checkInId: string;
   coverageStatus?: 'covered' | 'skipped' | 'partial' | 'failed';
@@ -43,7 +47,10 @@ export type UpdateTapInDetailsResult = {
 };
 
 export async function submitTapIn(input: SubmitTapInInput) {
-  return authenticatedCallable<SubmitTapInResult>('submitTapIn', {...input, progressVersion: 1});
+  return authenticatedCallable<SubmitTapInResult>('submitTapIn', {
+    ...input,
+    progressVersion: 1,
+  });
 }
 
 export async function uploadTapInPhoto({
@@ -58,10 +65,12 @@ export async function uploadTapInPhoto({
   uri: string;
 }) {
   const reference = firebaseStorage().ref(
-    `circles/${circleId}/check-ins/${dateKey}/${uid}/proof.jpg`,
+    `circles/${circleId}/check-ins/${dateKey}/${uid}/proof-${Date.now().toString(
+      36,
+    )}-${Math.random().toString(36).slice(2)}.jpg`,
   );
 
-  await reference.putFile(uri);
+  await reference.putFile(uri, {contentType: 'image/jpeg'});
 
   return reference.getDownloadURL();
 }

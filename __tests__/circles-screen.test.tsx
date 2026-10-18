@@ -1,3 +1,6 @@
+jest.mock('../src/lib/firebase/authenticated-callable', () => ({authenticatedCallable: jest.fn()}));
+jest.mock('../src/lib/firebase/auth', () => ({firebaseAuth: () => ({currentUser: null})}));
+jest.mock('../src/lib/firebase/firestore', () => ({firebaseFirestore: jest.fn()}));
 import React from 'react';
 import {Share, StyleSheet, Text} from 'react-native';
 import renderer, {act} from 'react-test-renderer';

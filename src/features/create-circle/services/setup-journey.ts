@@ -28,6 +28,7 @@ export type SetupStep =
   | 'frequency'
   | 'type'
   | 'goal'
+  | 'proof'
   | 'privacy'
   | 'joining'
   | 'capacity'
@@ -118,6 +119,7 @@ export function setupSteps(draft: CreateCircleDraft): SetupStep[] {
       'frequency',
       'type',
       'goal',
+      'proof',
       'privacy',
       'joining',
       'capacity',

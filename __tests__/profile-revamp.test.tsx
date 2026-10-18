@@ -1,12 +1,22 @@
 import {CircularEmoji} from '../src/design/components/CircularEmoji';
 import React from 'react';
-import {Alert, Image, Pressable, Switch, Text, TextInput} from 'react-native';
+import {
+  Alert,
+  Image,
+  Linking,
+  Pressable,
+  Switch,
+  Text,
+  TextInput,
+} from 'react-native';
 import renderer, {act} from 'react-test-renderer';
 import {EditProfileScreen} from '../src/features/settings/screens/EditProfileScreen';
 import {
   NotificationSettingsScreen,
   SettingsScreen,
   AccountSettingsScreen,
+  AppearanceSettingsScreen,
+  AboutHoystScreen,
 } from '../src/features/settings/screens/SettingsScreens';
 import {ProfileScreen} from '../src/features/profile/screens/ProfileScreen';
 import {ProfileShareScreen} from '../src/features/profile/screens/ProfileShareScreen';
@@ -26,9 +36,15 @@ const mockPermission = jest.fn();
 const mockNotificationUpdate = jest.fn();
 const mockSetProfile = jest.fn();
 const mockSetPreference = jest.fn();
+const mockSetAppearance = jest.fn();
 const mockShare = jest.fn();
+const mockClearPendingAction = jest.fn();
+const mockBeginAuthFlow = jest.fn();
+const mockStartWizard = jest.fn();
+const mockSetCurrentStep = jest.fn();
 let mockGuard: {enabled: boolean; callback: (data: unknown) => void};
 let mockUid = 'user-1';
+let mockSessionStatus = 'authenticatedReady';
 let mockProfile: UserProfile;
 let mockOverview: Record<string, unknown>;
 let mockDimensions = {width: 402, height: 874, scale: 3, fontScale: 1};
@@ -62,12 +78,15 @@ jest.mock('../src/store/profile-store', () => ({
 }));
 jest.mock('../src/store/session-store', () => ({
   useSessionStore: Object.assign(
-    (select: (value: unknown) => unknown) => select({user: {uid: mockUid}}),
+    (select: (value: unknown) => unknown) =>
+      select({status: mockSessionStatus, user: {uid: mockUid}}),
     {
       getState: () => ({
         user: {uid: mockUid},
+        status: mockSessionStatus,
         setGuest: jest.fn(),
-        clearPendingAction: jest.fn(),
+        clearPendingAction: mockClearPendingAction,
+        beginAuthFlow: mockBeginAuthFlow,
       }),
     },
   ),
@@ -78,6 +97,7 @@ jest.mock('../src/store/settings-store', () => ({
     {
       getState: () => ({
         setNotificationPreference: mockSetPreference,
+        setAppearancePreference: mockSetAppearance,
         setNotificationSettings: jest.fn(),
         reset: jest.fn(),
       }),
@@ -86,7 +106,12 @@ jest.mock('../src/store/settings-store', () => ({
 }));
 jest.mock('../src/store/onboarding-store', () => ({
   useOnboardingStore: {
-    getState: () => ({reset: jest.fn(), markSeen: jest.fn()}),
+    getState: () => ({
+      reset: jest.fn(),
+      markSeen: jest.fn(),
+      startOnboardingWizard: mockStartWizard,
+      setCurrentStep: mockSetCurrentStep,
+    }),
   },
 }));
 jest.mock('../src/features/auth/services/account-service', () => ({
@@ -138,7 +163,10 @@ const navigation = {
   goBack: jest.fn(),
   dispatch: jest.fn(),
   navigate: jest.fn(),
-  getParent: () => ({navigate: navigation.navigate}),
+  getParent: () => ({
+    navigate: navigation.navigate,
+    getState: () => ({routeNames: ['Auth']}),
+  }),
 };
 const mount = (Component: React.ComponentType<any>, params = {}) =>
   act(() => {
@@ -161,6 +189,7 @@ beforeEach(() => {
   jest.useFakeTimers();
   jest.clearAllMocks();
   mockUid = 'user-1';
+  mockSessionStatus = 'authenticatedReady';
   mockProfile = {
     id: 'user-1',
     name: 'Kelvin',
@@ -204,6 +233,127 @@ afterEach(() => {
   act(() => screen?.unmount());
   jest.useRealTimers();
   jest.restoreAllMocks();
+});
+it('offers contextual onboarding and direct login from the guest Profile', () => {
+  mockOverview = {status: 'guest'};
+  mount(ProfileScreen);
+  expect(text()).toContain('Get started');
+  expect(text()).toContain(
+    'Save your identity, build commitments, and celebrate the days you show up.',
+  );
+  expect(text()).toContain('Create your profile');
+  expect(text()).toContain('Already a member?');
+  expect(button('profile-share')).toBeUndefined();
+  act(() => button('profile-settings').props.onPress());
+  expect(navigation.navigate).toHaveBeenLastCalledWith('Settings');
+  expect(
+    screen.root.findByProps({testID: 'profile-guest-get-started-artwork'}).props
+      .accessible,
+  ).toBe(false);
+
+  act(() => button('profile-get-started').props.onPress());
+  expect(mockClearPendingAction).toHaveBeenCalledTimes(1);
+  expect(mockBeginAuthFlow).toHaveBeenCalledTimes(1);
+  expect(mockStartWizard).toHaveBeenCalledTimes(1);
+  expect(navigation.navigate).toHaveBeenLastCalledWith('Auth', {
+    screen: 'Welcome',
+  });
+
+  act(() => button('profile-log-in').props.onPress());
+  expect(mockClearPendingAction).toHaveBeenCalledTimes(2);
+  expect(mockBeginAuthFlow).toHaveBeenCalledTimes(2);
+  expect(mockStartWizard).toHaveBeenCalledTimes(1);
+  expect(navigation.navigate).toHaveBeenLastCalledWith('Auth', {
+    screen: 'SignIn',
+  });
+});
+it('keeps incomplete Profile on its finish-profile flow', () => {
+  mockOverview = {status: 'incomplete'};
+  mount(ProfileScreen);
+  expect(text()).toContain('Complete your profile');
+  expect(button('profile-log-in')).toBeUndefined();
+  act(() => button('profile-get-started').props.onPress());
+  expect(mockSetCurrentStep).toHaveBeenCalledWith('finishProfile');
+  expect(mockStartWizard).not.toHaveBeenCalled();
+  expect(navigation.navigate).toHaveBeenCalledWith('Auth', {
+    screen: 'Welcome',
+  });
+});
+it('keeps Profile loading without offering guest authentication actions', () => {
+  mockOverview = {status: 'loading'};
+  mount(ProfileScreen);
+  expect(text()).toContain('Loading your profile');
+  expect(button('profile-get-started')).toBeUndefined();
+  expect(button('profile-log-in')).toBeUndefined();
+  expect(button('profile-settings')).toBeUndefined();
+});
+
+it('shows guest settings without cached account identity or notifications', () => {
+  mockSessionStatus = 'guest';
+  // A matching cached profile must still be ignored after sign-out.
+  mount(SettingsScreen);
+  expect(button('settings-appearance')).toBeDefined();
+  expect(button('settings-support')).toBeDefined();
+  expect(button('settings-about')).toBeDefined();
+  for (const id of [
+    'settings-notifications',
+    'settings-account',
+    'settings-edit-profile',
+    'settings-sign-out',
+    'settings-delete-account',
+  ]) {
+    expect(button(id)).toBeUndefined();
+  }
+  expect(text()).not.toContain('@kelvin');
+  act(() => button('settings-appearance').props.onPress());
+  expect(navigation.navigate).toHaveBeenLastCalledWith('AppearanceSettings');
+  act(() => button('settings-about').props.onPress());
+  expect(navigation.navigate).toHaveBeenLastCalledWith('AboutHoyst');
+});
+
+it('keeps account settings and notifications available after sign-in', () => {
+  mount(SettingsScreen);
+  act(() => button('settings-notifications').props.onPress());
+  expect(navigation.navigate).toHaveBeenLastCalledWith('NotificationSettings');
+  act(() => button('settings-account').props.onPress());
+  expect(navigation.navigate).toHaveBeenLastCalledWith('AccountSettings');
+  mockSessionStatus = 'guest';
+  act(() =>
+    screen.update(
+      <SettingsScreen navigation={navigation as never} route={{} as never} />,
+    ),
+  );
+  expect(button('settings-account')).toBeUndefined();
+  expect(button('settings-notifications')).toBeUndefined();
+  expect(button('settings-edit-profile')).toBeUndefined();
+  expect(button('settings-appearance')).toBeDefined();
+});
+
+it('saves guest appearance locally without account updates', () => {
+  mockSessionStatus = 'guest';
+  mount(AppearanceSettingsScreen);
+  for (const appearance of ['light', 'dark', 'system']) {
+    act(() => button(`appearance-${appearance}`).props.onPress());
+    expect(mockSetAppearance).toHaveBeenLastCalledWith(appearance);
+  }
+  expect(mockUpdate).not.toHaveBeenCalled();
+  expect(mockNotificationUpdate).not.toHaveBeenCalled();
+});
+
+it('opens guest support and shows About information without an account', async () => {
+  mockSessionStatus = 'guest';
+  const openURL = jest.spyOn(Linking, 'openURL').mockResolvedValue(undefined);
+  mount(SettingsScreen);
+  await act(async () => button('settings-support').props.onPress());
+  expect(openURL).toHaveBeenLastCalledWith(
+    'mailto:support@hoyst.app?subject=Hoyst%20support',
+  );
+  act(() => screen.unmount());
+  mount(AboutHoystScreen);
+  expect(text()).toContain('Version');
+  expect(text()).toContain('1.0');
+  expect(text()).toContain('45');
+  expect(text()).toContain('hoyst.app');
 });
 it('defaults missing tint and lists only saved milestone awards', () => {
   expect(normalizeProfileTint(undefined)).toBe('green');
@@ -497,3 +647,23 @@ it('uses decorative emoji in Profile and share stats but preserves every Setting
     expect(screen.root.findAllByType(CircularEmoji)).toHaveLength(0);
   }
 });
+
+it.each(['guest', 'authenticatedReady'])(
+  'opens legal links with session=%s and handles link failure',
+  async status => {
+    mockSessionStatus = status;
+    const openURL = jest.spyOn(Linking, 'openURL').mockResolvedValue(undefined);
+    mount(SettingsScreen);
+    await act(async () => button('settings-privacy').props.onPress());
+    expect(openURL).toHaveBeenLastCalledWith('https://hoyst.app/privacy');
+    await act(async () => button('settings-terms').props.onPress());
+    expect(openURL).toHaveBeenLastCalledWith('https://hoyst.app/terms');
+    openURL.mockRejectedValueOnce(new Error('offline'));
+    const alert = jest.spyOn(Alert, 'alert');
+    await act(async () => button('settings-privacy').props.onPress());
+    expect(alert).toHaveBeenCalledWith(
+      'Could not open page',
+      expect.stringContaining('https://hoyst.app/privacy'),
+    );
+  },
+);

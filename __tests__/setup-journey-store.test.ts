@@ -127,3 +127,17 @@ it('does not resurrect a removed draft from partial or functional updates', () =
     previousId,
   );
 });
+
+
+it('hydrates legacy proof drafts with photo while preserving explicit No proof and submitted retries', async () => {
+  const legacy = createSetupJourney('proof');
+  delete legacy.draft.proofRequirement;
+  const selected = createSetupJourney('review');
+  selected.draft.proofRequirement = 'none';
+  selected.submittedDraft = {...selected.draft};
+  await AsyncStorage.setItem('hoyst-setup-journeys-v1', JSON.stringify({state: {records: {legacy, selected}}, version: 1}));
+  await useSetupJourneyStore.persist.rehydrate();
+  expect(useSetupJourneyStore.getState().records.legacy.draft.proofRequirement).toBe('photo');
+  expect(useSetupJourneyStore.getState().records.selected.draft.proofRequirement).toBe('none');
+  expect(useSetupJourneyStore.getState().records.selected.submittedDraft?.proofRequirement).toBe('none');
+});

@@ -3,6 +3,7 @@ import {Alert, Clipboard, NativeModules, View} from 'react-native';
 import renderer, {act} from 'react-test-renderer';
 
 import {BrandMark} from '../src/design/components/BrandMark';
+import {Flame} from 'lucide-react-native';
 import {HoystText} from '../src/design/components/HoystText';
 import {TapInStoryTemplateCard} from '../src/features/check-in/components/TapInStoryShareCard';
 import {TapInStoryShareScreen} from '../src/features/check-in/screens/TapInStoryShareScreen';
@@ -14,7 +15,7 @@ const mockReleaseCapture = jest.fn();
 const mockShareOpen = jest.fn();
 const mockShareSingle = jest.fn();
 const mockCopyImage = jest.fn();
-const mockGetProfileSummary = jest.fn();
+const mockLoadStoryContext = jest.fn();
 
 jest.mock('react-native-config', () => ({
   __esModule: true,
@@ -48,8 +49,16 @@ jest.mock('react-native-share', () => ({
   },
 }));
 
-jest.mock('../src/features/profile/services/profile-summary-service', () => ({
-  getProfileSummary: () => mockGetProfileSummary(),
+jest.mock('../src/features/check-in/services/tap-in-story-context', () => ({
+  loadTapInStoryContext: (...args: unknown[]) => mockLoadStoryContext(...args),
+  unavailableTapInStoryContext: (params: {
+    dateKey: string;
+    status?: string;
+  }) => ({tapIn: params}),
+}));
+jest.mock('../src/store/session-store', () => ({
+  useSessionStore: (selector: (state: {user: {uid: string}}) => unknown) =>
+    selector({user: {uid: 'user-1'}}),
 }));
 
 jest.mock('react-native-safe-area-context', () => {
@@ -94,12 +103,9 @@ async function renderStoryShareScreen(
               inviteUrl: 'https://hoyst.app/join/circle-1',
               memberCount: 4,
               members: [],
-              note: 'Finished the set.',
-              periodTapInCount: 8,
-              progressLabel: 'Week · 50%',
+              dateKey: '2026-10-17',
+              status: 'done',
               source: 'home',
-              streakDays: 4,
-              streakLabel: '4d streak',
               ...params,
             },
           } as never
@@ -138,19 +144,27 @@ describe('TapInStoryShareScreen', () => {
     mockShareOpen.mockReset();
     mockShareSingle.mockReset();
     mockCopyImage.mockReset();
-    mockGetProfileSummary.mockReset();
+    mockLoadStoryContext.mockReset();
     mockCaptureRef.mockResolvedValue('file:///tmp/hoyst-story.png');
     mockShareOpen.mockResolvedValue({message: 'shared', success: true});
     mockShareSingle.mockResolvedValue({message: 'shared', success: true});
     mockCopyImage.mockResolvedValue(true);
-    mockGetProfileSummary.mockResolvedValue({
-      activeCircleCount: 2,
-      activePersonalCommitmentCount: 1,
-      hasTappedInToday: true,
-      longestStreakDays: 12,
-      personalStreakDays: 9,
-      totalTapIns: 41,
-    });
+    mockLoadStoryContext.mockImplementation(
+      async (params: {dateKey: string}) => ({
+        tapIn: params,
+        progress: {
+          viewer: {
+            version: 2,
+            revision: 'v1',
+            asOfDateKey: '2026-10-17',
+            cadence: 'weekly',
+            period: {key: '2026-10-12', start: '2026-10-12', end: '2026-10-18'},
+            progress: {covered: 2, required: 4, outcome: 'open'},
+            streak: {count: 3, unit: 'week', availability: 'ready'},
+          },
+        },
+      }),
+    );
     NativeModules.HoystClipboardImage = {
       copyImage: (...args: unknown[]) => mockCopyImage(...args),
     };
@@ -166,6 +180,41 @@ describe('TapInStoryShareScreen', () => {
     delete NativeModules.HoystClipboardImage;
     setTapInStoryShareNativeModuleAvailabilityForTests(undefined);
     jest.restoreAllMocks();
+  });
+
+  it('groups the tap-in amount and status under Your progress and shows both flame icons', async () => {
+    const tree = await renderStoryShareScreen({
+      currentValue: 12,
+      unitLabel: 'pages',
+      status: 'partial',
+    });
+    const sections = tree.root.findAll(
+      node =>
+        node.type === View &&
+        node.props.testID === 'tap-in-story-your-progress',
+    );
+    expect(sections).toHaveLength(3);
+    for (const section of sections) {
+      const result = section.findAll(
+        node =>
+          node.type === View &&
+          node.props.testID === 'tap-in-story-this-tap-in',
+      )[0];
+      const text = result
+        .findAllByType(HoystText)
+        .map(node => node.props.children);
+      expect(text).toEqual(['This Tap In', '12 pages', 'Partial']);
+    }
+    expect(tree.root.findAllByType(Flame)).toHaveLength(6);
+    for (const id of [
+      'tap-in-story-activity',
+      'tap-in-story-result',
+      'tap-in-story-note',
+      'tap-in-story-eyebrow',
+    ]) {
+      expect(tree.root.findAllByProps({testID: id})).toHaveLength(0);
+    }
+    expect(JSON.stringify(tree.toJSON())).not.toContain('Goal:');
   });
 
   it('shows the same two-card carousel when no Tap In photo exists', async () => {
@@ -217,12 +266,6 @@ describe('TapInStoryShareScreen', () => {
       false,
       true,
     ]);
-    expect(wordmarks.map(node => node.props.style)).toEqual([
-      {height: 18, transform: [{translateY: -1}], width: 44},
-      {height: 18, transform: [{translateY: -1}], width: 44},
-      {height: 18, transform: [{translateY: -1}], width: 44},
-    ]);
-
     const titles = tree.root.findAll(
       node =>
         node.type === HoystText && node.props.testID === 'tap-in-story-title',
@@ -235,13 +278,15 @@ describe('TapInStoryShareScreen', () => {
     ]);
     const eyebrows = tree.root.findAll(
       node =>
-        node.type === HoystText && node.props.testID === 'tap-in-story-eyebrow',
+        node.type === HoystText && node.props.testID === 'tap-in-story-header',
     );
     expect(eyebrows).toHaveLength(3);
-    expect(eyebrows.map(node => node.props.children)).toEqual([
-      'ACCOUNTABILITY CIRCLE',
-      'ACCOUNTABILITY CIRCLE',
-      'ACCOUNTABILITY CIRCLE',
+    expect(
+      eyebrows.map(node => node.props.children.replace(/\s+/g, ' ')),
+    ).toEqual([
+      'OCT 17, 2026 · I TAPPED IN ON MY ACCOUNTABILITY CIRCLE:',
+      'OCT 17, 2026 · I TAPPED IN ON MY ACCOUNTABILITY CIRCLE:',
+      'OCT 17, 2026 · I TAPPED IN ON MY ACCOUNTABILITY CIRCLE:',
     ]);
     expect(
       tree.root.findAll(
@@ -250,24 +295,115 @@ describe('TapInStoryShareScreen', () => {
     ).toHaveLength(0);
   });
 
-  it('renders refreshed personal stats with the circle member count', async () => {
-    const tree = await renderStoryShareScreen({
-      memberCount: 4,
-      periodTapInCount: 1,
-      streakDays: 0,
-    });
-
+  it('uses current commitment stats without lifetime or overall daily stats', async () => {
+    const tree = await renderStoryShareScreen({memberCount: 4});
     const story = tree.root.findAllByType(TapInStoryTemplateCard)[0].props
       .story;
-
-    expect(mockGetProfileSummary).toHaveBeenCalledTimes(1);
-    expect(story).toEqual(
-      expect.objectContaining({
-        memberCount: 4,
-        streakDays: 9,
-        totalTapIns: 41,
-      }),
+    expect(mockLoadStoryContext).toHaveBeenCalledTimes(1);
+    expect(story.personalProgress).toEqual(
+      expect.objectContaining({value: '2 of 4', streak: '3 weeks'}),
     );
+    expect(story).not.toHaveProperty('totalTapIns');
+    expect(story.dateLabel).toBe('Oct 17, 2026');
+    expect(story.result.statusLabel).toBe('Goal met');
+  });
+
+  it('waits for one resolved snapshot and keeps it stable through rerenders', async () => {
+    let finish: (context: unknown) => void = () => {};
+    mockLoadStoryContext.mockImplementation(
+      () =>
+        new Promise(resolve => {
+          finish = resolve;
+        }),
+    );
+    const tree = await renderStoryShareScreen();
+    expect(
+      tree.root.findByProps({accessibilityLabel: 'More'}).props.disabled,
+    ).toBe(true);
+    await act(async () => {
+      finish({tapIn: {dateKey: '2026-10-17', status: 'partial'}});
+    });
+    const story = tree.root.findAllByType(TapInStoryTemplateCard)[0].props
+      .story;
+    expect(
+      tree.root.findByProps({accessibilityLabel: 'More'}).props.disabled,
+    ).toBe(false);
+    await act(async () => {
+      tree.root
+        .findByProps({accessibilityLabel: 'Show story option 2'})
+        .props.onPress();
+    });
+    expect(mockLoadStoryContext).toHaveBeenCalledTimes(1);
+    expect(tree.root.findAllByType(TapInStoryTemplateCard)[0].props.story).toBe(
+      story,
+    );
+    expect(story.result.statusLabel).toBe('Partial');
+  });
+
+  it('waits for photo and member images in the capture card', async () => {
+    const tree = await renderStoryShareScreen({
+      photoUri: 'file:///proof.jpg',
+      members: [
+        {
+          id: 'a',
+          name: 'Avery',
+          initials: 'AV',
+          state: 'done',
+          avatarUrl: 'https://example.com/avatar.png',
+        },
+      ],
+    });
+    const capture = () => tree.root.findAllByType(TapInStoryTemplateCard)[0];
+    const button = () => tree.root.findByProps({accessibilityLabel: 'More'});
+    expect(button().props.disabled).toBe(true);
+    await act(async () => {
+      capture().props.onImageSettled('file:///proof.jpg');
+    });
+    expect(button().props.disabled).toBe(true);
+    await act(async () => {
+      capture().props.onImageSettled('https://example.com/avatar.png');
+    });
+    expect(button().props.disabled).toBe(false);
+  });
+
+  it('resolves a failed load without fabricating progress', async () => {
+    mockLoadStoryContext.mockRejectedValue(new Error('offline'));
+    const tree = await renderStoryShareScreen();
+    const story = tree.root.findAllByType(TapInStoryTemplateCard)[0].props
+      .story;
+    expect(story.personalProgress.value).toBe('Progress unavailable');
+    expect(
+      tree.root.findByProps({accessibilityLabel: 'More'}).props.disabled,
+    ).toBe(false);
+  });
+
+  it('omits group sections and invitations for a personal commitment', async () => {
+    const tree = await renderStoryShareScreen({circleMode: 'personal'});
+    const story = tree.root.findAllByType(TapInStoryTemplateCard)[0].props
+      .story;
+    expect(story.groupProgress).toBeUndefined();
+    expect(
+      tree.root.findAllByProps({testID: 'tap-in-story-member-cluster'}),
+    ).toHaveLength(0);
+    expect(story.ctaLabel).toBe('Tapped in on Hoyst');
+  });
+
+  it('ignores a result that finishes after the screen unmounts', async () => {
+    let finish: (context: unknown) => void = () => {};
+    mockLoadStoryContext.mockImplementation(
+      () =>
+        new Promise(resolve => {
+          finish = resolve;
+        }),
+    );
+    const tree = await renderStoryShareScreen();
+    await act(async () => {
+      tree.unmount();
+    });
+    await act(async () => {
+      finish({tapIn: {dateKey: '2026-10-17'}});
+    });
+    expect(mockCaptureRef).not.toHaveBeenCalled();
   });
 
   it('uses routed Circle context without starting another live subscription', async () => {

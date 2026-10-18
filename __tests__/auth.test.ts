@@ -87,12 +87,12 @@ describe('session pending actions', () => {
     });
   });
 
-  it('stores protected actions while moving guests to auth', () => {
+  it('stores protected actions without putting guest screens into loading', () => {
     useSessionStore
       .getState()
       .beginAuthFlow({circleId: 'circle-1', type: 'joinCircle'});
 
-    expect(useSessionStore.getState().status).toBe('authenticating');
+    expect(useSessionStore.getState().status).toBe('guest');
     expect(useSessionStore.getState().pendingAction).toEqual({
       circleId: 'circle-1',
       type: 'joinCircle',
@@ -104,8 +104,42 @@ describe('session pending actions', () => {
 
     useSessionStore.getState().beginAuthFlow();
 
-    expect(useSessionStore.getState().status).toBe('authenticating');
+    expect(useSessionStore.getState().status).toBe('guest');
     expect(useSessionStore.getState().pendingAction).toBeUndefined();
+  });
+
+  it.each([
+    'authenticating',
+    'authenticatedIncompleteProfile',
+    'authenticatedReady',
+  ] as const)('preserves an existing %s session when opening auth', status => {
+    const user = {uid: 'user-1', providerIds: ['apple.com']};
+    useSessionStore.setState({status, user});
+
+    useSessionStore.getState().beginAuthFlow();
+
+    expect(useSessionStore.getState()).toMatchObject({status, user});
+  });
+
+  it('waits for the auth provider before entering the profile-loading state', () => {
+    useSessionStore.getState().beginAuthFlow();
+    expect(useSessionStore.getState()).toMatchObject({
+      status: 'guest',
+      user: undefined,
+    });
+
+    const user = {uid: 'user-1', providerIds: ['apple.com']};
+    useSessionStore.getState().setAuthenticating(user);
+    expect(useSessionStore.getState()).toMatchObject({
+      status: 'authenticating',
+      user,
+    });
+
+    useSessionStore.getState().setAuthenticatedReady(user);
+    expect(useSessionStore.getState()).toMatchObject({
+      status: 'authenticatedReady',
+      user,
+    });
   });
 
   it('consumes pending actions once after profile completion', () => {

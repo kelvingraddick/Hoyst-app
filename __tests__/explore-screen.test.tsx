@@ -16,6 +16,8 @@ import {
   type ExplorePage,
 } from '../src/features/explore/services/explore-service';
 
+import {circleDateKey, circlePeriodForDate} from '../src/shared/circle-progress';
+
 let mockFocused = true;
 let mockAppearance = 'light';
 jest.mock('@react-navigation/native', () => ({
@@ -54,6 +56,15 @@ const result: ExplorePage = {
       memberCount: 4,
       maxSize: 8,
       groupStreakDays: 3,
+      commitmentCadence: 'daily',
+      timezone: 'UTC',
+      groupStreak: {
+        version: 2, revision: '[2,"daily",1,"UTC"]',
+        asOfDateKey: circleDateKey('UTC'), cadence: 'daily',
+        period: circlePeriodForDate(circleDateKey('UTC'), 'daily'),
+        streak: {count: 3, unit: 'day', availability: 'ready'},
+        progress: {covered: 4, required: 4, outcome: 'secured'},
+      },
       joinMode: 'open',
     },
   ],
@@ -114,7 +125,7 @@ it('renders all public results with real facts and details navigation', async ()
       .accessibilityLabel,
   ).toBe('Find circles moving at your pace.');
   expect(output()).toContain('Builders');
-  expect(output()).toContain('3-day group streak');
+  expect(output()).toContain('3 days group streak');
   expect(output()).not.toContain('2 min ago');
   expect(output()).not.toContain('FOR YOU');
   act(() => screen.root.findByType(DSButton).props.onPress());

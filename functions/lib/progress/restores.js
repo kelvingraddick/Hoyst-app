@@ -2,6 +2,8 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.restoreStreak = exports.getRestoreOptions = void 0;
 exports.reconcileRestoreEffects = reconcileRestoreEffects;
+const progress_1 = require("../circles/progress");
+const circle_progress_1 = require("../shared/circle-progress");
 const firestore_1 = require("firebase-admin/firestore");
 const https_1 = require("firebase-functions/v2/https");
 const zod_1 = require("zod");
@@ -36,29 +38,35 @@ async function options(transaction, uid, profile) {
     // its original period boundary proves that period's slot count without consulting today's schedule.
     for (const slot of slots) {
         if (slot.opportunitiesPerPeriod ||
-            !['weekly', 'monthly'].includes(slot.cadence || ''))
+            !['weekly', 'monthly'].includes(slot.cadence || '')) {
             continue;
+        }
         const periodSlots = slots.filter(other => other.circleId === slot.circleId && other.periodKey === slot.periodKey);
         const last = periodSlots.reduce((left, right) => left.slotIndex > right.slotIndex ? left : right);
         const boundary = new Date(slot.cadence === 'monthly' ? slot.periodKey + '-01' : slot.periodKey);
-        if (!Number.isFinite(boundary.getTime()))
+        if (!Number.isFinite(boundary.getTime())) {
             continue;
-        if (slot.cadence === 'monthly')
+        }
+        if (slot.cadence === 'monthly') {
             boundary.setUTCMonth(boundary.getUTCMonth() + 1);
-        else
+        }
+        else {
             boundary.setUTCDate(boundary.getUTCDate() + 7);
+        }
         boundary.setUTCDate(boundary.getUTCDate() - 1);
-        if (last.expiresDateKey === boundary.toISOString().slice(0, 10))
+        if (last.expiresDateKey === boundary.toISOString().slice(0, 10)) {
             slot.opportunitiesPerPeriod = last.slotIndex + 1;
+        }
     }
     const circleIds = Array.from(new Set(slots.map(slot => slot.circleId)));
     const result = [];
     for (const circleId of circleIds) {
         const ref = firebase_1.db.collection('circles').doc(circleId);
-        const [circle, member, history] = await Promise.all([
+        const [circle, member, history, lifecycle] = await Promise.all([
             transaction.get(ref),
             transaction.get(ref.collection('members').doc(uid)),
             transaction.get(ref.collection('membershipHistory').doc(uid).collection('periods')),
+            transaction.get(ref.collection('lifecycleHistory').orderBy('at')),
         ]);
         if (!circle.exists ||
             (0, circle_lifecycle_1.getCircleLifecycleStatus)(circle.data()) !== 'active' ||
@@ -72,7 +80,10 @@ async function options(transaction, uid, profile) {
         }
         const periods = history.empty
             ? [member.data()]
-            : history.docs.map(doc => doc.data());
+            : history.docs
+                .map(doc => doc.data())
+                .filter(period => period.joinedAt?.toMillis?.() ===
+                member.data()?.joinedAt?.toMillis?.());
         if (!periods.some(period => period.joinedAt &&
             (0, eligibility_1.isMemberExpectedForSlot)({
                 member: { ...period, status: 'active' },
@@ -81,9 +92,66 @@ async function options(transaction, uid, profile) {
             }))) {
             continue;
         }
-        // A stored canonical gap is required. Missing history is never invented from today's schedule.
+        // A quota restore repairs exactly one missing eligible day, never a whole deficient period.
+        if (candidate.slot.cadence === 'weekly' ||
+            candidate.slot.cadence === 'monthly') {
+            if ((lifecycle.empty && circle.data()?.lastArchivedAt) ||
+                lifecycle.docs.some(doc => doc.data().historyKnownBefore === false)) {
+                continue;
+            }
+            const config = (0, circle_progress_1.circleProgressConfiguration)(circle.data());
+            const shape = (0, circle_progress_1.circlePeriodForDate)(candidate.slot.expiresDateKey, config.cadence);
+            if (shape.key !== candidate.slot.periodKey) {
+                continue;
+            }
+            const eligibleDates = (0, circle_progress_1.circleDates)(shape.start, shape.end).filter(day => {
+                let active = true;
+                for (const event of lifecycle.docs) {
+                    const data = event.data();
+                    const at = data.at?.toMillis?.();
+                    if (!at) {
+                        continue;
+                    }
+                    const boundary = (0, model_1.dateKey)(at, timezone);
+                    if (day >= boundary) {
+                        active = data.status === 'active' && day > boundary;
+                    }
+                }
+                return (active &&
+                    periods.some(period => {
+                        const joined = period.joinedAt?.toDate?.();
+                        if (!joined) {
+                            return false;
+                        }
+                        const joinedKey = (0, model_1.dateKey)(joined.getTime(), timezone);
+                        const first = period.opportunityEligibility === 'include_current'
+                            ? joinedKey
+                            : (0, circle_progress_1.shiftCircleDate)(joinedKey, 1);
+                        const left = period.leftAt?.toDate?.();
+                        return (day >= first && (!left || day < (0, model_1.dateKey)(left.getTime(), timezone)));
+                    }));
+            });
+            const coveredDates = new Set(checks.docs
+                .filter(check => check.ref.path.startsWith(`circles/${circleId}/days/`) &&
+                (0, commitments_1.isCoveredCheckInData)(check.data()))
+                .map(check => check.ref.parent.parent.id));
+            const target = Math.min(config.target, eligibleDates.length);
+            const count = eligibleDates.filter(day => coveredDates.has(day)).length;
+            if (target - count !== 1) {
+                continue;
+            }
+            const repairDate = eligibleDates
+                .slice()
+                .reverse()
+                .find(day => !coveredDates.has(day));
+            if (!repairDate) {
+                continue;
+            }
+            candidate.slot.restoreDateKey = repairDate;
+        }
+        const effectiveDate = candidate.slot.restoreDateKey ?? candidate.slot.expiresDateKey;
         const targetCheck = checks.docs.find(check => check.ref.path ===
-            `circles/${circleId}/days/${candidate.slot.expiresDateKey}/checkIns/${uid}`);
+            `circles/${circleId}/days/${effectiveDate}/checkIns/${uid}`);
         if (targetCheck && (0, commitments_1.isCoveredCheckInData)(targetCheck.data())) {
             continue;
         }
@@ -94,7 +162,7 @@ async function options(transaction, uid, profile) {
             (check.data().createdAt?.toMillis?.()
                 ? (0, model_1.dateKey)(check.data().createdAt.toMillis(), profile.timezone || 'UTC')
                 : check.ref.parent.parent.id));
-        const personalDateKey = (0, model_1.dateKey)((0, model_1.localNoon)(candidate.slot.expiresDateKey, candidate.slot.timezone), profile.timezone || 'UTC');
+        const personalDateKey = (0, model_1.dateKey)((0, model_1.localNoon)(effectiveDate, candidate.slot.timezone), profile.timezone || 'UTC');
         const repairedDates = [...personalDates, personalDateKey];
         result.push({
             ...candidate,
@@ -150,12 +218,17 @@ exports.restoreStreak = (0, https_1.onCall)(async (request) => {
             throw new https_1.HttpsError('failed-precondition', 'This gap can no longer reconnect your streak. Refresh your restore options.');
         }
         const { slot } = choice;
+        const effectiveDate = slot.restoreDateKey ?? slot.expiresDateKey;
         const circleRef = firebase_1.db.collection('circles').doc(slot.circleId);
         const periodRef = circleRef.collection('opportunities').doc(slot.periodKey);
-        const slotRef = periodRef.collection('slots').doc(String(slot.slotIndex));
+        const slotRef = periodRef
+            .collection('slots')
+            .doc(slot.policyVersion === 2
+            ? `v2_${slot.slotIndex}`
+            : String(slot.slotIndex));
         const checkRef = circleRef
             .collection('days')
-            .doc(slot.expiresDateKey)
+            .doc(effectiveDate)
             .collection('checkIns')
             .doc(uid);
         const [period, aggregate, check] = await Promise.all([
@@ -177,7 +250,7 @@ exports.restoreStreak = (0, https_1.onCall)(async (request) => {
             opportunityId: slot.id,
             requestId: input.requestId,
             restoredAt: firestore_1.Timestamp.now(),
-            originalDateKey: slot.expiresDateKey,
+            originalDateKey: effectiveDate,
             originalPeriodKey: slot.periodKey,
             originalSlotIndex: slot.slotIndex,
             personalEffectiveDateKey: choice.personalDateKey,
@@ -201,7 +274,7 @@ exports.restoreStreak = (0, https_1.onCall)(async (request) => {
             status: 'skipped',
             protectionKind: 'restore',
             restoration,
-            completionDateKey: slot.expiresDateKey,
+            completionDateKey: effectiveDate,
             resolvedAt: firestore_1.Timestamp.now(),
             updatedAt: firestore_1.FieldValue.serverTimestamp(),
         }, { merge: true });
@@ -212,11 +285,11 @@ exports.restoreStreak = (0, https_1.onCall)(async (request) => {
             coverageStatus: 'skipped',
             protectionKind: 'restore',
             restoration,
-            effectiveDateKey: slot.expiresDateKey,
+            effectiveDateKey: effectiveDate,
             displayName: profile.displayName,
             handle: profile.handle,
             avatarUrl: profile.avatarUrl || null,
-            createdAt: firestore_1.Timestamp.fromDate(new Date((0, model_1.localNoon)(slot.expiresDateKey, slot.timezone))),
+            createdAt: firestore_1.Timestamp.fromDate(new Date((0, model_1.localNoon)(effectiveDate, slot.timezone))),
             updatedAt: firestore_1.FieldValue.serverTimestamp(),
         }, { merge: true });
         transaction.set(slotRef, {
@@ -236,9 +309,9 @@ exports.restoreStreak = (0, https_1.onCall)(async (request) => {
             progressPercent: expected ? Math.round((100 * count) / expected) : 0,
             updatedAt: firestore_1.FieldValue.serverTimestamp(),
         }, { merge: true });
-        transaction.set(circleRef.collection('days').doc(slot.expiresDateKey), {
+        transaction.set(circleRef.collection('days').doc(effectiveDate), {
             checkInCount: firestore_1.FieldValue.increment(1),
-            dateKey: slot.expiresDateKey,
+            dateKey: effectiveDate,
             updatedAt: firestore_1.FieldValue.serverTimestamp(),
         }, { merge: true });
         economy.records.push({
@@ -249,7 +322,7 @@ exports.restoreStreak = (0, https_1.onCall)(async (request) => {
                 funding,
                 opportunityId: slot.id,
                 circleId: slot.circleId,
-                dateKey: slot.expiresDateKey,
+                dateKey: effectiveDate,
                 requestId: input.requestId,
                 restores: -1,
                 skips: 0,
@@ -261,7 +334,7 @@ exports.restoreStreak = (0, https_1.onCall)(async (request) => {
             restored: true,
             duplicate: false,
             circleId: slot.circleId,
-            dateKey: slot.expiresDateKey,
+            dateKey: effectiveDate,
             summary: (0, ledger_1.summary)(economy),
         };
     });
@@ -284,11 +357,13 @@ async function reconcileRestoreEffects(uid, circleId, restoredDate) {
     ]);
     if (!user.exists ||
         !circle.exists ||
-        check.data()?.protectionKind !== 'restore')
+        check.data()?.protectionKind !== 'restore') {
         return;
+    }
     await Promise.all([
         (0, momentum_1.recalculateMomentumSummaryForUser)(uid),
         (0, group_streak_1.reconcileCircleGroupStreak)({ circleId, dateKey: restoredDate }),
+        (0, progress_1.reconcileCircleProgress)({ circleId, uid }),
     ]);
     const actor = {
         uid,
@@ -301,8 +376,9 @@ async function reconcileRestoreEffects(uid, circleId, restoredDate) {
     if ((0, circle_mode_1.getCircleMode)(circle.data()) === 'group') {
         const itemRef = circle.ref.collection('feedItems').doc(id);
         await firebase_1.db.runTransaction(async (transaction) => {
-            if ((await transaction.get(itemRef)).exists)
+            if ((await transaction.get(itemRef)).exists) {
                 return;
+            }
             transaction.create(itemRef, {
                 actor,
                 kind: 'activity',

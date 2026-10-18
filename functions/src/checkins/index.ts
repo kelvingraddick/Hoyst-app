@@ -1,3 +1,7 @@
+import {getTapInProofRequirement} from '../shared/tap-in-proof';
+import {requireCompletedTapInProof, validateProofPhoto} from './proof';
+import {reconcileCircleProgress} from '../circles/progress';
+import {shiftCircleDate} from '../shared/circle-progress';
 import {randomUUID} from 'node:crypto';
 import {
   prepareSuccessfulOpportunity,
@@ -33,6 +37,7 @@ import {
   shouldRetainCorrectedMetricEffect,
 } from './reconciliation';
 import {
+  materializeCurrentCircleOpportunities,
   recordTapInOpportunity,
   recalculateMomentumSummaryForUser,
   removeTapInOpportunity,
@@ -74,7 +79,7 @@ const submitTapInSchema = z.object({
   progressVersion: z.literal(1).optional(),
   currentValue: z.number().int().min(0).max(100000).optional(),
   note: z.string().trim().max(1000).optional(),
-  photoUrl: z.string().trim().max(2048).optional(),
+  photoUrl: z.string().trim().url().max(2048).optional(),
   status: z.enum(['done', 'skip']).default('done'),
 });
 
@@ -861,6 +866,10 @@ async function submitTapInHandler(request: CallableRequest) {
   const memberRef = circleRef.collection('members').doc(uid);
   const now = FieldValue.serverTimestamp();
   const progressRequestId = randomUUID();
+  const membership = await memberRef.get();
+  if (membership.data()?.status !== 'active') throw new HttpsError('permission-denied', 'Join this circle first.');
+  await materializeCurrentCircleOpportunities(input.circleId);
+  const priorCircleProgress = await reconcileCircleProgress({circleId: input.circleId, uid});
 
   const result = await db.runTransaction(async transaction => {
     const [circleSnapshot, memberSnapshot, discoveryConfig] = await Promise.all(
@@ -882,6 +891,10 @@ async function submitTapInHandler(request: CallableRequest) {
     const circle = circleSnapshot.data();
     ensureActiveCircle(circle, 'tapping in');
     const dateKey = getDateKey(circle?.timezone ?? profile.timezone ?? 'UTC');
+    const joined = memberSnapshot.data()?.joinedAt?.toDate?.();
+    if (joined && memberSnapshot.data()?.opportunityEligibility !== 'include_current' && dateKey <= getDateKeyForDate(circle?.timezone ?? 'UTC', joined)) {
+      throw new HttpsError('failed-precondition', `Your first eligible Tap In is ${shiftCircleDate(getDateKeyForDate(circle?.timezone ?? 'UTC', joined), 1)}.`);
+    }
     const checkInRef = circleRef
       .collection('days')
       .doc(dateKey)
@@ -971,6 +984,17 @@ async function submitTapInHandler(request: CallableRequest) {
       status: input.status,
     });
     const nextStatus = getCheckInStatusForCoverage(coverageStatus);
+    const proofRequirement = getTapInProofRequirement(
+      circle ?? {}, existingCheckIn,
+    );
+    const photoUrl = input.status === 'skip'
+      ? null : input.photoUrl ?? existingCheckIn?.photoUrl ?? null;
+    requireCompletedTapInProof({
+      requirement: proofRequirement, status: nextStatus, photoUrl,
+    });
+    if (proofRequirement === 'photo' && nextStatus === 'done' && photoUrl) {
+      await validateProofPhoto({photoUrl, circleId: input.circleId, dateKey, uid});
+    }
     const nextCovered =
       coverageStatus === 'covered' || coverageStatus === 'skipped';
     const coverageRevision = getNextCoverageRevision({
@@ -1031,6 +1055,7 @@ async function submitTapInHandler(request: CallableRequest) {
           }
           if (
             nextStatus === 'done' &&
+            prior?.creditLocked !== true &&
             prior?.status !== 'completed' &&
             (!prior?.firstSuccessfulAt ||
               prior.firstSuccessfulAt.toMillis() >=
@@ -1075,8 +1100,9 @@ async function submitTapInHandler(request: CallableRequest) {
       circleId: input.circleId,
       displayName: profile.displayName,
       handle: profile.handle,
-      note: input.note ?? null,
-      photoUrl: input.photoUrl ?? null,
+      note: input.note ?? existingCheckIn?.note ?? null,
+      photoUrl,
+      proofRequirement,
       status: nextStatus,
       uid,
       updatedAt: now,
@@ -1180,6 +1206,8 @@ async function submitTapInHandler(request: CallableRequest) {
     );
 
     return {
+      proofRequirement,
+      photoUrl,
       checkInId: uid,
       coverageStatus,
       currentValue,
@@ -1226,8 +1254,17 @@ async function submitTapInHandler(request: CallableRequest) {
     }
   }
 
+  const circleProgress = await reconcileCircleProgress({circleId: input.circleId, uid}).catch(error => {console.error('circle_progress_pending', error); return undefined;});
+  if (circleProgress) {
+    const delta = (after?: typeof circleProgress.viewer, before?: typeof circleProgress.viewer) => after?.streak.count != null && before?.streak.count != null && after.revision === before.revision ? after.streak.count - before.streak.count : undefined;
+    circleProgress.viewerStreakDelta = delta(circleProgress.viewer, priorCircleProgress?.viewer);
+    circleProgress.groupStreakDelta = delta(circleProgress.group, priorCircleProgress?.group);
+  }
   return {
+    ...(circleProgress ? {circleProgress: JSON.parse(JSON.stringify(circleProgress))} : {}),
     progress: result.progress,
+    proofRequirement: result.proofRequirement,
+    photoUrl: result.photoUrl,
     checkInId: result.checkInId,
     coverageStatus: result.coverageStatus,
     currentValue: result.currentValue,
@@ -1273,6 +1310,18 @@ async function updateTapInDetailsHandler(request: CallableRequest) {
       note: input.note,
       photoUrl: input.photoUrl,
     });
+    const proofRequirement = getTapInProofRequirement({}, checkInSnapshot.data());
+    requireCompletedTapInProof({
+      requirement: proofRequirement,
+      status: checkInSnapshot.data()?.status ?? '',
+      photoUrl: patch.photoUrl,
+    });
+    if (
+      proofRequirement === 'photo' &&
+      checkInSnapshot.data()?.status === 'done' && patch.photoUrl
+    ) {
+      await validateProofPhoto({photoUrl: patch.photoUrl, circleId: input.circleId, dateKey, uid});
+    }
     const shouldDeletePhoto =
       Boolean(checkInSnapshot.data()?.photoUrl) && patch.photoUrl === null;
 

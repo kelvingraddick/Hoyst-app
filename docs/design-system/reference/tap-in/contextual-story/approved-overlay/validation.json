@@ -1,0 +1,242 @@
+[
+  {
+    "platform": "ios",
+    "mode": "light",
+    "size": [
+      1080,
+      1920
+    ],
+    "alpha": [
+      255,
+      255
+    ]
+  },
+  {
+    "platform": "ios",
+    "mode": "transparent",
+    "size": [
+      1080,
+      1920
+    ],
+    "alpha": [
+      0,
+      255
+    ]
+  },
+  {
+    "platform": "ios",
+    "mode": "long-transparent",
+    "size": [
+      1080,
+      1920
+    ],
+    "alpha": [
+      0,
+      255
+    ]
+  },
+  {
+    "platform": "ios",
+    "mode": "long-large-photo",
+    "size": [
+      1080,
+      1920
+    ],
+    "alpha": [
+      255,
+      255
+    ]
+  },
+  {
+    "platform": "ios",
+    "mode": "personal-transparent",
+    "size": [
+      1080,
+      1920
+    ],
+    "alpha": [
+      0,
+      255
+    ]
+  },
+  {
+    "platform": "ios",
+    "mode": "unknown-transparent",
+    "size": [
+      1080,
+      1920
+    ],
+    "alpha": [
+      0,
+      255
+    ]
+  },
+  {
+    "platform": "ios",
+    "mode": "daily",
+    "size": [
+      1080,
+      1920
+    ],
+    "alpha": [
+      255,
+      255
+    ]
+  },
+  {
+    "platform": "ios",
+    "mode": "monthly",
+    "size": [
+      1080,
+      1920
+    ],
+    "alpha": [
+      255,
+      255
+    ]
+  },
+  {
+    "platform": "ios",
+    "mode": "confirmation",
+    "size": [
+      1080,
+      1920
+    ],
+    "alpha": [
+      255,
+      255
+    ]
+  },
+  {
+    "platform": "ios",
+    "mode": "failed",
+    "size": [
+      1080,
+      1920
+    ],
+    "alpha": [
+      255,
+      255
+    ]
+  },
+  {
+    "platform": "android",
+    "mode": "light",
+    "size": [
+      1080,
+      1920
+    ],
+    "alpha": [
+      255,
+      255
+    ]
+  },
+  {
+    "platform": "android",
+    "mode": "transparent",
+    "size": [
+      1080,
+      1920
+    ],
+    "alpha": [
+      0,
+      255
+    ]
+  },
+  {
+    "platform": "android",
+    "mode": "long-transparent",
+    "size": [
+      1080,
+      1920
+    ],
+    "alpha": [
+      0,
+      255
+    ]
+  },
+  {
+    "platform": "android",
+    "mode": "long-large-photo",
+    "size": [
+      1080,
+      1920
+    ],
+    "alpha": [
+      255,
+      255
+    ]
+  },
+  {
+    "platform": "android",
+    "mode": "personal-transparent",
+    "size": [
+      1080,
+      1920
+    ],
+    "alpha": [
+      0,
+      255
+    ]
+  },
+  {
+    "platform": "android",
+    "mode": "unknown-transparent",
+    "size": [
+      1080,
+      1920
+    ],
+    "alpha": [
+      0,
+      255
+    ]
+  },
+  {
+    "platform": "android",
+    "mode": "daily",
+    "size": [
+      1080,
+      1920
+    ],
+    "alpha": [
+      255,
+      255
+    ]
+  },
+  {
+    "platform": "android",
+    "mode": "monthly",
+    "size": [
+      1080,
+      1920
+    ],
+    "alpha": [
+      255,
+      255
+    ]
+  },
+  {
+    "platform": "android",
+    "mode": "confirmation",
+    "size": [
+      1080,
+      1920
+    ],
+    "alpha": [
+      255,
+      255
+    ]
+  },
+  {
+    "platform": "android",
+    "mode": "failed",
+    "size": [
+      1080,
+      1920
+    ],
+    "alpha": [
+      255,
+      255
+    ]
+  }
+]

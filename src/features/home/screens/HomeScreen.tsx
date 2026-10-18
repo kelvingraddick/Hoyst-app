@@ -119,7 +119,7 @@ import {
 
 import {HomePreviewContext} from '../components/HomePreviewContext';
 
-const guestStarterArtwork = require('../../../assets/hoy/get-started-invites-network-hands.png');
+const guestStarterArtwork = require('../../../assets/hoy/get-started-invites-network-hands-blue.png');
 
 type HomeGreetingState = {
   requestKey: string;

@@ -85,6 +85,7 @@ function Fixture({route, navigation}: NativeStackScreenProps<Routes, 'Sheet'>) {
     mode === 'Photo' ? photo : undefined,
   );
   const [note, setNote] = useState('');
+  const [quantityInput, setQuantityInput] = useState<string>();
   const [expanded, setExpanded] = useState(mode === 'Editor');
   const [saved, setSaved] = useState(mode === 'Saved');
   const quantity = ['Build', 'Limit', 'Range', 'Saved', 'Long'].includes(mode);
@@ -184,9 +185,30 @@ function Fixture({route, navigation}: NativeStackScreenProps<Routes, 'Sheet'>) {
                 <ComposerQuantity
                   detail={detail}
                   value={value}
+                  inputText={quantityInput}
+                  onChangeText={text => {
+                    if (
+                      /^\d*$/.test(text) &&
+                      Number.isSafeInteger(Number(text))
+                    ) {
+                      setQuantityInput(text);
+                      if (text !== '') {
+                        setValue(Number(text));
+                      }
+                    }
+                  }}
+                  onEndEditing={() => setQuantityInput(undefined)}
                   saved={saved}
-                  onDecrease={() => setValue(Math.max(0, value - 1))}
-                  onIncrease={() => setValue(value + 1)}
+                  onDecrease={() => {
+                    setQuantityInput(undefined);
+                    setValue(previous => Math.max(0, previous - 1));
+                  }}
+                  onIncrease={() => {
+                    setQuantityInput(undefined);
+                    setValue(previous =>
+                      Math.min(Number.MAX_SAFE_INTEGER, previous + 1),
+                    );
+                  }}
                 />
               ) : (
                 <ComposerPhoto

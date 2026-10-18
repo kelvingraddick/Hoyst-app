@@ -1,3 +1,4 @@
+import {circleDates, circlePeriodForDate} from '../shared/circle-progress';
 import {clampOpportunitiesPerPeriod} from '../shared/commitments';
 import type {CommitmentPace} from '../shared/commitments';
 
@@ -18,11 +19,12 @@ export type MomentumStatus =
 export type CommitmentSchedule = {
   pace: CommitmentPace;
   opportunitiesPerPeriod: number;
-  slotPolicy: 'scheduled_slots';
+  slotPolicy: 'scheduled_slots' | 'period_quota';
   timezone: string;
 };
 
 export type OpportunitySlot = {
+  policyVersion?: 2;
   availableDateKey: string;
   expiresDateKey: string;
   periodKey: string;
@@ -188,9 +190,7 @@ export function normalizeCommitmentSchedule(
 ): CommitmentSchedule {
   const rawPace = commitment?.commitmentCadence;
   const pace: CommitmentPace =
-    rawPace === 'daily' ||
-    rawPace === 'weekly' ||
-    rawPace === 'monthly'
+    rawPace === 'daily' || rawPace === 'weekly' || rawPace === 'monthly'
       ? rawPace
       : typeof commitment?.commitmentFrequency?.tapInsPerWeek === 'number' &&
         commitment.commitmentFrequency.tapInsPerWeek >= 7
@@ -220,7 +220,7 @@ export function normalizeCommitmentSchedule(
   return {
     pace,
     opportunitiesPerPeriod,
-    slotPolicy: 'scheduled_slots',
+    slotPolicy: pace === 'daily' ? 'scheduled_slots' : 'period_quota',
     timezone,
   };
 }
@@ -230,6 +230,27 @@ export function getOpportunitySlots(
   now = new Date(),
 ): OpportunitySlot[] {
   const period = getPeriodShape(schedule, now);
+  if (schedule.slotPolicy === 'period_quota' && schedule.pace !== 'daily') {
+    const shape = circlePeriodForDate(
+      getDateKey(schedule.timezone, now),
+      schedule.pace,
+    );
+    return Array.from(
+      {
+        length: Math.min(
+          schedule.opportunitiesPerPeriod,
+          circleDates(shape.start, shape.end).length,
+        ),
+      },
+      (_, slotIndex) => ({
+        policyVersion: 2 as const,
+        availableDateKey: shape.start,
+        expiresDateKey: shape.end,
+        periodKey: shape.key,
+        slotIndex,
+      }),
+    );
+  }
   const offsets = getSlotOffsets(
     period.dayCount,
     schedule.opportunitiesPerPeriod,

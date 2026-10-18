@@ -267,3 +267,36 @@ TypeScript and targeted ESLint passed. Seven affected suites passed with 154 tes
 The smaller iPhone 17e simulator installed the Debug app but failed to launch it, including after a restart. Its actual-route checks remain unverified. Android docked-keyboard/enlarged-text interactions and the full theme/viewport matrix remain release QA tasks. Constrained standalone captures do not substitute for those checks. Original persisted setup intent and unrelated checkout changes were preserved. No backend or stored-data change was required.
 
 Implementation, focused verification and completed native checks: passed. Full device matrix: incomplete as described above.
+
+
+## October 17: Circle Detail compact progress tiles
+
+**Source visual truth:** /Users/kelvin/.codex/generated_images/01a1465a-a0f3-7d71-bfea-cf93ea315292/exec-00b2010a-4157-4a10-b905-1c32f395cab3.png, plus the user's subsequent instructions to bold Tap In and goal, place info icons beside streak labels, and put those labels above their values.
+
+**Implementation:** docs/circle-progress/evidence/compact-tiles-ios-empty-light.png and compact-tiles-ios-live-light.png. Additional evidence: compact-tiles-ios-empty-dark.png and compact-tiles-ios-narrow-larger-text-dark.png.
+
+**Comparison:** docs/circle-progress/evidence/compact-tiles-comparison-full.png and compact-tiles-comparison-focus.png place the reference on the left and implementation on the right. The source is 931 x 1689 pixels, representing approximately 430 x 780 logical points. Native captures are 912 x 1944 window pixels; the iPhone app area is 804 pixels wide, representing 402 points at 2x. Full comparison removes Simulator chrome and OS status area, then rescales the reference uniformly to 804 pixels wide. The focused comparison aligns the Daily activity and period-tile region at 716 pixels wide. No typography or image is stretched independently.
+
+**State:** light-mode daily Circle, October 17, zero personal/group progress and streaks, historical coverage 0/2, 0/2, 1/2, 1/2, 1/2, 1/2, 0/2. The matching fixture uses the real presentation components without account writes. Live-route verification additionally shows an existing completed personal Tap In, personal 1 day and group 0 days. Different fixture hero descriptions, existing proof copy, and initials in place of account photos are outside this presentation change. The live hero, action, member strip, and data logic are preserved.
+
+**Findings and comparison history:**
+- Initial native review found a P2 footer-wrap issue: the info icon could become an isolated second line in a narrow tile. See compact-tiles-ios-before-streak-label-fix.png. The final user-requested label/info row above the flame/value row resolves this. Both final light and dark captures show readable labels, adjacent info icons, and complete streak values.
+- Fonts: native system rendering; regular 14-point counts with only Tap In/goal emphasized. Streak labels are 12 points and values 16 points. No oversized fractions remain. Counts preserve singular/plural wording and full accessible progress descriptions.
+- Layout: shared uncontained daily timeline, then the cadence heading and two equal tiles, then uncontained members. Tiles use 20-point radius, 12-point padding/gap, subtle dividers, and no shadows. The period follows the full timeline, including its Today label, with a 12-point layout gap.
+- Color/assets: white light-mode tiles and the existing #242428 dark surface token; existing green/slate coverage, pale tracks, purple Today marking, and orange streak values remain. Existing Lucide icons and app artwork are reused; no generated screenshot is shipped as UI.
+- Larger text: at 360-point constrained width with three preferred-text-size increases, the isolated panel shows complete counts, labels, info icons, and 4 weeks/2 weeks values. Existing member-label truncation and the horizontally scrollable daily timeline are retained. The original UICTContentSizeCategoryL text setting and appearance were restored.
+- Interactions: live day details opened with Kelvin's completion and historical cohort count; streak info opened with cadence/protection explanations and orientation-neutral Daily activity wording. Closing each returned to the Circle. No Tap In, membership, or inventory was changed by this validation.
+
+**Verification:** 106 tests across Circle panel, screen, subscription, and Home-data suites pass. App TypeScript passes. Affected ESLint has no errors; existing inline-style/no-shadow warnings remain. Git diff whitespace check passes.
+
+**Limits:** Android visual acceptance and full VoiceOver/TalkBack gesture navigation were not run. Larger-text visual evidence uses the real panel in an isolated native fixture; it does not claim a full-screen large-text scroll acceptance pass.
+
+**Implementation checklist:** complete for this presentation change. No backend deployment, migration, or data-contract changes.
+
+final result: passed
+
+### Circle timeline sizing follow-up
+
+Matched HomeWeekPath locally in CircleGroupWeekPath: 22-point nodes, 1.5-point outlines, 13-point completion checks, the same staggered centers, and 1.4-point connectors with a 5/6 dash pattern and matching light/dark strokes. Member contribution arcs retain green/slate/pale colors and fit within the 22-point markers; today retains its distinct outline. Counts, day details, and large-text scrolling remain. Home was not edited by this follow-up. Native iOS evidence: docs/circle-progress/evidence/home-sized-circle-timeline-ios.png.
+
+Verification: Circle panel and screen suites pass; combined with Home, 102 tests pass and two Home assertions fail (actorless activity icon and PERSONAL label). Both Home failures reproduce when rerunning with the previous Circle geometry. App TypeScript passes; affected lint has zero errors and one existing inline-style warning. Circle native capture was inspected; no new Android, dark-mode, or larger-text capture was performed for this sizing follow-up.

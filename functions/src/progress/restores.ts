@@ -1,3 +1,10 @@
+import {reconcileCircleProgress} from '../circles/progress';
+import {
+  circleDates,
+  circlePeriodForDate,
+  circleProgressConfiguration,
+  shiftCircleDate,
+} from '../shared/circle-progress';
 import {
   FieldValue,
   Timestamp,
@@ -47,8 +54,9 @@ async function options(
     if (
       slot.opportunitiesPerPeriod ||
       !['weekly', 'monthly'].includes(slot.cadence || '')
-    )
+    ) {
       continue;
+    }
     const periodSlots = slots.filter(
       other =>
         other.circleId === slot.circleId && other.periodKey === slot.periodKey,
@@ -59,24 +67,30 @@ async function options(
     const boundary = new Date(
       slot.cadence === 'monthly' ? slot.periodKey + '-01' : slot.periodKey,
     );
-    if (!Number.isFinite(boundary.getTime())) continue;
-    if (slot.cadence === 'monthly')
+    if (!Number.isFinite(boundary.getTime())) {
+      continue;
+    }
+    if (slot.cadence === 'monthly') {
       boundary.setUTCMonth(boundary.getUTCMonth() + 1);
-    else boundary.setUTCDate(boundary.getUTCDate() + 7);
+    } else {
+      boundary.setUTCDate(boundary.getUTCDate() + 7);
+    }
     boundary.setUTCDate(boundary.getUTCDate() - 1);
-    if (last.expiresDateKey === boundary.toISOString().slice(0, 10))
+    if (last.expiresDateKey === boundary.toISOString().slice(0, 10)) {
       slot.opportunitiesPerPeriod = last.slotIndex + 1;
+    }
   }
   const circleIds = Array.from(new Set(slots.map(slot => slot.circleId)));
   const result = [];
   for (const circleId of circleIds) {
     const ref = db.collection('circles').doc(circleId);
-    const [circle, member, history] = await Promise.all([
+    const [circle, member, history, lifecycle] = await Promise.all([
       transaction.get(ref),
       transaction.get(ref.collection('members').doc(uid)),
       transaction.get(
         ref.collection('membershipHistory').doc(uid).collection('periods'),
       ),
+      transaction.get(ref.collection('lifecycleHistory').orderBy('at')),
     ]);
     if (
       !circle.exists ||
@@ -95,7 +109,13 @@ async function options(
     }
     const periods = history.empty
       ? [member.data()!]
-      : history.docs.map(doc => doc.data());
+      : history.docs
+          .map(doc => doc.data())
+          .filter(
+            period =>
+              period.joinedAt?.toMillis?.() ===
+              member.data()?.joinedAt?.toMillis?.(),
+          );
     if (
       !periods.some(
         period =>
@@ -109,11 +129,86 @@ async function options(
     ) {
       continue;
     }
-    // A stored canonical gap is required. Missing history is never invented from today's schedule.
+    // A quota restore repairs exactly one missing eligible day, never a whole deficient period.
+    if (
+      candidate.slot.cadence === 'weekly' ||
+      candidate.slot.cadence === 'monthly'
+    ) {
+      if (
+        (lifecycle.empty && circle.data()?.lastArchivedAt) ||
+        lifecycle.docs.some(doc => doc.data().historyKnownBefore === false)
+      ) {
+        continue;
+      }
+      const config = circleProgressConfiguration(circle.data()!);
+      const shape = circlePeriodForDate(
+        candidate.slot.expiresDateKey,
+        config.cadence,
+      );
+      if (shape.key !== candidate.slot.periodKey) {
+        continue;
+      }
+      const eligibleDates = circleDates(shape.start, shape.end).filter(day => {
+        let active = true;
+        for (const event of lifecycle.docs) {
+          const data = event.data();
+          const at = data.at?.toMillis?.();
+          if (!at) {
+            continue;
+          }
+          const boundary = dateKey(at, timezone);
+          if (day >= boundary) {
+            active = data.status === 'active' && day > boundary;
+          }
+        }
+        return (
+          active &&
+          periods.some(period => {
+            const joined = period.joinedAt?.toDate?.();
+            if (!joined) {
+              return false;
+            }
+            const joinedKey = dateKey(joined.getTime(), timezone);
+            const first =
+              period.opportunityEligibility === 'include_current'
+                ? joinedKey
+                : shiftCircleDate(joinedKey, 1);
+            const left = period.leftAt?.toDate?.();
+            return (
+              day >= first && (!left || day < dateKey(left.getTime(), timezone))
+            );
+          })
+        );
+      });
+      const coveredDates = new Set(
+        checks.docs
+          .filter(
+            check =>
+              check.ref.path.startsWith(`circles/${circleId}/days/`) &&
+              isCoveredCheckInData(check.data()),
+          )
+          .map(check => check.ref.parent.parent!.id),
+      );
+      const target = Math.min(config.target, eligibleDates.length);
+      const count = eligibleDates.filter(day => coveredDates.has(day)).length;
+      if (target - count !== 1) {
+        continue;
+      }
+      const repairDate = eligibleDates
+        .slice()
+        .reverse()
+        .find(day => !coveredDates.has(day));
+      if (!repairDate) {
+        continue;
+      }
+      candidate.slot.restoreDateKey = repairDate;
+    }
+    const effectiveDate =
+      candidate.slot.restoreDateKey ?? candidate.slot.expiresDateKey;
     const targetCheck = checks.docs.find(
       check =>
         check.ref.path ===
-        `circles/${circleId}/days/${candidate.slot.expiresDateKey}/checkIns/${uid}`,
+        `circles/${circleId}/days/${effectiveDate}/checkIns/${uid}`,
     );
     if (targetCheck && isCoveredCheckInData(targetCheck.data())) {
       continue;
@@ -132,7 +227,7 @@ async function options(
             : check.ref.parent.parent!.id),
       );
     const personalDateKey = dateKey(
-      localNoon(candidate.slot.expiresDateKey, candidate.slot.timezone),
+      localNoon(effectiveDate, candidate.slot.timezone),
       profile.timezone || 'UTC',
     );
     const repairedDates = [...personalDates, personalDateKey];
@@ -215,12 +310,19 @@ export const restoreStreak = onCall(async request => {
       );
     }
     const {slot} = choice;
+    const effectiveDate = slot.restoreDateKey ?? slot.expiresDateKey;
     const circleRef = db.collection('circles').doc(slot.circleId);
     const periodRef = circleRef.collection('opportunities').doc(slot.periodKey);
-    const slotRef = periodRef.collection('slots').doc(String(slot.slotIndex));
+    const slotRef = periodRef
+      .collection('slots')
+      .doc(
+        slot.policyVersion === 2
+          ? `v2_${slot.slotIndex}`
+          : String(slot.slotIndex),
+      );
     const checkRef = circleRef
       .collection('days')
-      .doc(slot.expiresDateKey)
+      .doc(effectiveDate)
       .collection('checkIns')
       .doc(uid);
     const [period, aggregate, check] = await Promise.all([
@@ -244,7 +346,7 @@ export const restoreStreak = onCall(async request => {
       opportunityId: slot.id,
       requestId: input.requestId,
       restoredAt: Timestamp.now(),
-      originalDateKey: slot.expiresDateKey,
+      originalDateKey: effectiveDate,
       originalPeriodKey: slot.periodKey,
       originalSlotIndex: slot.slotIndex,
       personalEffectiveDateKey: choice.personalDateKey,
@@ -279,7 +381,7 @@ export const restoreStreak = onCall(async request => {
         status: 'skipped',
         protectionKind: 'restore',
         restoration,
-        completionDateKey: slot.expiresDateKey,
+        completionDateKey: effectiveDate,
         resolvedAt: Timestamp.now(),
         updatedAt: FieldValue.serverTimestamp(),
       },
@@ -294,12 +396,12 @@ export const restoreStreak = onCall(async request => {
         coverageStatus: 'skipped',
         protectionKind: 'restore',
         restoration,
-        effectiveDateKey: slot.expiresDateKey,
+        effectiveDateKey: effectiveDate,
         displayName: profile.displayName,
         handle: profile.handle,
         avatarUrl: profile.avatarUrl || null,
         createdAt: Timestamp.fromDate(
-          new Date(localNoon(slot.expiresDateKey, slot.timezone)),
+          new Date(localNoon(effectiveDate, slot.timezone)),
         ),
         updatedAt: FieldValue.serverTimestamp(),
       },
@@ -331,10 +433,10 @@ export const restoreStreak = onCall(async request => {
       {merge: true},
     );
     transaction.set(
-      circleRef.collection('days').doc(slot.expiresDateKey),
+      circleRef.collection('days').doc(effectiveDate),
       {
         checkInCount: FieldValue.increment(1),
-        dateKey: slot.expiresDateKey,
+        dateKey: effectiveDate,
         updatedAt: FieldValue.serverTimestamp(),
       },
       {merge: true},
@@ -347,7 +449,7 @@ export const restoreStreak = onCall(async request => {
         funding,
         opportunityId: slot.id,
         circleId: slot.circleId,
-        dateKey: slot.expiresDateKey,
+        dateKey: effectiveDate,
         requestId: input.requestId,
         restores: -1,
         skips: 0,
@@ -359,7 +461,7 @@ export const restoreStreak = onCall(async request => {
       restored: true,
       duplicate: false,
       circleId: slot.circleId,
-      dateKey: slot.expiresDateKey,
+      dateKey: effectiveDate,
       summary: summary(economy),
     };
   });
@@ -388,11 +490,13 @@ export async function reconcileRestoreEffects(
     !user.exists ||
     !circle.exists ||
     check.data()?.protectionKind !== 'restore'
-  )
+  ) {
     return;
+  }
   await Promise.all([
     recalculateMomentumSummaryForUser(uid),
     reconcileCircleGroupStreak({circleId, dateKey: restoredDate}),
+    reconcileCircleProgress({circleId, uid}),
   ]);
   const actor = {
     uid,
@@ -408,7 +512,9 @@ export async function reconcileRestoreEffects(
   if (getCircleMode(circle.data()) === 'group') {
     const itemRef = circle.ref.collection('feedItems').doc(id);
     await db.runTransaction(async transaction => {
-      if ((await transaction.get(itemRef)).exists) return;
+      if ((await transaction.get(itemRef)).exists) {
+        return;
+      }
       transaction.create(itemRef, {
         actor,
         kind: 'activity',

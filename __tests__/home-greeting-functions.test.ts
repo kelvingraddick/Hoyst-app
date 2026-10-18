@@ -307,6 +307,7 @@ describe('Home greeting function helpers', () => {
         headline: 'Aaron, fresh status. Handle it cleanly.',
         source: 'gemini',
       },
+      'user-1',
     );
   });
 

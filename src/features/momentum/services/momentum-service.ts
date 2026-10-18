@@ -1,4 +1,5 @@
 import type {FirebaseFirestoreTypes} from '@react-native-firebase/firestore';
+import {circleDateKey, circleDates, circlePeriodForDate, shiftCircleDate} from '../../../shared/circle-progress';
 
 import {firebaseFirestore} from '../../../lib/firebase/firestore';
 import type {HomeData} from '../../home/services/home-data-service';
@@ -34,43 +35,6 @@ function clampNumber(value: unknown, fallback: number, max: number) {
   return typeof value === 'number' && Number.isFinite(value)
     ? Math.min(max, Math.max(1, Math.round(value)))
     : fallback;
-}
-
-function parseDateKey(dateKey: string) {
-  const [year = '1970', month = '01', day = '01'] = dateKey.split('-');
-
-  return new Date(Date.UTC(Number(year), Number(month) - 1, Number(day)));
-}
-
-function getDaysInMonth(dateKey: string) {
-  const date = parseDateKey(dateKey);
-
-  return new Date(
-    Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 0),
-  ).getUTCDate();
-}
-
-function getElapsedPeriodOffset(pace: CommitmentPace, dateKey: string) {
-  const date = parseDateKey(dateKey);
-
-  if (pace === 'monthly') {
-    return date.getUTCDate() - 1;
-  }
-
-  const utcWeekday = date.getUTCDay();
-
-  return (utcWeekday + 6) % 7;
-}
-
-function getSlotOffsets(dayCount: number, opportunitiesPerPeriod: number) {
-  const count = Math.min(
-    dayCount,
-    Math.max(1, Math.round(opportunitiesPerPeriod)),
-  );
-
-  return Array.from({length: count}, (_, index) =>
-    Math.min(dayCount - 1, Math.floor((index * dayCount) / count)),
-  );
 }
 
 function getCirclePace(circle: CircleManagementCard): CommitmentPace {
@@ -117,13 +81,12 @@ function getAvailableScheduledOpportunityCount(
     return 1;
   }
 
-  const dayCount = pace === 'monthly' ? getDaysInMonth(todayDateKey) : 7;
-  const elapsedOffset = getElapsedPeriodOffset(pace, todayDateKey);
-
-  return getSlotOffsets(
-    dayCount,
-    getCircleOpportunityCount(circle, pace),
-  ).filter(offset => offset <= elapsedOffset).length;
+  const period = circlePeriodForDate(todayDateKey, pace);
+  const member = circle.members.find(item => item.id === circle.viewerUid);
+  const joined = member?.joinedAt ? circleDateKey(circle.timezone ?? 'UTC', new Date(member.joinedAt)) : period.start;
+  const first = member?.opportunityEligibility === 'next_opening' ? shiftCircleDate(joined, 1) : joined;
+  const eligibleStart = first > period.start ? first : period.start;
+  return eligibleStart > todayDateKey ? 0 : Math.min(getCircleOpportunityCount(circle, pace), circleDates(eligibleStart, period.end).length);
 }
 
 function getCoveredOpportunityCount(circle: CircleManagementCard) {

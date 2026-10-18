@@ -53,7 +53,8 @@ import {brandColors} from '../../../design/tokens/colors';
 import {useSettingsStore} from '../../../store/settings-store';
 import {useSessionStore} from '../../../store/session-store';
 import {useProgress} from '../hooks/useProgress';
-import {ProgressGuestStart} from '../components/ProgressGuestStart';
+import {ProgressGuestPreview} from '../components/ProgressGuestPreview';
+import {ProgressXPCard} from '../components/ProgressXPCard';
 import {ProgressLadder} from '../components/ProgressLadder';
 import {ProgressStatsSection} from '../components/ProgressStatsSection';
 import {ProgressStatsRow} from '../components/ProgressStatsRow';
@@ -357,19 +358,19 @@ function ProgressContent({navigation}: Props) {
               </DSText>
             </DSText>
           </View>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Reward history"
-            onPress={() => uid && open('history')}
-            style={[
-              styles.history,
-              boostHorizontal && styles.headerHistory,
-            ]}>
-            <History size={21} color={theme.text} />
-          </Pressable>
+          {uid ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Reward history"
+              onPress={() => uid && open('history')}
+              style={[styles.history, boostHorizontal && styles.headerHistory]}>
+              <History size={21} color={theme.text} />
+            </Pressable>
+          ) : null}
         </View>
         {!uid ? (
-          <ProgressGuestStart
+          <ProgressGuestPreview
+            width={width}
             onGetStarted={() => {
               const session = useSessionStore.getState();
               session.clearPendingAction();
@@ -405,51 +406,7 @@ function ProgressContent({navigation}: Props) {
                 <DSButton variant="quiet" label="Refresh" onPress={refresh} />
               </DSSurface>
             ) : null}
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={`Level ${summary.level}. ${summary.levelXP} of ${summary.requiredXP} XP. ${summary.remainingXP} XP to level up.`}
-              onPress={() => open('xp')}
-              style={styles.xp}>
-              <View style={[styles.wrap, {justifyContent: 'space-between'}]}>
-                <View style={[styles.levelPill, {backgroundColor: '#FFFFFF'}]}>
-                  <DSText variant="action" style={{color: '#070B1A'}}>
-                    Level {summary.level}
-                  </DSText>
-                </View>
-                <DSText variant="body">
-                  <DSText variant="title">{summary.levelXP}</DSText> /{' '}
-                  {summary.requiredXP} XP
-                </DSText>
-                <DSText variant="secondary" tone="muted">
-                  {summary.remainingXP} XP to level up
-                </DSText>
-              </View>
-              <View
-                accessibilityRole="progressbar"
-                accessibilityValue={{
-                  min: 0,
-                  max: summary.requiredXP,
-                  now: summary.levelXP,
-                }}
-                style={[styles.track, {backgroundColor: theme.track}]}>
-                <View
-                  style={[
-                    styles.fill,
-                    {
-                      width: `${(summary.levelXP / summary.requiredXP) * 100}%`,
-                    },
-                  ]}
-                />
-              </View>
-              <DSText variant="secondary" tone="muted">
-                {summary.totalXP} total XP
-              </DSText>
-              {!summary.flags.earning ? (
-                <DSText tone="muted" variant="secondary">
-                  XP earning is paused. Your earned XP and rewards stay saved.
-                </DSText>
-              ) : null}
-            </Pressable>
+            <ProgressXPCard summary={summary} onPress={() => open('xp')} />
             <ProgressLadder summary={summary} onDetails={() => open('xp')} />
             <DSSurface
               raised
@@ -845,12 +802,7 @@ const styles = StyleSheet.create({
     minHeight: 48,
     paddingVertical: 6,
   },
-  wrap: {flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8},
-  xp: {gap: 6},
   boostVertical: {flexDirection: 'column', alignItems: 'stretch'},
-  levelPill: {paddingHorizontal: 14, paddingVertical: 4, borderRadius: 100},
-  track: {height: 8, borderRadius: 8, overflow: 'hidden', marginTop: 2},
-  fill: {height: '100%', borderRadius: 8, backgroundColor: '#FF6D00'},
   earnPanel: {gap: 8, padding: 12},
   earnRow: {flexDirection: 'row', alignItems: 'center', gap: 8},
   earnTask: {flexDirection: 'row', alignItems: 'center', gap: 8},

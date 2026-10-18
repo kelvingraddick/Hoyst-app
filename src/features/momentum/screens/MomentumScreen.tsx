@@ -448,7 +448,7 @@ export function MomentumScreen({
               numberOfLines={1}
               style={styles.currentStreakLabel}
               tone="muted">
-              Current Streak
+              Daily Tap In streak
             </HoystText>
             <View
               accessibilityLabel={`Best streak: ${bestStreakDays} ${getDayNoun(
@@ -472,12 +472,13 @@ export function MomentumScreen({
               </HoystText>
             </View>
           </View>
+          <HoystText tone="muted" variant="caption">Consecutive covered days across active commitments. Completed goals and valid protection cover a day. Circle streaks separately follow each Circle’s cadence.</HoystText>
           <View style={styles.currentStreakBody}>
             <View
               accessible
               accessibilityLabel={`${currentStreakDays} ${getDayNoun(
                 currentStreakDays,
-              )} current streak`}
+              )} Daily Tap In streak`}
               style={styles.currentStreakIconWrap}>
               <CircularEmoji
                 kind="streak"

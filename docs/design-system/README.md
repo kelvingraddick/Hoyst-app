@@ -38,6 +38,8 @@ The gallery integration remains a development-only host in `App.tsx`; release bu
 
 ## Decision log
 
+- **2026-10-15:** The user approved a blue variant of signed-out Home's people-and-connections illustration, with the existing purple illustration reused on Profile's matching contextual Get started panel. Home's only change is its starter artwork reference; its layout, copy, actions, other artwork, and frozen hashes remain unchanged.
+
 - **2026-09-30:** The user approved the same transparent top-area correction on Home as Progress. Home's scroll viewport now extends through the top safe area, with its inset applied to scrolling content. This supersedes Home's earlier top clipping; initial header spacing, stationary Hoy-dependent tint, bottom spacing, and other frozen presentation remain unchanged.
 
 - **2026-09-30:** The user explicitly approved a stationary Home tint retaining the existing Hoy-dependent colors, and replacing Home’s stats with Progress’s compact streak/momentum cards. Each card opens its corresponding details. Local scroll clipping keeps content beneath the transparent status bar; initial header geometry is retained. Other Home presentation and tab-bar defaults remain frozen.

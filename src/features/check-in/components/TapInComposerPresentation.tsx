@@ -1,3 +1,4 @@
+import {formatCircleStreak} from '../../../shared/circle-progress';
 import React, {useEffect, useId, useRef, useState} from 'react';
 import {
   AccessibilityInfo,
@@ -6,6 +7,7 @@ import {
   AppState,
   Easing,
   Image,
+  InputAccessoryView,
   Keyboard,
   TextInput,
   Platform,
@@ -22,6 +24,7 @@ import {
   ChevronRight,
   Flame,
   Minus,
+  Pencil,
   Plus,
   X,
 } from 'lucide-react-native';
@@ -40,6 +43,8 @@ import {
   DSIconButton,
   DSText,
   useSystemTheme,
+  nativeFont,
+  typography,
   type CategoryTone,
 } from '../../../design/system';
 import {getTapInSheetDetents} from '../../../navigation/tap-in-sheet-options';
@@ -50,6 +55,7 @@ import {
   formatQuantityValue,
 } from '../../commitments/commitment-logic';
 import {getComposerQuantity} from './composer-quantity';
+import {useQuantityRepeat} from './useQuantityRepeat';
 
 type Navigation = NativeStackNavigationProp<
   RootStackParamList,
@@ -340,7 +346,7 @@ export function ComposerHeader({
               tone={detail.state === 'risk' ? 'warning' : 'muted'}>
               {status}
               {status ? ' · ' : ''}
-              {detail.streakLabel ?? `${detail.streakDays ?? 0}d streak`}
+              {`Your Circle streak: ${formatCircleStreak(detail.viewerCircleProgress?.streak)}`}
             </DSText>
           </View>
         </View>
@@ -514,6 +520,10 @@ export function ComposerQuietAction({
 export function ComposerQuantity({
   detail,
   value,
+  inputText,
+  onChangeText,
+  onEndEditing,
+  active = true,
   onDecrease,
   onIncrease,
   disabled,
@@ -521,6 +531,10 @@ export function ComposerQuantity({
 }: {
   detail: CircleDetailModel;
   value: number;
+  inputText?: string;
+  onChangeText?: (text: string) => void;
+  onEndEditing?: () => void;
+  active?: boolean;
   onDecrease: () => void;
   onIncrease: () => void;
   disabled?: boolean;
@@ -529,8 +543,23 @@ export function ComposerQuantity({
   const theme = useSystemTheme();
   const {fontScale, width} = useWindowDimensions();
   const [textWidth, setTextWidth] = useState(0);
+  const [editing, setEditing] = useState(false);
+  const inputRef = useRef<TextInput>(null);
+  const accessoryId = useId();
+  const repeat = useQuantityRepeat({
+    active,
+    disabled,
+    value,
+    onDecrease,
+    onIncrease,
+  });
+  useEffect(() => {
+    if (!active || disabled) {
+      inputRef.current?.blur();
+    }
+  }, [active, disabled]);
   const presentation = getComposerQuantity(detail, value);
-  const valueText = formatQuantityValue(value);
+  const valueText = inputText ?? formatQuantityValue(value);
   const availableWidth = Math.max(72, width - 44);
   const size = Math.min(
     availableWidth,
@@ -559,14 +588,18 @@ export function ComposerQuantity({
         ]}>
         <DSIconButton
           label="Decrease quantity"
-          disabled={disabled || value <= 0}
-          onPress={onDecrease}
+          disabled={disabled || !active || value <= 0}
+          delayLongPress={500}
+          onPressIn={() => repeat.pressIn(-1)}
+          onLongPress={() => repeat.longPress(-1)}
+          onPressOut={repeat.pressOut}
+          onPress={() => repeat.press(-1)}
+          accessibilityHint="Tap to decrease by one. Hold to decrease faster."
           style={[styles.stepButton, {borderColor: theme.inputBorder}]}
           icon={<Minus size={20} color={theme.muted} />}
         />
         <View
-          accessible
-          accessibilityRole="text"
+          accessible={false}
           accessibilityLabel={`${formatQuantityValue(value)} ${
             presentation.unit
           }. ${presentation.goal}. ${presentation.status}${
@@ -579,10 +612,17 @@ export function ComposerQuantity({
             justifyContent: 'center',
           }}
           testID="tap-in-composer-quantity-ring">
+          <Pressable
+            accessible={false}
+            disabled={!active || disabled || !onChangeText}
+            onPress={() => inputRef.current?.focus()}
+            style={StyleSheet.absoluteFill}
+          />
           <Svg
             width={size}
             height={size}
             style={StyleSheet.absoluteFill}
+            pointerEvents="none"
             accessible={false}>
             <Circle
               cx={size / 2}
@@ -609,9 +649,40 @@ export function ComposerQuantity({
               />
             ) : null}
           </Svg>
+          <TextInput
+            ref={inputRef}
+            testID="tap-in-composer-quantity-input"
+            value={valueText}
+            onChangeText={onChangeText}
+            onFocus={() => setEditing(true)}
+            onBlur={() => {
+              setEditing(false);
+              onEndEditing?.();
+            }}
+            editable={active && !disabled && Boolean(onChangeText)}
+            selectTextOnFocus
+            keyboardType="number-pad"
+            inputMode="numeric"
+            returnKeyType="done"
+            inputAccessoryViewID={
+              Platform.OS === 'ios' ? accessoryId : undefined
+            }
+            onSubmitEditing={() => inputRef.current?.blur()}
+            underlineColorAndroid="transparent"
+            selectionColor={theme.action}
+            accessibilityLabel={`Edit today's ${
+              presentation.isLimit ? 'amount' : 'progress'
+            }, ${presentation.unit}`}
+            accessibilityHint={`${presentation.goal}. ${presentation.status}${
+              saved ? '. Saved' : ''
+            }. Enter today's total.`}
+            style={[styles.quantityInput, {color: theme.text}]}
+          />
           <DSText
+            accessible={false}
             variant="screenTitle"
-            style={styles.quantityValue}
+            pointerEvents="none"
+            style={styles.quantityMeasurement}
             onTextLayout={event =>
               setTextWidth(
                 Math.ceil(
@@ -622,17 +693,57 @@ export function ComposerQuantity({
                 ),
               )
             }>
-            {formatQuantityValue(value)}
+            {valueText || '0'}
           </DSText>
+          <View
+            testID="tap-in-composer-quantity-edit-icon"
+            accessible={false}
+            importantForAccessibility="no-hide-descendants"
+            pointerEvents="none"
+            style={[styles.quantityEditIcon, {backgroundColor: theme.canvas}]}>
+            <Pencil size={14} color={theme.muted} accessible={false} />
+          </View>
         </View>
         <DSIconButton
           label="Increase quantity"
-          disabled={disabled}
-          onPress={onIncrease}
+          disabled={disabled || !active || value >= Number.MAX_SAFE_INTEGER}
+          delayLongPress={500}
+          onPressIn={() => repeat.pressIn(1)}
+          onLongPress={() => repeat.longPress(1)}
+          onPressOut={repeat.pressOut}
+          onPress={() => repeat.press(1)}
+          accessibilityHint="Tap to increase by one. Hold to increase faster."
           style={[styles.stepButton, {borderColor: theme.inputBorder}]}
           icon={<Plus size={20} color={theme.muted} />}
         />
       </View>
+      {editing && Platform.OS !== 'ios' ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Done editing quantity"
+          onPress={() => inputRef.current?.blur()}
+          style={styles.quantityDone}>
+          <DSText variant="action" tone="action">
+            Done
+          </DSText>
+        </Pressable>
+      ) : null}
+      {Platform.OS === 'ios' ? (
+        <InputAccessoryView nativeID={accessoryId}>
+          <View
+            style={[styles.quantityAccessory, {backgroundColor: theme.canvas}]}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Done editing quantity"
+              onPress={() => inputRef.current?.blur()}
+              style={styles.quantityDone}>
+              <DSText variant="action" tone="action">
+                Done
+              </DSText>
+            </Pressable>
+          </View>
+        </InputAccessoryView>
+      ) : null}
       <View style={styles.quantityCaptions}>
         <DSText variant="secondary" tone="muted" style={styles.center}>
           {presentation.goal}
@@ -714,6 +825,7 @@ export function ComposerDisclosure({
 }
 
 export function ComposerPhoto({
+  required = false,
   uri,
   onAdd,
   onRemove,
@@ -722,6 +834,7 @@ export function ComposerPhoto({
   uri?: string;
   onAdd: () => void;
   onRemove: () => void;
+  required?: boolean;
   disabled?: boolean;
 }) {
   const theme = useSystemTheme();
@@ -735,7 +848,7 @@ export function ComposerPhoto({
         leading={<Camera size={20} color={theme.muted} />}
       />
       <DSText variant="secondary" tone="muted">
-        Optional proof for your Circle
+        {required ? 'Photo proof is required to complete this Tap In.' : 'Optional proof for your Circle'}
       </DSText>
       {uri ? (
         <>
@@ -800,7 +913,28 @@ const styles = StyleSheet.create({
   },
   wrappedStepper: {flexWrap: 'wrap', gap: 8},
   stepButton: {borderRadius: 24, borderWidth: 1},
-  quantityValue: {flexShrink: 0},
+  quantityInput: {
+    ...typography.screenTitle,
+    fontFamily: nativeFont,
+    includeFontPadding: false,
+    textAlign: 'center',
+    padding: 0,
+    width: '100%',
+    minHeight: 44,
+  },
+  quantityMeasurement: {position: 'absolute', opacity: 0},
+  quantityEditIcon: {
+    position: 'absolute',
+    right: -2,
+    bottom: -2,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  quantityDone: {minHeight: 44, alignItems: 'center', justifyContent: 'center'},
+  quantityAccessory: {alignItems: 'flex-end', paddingHorizontal: 22},
   quantityCaptions: {gap: 4},
   quantityStatus: {
     flexDirection: 'row',

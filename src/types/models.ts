@@ -1,3 +1,6 @@
+import type {ProofRequirement} from '../shared/tap-in-proof';
+export type {ProofRequirement} from '../shared/tap-in-proof';
+import type {CircleProgressSummary} from '../shared/circle-progress';
 import type {CommitmentAppearance} from '../shared/commitment-appearance';
 import type {ImageSourcePropType} from 'react-native';
 
@@ -84,7 +87,7 @@ export type CommitmentQuantityConfig = {
 export type CommitmentSchedule = {
   cadence: CommitmentPace;
   opportunitiesPerPeriod: number;
-  slotPolicy: 'scheduled_slots';
+  slotPolicy: 'scheduled_slots' | 'period_quota';
   timezone: string;
 };
 
@@ -123,6 +126,7 @@ export type Opportunity = {
 };
 
 export type Circle = {
+  proofRequirement?: ProofRequirement;
   id: string;
   circleMode?: CircleMode;
   lifecycleStatus?: CircleLifecycleStatus;
@@ -290,6 +294,7 @@ export type InboxEvent = {
 };
 
 export type ViewerTodayCheckIn = {
+  proofRequirement?: ProofRequirement;
   coverageStatus?: CheckInCoverageStatus;
   currentValue?: number;
   dateKey?: string;
@@ -304,6 +309,10 @@ export type ViewerTodayCheckIn = {
 };
 
 export type CircleSummary = {
+  proofRequirement?: ProofRequirement;
+  viewerUid?: string;
+  viewerCircleProgress?: CircleProgressSummary;
+  groupStreak?: CircleProgressSummary;
   id: string;
   circleMode?: CircleMode;
   lifecycleStatus?: CircleLifecycleStatus;
@@ -405,6 +414,7 @@ export type CircleDetailModel = CircleSummary & {
 };
 
 export type CreateCircleDraft = {
+  proofRequirement?: ProofRequirement;
   category: string;
   appearance?: CommitmentAppearance;
   circleMode: CircleMode;

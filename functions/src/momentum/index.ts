@@ -1,3 +1,4 @@
+import {circleDates, shiftCircleDate} from '../shared/circle-progress';
 import {
   FieldValue,
   type DocumentData,
@@ -192,14 +193,27 @@ function getOpportunityId(
   circleId: string,
   periodKey: string,
   slotIndex: number,
+  policyVersion?: number,
 ) {
-  return `${circleId}_${periodKey}_${slotIndex}`;
+  return `${circleId}_${periodKey}_${
+    policyVersion === 2 ? 'v2_' : ''
+  }${slotIndex}`;
 }
 
 function getCurrentSlots(circle: DocumentData | undefined, now = new Date()) {
   const timezone = asString(circle?.timezone, 'UTC');
   const schedule = normalizeCommitmentSchedule(circle, timezone);
-  return getOpportunitySlots(schedule, now);
+  const resume =
+    typeof circle?.opportunitiesResumeAfterDateKey === 'string'
+      ? circle.opportunitiesResumeAfterDateKey
+      : undefined;
+  return getOpportunitySlots(schedule, now)
+    .map(slot =>
+      slot.policyVersion === 2 && resume && slot.availableDateKey <= resume
+        ? {...slot, availableDateKey: shiftCircleDate(resume, 1)}
+        : slot,
+    )
+    .filter(slot => slot.availableDateKey <= slot.expiresDateKey);
 }
 
 function getSlotForDate(
@@ -299,7 +313,9 @@ export async function recalculateMomentumSummaryForUser(uid: string) {
   // deletion that starts after this recalculation read its opportunities.
   await db.runTransaction(async transaction => {
     const profile = await transaction.get(db.collection('users').doc(uid));
-    if (!profile.exists || profile.data()?.accountDeletionStartedAt) return;
+    if (!profile.exists || profile.data()?.accountDeletionStartedAt) {
+      return;
+    }
     transaction.set(
       momentumRef,
       {...reconciledSummary, updatedAt: FieldValue.serverTimestamp()},
@@ -339,6 +355,7 @@ function buildOpportunityPayload({
 
   return {
     availableDateKey: slot.availableDateKey,
+    ...(slot.policyVersion ? {policyVersion: slot.policyVersion} : {}),
     cadence: normalizeCommitmentSchedule(circle).pace,
     opportunitiesPerPeriod:
       normalizeCommitmentSchedule(circle).opportunitiesPerPeriod,
@@ -347,7 +364,12 @@ function buildOpportunityPayload({
     countsTowardCircle: true,
     expiresDateKey: slot.expiresDateKey,
     expectedForCircle: true,
-    id: getOpportunityId(circleId, slot.periodKey, slot.slotIndex),
+    id: getOpportunityId(
+      circleId,
+      slot.periodKey,
+      slot.slotIndex,
+      slot.policyVersion,
+    ),
     isCurrentPeriod: status !== 'missed' && status !== 'expired',
     periodKey: slot.periodKey,
     slotIndex: slot.slotIndex,
@@ -395,7 +417,14 @@ export async function recordTapInOpportunity({
   const opportunityRefs = slots.map(slot =>
     userPrivateRef
       .collection('opportunities')
-      .doc(getOpportunityId(circleId, slot.periodKey, slot.slotIndex)),
+      .doc(
+        getOpportunityId(
+          circleId,
+          slot.periodKey,
+          slot.slotIndex,
+          slot.policyVersion,
+        ),
+      ),
   );
   const opportunitySnapshots = await Promise.all(
     opportunityRefs.map(ref => transaction.get(ref)),
@@ -430,7 +459,7 @@ export async function recordTapInOpportunity({
       );
     });
 
-    if (hasSatisfiedEligibleOpportunity) {
+    if (hasSatisfiedEligibleOpportunity && status !== 'skip') {
       return;
     }
 
@@ -442,7 +471,14 @@ export async function recordTapInOpportunity({
 
   const opportunityRef = userPrivateRef
     .collection('opportunities')
-    .doc(getOpportunityId(circleId, slot.periodKey, slot.slotIndex));
+    .doc(
+      getOpportunityId(
+        circleId,
+        slot.periodKey,
+        slot.slotIndex,
+        slot.policyVersion,
+      ),
+    );
   const opportunityIndex = slots.findIndex(
     candidate => candidate.slotIndex === slot.slotIndex,
   );
@@ -459,7 +495,11 @@ export async function recordTapInOpportunity({
     .doc(slot.periodKey);
   const circleSlotRef = circleOpportunityRef
     .collection('slots')
-    .doc(String(slot.slotIndex));
+    .doc(
+      slot.policyVersion === 2
+        ? `v2_${slot.slotIndex}`
+        : String(slot.slotIndex),
+    );
   const [circleOpportunitySnapshot, circleSlotSnapshot] = await Promise.all([
     transaction.get(circleOpportunityRef),
     transaction.get(circleSlotRef),
@@ -584,7 +624,14 @@ export async function removeTapInOpportunity({
   const opportunityRefs = slots.map(slot =>
     userPrivateRef
       .collection('opportunities')
-      .doc(getOpportunityId(circleId, slot.periodKey, slot.slotIndex)),
+      .doc(
+        getOpportunityId(
+          circleId,
+          slot.periodKey,
+          slot.slotIndex,
+          slot.policyVersion,
+        ),
+      ),
   );
   const opportunitySnapshots = await Promise.all(
     opportunityRefs.map(ref => transaction.get(ref)),
@@ -615,7 +662,11 @@ export async function removeTapInOpportunity({
     .doc(slot.periodKey);
   const circleSlotRef = circleOpportunityRef
     .collection('slots')
-    .doc(String(slot.slotIndex));
+    .doc(
+      slot.policyVersion === 2
+        ? `v2_${slot.slotIndex}`
+        : String(slot.slotIndex),
+    );
   const [circleOpportunitySnapshot, circleSlotSnapshot] = await Promise.all([
     transaction.get(circleOpportunityRef),
     transaction.get(circleSlotRef),
@@ -726,14 +777,27 @@ export async function removeMemberFromOpenCircleOpportunities({
 
   const periodRef = circleRef.collection('opportunities').doc(periodKey);
   const slotRefs = slots.map(slot =>
-    periodRef.collection('slots').doc(String(slot.slotIndex)),
+    periodRef
+      .collection('slots')
+      .doc(
+        slot.policyVersion === 2
+          ? `v2_${slot.slotIndex}`
+          : String(slot.slotIndex),
+      ),
   );
   const opportunityRefs = slots.map(slot =>
     db
       .collection('userPrivate')
       .doc(uid)
       .collection('opportunities')
-      .doc(getOpportunityId(circleId, slot.periodKey, slot.slotIndex)),
+      .doc(
+        getOpportunityId(
+          circleId,
+          slot.periodKey,
+          slot.slotIndex,
+          slot.policyVersion,
+        ),
+      ),
   );
   const [slotSnapshots, opportunitySnapshots] = await Promise.all([
     Promise.all(slotRefs.map(ref => ref.get())),
@@ -987,6 +1051,7 @@ export async function neutralizeCircleOpportunitiesForArchive({
 export async function materializeCurrentCircleOpportunities(
   circleId: string,
   now = new Date(),
+  retries = 3,
 ) {
   const circleRef = db.collection('circles').doc(circleId);
   const circleSnapshot = await circleRef.get();
@@ -1026,15 +1091,37 @@ export async function materializeCurrentCircleOpportunities(
 
     return slots
       .filter(slot => isMemberExpectedForSlot({member, slot, timezone}))
-      .map(slot => ({
-        opportunityRef: db
-          .collection('userPrivate')
-          .doc(uid)
-          .collection('opportunities')
-          .doc(getOpportunityId(circleId, slot.periodKey, slot.slotIndex)),
-        slot,
-        uid,
-      }));
+      .map(rawSlot => {
+        const joined = asTimestampMs(member.joinedAt);
+        const first = joined
+          ? getDateKey(timezone, new Date(joined))
+          : rawSlot.availableDateKey;
+        const eligibleStart =
+          member.opportunityEligibility === 'include_current'
+            ? first
+            : shiftCircleDate(first, 1);
+        const slot =
+          rawSlot.policyVersion === 2 &&
+          eligibleStart > rawSlot.availableDateKey
+            ? {...rawSlot, availableDateKey: eligibleStart}
+            : rawSlot;
+        return {
+          opportunityRef: db
+            .collection('userPrivate')
+            .doc(uid)
+            .collection('opportunities')
+            .doc(
+              getOpportunityId(
+                circleId,
+                slot.periodKey,
+                slot.slotIndex,
+                slot.policyVersion,
+              ),
+            ),
+          slot,
+          uid,
+        };
+      });
   });
   const existingOpportunitySnapshots = await Promise.all(
     eligibleEntries.map(entry => entry.opportunityRef.get()),
@@ -1093,6 +1180,75 @@ export async function materializeCurrentCircleOpportunities(
       }
     });
   });
+  const quotaChecks = new Map<
+    string,
+    Array<{day: string; data: DocumentData}>
+  >();
+  const coverageSources: Array<{
+    query: FirebaseFirestore.Query;
+    fingerprint: string;
+  }> = [];
+  const fingerprint = (docs: FirebaseFirestore.QueryDocumentSnapshot[]) =>
+    docs
+      .map(doc => `${doc.id}:${doc.updateTime.toMillis()}`)
+      .sort()
+      .join('|');
+  if (slots[0]?.policyVersion === 2) {
+    const dates = circleDates(
+      slots[0].availableDateKey,
+      slots[0].expiresDateKey,
+    ).filter(day => day <= getDateKey(timezone, now));
+    const queries = dates.map(day =>
+      circleRef.collection('days').doc(day).collection('checkIns'),
+    );
+    const checks = await Promise.all(queries.map(query => query.get()));
+    checks.forEach((snapshot, index) =>
+      coverageSources.push({
+        query: queries[index],
+        fingerprint: fingerprint(snapshot.docs),
+      }),
+    );
+    checks.forEach((snapshot, index) =>
+      snapshot.docs.forEach(check => {
+        const data = check.data();
+        if (
+          data.status !== 'skip' &&
+          (data.status !== 'done' ||
+            (data.coverageStatus !== undefined &&
+              data.coverageStatus !== 'covered'))
+        ) {
+          return;
+        }
+        const uid = asString(data.uid, check.id);
+        const list = quotaChecks.get(uid) ?? [];
+        list.push({day: dates[index], data});
+        quotaChecks.set(uid, list);
+      }),
+    );
+    priorCircleOpportunitySnapshots.forEach(snapshot =>
+      snapshot.docs.forEach(doc => {
+        const data = doc.data();
+        if (
+          data.periodKey === periodKey &&
+          (data.policyVersion !== 2 ||
+            !eligibleEntries.some(
+              entry => entry.opportunityRef.path === doc.ref.path,
+            ))
+        ) {
+          writes.push({
+            ref: doc.ref,
+            merge: true,
+            data: {
+              expectedForCircle: false,
+              countsTowardCircle: false,
+              isCurrentPeriod: false,
+              updatedAt: FieldValue.serverTimestamp(),
+            },
+          });
+        }
+      }),
+    );
+  }
   const periodRef = circleRef.collection('opportunities').doc(periodKey);
   const slotAggregates = new Map<
     number,
@@ -1106,7 +1262,22 @@ export async function materializeCurrentCircleOpportunities(
 
   eligibleEntries.forEach((entry, index) => {
     const existingOpportunityData = existingOpportunitySnapshots[index].data();
-    const existingStatus = existingOpportunityData?.status;
+    const credited =
+      entry.slot.policyVersion === 2
+        ? quotaChecks
+            .get(entry.uid)
+            ?.filter(check => check.day >= entry.slot.availableDateKey)[
+            entry.slot.slotIndex
+          ]
+        : undefined;
+    const existingStatus =
+      entry.slot.policyVersion === 2
+        ? credited
+          ? credited.data.status === 'skip'
+            ? 'skipped'
+            : 'completed'
+          : undefined
+        : existingOpportunityData?.status;
     const status = getOpportunityStatusForSlot({
       completionStatus: existingStatus,
       now,
@@ -1132,14 +1303,29 @@ export async function materializeCurrentCircleOpportunities(
     }
     slotAggregates.set(entry.slot.slotIndex, aggregate);
     writes.push({
-      data: buildOpportunityPayload({
-        circle,
-        circleId,
-        stampResolution: !existingOpportunityData?.resolvedAt,
-        slot: entry.slot,
-        status,
-        uid: entry.uid,
-      }),
+      data: {
+        ...buildOpportunityPayload({
+          circle,
+          circleId,
+          ...(credited ? {dateKey: credited.day, checkInId: entry.uid} : {}),
+          stampResolution: !existingOpportunityData?.resolvedAt,
+          slot: entry.slot,
+          status,
+          uid: entry.uid,
+        }),
+        ...(credited
+          ? {
+              ...(credited.data.status === 'done' &&
+              !existingOpportunityData?.firstSuccessfulAt
+                ? {creditLocked: true}
+                : {}),
+              firstSuccessfulAt:
+                existingOpportunityData?.firstSuccessfulAt ??
+                credited.data.createdAt ??
+                FieldValue.serverTimestamp(),
+            }
+          : {}),
+      },
       merge: true,
       ref: entry.opportunityRef,
     });
@@ -1170,7 +1356,13 @@ export async function materializeCurrentCircleOpportunities(
         updatedAt: FieldValue.serverTimestamp(),
       },
       merge: true,
-      ref: periodRef.collection('slots').doc(String(slot.slotIndex)),
+      ref: periodRef
+        .collection('slots')
+        .doc(
+          slot.policyVersion === 2
+            ? `v2_${slot.slotIndex}`
+            : String(slot.slotIndex),
+        ),
     });
   });
   const aggregates = Array.from(slotAggregates.values());
@@ -1214,7 +1406,46 @@ export async function materializeCurrentCircleOpportunities(
     ref: periodRef,
   });
 
-  await commitSetWrites(writes);
+  // Read the coverage queries inside each write transaction. This detects additions,
+  // corrections and deletions, including a submission racing this hydration.
+  for (let index = 0; index < writes.length; index += 350) {
+    const committed = await db.runTransaction(async transaction => {
+      const currentCircle = await transaction.get(circleRef);
+      const currentMembers = await transaction.get(
+        circleRef.collection('members').where('status', '==', 'active'),
+      );
+      const currentCoverage = await Promise.all(
+        coverageSources.map(source => transaction.get(source.query)),
+      );
+      if (
+        !currentCircle.updateTime?.isEqual(circleSnapshot.updateTime!) ||
+        fingerprint(currentMembers.docs) !==
+          fingerprint(memberSnapshots.docs) ||
+        currentCoverage.some(
+          (snapshot, i) =>
+            fingerprint(snapshot.docs) !== coverageSources[i].fingerprint,
+        )
+      ) {
+        return false;
+      }
+      writes
+        .slice(index, index + 350)
+        .forEach(write =>
+          transaction.set(write.ref, write.data, {merge: write.merge ?? false}),
+        );
+      return true;
+    });
+    if (!committed) {
+      if (retries > 0) {
+        return materializeCurrentCircleOpportunities(
+          circleId,
+          now,
+          retries - 1,
+        );
+      }
+      throw new HttpsError('aborted', 'Circle activity changed. Please retry.');
+    }
+  }
   await Promise.all(
     Array.from(affectedUids).map(uid => recalculateMomentumSummaryForUser(uid)),
   );
@@ -1267,7 +1498,14 @@ export const backfillMomentumOpportunities = onCall(async request => {
           .collection('userPrivate')
           .doc(uid)
           .collection('opportunities')
-          .doc(getOpportunityId(circleRef.id, slot.periodKey, slot.slotIndex)),
+          .doc(
+            getOpportunityId(
+              circleRef.id,
+              slot.periodKey,
+              slot.slotIndex,
+              slot.policyVersion,
+            ),
+          ),
         buildOpportunityPayload({
           circle,
           circleId: circleRef.id,

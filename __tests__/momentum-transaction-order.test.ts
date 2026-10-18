@@ -316,7 +316,7 @@ describe('momentum transaction ordering', () => {
     );
     const snapshots = new Map<string, Record<string, unknown> | undefined>(
       slots.map(slot => [
-        `userPrivate/user-1/opportunities/circle-1_${slot.periodKey}_${slot.slotIndex}`,
+        `userPrivate/user-1/opportunities/circle-1_${slot.periodKey}_${slot.policyVersion === 2 ? "v2_" : ""}${slot.slotIndex}`,
         {
           completionDateKey: slot.availableDateKey,
           slotIndex: slot.slotIndex,
@@ -386,7 +386,7 @@ describe('momentum transaction ordering', () => {
     );
     const snapshots = new Map<string, Record<string, unknown> | undefined>(
       slots.map(slot => [
-        `userPrivate/user-1/opportunities/circle-1_${slot.periodKey}_${slot.slotIndex}`,
+        `userPrivate/user-1/opportunities/circle-1_${slot.periodKey}_${slot.policyVersion === 2 ? "v2_" : ""}${slot.slotIndex}`,
         {
           completionDateKey: slot.availableDateKey,
           slotIndex: slot.slotIndex,

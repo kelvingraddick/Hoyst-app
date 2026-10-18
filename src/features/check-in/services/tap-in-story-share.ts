@@ -4,7 +4,13 @@ import {
   type CommitmentAppearance,
 } from '../../../shared/commitment-appearance';
 import type {RefObject} from 'react';
-import {NativeModules, TurboModuleRegistry, type View} from 'react-native';
+import {
+  NativeModules,
+  PixelRatio,
+  Platform,
+  TurboModuleRegistry,
+  type View,
+} from 'react-native';
 import type {ShareSingleOptions, Social} from 'react-native-share';
 
 import type {
@@ -13,15 +19,30 @@ import type {
   CircleMemberStatus,
   CommitmentType,
 } from '../../../types/models';
-import type {ProfileSummary} from '../../profile/services/profile-summary-service';
+import {DateTime} from 'luxon';
+import {
+  formatCircleStreak,
+  type CircleProgressSummary,
+} from '../../../shared/circle-progress';
+import {formatCommitmentQuantity} from '../../commitments/commitment-goal-label';
+import type {TapInStoryContext, TapInStoryMoment} from './tap-in-story-context';
 
 export type TapInStoryShareStatus = Exclude<CheckInStatus, 'rest'> | undefined;
 export type TapInStoryTemplateId = 'tapInMoment' | 'transparentOverlay';
+
+export type TapInStoryProgress = {
+  label: string;
+  periodLabel: string;
+  value: string;
+  unitLabel?: string;
+  streak: string;
+};
 
 export type TapInStoryShareData = {
   category: string;
   appearance?: CommitmentAppearance;
   circleTitle: string;
+  circleMode: 'personal' | 'group';
   commitmentType?: CommitmentType;
   ctaLabel: string;
   commitment: string;
@@ -29,13 +50,13 @@ export type TapInStoryShareData = {
   inviteUrl?: string;
   memberCount: number;
   members: CircleMemberStatus[];
-  note: string;
   photoUri?: string;
-  progressLabel: string;
   shareMessage: string;
-  streakDays: number;
-  streakLabel: string;
-  totalTapIns: number;
+  dateLabel: string;
+  headerLabel: string;
+  result: {statusLabel: string; quantityLabel?: string};
+  personalProgress: TapInStoryProgress;
+  groupProgress?: TapInStoryProgress;
 };
 
 type TapInStoryShareDetail = Pick<CircleDetailModel, 'commitment' | 'title'> &
@@ -44,42 +65,47 @@ type TapInStoryShareDetail = Pick<CircleDetailModel, 'commitment' | 'title'> &
       CircleDetailModel,
       | 'category'
       | 'appearance'
+      | 'circleMode'
       | 'commitmentType'
-      | 'completionRate'
+      | 'commitmentCadence'
+      | 'commitmentFrequency'
+      | 'targetValue'
+      | 'maximumValue'
+      | 'minimumValue'
+      | 'unitLabel'
+      | 'buildTrackingMode'
       | 'inviteUrl'
       | 'memberCount'
       | 'members'
-      | 'periodTapInCount'
-      | 'progressLabel'
-      | 'streakDays'
-      | 'streakLabel'
     >
   >;
 
 type BuildTapInStoryShareDataInput = {
   detail?: TapInStoryShareDetail;
-  note?: string;
+  tapIn?: TapInStoryMoment;
+  context?: TapInStoryContext;
   photoUri?: string;
-  profileSummary?: Pick<ProfileSummary, 'personalStreakDays' | 'totalTapIns'>;
 };
 
 const fallbackCircleTitle = 'Hoyst Circle';
 const fallbackCommitment = "Today's Tap In";
-const fallbackNote = 'No note added. Still counted.';
-const fallbackCtaLabel = 'Join my Circle on Hoyst';
 const unavailableMessage =
   'Story sharing is not available in this app build yet. Rebuild the app, then try again.';
 const imageClipboardUnavailableMessage =
   'Image clipboard is not available in this app build yet. Rebuild the app, then try again.';
 let nativeModuleAvailabilityOverride: boolean | undefined;
 
-const storyCaptureOptions = {
-  format: 'png',
-  height: 1920,
-  quality: 1,
-  result: 'tmpfile',
-  width: 1080,
-} as const;
+function storyCaptureOptions() {
+  // iOS interprets dimensions as points; Android uses physical pixels.
+  const density = Platform.OS === 'ios' ? PixelRatio.get() : 1;
+  return {
+    format: 'png',
+    height: 1920 / density,
+    quality: 1,
+    result: 'tmpfile',
+    width: 1080 / density,
+  } as const;
+}
 
 function cleanText(value: string | undefined, fallback: string) {
   const trimmed = value?.trim();
@@ -136,43 +162,67 @@ export function getTapInStoryClipboardText(story: TapInStoryShareData) {
   return `${baseMessage}\n${story.inviteUrl}`;
 }
 
+function storyProgress(
+  summary: CircleProgressSummary | undefined,
+  isGroup: boolean,
+  tapInDate?: string,
+): TapInStoryProgress {
+  const periodDate = summary && DateTime.fromISO(summary.period.start);
+  const periodEnd = summary && DateTime.fromISO(summary.period.end);
+  const sameDay = tapInDate === summary?.asOfDateKey;
+  const periodLabel =
+    !summary || !periodDate?.isValid || !periodEnd?.isValid
+      ? 'Current period'
+      : sameDay
+      ? summary.cadence === 'daily'
+        ? 'Today'
+        : summary.cadence === 'weekly'
+        ? 'This week'
+        : 'This month'
+      : summary.cadence === 'daily'
+      ? periodDate.toFormat('LLL d, yyyy')
+      : `${periodDate.toFormat('LLL d')} to ${periodEnd.toFormat(
+          'LLL d, yyyy',
+        )}`;
+  const known = summary && summary.progress.outcome !== 'unknown';
+  const {covered = 0, required = 0} = summary?.progress ?? {};
+  return {
+    label: isGroup ? 'Group progress' : 'Your progress',
+    periodLabel,
+    value: !known
+      ? 'Progress unavailable'
+      : required === 0
+      ? 'No eligible goal'
+      : isGroup
+      ? `${covered} of ${required} members met goal`
+      : `${covered} of ${required}`,
+    unitLabel: known && required > 0 && !isGroup ? 'Tap Ins' : undefined,
+    streak: formatCircleStreak(summary?.streak),
+  };
+}
+
 export function buildTapInStoryShareData({
   detail,
-  note,
+  tapIn,
+  context,
   photoUri,
-  profileSummary,
 }: BuildTapInStoryShareDataInput): TapInStoryShareData {
   const circleTitle = cleanText(detail?.title, fallbackCircleTitle);
   const category = cleanText(detail?.category, 'General');
   const commitment = cleanText(detail?.commitment, fallbackCommitment);
-  const cleanNote = cleanText(note, fallbackNote);
-  const progressLabel =
-    cleanText(detail?.progressLabel, '') ||
-    (typeof detail?.completionRate === 'number'
-      ? `${detail.completionRate}% tapped in`
-      : 'Tapped in today');
-  const streakDays = cleanCount(
-    profileSummary?.personalStreakDays ?? detail?.streakDays,
-  );
-  const streakLabel =
-    streakDays > 0
-      ? `${streakDays}d streak`
-      : profileSummary
-      ? 'Momentum saved'
-      : cleanText(detail?.streakLabel, 'Momentum saved');
-  const memberCount = cleanCount(detail?.memberCount);
-  const members =
-    detail?.members
-      ?.filter(member => member.membershipStatus !== 'pending')
-      .slice(0, 3) ?? [];
-  const totalTapIns = cleanCount(
-    profileSummary?.totalTapIns ?? detail?.periodTapInCount,
-  );
-  const inviteUrl = detail?.inviteUrl?.trim() || undefined;
-  const ctaLabel = inviteUrl ? 'Join this Circle on Hoyst' : fallbackCtaLabel;
+  const personal = detail?.circleMode === 'personal';
+  const moment = context?.tapIn ?? tapIn;
+  const date = moment && DateTime.fromISO(moment.dateKey);
+  const inviteUrl = personal
+    ? undefined
+    : detail?.inviteUrl?.trim() || undefined;
   const shareMessage = inviteUrl
     ? `I tapped in with ${circleTitle} on Hoyst. Join us: ${inviteUrl}`
     : `I tapped in with ${circleTitle} on Hoyst.`;
+  const status = moment?.coverageStatus ?? moment?.status;
+  const dateLabel = date?.isValid
+    ? date.setLocale('en-US').toFormat('LLL d, yyyy')
+    : 'Date unavailable';
 
   return {
     category: normalizeCategory(category),
@@ -180,20 +230,62 @@ export function buildTapInStoryShareData({
       ? {appearance: readAppearance(detail.appearance)}
       : {}),
     circleTitle,
+    circleMode: personal ? 'personal' : 'group',
     ...(detail?.commitmentType ? {commitmentType: detail.commitmentType} : {}),
-    ctaLabel,
+    ctaLabel: personal
+      ? 'Tapped in on Hoyst'
+      : inviteUrl
+      ? 'Join this Circle on Hoyst'
+      : 'Tap in with Hoyst',
     commitment,
     hasInviteUrl: Boolean(inviteUrl),
     inviteUrl,
-    memberCount,
-    members,
-    note: cleanNote,
+    memberCount: personal ? 0 : cleanCount(detail?.memberCount),
+    members: personal
+      ? []
+      : detail?.members
+          ?.filter(member => member.membershipStatus !== 'pending')
+          .slice(0, 3) ?? [],
     photoUri,
-    progressLabel,
     shareMessage,
-    streakDays,
-    streakLabel,
-    totalTapIns,
+    dateLabel,
+    headerLabel: `${dateLabel.toUpperCase()} · I TAPPED IN ON MY ${
+      personal ? 'PERSONAL COMMITMENT' : 'ACCOUNTABILITY CIRCLE'
+    }:`,
+    result: {
+      statusLabel:
+        status === 'done' || status === 'covered'
+          ? 'Goal met'
+          : status === 'partial'
+          ? 'Partial'
+          : status === 'failed'
+          ? 'Goal not met'
+          : status === 'skip' || status === 'skipped'
+          ? 'Protected'
+          : 'Result unavailable',
+      quantityLabel:
+        typeof moment?.currentValue === 'number' &&
+        Number.isFinite(moment.currentValue)
+          ? formatCommitmentQuantity(
+              moment.currentValue,
+              moment.unitLabel?.trim() || detail?.unitLabel || 'unit',
+            )
+          : undefined,
+    },
+    personalProgress: storyProgress(
+      context?.progress?.viewer,
+      false,
+      moment?.dateKey,
+    ),
+    ...(!personal
+      ? {
+          groupProgress: storyProgress(
+            context?.progress?.group,
+            true,
+            moment?.dateKey,
+          ),
+        }
+      : {}),
   };
 }
 
@@ -266,7 +358,7 @@ export async function captureTapInStoryImage(
   storyCardRef: RefObject<View | null>,
 ) {
   const {captureRef} = await loadViewShotModule();
-  return captureRef(storyCardRef, storyCaptureOptions);
+  return captureRef(storyCardRef, storyCaptureOptions());
 }
 
 export async function releaseTapInStoryImage(capturedUri: string) {
@@ -282,7 +374,7 @@ export async function copyTapInStoryImageToClipboard(
   const imageClipboard = getImageClipboardModule();
 
   try {
-    capturedUri = await captureRef(storyCardRef, storyCaptureOptions);
+    capturedUri = await captureRef(storyCardRef, storyCaptureOptions());
     await imageClipboard.copyImage(capturedUri);
   } finally {
     if (capturedUri) {
@@ -300,7 +392,7 @@ export async function shareTapInStoryImage(
   const {captureRef, releaseCapture, shareOpen} = await loadStoryShareModules();
 
   try {
-    capturedUri = await captureRef(storyCardRef, storyCaptureOptions);
+    capturedUri = await captureRef(storyCardRef, storyCaptureOptions());
 
     if (canOpenShare && !canOpenShare()) {
       throw new Error('Your account changed. Reopen the share preview.');
@@ -350,7 +442,7 @@ export async function shareTapInStoryToInstagram({
     await loadStoryShareModules();
 
   try {
-    capturedUri = await captureRef(storyCardRef, storyCaptureOptions);
+    capturedUri = await captureRef(storyCardRef, storyCaptureOptions());
 
     if (!appId || !social?.INSTAGRAM_STORIES) {
       await shareCapturedViaOpen(capturedUri, message);
@@ -396,7 +488,7 @@ export async function shareTapInStoryToSnapchat({
     await loadStoryShareModules();
 
   try {
-    capturedUri = await captureRef(storyCardRef, storyCaptureOptions);
+    capturedUri = await captureRef(storyCardRef, storyCaptureOptions());
 
     if (!social?.SNAPCHAT) {
       await shareCapturedViaOpen(capturedUri, message);

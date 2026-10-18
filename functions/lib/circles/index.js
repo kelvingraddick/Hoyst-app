@@ -1,6 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.deleteCircle = exports.unarchiveCircle = exports.archiveCircle = exports.updateCircle = exports.convertPersonalCircle = exports.leaveCircle = exports.nudgeCircleMembers = exports.reviewJoinRequest = exports.joinCircle = exports.createCircle = void 0;
+const tap_in_proof_1 = require("../shared/tap-in-proof");
 const node_crypto_1 = require("node:crypto");
 const commitment_appearance_1 = require("../shared/commitment-appearance");
 const node_crypto_2 = require("node:crypto");
@@ -54,6 +55,7 @@ const createCircleSchema = zod_1.z
     commitment: zod_1.z.string().trim().min(1).max(160),
     commitmentCadence: zod_1.z.enum(['daily', 'weekly', 'monthly']).optional(),
     commitmentFrequency: commitmentFrequencySchema,
+    proofRequirement: zod_1.z.enum(['photo', 'none']).optional(),
     commitmentType: zod_1.z.enum(['build', 'limit', 'avoid']).default('build'),
     buildTrackingMode: zod_1.z.enum(['confirmation', 'quantity']).optional(),
     graceRules: zod_1.z
@@ -523,6 +525,7 @@ exports.createCircle = (0, https_1.onCall)({ secrets: [notifications_1.oneSignal
         commitment: input.commitment,
         commitmentCadence: commitmentPace,
         commitmentFrequency,
+        proofRequirement: input.proofRequirement ?? 'photo',
         commitmentType,
         ...(isPersonal ? {} : { groupStreakDays: 0 }),
         graceRules: input.graceRules ?? {
@@ -611,6 +614,7 @@ exports.createCircle = (0, https_1.onCall)({ secrets: [notifications_1.oneSignal
                 commitment: input.commitment,
                 commitmentCadence: commitmentPace,
                 commitmentFrequency,
+                proofRequirement: input.proofRequirement ?? 'photo',
                 commitmentType,
                 groupStreakDays: 0,
                 joinMode,
@@ -1369,6 +1373,7 @@ exports.convertPersonalCircle = (0, https_1.onCall)(async (request) => {
                 commitment,
                 commitmentCadence: commitmentPace,
                 commitmentFrequency,
+                proofRequirement: (0, tap_in_proof_1.readProofRequirement)(latestCircle?.proofRequirement),
                 commitmentType: latestCircle?.commitmentType ?? 'build',
                 groupStreakDays: 0,
                 joinMode: input.joinMode,
@@ -1473,6 +1478,7 @@ exports.updateCircle = (0, https_1.onCall)(async (request) => {
         commitment: input.commitment,
         commitmentCadence: commitmentPace,
         commitmentFrequency,
+        proofRequirement: input.proofRequirement ?? (0, tap_in_proof_1.readProofRequirement)(circle?.proofRequirement),
         commitmentType,
         graceRules: input.graceRules ?? {
             skip: {
@@ -1512,6 +1518,7 @@ exports.updateCircle = (0, https_1.onCall)(async (request) => {
             commitment: input.commitment,
             commitmentCadence: commitmentPace,
             commitmentFrequency,
+            proofRequirement: input.proofRequirement ?? (0, tap_in_proof_1.readProofRequirement)(circle?.proofRequirement),
             commitmentType,
             groupStreakDays: asNumber(circle?.groupStreakDays, 0),
             joinMode,
@@ -1754,6 +1761,7 @@ exports.unarchiveCircle = (0, https_1.onCall)({ secrets: [notifications_1.oneSig
                 commitment: circle?.commitment ?? circle?.title ?? 'Commitment',
                 commitmentCadence: commitmentPace,
                 commitmentFrequency,
+                proofRequirement: (0, tap_in_proof_1.readProofRequirement)(circle?.proofRequirement),
                 commitmentType: circle?.commitmentType ?? 'build',
                 groupStreakDays: asNumber(circle?.groupStreakDays, 0),
                 joinMode: circle?.joinMode ?? 'invite_only',

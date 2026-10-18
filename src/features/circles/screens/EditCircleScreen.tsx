@@ -1,4 +1,7 @@
-import {GoalEditor} from '../../create-circle/components/SetupStepContent';
+import {
+  GoalEditor,
+  ProofSelector,
+} from '../../create-circle/components/SetupStepContent';
 import {validateSetup} from '../../create-circle/services/setup-journey';
 import {CommitmentAppearanceControl} from '../../../design/components/CommitmentAppearanceControl';
 import React, {useEffect, useMemo, useRef, useState} from 'react';
@@ -256,7 +259,10 @@ export function EditCircleScreen({
   };
 
   const handleSave = async () => {
-    if (draft && validateSetup(draft)) { Alert.alert('Check your setup', validateSetup(draft)); return; }
+    if (draft && validateSetup(draft)) {
+      Alert.alert('Check your setup', validateSetup(draft));
+      return;
+    }
     if (!canSave || !payload) {
       return;
     }
@@ -510,7 +516,17 @@ export function EditCircleScreen({
           selected={draft.commitmentType}
         />
         <HoystText variant="bodyStrong">Goal for each Tap In</HoystText>
-        <GoalEditor draft={draft} onChange={setDraft} disabled={isSaving}/>
+        <GoalEditor draft={draft} onChange={setDraft} disabled={isSaving} />
+        <HoystText variant="bodyStrong">Tap In proof</HoystText>
+        <ProofSelector
+          value={draft.proofRequirement ?? 'none'}
+          onChange={value => setField('proofRequirement', value)}
+          disabled={isSaving}
+        />
+        <HoystText tone="muted">
+          Changes apply to new Tap Ins. Saved Tap Ins keep their original proof
+          rule.
+        </HoystText>
       </GlassPanel>
 
       <GlassPanel>
@@ -570,7 +586,8 @@ export function EditCircleScreen({
               }
             />
             <HoystText tone="muted">
-              Tap In windows are spaced across the month in the selected timezone.
+              Tap In windows are spaced across the month in the selected
+              timezone.
             </HoystText>
           </>
         ) : (
@@ -581,7 +598,10 @@ export function EditCircleScreen({
           </HoystText>
         )}
         <TimezonePicker
-          actionColors={{fill: theme.accent, foreground: theme.accentForeground}}
+          actionColors={{
+            fill: theme.accent,
+            foreground: theme.accentForeground,
+          }}
           helperText={`This controls when each Tap In day resets for this ${
             isPersonal ? 'Commitment' : 'Circle'
           }.`}

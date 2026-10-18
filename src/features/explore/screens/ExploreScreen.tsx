@@ -1,3 +1,5 @@
+import {formatCircleStreak} from '../../../shared/circle-progress';
+import {readCircleProgress} from '../../../shared/circle-progress';
 import {categories as commitmentCategories} from '../../../shared/commitment-appearance';
 import React, {useCallback, useEffect, useRef, useState} from 'react';
 import {
@@ -114,15 +116,15 @@ function CircleResult({
             </DSText>
           </View>
           <View style={styles.fact}>
-            {circle.groupStreakDays > 0 ? (
+            {(readCircleProgress(circle.groupStreak, circle as unknown as Record<string, unknown>)?.streak.count ?? 0) > 0 ? (
               <Flame
                 size={layout.statIcon}
                 color={theme.category[tone].foreground}
               />
             ) : null}
             <DSText variant="secondary" tone="muted">
-              {circle.groupStreakDays > 0
-                ? `${circle.groupStreakDays}-day group streak`
+              {(readCircleProgress(circle.groupStreak, circle as unknown as Record<string, unknown>)?.streak.count ?? 0) > 0
+                ? `${formatCircleStreak(readCircleProgress(circle.groupStreak, circle as unknown as Record<string, unknown>)?.streak)} group streak`
                 : availability}
             </DSText>
           </View>

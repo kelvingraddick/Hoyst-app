@@ -88,7 +88,7 @@ export function ProfileStats({
     {
       key: 'streak',
       value: streak,
-      label: 'Current streak',
+      label: 'Daily Tap In streak',
       icon: <ProgressStatBadge tone="orange" />,
       action: onStreak,
     },

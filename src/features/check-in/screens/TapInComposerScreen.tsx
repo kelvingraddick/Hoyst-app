@@ -1,3 +1,5 @@
+import {DateTime} from 'luxon';
+import {getTapInProofRequirement} from '../../../shared/tap-in-proof';
 import {useProgress} from '../../progress/hooks/useProgress';
 import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {Alert, Image, View} from 'react-native';
@@ -40,7 +42,11 @@ import {
   ComposerSheet,
   composerStyles as styles,
 } from '../components/TapInComposerPresentation';
-import {removeTapIn, submitTapIn} from '../services/check-in-service';
+import {
+  removeTapIn,
+  submitTapIn,
+  uploadTapInPhoto,
+} from '../services/check-in-service';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'TapInComposer'>;
 
@@ -65,6 +71,9 @@ function TapInComposerController({
     () => setDetailsScrollResetKey(previousKey => previousKey + 1),
     [],
   );
+  const uploadedPhoto = useRef<
+    {uri: string; dateKey: string; url: string} | undefined
+  >(undefined);
   const submissionLock = useRef(false);
   const removalLock = useRef(false);
   useEffect(() => {
@@ -81,7 +90,7 @@ function TapInComposerController({
   const [isRemovingTapIn, setIsRemovingTapIn] = useState(false);
   const [hasDirtyDetails, setHasDirtyDetails] = useState(false);
   const [selectedPhotoUri, setSelectedPhotoUri] = useState<string>();
-  const [quantityInput, setQuantityInput] = useState('0');
+  const [quantityDraft, setQuantityDraft] = useState({text: '0', value: 0});
   const [hasEditedQuantity, setHasEditedQuantity] = useState(false);
   const rewardState = useProgress();
   const profile = useUserProfileStore(state => state.profile);
@@ -123,30 +132,31 @@ function TapInComposerController({
     reloadAttempt,
   ]);
 
-  const savedQuantityValue = useMemo(
-    () =>
-      Math.round(
-        detail?.viewerTodayCheckIn?.currentValue ?? detail?.currentValue ?? 0,
-      ),
-    [detail?.currentValue, detail?.viewerTodayCheckIn?.currentValue],
-  );
+  const savedQuantityValue = useMemo(() => {
+    const saved =
+      detail?.viewerTodayCheckIn?.currentValue ?? detail?.currentValue ?? 0;
+    return Number.isFinite(saved)
+      ? Math.min(Number.MAX_SAFE_INTEGER, Math.max(0, Math.round(saved)))
+      : 0;
+  }, [detail?.currentValue, detail?.viewerTodayCheckIn?.currentValue]);
 
   useEffect(() => {
     if (!detail || hasEditedQuantity) {
       return;
     }
 
-    setQuantityInput(formatQuantityValue(savedQuantityValue));
+    setQuantityDraft({
+      text: formatQuantityValue(savedQuantityValue),
+      value: savedQuantityValue,
+    });
   }, [detail, hasEditedQuantity, savedQuantityValue]);
 
   const resetAndClose = () => {
     navigation.goBack();
   };
 
-  const parsedQuantityValue = Number.parseFloat(quantityInput);
-  const quantityValue = Number.isFinite(parsedQuantityValue)
-    ? Math.max(0, Math.round(parsedQuantityValue))
-    : 0;
+  const quantityValue = quantityDraft.value;
+  const hasValidQuantityInput = quantityDraft.text !== '';
   const hasDirtyQuantity =
     hasEditedQuantity && quantityValue !== savedQuantityValue;
   const hasSelectedPhoto = Boolean(selectedPhotoUri);
@@ -295,6 +305,12 @@ function TapInComposerController({
       : undefined;
   const viewerTodayNote = viewerTodayCheckIn?.note?.trim();
   const viewerTodayPhotoUrl = viewerTodayCheckIn?.photoUrl;
+  const proofRequirement = getTapInProofRequirement(detail, viewerTodayCheckIn);
+  const needsPhotoForCompletion =
+    proofRequirement === 'photo' &&
+    (!isQuantityTapIn || quantityCoverageStatus === 'covered');
+  const isMissingRequiredPhoto =
+    needsPhotoForCompletion && !selectedPhotoUri && !viewerTodayPhotoUrl;
   const removeActionLabel =
     detail.viewerTodayStatus === 'skip' ? 'Remove Skip' : 'Remove Tap In';
   const removeProgressCopy =
@@ -306,10 +322,35 @@ function TapInComposerController({
   const quantityStep = Math.max(1, Math.round(quantityConfig.stepValue ?? 1));
 
   const stepQuantity = (direction: -1 | 1) => {
-    const nextValue = Math.max(0, quantityValue + direction * quantityStep);
-
     setHasEditedQuantity(true);
-    setQuantityInput(formatQuantityValue(nextValue));
+    setQuantityDraft(previous => {
+      const value = Math.min(
+        Number.MAX_SAFE_INTEGER,
+        Math.max(0, previous.value + direction * quantityStep),
+      );
+      return {text: formatQuantityValue(value), value};
+    });
+  };
+
+  const editQuantity = (text: string) => {
+    if (
+      !/^\d*$/.test(text) ||
+      (text !== '' && !Number.isSafeInteger(Number(text)))
+    ) {
+      return;
+    }
+    setHasEditedQuantity(true);
+    setQuantityDraft(previous => ({
+      text,
+      value: text === '' ? previous.value : Number(text),
+    }));
+  };
+
+  const finishQuantityEditing = () => {
+    setQuantityDraft(previous => ({
+      ...previous,
+      text: formatQuantityValue(previous.value),
+    }));
   };
 
   const choosePhoto = async () => {
@@ -359,6 +400,9 @@ function TapInComposerController({
       submissionLock.current ||
       removalLock.current ||
       !canSubmitTapIn ||
+      (checkInStatus === 'done' &&
+        (isMissingRequiredPhoto || hasDirtyDetails)) ||
+      (checkInStatus === 'done' && isQuantityTapIn && !hasValidQuantityInput) ||
       (checkInStatus === 'skip' && !canSkip)
     ) {
       return;
@@ -366,7 +410,40 @@ function TapInComposerController({
     submissionLock.current = true;
     setIsSubmitting(true);
     try {
+      let savedPhotoUrl = viewerTodayPhotoUrl;
+      // Optional confirmation photos retain the post-completion upload flow.
+      if (
+        checkInStatus === 'done' &&
+        selectedPhotoUri &&
+        (proofRequirement === 'photo' || isQuantityTapIn)
+      ) {
+        if (!user?.uid) {
+          throw new Error('Sign in before uploading Photo proof.');
+        }
+        const dateKey = DateTime.now()
+          .setZone(detail.timezone ?? timezone)
+          .toISODate();
+        if (!dateKey) {
+          throw new Error('Could not determine today’s Tap In date.');
+        }
+        if (
+          uploadedPhoto.current?.uri !== selectedPhotoUri ||
+          uploadedPhoto.current.dateKey !== dateKey
+        ) {
+          const url = await uploadTapInPhoto({
+            circleId: route.params.circleId,
+            dateKey,
+            uid: user.uid,
+            uri: selectedPhotoUri,
+          });
+          uploadedPhoto.current = {uri: selectedPhotoUri, dateKey, url};
+        }
+        savedPhotoUrl = uploadedPhoto.current.url;
+      }
       const result = await submitTapIn({
+        ...(checkInStatus === 'done' && savedPhotoUrl
+          ? {photoUrl: savedPhotoUrl}
+          : {}),
         circleId: route.params.circleId,
         ...(checkInStatus === 'done' && isQuantityTapIn
           ? {currentValue: quantityValue}
@@ -407,9 +484,13 @@ function TapInComposerController({
       }
 
       navigation.replace('TapInComplete', {
+        proofRequirement: result.proofRequirement ?? proofRequirement,
         category: detail.category,
         appearance: detail.appearance,
         circleId: route.params.circleId,
+        circleMode: detail.circleMode,
+        commitmentCadence: detail.commitmentCadence,
+        timezone: detail.timezone,
         circleTitle: detail.title,
         commitment: detail.commitment,
         commitmentType,
@@ -429,6 +510,7 @@ function TapInComposerController({
               unitLabel: quantityConfig.unitLabel,
             }
           : {}),
+        circleProgress: result.circleProgress,
         completionMomentum: result.momentum,
         completionProgress: result.progress,
         dateKey: result.dateKey,
@@ -441,11 +523,20 @@ function TapInComposerController({
         status: completionStatus,
         streakDays: detail.streakDays,
         streakLabel: detail.streakLabel,
-        ...(checkInStatus === 'done' && !isQuantityTapIn && selectedPhotoUri
-          ? {photoUri: selectedPhotoUri}
+        ...(checkInStatus === 'done' &&
+        (result.photoUrl || savedPhotoUrl || selectedPhotoUri)
+          ? {photoUri: result.photoUrl || savedPhotoUrl || selectedPhotoUri}
           : {}),
       });
     } catch (error) {
+      const reason = (error as {details?: {reason?: string}}).details?.reason;
+      if (
+        reason === 'invalid-photo-proof' ||
+        reason === 'photo-proof-required'
+      ) {
+        uploadedPhoto.current = undefined;
+        setReloadAttempt(value => value + 1);
+      }
       Alert.alert(
         'Tap In failed',
         (error as {message?: string}).message ??
@@ -523,13 +614,21 @@ function TapInComposerController({
       inviteUrl: detail.inviteUrl,
       memberCount: detail.memberCount,
       members: detail.members,
-      note: viewerTodayNote || undefined,
-      periodTapInCount: detail.periodTapInCount,
+      circleMode: detail.circleMode,
+      commitmentCadence: detail.commitmentCadence,
+      timezone: detail.timezone,
+      dateKey:
+        viewerTodayCheckIn?.dateKey ??
+        DateTime.now().setZone(detail.timezone ?? timezone).toISODate()!,
+      status: viewerTodayCheckIn?.status,
+      coverageStatus: viewerTodayCheckIn?.coverageStatus,
+      currentValue: viewerTodayCheckIn?.currentValue,
+      minimumValue: viewerTodayCheckIn?.minimumValue ?? detail.minimumValue,
+      maximumValue: viewerTodayCheckIn?.maximumValue ?? detail.maximumValue,
+      targetValue: viewerTodayCheckIn?.targetValue ?? detail.targetValue,
+      unitLabel: viewerTodayCheckIn?.unitLabel ?? detail.unitLabel,
       photoUri: viewerTodayPhotoUrl,
-      progressLabel: detail.progressLabel,
       source: route.params.source,
-      streakDays: detail.streakDays,
-      streakLabel: detail.streakLabel,
     });
   };
 
@@ -545,6 +644,10 @@ function TapInComposerController({
         dateKey={viewerTodayCheckIn.dateKey}
         initialNote={viewerTodayNote}
         initialPhotoUrl={viewerTodayPhotoUrl}
+        photoRequired={
+          proofRequirement === 'photo' && viewerTodayCheckIn.status === 'done'
+        }
+        proofRequiredForCompletion={proofRequirement === 'photo'}
         presentation="composer"
         category={category}
         onDirtyChange={setHasDirtyDetails}
@@ -577,7 +680,13 @@ function TapInComposerController({
               category={category}
               active={active}
               busy={isSubmitting}
-              disabled={blocked || !canSubmitTapIn}
+              disabled={
+                blocked ||
+                !canSubmitTapIn ||
+                isMissingRequiredPhoto ||
+                hasDirtyDetails ||
+                (isQuantityTapIn && !hasValidQuantityInput)
+              }
               label={
                 isSubmitting
                   ? 'Submitting...'
@@ -653,19 +762,33 @@ function TapInComposerController({
               <ComposerQuantity
                 detail={detail}
                 value={quantityValue}
+                inputText={quantityDraft.text}
+                onChangeText={editQuantity}
+                onEndEditing={finishQuantityEditing}
+                active={active}
                 onDecrease={() => stepQuantity(-1)}
                 onIncrease={() => stepQuantity(1)}
                 disabled={blocked}
                 saved={detail.viewerHasTappedInToday && !hasDirtyQuantity}
               />
-            ) : (
+            ) : null}
+            {!isQuantityTapIn || !viewerTodayCheckIn ? (
               <ComposerPhoto
                 uri={selectedPhotoUri}
+                required={proofRequirement === 'photo'}
                 onAdd={openPhotoPicker}
                 onRemove={() => setSelectedPhotoUri(undefined)}
                 disabled={blocked}
               />
-            )}
+            ) : null}
+            {isMissingRequiredPhoto ? (
+              <DSText
+                variant="secondary"
+                tone="muted"
+                accessibilityLiveRegion="polite">
+                Add Photo proof before completing this Tap In.
+              </DSText>
+            ) : null}
             {isQuantityTapIn ? detailsEditor : null}
             {isQuantityTapIn && hasRemovableTodayCheckIn ? removeAction : null}
           </>

@@ -11,6 +11,8 @@ const {
   joinCircle,
 } = require('../functions/lib/circles');
 const {completeProfile} = require('../functions/lib/auth');
+const {acceptLegalTerms} = require('../functions/lib/auth/legal');
+const {LEGAL_VERSION} = require('../functions/lib/shared/legal');
 const {checkProfileUsername} = require('../functions/lib/profile/edit');
 const {suggestPublicCircles} = require('../functions/lib/discovery');
 const {resolveCircleInvite} = require('../functions/lib/invites');
@@ -22,13 +24,23 @@ const owner = 'onboarding-test-owner';
 const other = 'onboarding-test-other';
 const fresh = 'onboarding-test-fresh';
 const refs = [];
-const call = (fn, data, uid = owner) =>
-  fn.run({
+const call = async (fn, data, uid = owner) => {
+  if (fn === completeProfile && uid)
+    await acceptLegalTerms.run({
+      auth: {uid, token: {}},
+      data: {
+        adult: true,
+        termsVersion: LEGAL_VERSION,
+        privacyVersion: LEGAL_VERSION,
+      },
+    });
+  return fn.run({
     auth: uid
       ? {uid, token: {firebase: {sign_in_provider: 'password'}}}
       : undefined,
     data,
   });
+};
 const payload = {
   category: 'Fitness',
   circleMode: 'group',
@@ -66,6 +78,7 @@ after(async () => {
   }
   for (const uid of [owner, other, fresh, 'onboarding-profile-size']) {
     await db.recursiveDelete(db.doc(`users/${uid}`));
+    await db.doc(`publicProfiles/${uid}`).delete();
     await db.recursiveDelete(db.doc(`userPrivate/${uid}`));
   }
   for (const handle of [
@@ -389,6 +402,14 @@ test('an older personal-edit payload cannot collapse an independent name back in
 });
 test('an explicit no-photo choice overrides the authentication photo', async () => {
   const uid = 'onboarding-no-photo';
+  await acceptLegalTerms.run({
+    auth: {uid, token: {}},
+    data: {
+      adult: true,
+      termsVersion: LEGAL_VERSION,
+      privacyVersion: LEGAL_VERSION,
+    },
+  });
   await completeProfile.run({
     auth: {
       uid,
@@ -417,6 +438,7 @@ test('numeric-one Tap Ins keep partial progress and persist the quantity mode sn
     targetValue: 1,
     unitLabel: 'pages',
     requestId: 'numeric-one-submission',
+    proofRequirement: 'none',
   });
   const ref = db.doc(`circles/${result.circleId}`);
   refs.push(ref);

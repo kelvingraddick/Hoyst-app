@@ -1,5 +1,5 @@
 import React, {useEffect, useState} from 'react';
-import {DevSettings, Linking, Modal, View} from 'react-native';
+import {DevSettings, Linking, Modal, StyleSheet, View} from 'react-native';
 import {
   initialWindowMetrics,
   SafeAreaProvider,
@@ -9,6 +9,8 @@ import {DesignSystemGallery} from './DesignSystemGallery';
 
 /** Debug-only visual fixtures. Hidden host renders nothing. */
 export function DesignSystemDevHost() {
+  const [storyMode, setStoryMode] = useState<string>();
+  const [circleProgressMode, setCircleProgressMode] = useState<string>();
   const [profileMode, setProfileMode] = useState<string>();
   const [progressMode, setProgressMode] = useState<ProgressPreviewMode>();
   const [visible, setVisible] = useState(false);
@@ -54,6 +56,13 @@ export function DesignSystemDevHost() {
         'light',
         'dark',
         'guest',
+        'guest-dark',
+        'guest-narrow',
+        'guest-dark-narrow',
+        'guest-bottom',
+        'guest-dark-bottom',
+        'guest-narrow-bottom',
+        'guest-dark-narrow-bottom',
         'loading',
         'error',
         'zero',
@@ -66,7 +75,19 @@ export function DesignSystemDevHost() {
     DevSettings.addMenuItem('Close Progress preview', () => {
       if (mounted) setProgressMode(undefined);
     });
+    ['light', 'dark', 'light-narrow', 'dark-narrow', 'light-narrow-panel', 'dark-narrow-panel', 'daily', 'daily-empty', 'dark-daily-empty', 'monthly', 'personal', 'unknown'].forEach(mode => {
+      DevSettings.addMenuItem(`Circle progress: ${mode}`, () => {if (mounted) setCircleProgressMode(mode);});
+    });
     const openPreview = (url: string | null) => {
+      const storyMatch = url?.match(/^hoyst:\/\/tap-in-story-preview\/([a-z-]+)$/);
+      if (mounted && storyMatch) {
+        setStoryMode(storyMatch[1] === 'close' ? undefined : storyMatch[1]);
+        return;
+      }
+
+      const circleMatch = url?.match(/^hoyst:\/\/circle-progress-preview\/([a-z-]+)$/);
+      if (mounted && circleMatch) {setCircleProgressMode(circleMatch[1] === 'close' ? undefined : circleMatch[1]); return;}
+
       if (url === 'hoyst://profile-preview/close') {
         if (mounted) setProfileMode(undefined);
         return;
@@ -82,7 +103,7 @@ export function DesignSystemDevHost() {
         return;
       }
       const match = url?.match(
-        /^hoyst:\/\/progress-preview\/((?:light|dark)(?:-bottom|-middle|-narrow|-narrow-middle|-stats|-stats-narrow|-stats-details)?|guest|loading|error|zero|zero-bottom|home-(?:light|dark)(?:-bottom|-narrow)?|level-one|level-four)$/,
+        /^hoyst:\/\/progress-preview\/((?:light|dark)(?:-bottom|-middle|-narrow|-narrow-middle|-stats|-stats-narrow|-stats-details)?|guest(?:-dark)?(?:-narrow)?(?:-bottom)?|loading|error|zero|zero-bottom|home-(?:light|dark)(?:-bottom|-narrow)?|level-one|level-four)$/,
       );
       if (mounted && match) setProgressMode(match[1] as ProgressPreviewMode);
     };
@@ -99,13 +120,27 @@ export function DesignSystemDevHost() {
   }, []);
   if (
     !__DEV__ ||
-    (!visible &&
+    (!storyMode &&
+      !circleProgressMode &&
+      !visible &&
       !tapInVisible &&
       !pickerVisible &&
       !progressMode &&
       !profileMode)
   ) {
     return null;
+  }
+  if (storyMode) {
+    const {TapInStoryPreview} = require('../../features/check-in/components/TapInStoryPreview');
+    return (
+      <View accessibilityViewIsModal style={storyPreviewStyles.overlay}>
+        <TapInStoryPreview key={storyMode} mode={storyMode} onClose={() => setStoryMode(undefined)} />
+      </View>
+    );
+  }
+  if (circleProgressMode) {
+    const {CircleProgressPreview} = require('../../features/circles/components/CircleProgressPreview');
+    return <View accessibilityViewIsModal style={{position: 'absolute', top: 0, right: 0, bottom: 0, left: 0}}><CircleProgressPreview mode={circleProgressMode} onClose={() => setCircleProgressMode(undefined)} /></View>;
   }
   if (profileMode) {
     const {GestureHandlerRootView} = require('react-native-gesture-handler');
@@ -181,3 +216,7 @@ export function DesignSystemDevHost() {
     </Modal>
   );
 }
+
+const storyPreviewStyles = StyleSheet.create({
+  overlay: {position: 'absolute', top: 0, right: 0, bottom: 0, left: 0},
+});

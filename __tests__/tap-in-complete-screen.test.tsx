@@ -210,7 +210,7 @@ describe('TapInCompleteScreen', () => {
     const output = JSON.stringify(tree!.toJSON());
 
     expect(output).toContain('Tap In complete');
-    expect(output).toContain('+1 day streak');
+    expect(output).toContain('+1 day Daily Tap In streak');
     expect(output).toContain('6 now');
     expect(output).toContain('Move for 30 minutes');
     expect(output).toContain('Share as story');
@@ -405,26 +405,23 @@ describe('TapInCompleteScreen', () => {
       shareButton!.props.onPress();
     });
 
-    expect(navigation.navigate).toHaveBeenCalledWith('TapInStoryShare', {
+    expect(navigation.navigate).toHaveBeenCalledWith('TapInStoryShare', expect.objectContaining({
       category: 'Fitness',
       circleId: 'circle-1',
+      dateKey: '2026-05-29',
+      status: 'done',
       circleTitle: 'Morning Movers',
       commitment: 'Move for 30 minutes',
       commitmentType: 'build',
       inviteUrl: 'https://hoyst.app/join/circle-1',
       memberCount: 4,
       members: [],
-      note: undefined,
-      periodTapInCount: 8,
       photoUri: undefined,
-      progressLabel: 'Week · 50%',
       source: 'home',
-      streakDays: 6,
-      streakLabel: '4d streak',
-    });
+    }));
   });
 
-  it('adds details after completion and shares the saved note', async () => {
+  it('saves notes on the Tap In without including them in story sharing', async () => {
     const tree = await renderReadyCompleteScreen();
 
     await act(async () => {
@@ -469,8 +466,9 @@ describe('TapInCompleteScreen', () => {
 
     expect(navigation.navigate).toHaveBeenCalledWith(
       'TapInStoryShare',
-      expect.objectContaining({note: 'Saved after the Tap In.'}),
+      expect.objectContaining({dateKey: '2026-05-29'}),
     );
+    expect(navigation.navigate.mock.calls.at(-1)?.[1]).not.toHaveProperty('note');
   });
 
   it('shows selected proof immediately and saves it after Tap In completion', async () => {
@@ -861,7 +859,7 @@ describe('TapInCompleteScreen', () => {
 
     expect(output).toContain('Skip Recorded');
     expect(output).toContain('Skip used');
-    expect(output).toContain('6 days streak held');
+    expect(output).toContain('6 days Daily Tap In streak held');
     expect(output).toContain('No note added. Your skip still protects this opportunity.');
     expect(output).not.toContain('Share as story');
     expect(output).not.toContain('Add details');

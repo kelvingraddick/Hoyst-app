@@ -152,6 +152,7 @@ export const suggestPublicCircles = onCall(async request => {
       memberCount: Math.max(0, Number(circle.memberCount) || 0),
       maxSize: Number(circle.maxSize) || 10,
       groupStreakDays: Number(circle.groupStreakDays) || 0,
+      ...(circle.groupStreak ? {groupStreak: circle.groupStreak} : {}),
       joinMode: circle.joinMode ?? 'request_to_join',
       commitmentCadence: circle.commitmentCadence ?? 'daily',
       commitmentFrequency: circle.commitmentFrequency ?? {tapInsPerWeek: 7},
@@ -290,6 +291,10 @@ export const searchPublicCircles = onCall(async request => {
         memberCount: Math.max(0, Number(data.memberCount) || 0),
         maxSize: Math.max(1, Number(data.maxSize) || 10),
         groupStreakDays: Math.max(0, Number(data.groupStreakDays) || 0),
+        commitmentCadence: data.commitmentCadence,
+        commitmentFrequency: data.commitmentFrequency,
+        timezone: data.timezone || 'UTC',
+        ...(data.groupStreak ? {groupStreak: data.groupStreak} : {}),
         joinMode: data.joinMode ?? 'request_to_join',
         ...(latestPublicTapIn ? {latestPublicTapIn} : {}),
       };

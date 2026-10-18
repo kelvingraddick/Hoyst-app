@@ -3,6 +3,46 @@ import {Pressable, StyleSheet, View, useWindowDimensions} from 'react-native';
 import {ChevronRight} from 'lucide-react-native';
 import {DSSurface, DSText, useSystemTheme} from '../../../design/system';
 import {ProgressStatBadge} from './ProgressStatBadge';
+import type {CircularEmojiKind} from '../../../design/components/CircularEmoji';
+
+export function ProgressStatCard({
+  title,
+  value,
+  tone,
+  kind,
+  onPress,
+  targetTestID,
+  grow = false,
+}: {
+  title: string;
+  value: string;
+  tone: 'orange' | 'blue';
+  kind?: CircularEmojiKind;
+  onPress: () => void;
+  targetTestID: string;
+  grow?: boolean;
+}) {
+  const theme = useSystemTheme();
+  return (
+    <DSSurface raised style={[styles.card, grow && styles.grow]}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`${value}. ${title}. View details.`}
+        onPress={onPress}
+        style={styles.row}
+        testID={targetTestID}>
+        <ProgressStatBadge tone={tone} kind={kind} />
+        <View style={styles.copy}>
+          <DSText variant="title">{value}</DSText>
+          <DSText variant="statCaption" tone="muted">
+            {title}
+          </DSText>
+        </View>
+        <ChevronRight color={theme.muted} size={12} style={styles.chevron} />
+      </Pressable>
+    </DSSurface>
+  );
+}
 
 /** Presentation only: each caller retains its own data and navigation. */
 export function ProgressStatsRow({
@@ -20,7 +60,6 @@ export function ProgressStatsRow({
   onMomentumPress: () => void;
   testIDPrefix?: string;
 }) {
-  const theme = useSystemTheme();
   const {width, fontScale} = useWindowDimensions();
   const columns = (viewportWidth ?? width) >= 390 && fontScale <= 1.15;
   return (
@@ -28,7 +67,7 @@ export function ProgressStatsRow({
       {[
         {
           key: 'streak',
-          title: 'Current streak',
+          title: 'Daily Tap In streak',
           value: streak,
           tone: 'orange' as const,
           onPress: onStreakPress,
@@ -40,31 +79,13 @@ export function ProgressStatsRow({
           tone: 'blue' as const,
           onPress: onMomentumPress,
         },
-      ].map(stat => (
-        <DSSurface
-          raised
-          key={stat.key}
-          style={[styles.card, columns && styles.grow]}>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={`${stat.value}. ${stat.title}. View details.`}
-            onPress={stat.onPress}
-            style={styles.row}
-            testID={`${testIDPrefix}-${stat.key}-card`}>
-            <ProgressStatBadge tone={stat.tone} />
-            <View style={styles.copy}>
-              <DSText variant="title">{stat.value}</DSText>
-              <DSText variant="statCaption" tone="muted">
-                {stat.title}
-              </DSText>
-            </View>
-            <ChevronRight
-              color={theme.muted}
-              size={12}
-              style={styles.chevron}
-            />
-          </Pressable>
-        </DSSurface>
+      ].map(({key, ...stat}) => (
+        <ProgressStatCard
+          key={key}
+          {...stat}
+          grow={columns}
+          targetTestID={`${testIDPrefix}-${key}-card`}
+        />
       ))}
     </View>
   );

@@ -21,6 +21,7 @@ import {
   Check,
   Compass,
   Globe,
+  FileText,
   Info,
   LifeBuoy,
   LogOut,
@@ -69,6 +70,9 @@ import {
 } from '../../profile/components/ProfileScaffold';
 import {useProfilePreview} from '../../profile/components/ProfilePreviewContext';
 
+import {openLegalPage} from '../../legal/policy';
+import {LegalAcceptanceBanner} from '../../legal/LegalAcceptanceBanner';
+
 type Route =
   | 'Settings'
   | 'AccountSettings'
@@ -83,7 +87,12 @@ function useIdentity() {
   const stored = useUserProfileStore(state => state.profile);
   const preview = useProfilePreview();
   const uid = useSessionStore(state => state.user?.uid);
-  return preview ? preview.profile : stored?.id === uid ? stored : undefined;
+  const status = useSessionStore(state => state.status);
+  return preview
+    ? preview.profile
+    : status === 'authenticatedReady' && stored?.id === uid
+    ? stored
+    : undefined;
 }
 function Group({title, children}: {title: string; children: ReactNode}) {
   return (
@@ -105,6 +114,11 @@ export function SettingsScreen(props: Props<'Settings'>) {
 function SettingsContent({navigation}: Props<'Settings'>) {
   const profile = useIdentity();
   const preview = useProfilePreview();
+  const status = useSessionStore(state => state.status);
+  const uid = useSessionStore(state => state.user?.uid);
+  const signedIn = preview
+    ? Boolean(preview.profile)
+    : status === 'authenticatedReady' && Boolean(uid);
   const appearance = useSettingsStore(state => state.appearance);
   const info = getInstalledAppInfo();
   const [deleteVisible, setDeleteVisible] = useState(false);
@@ -160,14 +174,17 @@ function SettingsContent({navigation}: Props<'Settings'>) {
           testID="settings-edit-profile"
         />
       ) : null}
+      {signedIn && !preview ? <LegalAcceptanceBanner /> : null}
       <Group title="Preferences">
-        <DSListRow
-          title="Notifications"
-          subtitle="Reminders, nudges & Circle activity"
-          leading={<ProfileIcon icon={Bell} tone="green" />}
-          onPress={() => navigation.navigate('NotificationSettings')}
-          testID="settings-notifications"
-        />
+        {signedIn ? (
+          <DSListRow
+            title="Notifications"
+            subtitle="Reminders, nudges & Circle activity"
+            leading={<ProfileIcon icon={Bell} tone="green" />}
+            onPress={() => navigation.navigate('NotificationSettings')}
+            testID="settings-notifications"
+          />
+        ) : null}
         <DSListRow
           title="Appearance"
           leading={<ProfileIcon icon={MoonStar} tone="purple" />}
@@ -217,6 +234,18 @@ function SettingsContent({navigation}: Props<'Settings'>) {
           leading={<ProfileIcon icon={Info} />}
           onPress={() => navigation.navigate('AboutHoyst')}
           testID="settings-about"
+        />
+        <DSListRow
+          title="Privacy Policy"
+          leading={<ProfileIcon icon={Shield} />}
+          onPress={() => void openLegalPage('privacy')}
+          testID="settings-privacy"
+        />
+        <DSListRow
+          title="Terms"
+          leading={<ProfileIcon icon={FileText} />}
+          onPress={() => void openLegalPage('terms')}
+          testID="settings-terms"
         />
       </Group>
       {profile ? (

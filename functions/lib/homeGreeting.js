@@ -9,6 +9,7 @@ exports.parseGeminiHomeGreetingResponse = parseGeminiHomeGreetingResponse;
 exports.resolveHomeGreeting = resolveHomeGreeting;
 const params_1 = require("firebase-functions/params");
 const https_1 = require("firebase-functions/v2/https");
+const legal_1 = require("./shared/legal");
 const firestore_1 = require("firebase-admin/firestore");
 const zod_1 = require("zod");
 const firebase_1 = require("./firebase");
@@ -223,6 +224,9 @@ const firestoreHomeGreetingCacheStore = {
             .doc(cacheKey)
             .get();
         const data = snapshot.data();
+        if (!data?.updatedAt?.toMillis ||
+            data.updatedAt.toMillis() < Date.now() - 48 * 60 * 60 * 1000)
+            return undefined;
         const headline = validateHomeGreetingHeadline({
             firstName: input.firstName,
             headline: data?.headline,
@@ -261,24 +265,32 @@ const firestoreHomeGreetingCacheStore = {
             return 'allowed';
         });
     },
-    async setCachedGreeting(cacheKey, input, result) {
+    async setCachedGreeting(cacheKey, input, result, uid) {
         if (result.source !== 'gemini') {
             return;
         }
-        await firebase_1.db
-            .collection('homeGreetingCache')
-            .doc(cacheKey)
-            .set({
-            circleSummary: input.circleSummary,
-            createdAt: firestore_1.FieldValue.serverTimestamp(),
-            dateKey: input.dateKey,
-            firstName: cleanFirstName(input.firstName) ?? null,
-            headline: result.headline,
-            primaryAction: input.primaryAction ?? null,
-            source: 'gemini',
-            timeWindow: input.timeWindow,
-            updatedAt: firestore_1.FieldValue.serverTimestamp(),
-        }, { merge: true });
+        await firebase_1.db.runTransaction(async (transaction) => {
+            const [account, privateAccount] = await Promise.all([
+                transaction.get(firebase_1.db.doc(`users/${uid}`)),
+                transaction.get(firebase_1.db.doc(`userPrivate/${uid}`)),
+            ]);
+            if (!account.exists ||
+                account.data()?.accountDeletionStartedAt ||
+                !(0, legal_1.hasCurrentLegalAcceptance)(privateAccount.data()?.legalAcceptance))
+                return;
+            transaction.set(firebase_1.db.collection('homeGreetingCache').doc(cacheKey), {
+                ownerUid: uid,
+                circleSummary: input.circleSummary,
+                createdAt: firestore_1.FieldValue.serverTimestamp(),
+                dateKey: input.dateKey,
+                firstName: cleanFirstName(input.firstName) ?? null,
+                headline: result.headline,
+                primaryAction: input.primaryAction ?? null,
+                source: 'gemini',
+                timeWindow: input.timeWindow,
+                updatedAt: firestore_1.FieldValue.serverTimestamp(),
+            });
+        });
     },
 };
 function validateHomeGreetingHeadline({ firstName, headline, primaryAction, }) {
@@ -471,7 +483,7 @@ async function resolveHomeGreeting({ apiKey = getGeminiApiKey(), cacheStore, fet
         }
         const result = { headline, source: 'gemini' };
         if (cacheStore && cacheKey) {
-            await cacheStore.setCachedGreeting(cacheKey, input, result);
+            await cacheStore.setCachedGreeting(cacheKey, input, result, uid);
         }
         return result;
     }
@@ -486,6 +498,15 @@ exports.generateHomeGreeting = (0, https_1.onCall)({ secrets: [geminiApiKey] }, 
     const input = homeGreetingSchema.parse(request.data);
     if (!request.auth?.uid) {
         return buildHomeGreetingFallback(input, 'unauthenticated');
+    }
+    const [account, privateAccount] = await Promise.all([
+        firebase_1.db.doc(`users/${request.auth.uid}`).get(),
+        firebase_1.db.doc(`userPrivate/${request.auth.uid}`).get(),
+    ]);
+    if (!account.exists ||
+        account.data()?.accountDeletionStartedAt ||
+        !(0, legal_1.hasCurrentLegalAcceptance)(privateAccount.data()?.legalAcceptance)) {
+        return buildHomeGreetingFallback(input, 'legal-acceptance-required');
     }
     return resolveHomeGreeting({
         cacheStore: firestoreHomeGreetingCacheStore,

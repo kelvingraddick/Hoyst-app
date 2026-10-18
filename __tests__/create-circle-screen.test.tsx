@@ -100,6 +100,8 @@ jest.mock('../src/lib/firebase/firestore', () => ({
     return chain;
   },
 }));
+jest.mock('../src/features/legal/LegalAcceptanceContext', () => ({useHasLegalAcceptance: () => true, useLegalAcceptance: () => ({acknowledge: jest.fn().mockResolvedValue(undefined)})}));
+jest.mock('../src/features/legal/policy-service', () => ({acceptLegalTerms: jest.fn().mockResolvedValue(undefined)}));
 jest.mock('../src/lib/notifications', () => ({
   requestPushNotificationPermission: jest.fn().mockResolvedValue(true),
 }));
@@ -636,14 +638,14 @@ describe('shared approved wizard', () => {
       cadence: 'weekly',
       mode: 'group',
       type: 'avoid',
-      previous: 'type',
+      previous: 'proof',
     },
     {
       step: 'timezone',
       cadence: 'weekly',
       mode: 'personal',
       type: 'build',
-      previous: 'goal',
+      previous: 'proof',
     },
   ])(
     'backs from $step to $previous while respecting skipped steps',
@@ -1496,4 +1498,33 @@ describe('shared goal editor polish', () => {
     const second = await renderGoal(first.draft());
     expect(second.draft().unitLabel).toBe('minutes');
   });
+});
+
+
+describe('Tap In proof setup', () => {
+  it('shows a selected Photo proof default and preserves No proof through review and save', async () => {
+    seed('proof');
+    const tree = await render();
+    expect(tree.root.findAllByType(SetupChoice).find(node => node.props.title === 'Photo proof')?.props.selected).toBe(true);
+    await choose(tree, 'No proof needed');
+    expect(currentRecord().draft.proofRequirement).toBe('none');
+    await act(async () => useSetupJourneyStore.getState().update(key, {step: 'review'}));
+    expect(JSON.stringify(tree.toJSON())).toContain('No proof needed');
+    await act(async () => tree.unmount());
+  });
+});
+
+
+it('preserves a pre-proof submitted payload when recovering an uncertain creation', async () => {
+  const saved = seed('saveError');
+  saved.draft = applyStarter(saved.draft, starters[0]);
+  saved.submittedDraft = {...saved.draft};
+  delete saved.submittedDraft.proofRequirement;
+  saved.status = 'error';
+  useSetupJourneyStore.setState({records: {[key]: saved}});
+  const tree = await render();
+  await press(tree, 'Try again');
+  const sent = (createCircle as jest.Mock).mock.calls[0][0];
+  expect(sent.requestId).toBe(saved.requestId);
+  expect(sent).not.toHaveProperty('proofRequirement');
 });

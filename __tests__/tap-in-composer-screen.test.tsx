@@ -10,6 +10,7 @@ import {TapInComposerScreen} from '../src/features/check-in/screens/TapInCompose
 import {useHoyFeedbackStore} from '../src/store/hoy-feedback-store';
 import type {CircleDetailModel} from '../src/types/models';
 
+const mockUploadTapInPhoto = jest.fn();
 const mockSubmitTapIn = jest.fn();
 const mockRemoveTapIn = jest.fn();
 const mockSubscribeToMemberCircleDetail = jest.fn();
@@ -121,6 +122,7 @@ jest.mock('../src/store/profile-store', () => ({
 }));
 
 jest.mock('../src/features/check-in/services/check-in-service', () => ({
+  uploadTapInPhoto: (...args: unknown[]) => mockUploadTapInPhoto(...args),
   removeTapIn: (...args: unknown[]) => mockRemoveTapIn(...args),
   submitTapIn: (...args: unknown[]) => mockSubmitTapIn(...args),
 }));
@@ -218,6 +220,7 @@ describe('TapInComposerScreen', () => {
     });
     mockRemoveTapIn.mockResolvedValue({dateKey: '2026-05-29', removed: true});
     mockSubscribeToMemberCircleDetail.mockClear();
+    mockUploadTapInPhoto.mockReset();
     mockLaunchCamera.mockReset();
     mockLaunchImageLibrary.mockReset();
     Object.keys(mockNavigationListeners).forEach(key => {
@@ -227,6 +230,135 @@ describe('TapInComposerScreen', () => {
 
   afterEach(() => {
     jest.clearAllMocks();
+  });
+
+  it.each([false, true])(
+    'types an exact total and saves it once (previously saved: %s)',
+    async saved => {
+      mockDetail = {
+        ...baseMockDetail,
+        commitmentType: 'build',
+        buildTrackingMode: 'quantity',
+        targetValue: 100,
+        unitLabel: 'ounces',
+        currentValue: saved ? 20 : 0,
+        viewerHasTappedInToday: saved,
+        viewerTodayStatus: saved ? 'done' : undefined,
+      };
+      let tree!: renderer.ReactTestRenderer;
+      await act(async () => {
+        tree = renderComposerScreen();
+      });
+      const input = () =>
+        tree.root.findByProps({testID: 'tap-in-composer-quantity-input'});
+      expect(input().props.value).toBe(saved ? '20' : '0');
+      expect(input().props.selectTextOnFocus).toBe(true);
+      expect(input().props.accessibilityLabel).toContain('ounces');
+      await act(async () => {
+        input().props.onChangeText('100');
+      });
+      expect(input().props.value).toBe('100');
+      const save = tree.root
+        .findAllByType(DSButton)
+        .find(
+          button =>
+            button.props.label === (saved ? 'Update Progress' : 'Log Progress'),
+        )!;
+      await act(async () => {
+        save.props.onPress();
+        save.props.onPress();
+      });
+      expect(mockSubmitTapIn).toHaveBeenCalledTimes(1);
+      expect(mockSubmitTapIn).toHaveBeenCalledWith(
+        expect.objectContaining({currentValue: 100}),
+      );
+      await act(async () => tree.unmount());
+    },
+  );
+
+  it('handles blank input, rejects invalid paste, and restores the last valid total', async () => {
+    mockDetail = {
+      ...baseMockDetail,
+      commitmentType: 'build',
+      buildTrackingMode: 'quantity',
+      targetValue: 100,
+      currentValue: 20,
+    };
+    let tree!: renderer.ReactTestRenderer;
+    await act(async () => {
+      tree = renderComposerScreen();
+    });
+    const input = () =>
+      tree.root.findByProps({testID: 'tap-in-composer-quantity-input'});
+    const save = () =>
+      tree.root
+        .findAllByType(DSButton)
+        .find(button => button.props.label === 'Log Progress')!;
+    for (const invalid of ['-1', '1.5', '10 oz', '1e3', '9007199254740992']) {
+      await act(async () => input().props.onChangeText(invalid));
+      expect(input().props.value).toBe('20');
+    }
+    await act(async () => input().props.onChangeText(''));
+    expect(save().props.disabled).toBe(true);
+    await act(async () => save().props.onPress());
+    expect(mockSubmitTapIn).not.toHaveBeenCalled();
+    await act(async () => input().props.onBlur());
+    expect(input().props.value).toBe('20');
+    expect(save().props.disabled).toBe(false);
+    await act(async () => input().props.onChangeText('00030'));
+    await act(async () => input().props.onBlur());
+    expect(input().props.value).toBe('30');
+    const event = {
+      preventDefault: jest.fn(),
+      data: {action: {type: 'GO_BACK'}},
+    };
+    await act(async () => mockNavigationListeners.beforeRemove(event as never));
+    expect(event.preventDefault).toHaveBeenCalled();
+    await act(async () => tree.unmount());
+  });
+
+  it('uses the latest total for rapid steps and permits values above a Limit maximum', async () => {
+    mockDetail = {
+      ...baseMockDetail,
+      commitmentType: 'limit',
+      maximumValue: 10,
+      unitLabel: 'cups',
+      currentValue: 0,
+    };
+    let tree!: renderer.ReactTestRenderer;
+    await act(async () => {
+      tree = renderComposerScreen();
+    });
+    const input = () =>
+      tree.root.findByProps({testID: 'tap-in-composer-quantity-input'});
+    const increase = tree.root.findByProps({
+      accessibilityLabel: 'Increase quantity',
+    }).props.onPress;
+    await act(async () => {
+      for (let i = 0; i < 100; i += 1) {
+        increase();
+      }
+    });
+    expect(input().props.value).toBe('100');
+    await act(async () => input().props.onChangeText('9007199254740991'));
+    expect(
+      tree.root.findByProps({accessibilityLabel: 'Increase quantity'}).props
+        .disabled,
+    ).toBe(true);
+    const decrease = tree.root.findByProps({
+      accessibilityLabel: 'Decrease quantity',
+    }).props.onPress;
+    await act(async () => input().props.onChangeText('1'));
+    await act(async () => {
+      decrease();
+      decrease();
+    });
+    expect(input().props.value).toBe('0');
+    expect(
+      tree.root.findByProps({accessibilityLabel: 'Decrease quantity'}).props
+        .disabled,
+    ).toBe(true);
+    await act(async () => tree.unmount());
   });
 
   it('prevents duplicate submissions while a save is pending and permits retry after failure', async () => {
@@ -320,7 +452,7 @@ describe('TapInComposerScreen', () => {
         .findByProps({testID: 'tap-in-composer-category-fade'})
         .findAllByType(Stop)
         .map(stop => stop.props.stopColor),
-    ).toEqual(['#E7F8EF', '#FAFAF7']);
+    ).toEqual(['#FFF0E6', '#FAFAF7']);
     const confirmButton = tree!.root
       .findAllByType(DSButton)
       .find(button => button.props.label === 'Tap In');
@@ -334,6 +466,7 @@ describe('TapInComposerScreen', () => {
     });
 
     expect(navigation.replace).toHaveBeenCalledWith('TapInComplete', {
+      proofRequirement: 'none',
       category: 'Fitness',
       circleId: 'circle-1',
       circleTitle: 'Morning Movers',
@@ -343,6 +476,7 @@ describe('TapInComposerScreen', () => {
       },
       commitment: 'Move for 30 minutes',
       commitmentType: 'build',
+      commitmentCadence: 'weekly',
       inviteUrl: 'https://hoyst.app/join/circle-1',
       memberCount: 4,
       members: [],
@@ -1028,7 +1162,7 @@ describe('TapInComposerScreen', () => {
       shareButton.props.onPress();
     });
 
-    expect(navigation.navigate).toHaveBeenCalledWith('TapInStoryShare', {
+    expect(navigation.navigate).toHaveBeenCalledWith('TapInStoryShare', expect.objectContaining({
       category: 'Fitness',
       circleId: 'circle-1',
       circleTitle: 'Morning Movers',
@@ -1037,14 +1171,9 @@ describe('TapInComposerScreen', () => {
       inviteUrl: 'https://hoyst.app/join/circle-1',
       memberCount: 4,
       members: [],
-      periodTapInCount: 8,
-      progressLabel: 'Week · 50%',
       source: 'home',
-      streakDays: 4,
-      streakLabel: '4d streak',
-      note: undefined,
       photoUri: undefined,
-    });
+    }));
   });
 
   it.each([
@@ -1119,7 +1248,7 @@ describe('TapInComposerScreen', () => {
       shareButton.props.onPress();
     });
 
-    expect(navigation.navigate).toHaveBeenCalledWith('TapInStoryShare', {
+    expect(navigation.navigate).toHaveBeenCalledWith('TapInStoryShare', expect.objectContaining({
       category: 'Fitness',
       circleId: 'circle-1',
       circleTitle: 'Morning Movers',
@@ -1128,17 +1257,12 @@ describe('TapInComposerScreen', () => {
       inviteUrl: 'https://hoyst.app/join/circle-1',
       memberCount: 4,
       members: [],
-      note: 'Slept eight hours and woke up steady.',
-      periodTapInCount: 8,
       photoUri: 'https://example.com/proof.jpg',
-      progressLabel: 'Week · 50%',
       source: 'home',
-      streakDays: 4,
-      streakLabel: '4d streak',
-    });
+    }));
   });
 
-  it('keeps optional photo controls out of quantity logging', async () => {
+  it('offers optional photos before quantity logging', async () => {
     mockDetail = {
       ...baseMockDetail,
       commitmentType: 'build',
@@ -1156,7 +1280,7 @@ describe('TapInComposerScreen', () => {
 
     expect(output).toContain("Today's progress");
     expect(output).not.toContain('Optional Note');
-    expect(output).not.toContain('Add Photo');
+    expect(output).toContain('Add Photo');
     expect(output).not.toContain('Take Photo');
     expect(output).not.toContain('Choose Photo');
   });
@@ -1224,6 +1348,76 @@ describe('TapInComposerScreen', () => {
     );
     alertSpy.mockRestore();
   });
+  async function selectRequiredPhoto(tree: renderer.ReactTestRenderer) {
+    mockLaunchImageLibrary.mockResolvedValueOnce({assets: [{uri: 'file:///required.jpg'}]});
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    await act(async () => tree.root.findByProps({testID: 'photo-picker-add'}).props.onPress());
+    const buttons = alertSpy.mock.calls.at(-1)?.[2];
+    await act(async () => {
+      buttons?.find(button => button.text === 'Choose from Library')?.onPress?.();
+      await Promise.resolve();
+    });
+    return alertSpy;
+  }
+  const primaryAction = (tree: renderer.ReactTestRenderer) => tree.root.findAllByType(DSButton).find(button => ['Tap In', 'Log Progress', 'Update Progress'].includes(button.props.label))!;
+
+  it('blocks completion without required proof and allows an exempt partial entry', async () => {
+    mockDetail = {...baseMockDetail, proofRequirement: 'photo'};
+    let tree!: renderer.ReactTestRenderer;
+    await act(async () => {tree = renderComposerScreen();});
+    expect(primaryAction(tree).props.disabled).toBe(true);
+    await act(async () => primaryAction(tree).props.onPress());
+    expect(mockSubmitTapIn).not.toHaveBeenCalled();
+    await act(async () => tree.unmount());
+    mockDetail = {...baseMockDetail, proofRequirement: 'photo', commitmentType: 'build', buildTrackingMode: 'quantity', targetValue: 10, currentValue: 3};
+    await act(async () => {tree = renderComposerScreen();});
+    expect(primaryAction(tree).props.disabled).toBe(false);
+    await act(async () => primaryAction(tree).props.onPress());
+    expect(mockSubmitTapIn).toHaveBeenCalledWith({circleId: 'circle-1', currentValue: 3, status: 'done'});
+    expect(mockUploadTapInPhoto).not.toHaveBeenCalled();
+    await act(async () => tree.unmount());
+  });
+  it('uploads required proof before saving and passes a remote photo to completion', async () => {
+    mockDetail = {...baseMockDetail, proofRequirement: 'photo'};
+    mockUploadTapInPhoto.mockResolvedValueOnce('https://example.test/uploaded.jpg');
+    let tree!: renderer.ReactTestRenderer;
+    await act(async () => {tree = renderComposerScreen();});
+    const alertSpy = await selectRequiredPhoto(tree);
+    expect(primaryAction(tree).props.disabled).toBe(false);
+    await act(async () => primaryAction(tree).props.onPress());
+    expect(mockUploadTapInPhoto).toHaveBeenCalledWith(expect.objectContaining({circleId: 'circle-1', uid: 'user-1', uri: 'file:///required.jpg'}));
+    expect(mockUploadTapInPhoto.mock.invocationCallOrder.at(-1)).toBeLessThan(mockSubmitTapIn.mock.invocationCallOrder.at(-1)!);
+    expect(mockSubmitTapIn).toHaveBeenCalledWith({circleId: 'circle-1', status: 'done', photoUrl: 'https://example.test/uploaded.jpg'});
+    expect(tree.root.findByType(TapInComposerScreen).props.navigation.replace).toHaveBeenCalledWith('TapInComplete', expect.objectContaining({proofRequirement: 'photo', photoUri: 'https://example.test/uploaded.jpg'}));
+    alertSpy.mockRestore(); await act(async () => tree.unmount());
+  });
+  it('retains selected proof after an upload failure and reuses it across a submission retry', async () => {
+    mockDetail = {...baseMockDetail, proofRequirement: 'photo'};
+    mockUploadTapInPhoto.mockRejectedValueOnce(new Error('Upload failed')).mockResolvedValueOnce('https://example.test/retry.jpg');
+    let tree!: renderer.ReactTestRenderer;
+    await act(async () => {tree = renderComposerScreen();});
+    const alertSpy = await selectRequiredPhoto(tree);
+    await act(async () => primaryAction(tree).props.onPress());
+    expect(mockSubmitTapIn).not.toHaveBeenCalled();
+    expect(tree.root.findByProps({testID: 'photo-picker-preview'}).props.source.uri).toBe('file:///required.jpg');
+    mockSubmitTapIn.mockRejectedValueOnce(new Error('Network failed'));
+    await act(async () => primaryAction(tree).props.onPress());
+    const uploads = mockUploadTapInPhoto.mock.calls.length;
+    await act(async () => primaryAction(tree).props.onPress());
+    expect(mockUploadTapInPhoto).toHaveBeenCalledTimes(uploads);
+    alertSpy.mockRestore(); await act(async () => tree.unmount());
+  });
+  it('uses a saved Tap In proof snapshot and photo while updating quantity', async () => {
+    mockDetail = {...baseMockDetail, proofRequirement: 'none', commitmentType: 'build', buildTrackingMode: 'quantity', targetValue: 10, viewerHasTappedInToday: true, viewerTodayStatus: 'partial', viewerTodayCheckIn: {status: 'partial', currentValue: 5, proofRequirement: 'photo', photoUrl: 'https://example.test/existing.jpg', dateKey: '2026-10-17'}};
+    let tree!: renderer.ReactTestRenderer;
+    await act(async () => {tree = renderComposerScreen();});
+    await act(async () => tree.root.findByProps({testID: 'tap-in-composer-quantity-input'}).props.onChangeText('10'));
+    await act(async () => primaryAction(tree).props.onPress());
+    expect(mockSubmitTapIn).toHaveBeenCalledWith(expect.objectContaining({photoUrl: 'https://example.test/existing.jpg', currentValue: 10}));
+    expect(mockUploadTapInPhoto).not.toHaveBeenCalled();
+    await act(async () => tree.unmount());
+  });
+
 });
 
 // The server-backed wallet is a separate tested subscription boundary.

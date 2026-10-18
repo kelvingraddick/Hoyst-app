@@ -2878,6 +2878,7 @@ export function getOpportunityReminderSlots({
   dateKey: string;
   kind: 'final' | 'midday';
   slots: Array<{
+    policyVersion?: 2;
     availableDateKey: string;
     expiresDateKey: string;
     periodKey: string;
@@ -2886,7 +2887,7 @@ export function getOpportunityReminderSlots({
 }) {
   return slots.filter(slot =>
     kind === 'midday'
-      ? slot.availableDateKey === dateKey
+      ? slot.policyVersion === 2 ? slot.availableDateKey <= dateKey && slot.expiresDateKey >= dateKey : slot.availableDateKey === dateKey
       : slot.expiresDateKey === dateKey,
   );
 }
@@ -2939,7 +2940,7 @@ async function sendTapInReminders(kind: 'final' | 'midday') {
           .collection('opportunities')
           .doc(slot.periodKey)
           .collection('slots')
-          .doc(String(slot.slotIndex))
+          .doc(slot.policyVersion === 2 ? `v2_${slot.slotIndex}` : String(slot.slotIndex))
           .get(),
       ),
     );
@@ -2952,7 +2953,7 @@ async function sendTapInReminders(kind: 'final' | 'midday') {
           slotSnapshots[index].data()?.expectedMemberUids;
 
         return Array.isArray(expectedMemberUids)
-          ? expectedMemberUids.includes(uid)
+          ? expectedMemberUids.includes(uid) && !(slotSnapshots[index].data()?.coveredMemberUids || []).includes(uid)
           : isMemberExpectedForSlot({
               member: memberSnapshot.data(),
               slot,
@@ -2969,7 +2970,7 @@ async function sendTapInReminders(kind: 'final' | 'midday') {
         .collection('userPrivate')
         .doc(uid)
         .collection('opportunities')
-        .doc(`${circleSnapshot.id}_${slot.periodKey}_${slot.slotIndex}`)
+        .doc(`${circleSnapshot.id}_${slot.periodKey}_${slot.policyVersion === 2 ? 'v2_' : ''}${slot.slotIndex}`)
         .get();
       const opportunityStatus = opportunitySnapshot.data()?.status;
       const userPrivateSnapshot = await db
@@ -3022,7 +3023,7 @@ async function sendTapInReminders(kind: 'final' | 'midday') {
         opportunityKey:
           commitmentPace === 'daily'
             ? undefined
-            : `${circleSnapshot.id}_${slot.periodKey}_${slot.slotIndex}`,
+            : `${circleSnapshot.id}_${slot.periodKey}_${slot.policyVersion === 2 ? 'v2_' : ''}${slot.slotIndex}`,
       });
       reminderGroups.set(groupKey, group);
     }

@@ -23,6 +23,7 @@ jest.mock('react-native-share', () => ({
 
 import {
   buildTapInStoryShareData,
+  captureTapInStoryImage,
   canShareTapInStory,
   copyTapInStoryImageToClipboard,
   getAvailableTapInStoryTemplates,
@@ -33,7 +34,8 @@ import {
   shareTapInStoryToSnapchat,
 } from '../src/features/check-in/services/tap-in-story-share';
 import type {RefObject} from 'react';
-import {NativeModules} from 'react-native';
+import {NativeModules, PixelRatio, Platform} from 'react-native';
+import type {CircleProgressSummary} from '../src/shared/circle-progress';
 import type {CircleDetailModel} from '../src/types/models';
 
 const detail = {
@@ -103,50 +105,174 @@ describe('Tap In story sharing', () => {
   it('builds story data with invite CTA and attached Tap In details', () => {
     const story = buildTapInStoryShareData({
       detail,
-      note: 'Finished the set before breakfast.',
       photoUri: 'file:///tmp/proof.jpg',
     });
 
-    expect(story).toEqual({
-      circleTitle: 'Morning Movers',
-      category: 'Wellness',
-      ctaLabel: 'Join this Circle on Hoyst',
-      commitment: 'Move for 20 minutes',
-      hasInviteUrl: true,
-      inviteUrl: 'https://hoyst.app/invite/circle-1',
-      memberCount: 7,
-      members: [],
-      note: 'Finished the set before breakfast.',
-      photoUri: 'file:///tmp/proof.jpg',
-      progressLabel: 'Today · 82%',
-      shareMessage:
-        'I tapped in with Morning Movers on Hoyst. Join us: https://hoyst.app/invite/circle-1',
-      streakDays: 6,
-      streakLabel: '6d streak',
-      totalTapIns: 23,
-    });
+    expect(story).toEqual(
+      expect.objectContaining({
+        circleTitle: 'Morning Movers',
+        category: 'Wellness',
+        ctaLabel: 'Join this Circle on Hoyst',
+        commitment: 'Move for 20 minutes',
+        hasInviteUrl: true,
+        inviteUrl: 'https://hoyst.app/invite/circle-1',
+        memberCount: 7,
+        members: [],
+        photoUri: 'file:///tmp/proof.jpg',
+        personalProgress: expect.objectContaining({
+          value: 'Progress unavailable',
+        }),
+      }),
+    );
+    expect(story).not.toHaveProperty('totalTapIns');
+    expect(story).not.toHaveProperty('dailyStreakAvailable');
   });
 
-  it('uses canonical personal stats instead of circle-period fallbacks', () => {
+  const summary = (
+    cadence: 'daily' | 'weekly' | 'monthly',
+    count = 3,
+  ): CircleProgressSummary => ({
+    version: 2,
+    revision: 'v1',
+    asOfDateKey: '2026-10-17',
+    cadence,
+    period: {key: '2026-10-12', start: '2026-10-12', end: '2026-10-18'},
+    progress: {covered: 2, required: 4, outcome: 'open'},
+    streak: {
+      count,
+      unit:
+        cadence === 'daily' ? 'day' : cadence === 'weekly' ? 'week' : 'month',
+      availability: 'ready',
+    },
+  });
+
+  it.each(['daily', 'weekly', 'monthly'] as const)(
+    'uses %s commitment progress and streak units',
+    cadence => {
+      const story = buildTapInStoryShareData({
+        detail,
+        tapIn: {dateKey: '2026-10-17', status: 'done'},
+        context: {
+          tapIn: {dateKey: '2026-10-17', status: 'done'},
+          progress: {viewer: summary(cadence, 0), group: summary(cadence)},
+        },
+      });
+      expect(story.personalProgress.value).toBe('2 of 4');
+      expect(story.personalProgress.unitLabel).toBe('Tap Ins');
+      expect(story.personalProgress).not.toHaveProperty('fraction');
+      expect(story.personalProgress.streak).toBe(
+        `0 ${
+          cadence === 'daily'
+            ? 'days'
+            : cadence === 'weekly'
+            ? 'weeks'
+            : 'months'
+        }`,
+      );
+      expect(story.groupProgress?.value).toBe('2 of 4 members met goal');
+      expect(story.dateLabel).toBe('Oct 17, 2026');
+      expect(story.headerLabel).toBe(
+        'OCT 17, 2026 · I TAPPED IN ON MY ACCOUNTABILITY CIRCLE:',
+      );
+    },
+  );
+
+  it('omits group information and invitations for a personal Circle', () => {
+    const story = buildTapInStoryShareData({
+      detail: {...detail, circleMode: 'personal'},
+    });
+    expect(story.groupProgress).toBeUndefined();
+    expect(story.members).toEqual([]);
+    expect(story.inviteUrl).toBeUndefined();
+    expect(story.ctaLabel).toBe('Tapped in on Hoyst');
+    expect(story.headerLabel).toContain(
+      '· I TAPPED IN ON MY PERSONAL COMMITMENT:',
+    );
+  });
+
+  it.each([
+    ['build', {targetValue: 20}, 'partial', 'Partial'],
+    ['limit', {maximumValue: 20}, 'failed', 'Goal not met'],
+    ['limit', {minimumValue: 10, maximumValue: 20}, 'done', 'Goal met'],
+  ] as const)(
+    'formats %s quantities and status',
+    (commitmentType, goal, status, statusLabel) => {
+      const story = buildTapInStoryShareData({
+        detail: {...detail, commitmentType, buildTrackingMode: 'quantity'},
+        tapIn: {
+          dateKey: '2026-10-17',
+          currentValue: 12,
+          unitLabel: 'pages',
+          status,
+          ...goal,
+        },
+      });
+      expect(story.result).not.toHaveProperty('goalLabel');
+      expect(story.result).toEqual({
+        quantityLabel: '12 pages',
+        statusLabel,
+      });
+    },
+  );
+
+  it('uses completion status alone for confirmation entries and omits unused share metadata', () => {
     const story = buildTapInStoryShareData({
       detail,
-      profileSummary: {
-        personalStreakDays: 9,
-        totalTapIns: 41,
+      tapIn: {dateKey: '2026-10-17', status: 'done'},
+    });
+    expect(story.result).toEqual({
+      quantityLabel: undefined,
+      statusLabel: 'Goal met',
+    });
+    expect(story).not.toHaveProperty('note');
+    expect(story).not.toHaveProperty('activity');
+    expect(story.result).not.toHaveProperty('goalLabel');
+  });
+
+  it('does not invent a quantity target when the saved goal is unavailable', () => {
+    const story = buildTapInStoryShareData({
+      detail: {...detail, buildTrackingMode: 'quantity'},
+      tapIn: {
+        dateKey: '2026-10-17',
+        status: 'partial',
+        currentValue: 12,
+        unitLabel: 'pages',
       },
     });
+    expect(story.result.quantityLabel).toBe('12 pages');
+    expect(story.result).not.toHaveProperty('goalLabel');
+  });
 
-    expect(story.streakDays).toBe(9);
-    expect(story.streakLabel).toBe('9d streak');
-    expect(story.totalTapIns).toBe(41);
-    expect(story.memberCount).toBe(7);
+  it('labels progress with its actual dates when sharing an older tap-in', () => {
+    const story = buildTapInStoryShareData({
+      detail,
+      context: {
+        tapIn: {dateKey: '2026-09-30'},
+        progress: {viewer: summary('weekly')},
+      },
+    });
+    expect(story.personalProgress.periodLabel).toBe('Oct 12 to Oct 18, 2026');
+  });
 
-    expect(
-      buildTapInStoryShareData({
-        detail,
-        profileSummary: {personalStreakDays: 0, totalTapIns: 0},
-      }).streakLabel,
-    ).toBe('Momentum saved');
+  it('does not replace unavailable or neutral progress with invented counts', () => {
+    const unknown = summary('weekly');
+    unknown.progress.outcome = 'unknown';
+    unknown.streak = {count: null, unit: 'week', availability: 'recalculating'};
+    const story = buildTapInStoryShareData({
+      context: {
+        tapIn: {dateKey: '2026-10-17'},
+        progress: {
+          viewer: unknown,
+          group: {
+            ...summary('weekly'),
+            progress: {covered: 0, required: 0, outcome: 'neutral'},
+          },
+        },
+      },
+    });
+    expect(story.personalProgress.value).toBe('Progress unavailable');
+    expect(story.personalProgress).not.toHaveProperty('fraction');
+    expect(story.groupProgress?.value).toBe('No eligible goal');
   });
 
   it('returns the two share templates whether or not a Tap In photo exists', () => {
@@ -177,17 +303,46 @@ describe('Tap In story sharing', () => {
   it('uses a Hoyst fallback CTA when no invite URL is available', () => {
     const story = buildTapInStoryShareData({
       detail: {...detail, inviteUrl: undefined},
-      note: '',
     });
 
     expect(story.hasInviteUrl).toBe(false);
     expect(story.inviteUrl).toBeUndefined();
-    expect(story.ctaLabel).toBe('Join my Circle on Hoyst');
-    expect(story.note).toBe('No note added. Still counted.');
+    expect(story.ctaLabel).toBe('Tap in with Hoyst');
+    expect(story).not.toHaveProperty('note');
     expect(story.shareMessage).toBe(
       'I tapped in with Morning Movers on Hoyst.',
     );
   });
+
+  it.each([
+    ['ios', 2, 540, 960],
+    ['ios', 3, 360, 640],
+    ['android', 2, 1080, 1920],
+    ['android', 3, 1080, 1920],
+  ] as const)(
+    'requests exact pixels on %s at density %s',
+    async (platform, density, width, height) => {
+      const originalPlatform = Platform.OS;
+      const densitySpy = jest.spyOn(PixelRatio, 'get').mockReturnValue(density);
+      Object.defineProperty(Platform, 'OS', {
+        configurable: true,
+        value: platform,
+      });
+      try {
+        await captureTapInStoryImage({current: {}} as RefObject<never>);
+        expect(mockCaptureRef).toHaveBeenLastCalledWith(
+          expect.anything(),
+          expect.objectContaining({width, height}),
+        );
+      } finally {
+        Object.defineProperty(Platform, 'OS', {
+          configurable: true,
+          value: originalPlatform,
+        });
+        densitySpy.mockRestore();
+      }
+    },
+  );
 
   it('captures, shares, and releases the temporary story image', async () => {
     const ref = {current: {}} as RefObject<never>;
@@ -196,10 +351,10 @@ describe('Tap In story sharing', () => {
 
     expect(mockCaptureRef).toHaveBeenCalledWith(ref, {
       format: 'png',
-      height: 1920,
+      height: 1920 / (Platform.OS === 'ios' ? PixelRatio.get() : 1),
       quality: 1,
       result: 'tmpfile',
-      width: 1080,
+      width: 1080 / (Platform.OS === 'ios' ? PixelRatio.get() : 1),
     });
     expect(mockShareOpen).toHaveBeenCalledWith({
       failOnCancel: false,
@@ -219,10 +374,10 @@ describe('Tap In story sharing', () => {
 
     expect(mockCaptureRef).toHaveBeenCalledWith(ref, {
       format: 'png',
-      height: 1920,
+      height: 1920 / (Platform.OS === 'ios' ? PixelRatio.get() : 1),
       quality: 1,
       result: 'tmpfile',
-      width: 1080,
+      width: 1080 / (Platform.OS === 'ios' ? PixelRatio.get() : 1),
     });
     expect(mockCopyImage).toHaveBeenCalledWith('file:///tmp/hoyst-story.png');
     expect(mockReleaseCapture).toHaveBeenCalledWith(

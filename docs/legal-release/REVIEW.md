@@ -1,0 +1,1 @@
+Local release candidates only. Not published or adopted. Proposed effective date: 2026-10-17. Regenerate using the actual publication date after approval. Complete the rollout in ../legal-drafts/implementation.md before shipping the app.

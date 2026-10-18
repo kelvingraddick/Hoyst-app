@@ -69,6 +69,7 @@ export const useSetupJourneyStore = create<State>()(
                     key,
                     {
                       ...record,
+                      draft: {proofRequirement: 'photo', ...record.draft},
                       status:
                         record.status === 'saving' ? 'error' : record.status,
                       step:

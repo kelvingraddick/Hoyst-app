@@ -34,6 +34,7 @@ export type CommitmentPreviewProps = {
     value: string;
   };
   context: string;
+  streaks?: ReactNode;
   expanded: boolean;
   onExpand: () => void;
   onDetails: () => void;
@@ -58,6 +59,7 @@ export function DSCommitmentPreview({
   description,
   goal,
   context,
+  streaks,
   expanded,
   onExpand,
   onDetails,
@@ -160,6 +162,7 @@ export function DSCommitmentPreview({
           </View>
         ) : null}
       </Pressable>
+      {streaks}
       <View style={styles.footer}>
         <Pressable
           accessible={false}

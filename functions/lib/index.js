@@ -1,7 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.getRestoreOptions = exports.completeProgressTask = exports.ensureProgress = exports.refreshPublicActivityProfile = exports.refreshPublicActivityCircle = exports.refreshPublicActivityMembership = exports.projectPublicTapIn = exports.maintainPublicCircleSearch = exports.searchPublicCircles = exports.suggestPublicCircles = exports.healthcheck = exports.rotateCircleInvite = exports.resolveCircleInvite = exports.invitePage = exports.toggleCircleThreadItemLike = exports.sendCircleThreadMessage = exports.markCircleThreadRead = exports.materializeMomentumOpportunities = exports.backfillMomentumOpportunities = exports.refreshMemberProfile = exports.updateProfile = exports.checkProfileUsername = exports.getProfileSummary = exports.generateHomeGreeting = exports.updateCircle = exports.unarchiveCircle = exports.reviewJoinRequest = exports.nudgeCircleMembers = exports.leaveCircle = exports.joinCircle = exports.deleteCircle = exports.createCircle = exports.convertPersonalCircle = exports.archiveCircle = exports.updateTapInDetails = exports.submitTapIn = exports.removeTapIn = exports.processTapInSideEffects = exports.deleteAccount = exports.completeProfile = exports.updateNotificationSettings = exports.sendRoutineEngagementNotifications = exports.sendMiddayTapInReminders = exports.sendFinalTapInWarnings = exports.sendEveningActivityRecaps = exports.repairPushSubscription = exports.notificationModules = exports.markInboxEventRead = exports.markInboxEventsRead = exports.emailModules = void 0;
-exports.getProgressDayActivity = exports.getProgressMonth = exports.reconcileProgressRestore = exports.reconcileProgressReminders = exports.reconcileProgressMembership = exports.initializeProgressAccount = exports.reconcileProgressTapIn = exports.progressPurchaseWebhook = exports.syncProgressPurchases = exports.restoreStreak = void 0;
+exports.reconcileCircleProgressRollover = exports.reconcileCircleProgressConfiguration = exports.reconcileCircleProgressMembership = exports.reconcileCircleProgressCheckIn = exports.refreshCircleProgress = exports.expireHomeGreetingData = exports.refreshPublicProfile = exports.acceptLegalTerms = exports.getProgressDayActivity = exports.getProgressMonth = exports.reconcileProgressRestore = exports.reconcileProgressReminders = exports.reconcileProgressMembership = exports.initializeProgressAccount = exports.reconcileProgressTapIn = exports.progressPurchaseWebhook = exports.syncProgressPurchases = exports.restoreStreak = void 0;
 const https_1 = require("firebase-functions/v2/https");
 var emails_1 = require("./emails");
 Object.defineProperty(exports, "emailModules", { enumerable: true, get: function () { return emails_1.emailModules; } });
@@ -85,3 +85,15 @@ Object.defineProperty(exports, "reconcileProgressRestore", { enumerable: true, g
 var history_1 = require("./progress/history");
 Object.defineProperty(exports, "getProgressMonth", { enumerable: true, get: function () { return history_1.getProgressMonth; } });
 Object.defineProperty(exports, "getProgressDayActivity", { enumerable: true, get: function () { return history_1.getProgressDayActivity; } });
+var legal_1 = require("./auth/legal");
+Object.defineProperty(exports, "acceptLegalTerms", { enumerable: true, get: function () { return legal_1.acceptLegalTerms; } });
+var public_1 = require("./profile/public");
+Object.defineProperty(exports, "refreshPublicProfile", { enumerable: true, get: function () { return public_1.refreshPublicProfile; } });
+var greeting_data_1 = require("./auth/greeting-data");
+Object.defineProperty(exports, "expireHomeGreetingData", { enumerable: true, get: function () { return greeting_data_1.expireHomeGreetingData; } });
+var progress_2 = require("./circles/progress");
+Object.defineProperty(exports, "refreshCircleProgress", { enumerable: true, get: function () { return progress_2.refreshCircleProgress; } });
+Object.defineProperty(exports, "reconcileCircleProgressCheckIn", { enumerable: true, get: function () { return progress_2.reconcileCircleProgressCheckIn; } });
+Object.defineProperty(exports, "reconcileCircleProgressMembership", { enumerable: true, get: function () { return progress_2.reconcileCircleProgressMembership; } });
+Object.defineProperty(exports, "reconcileCircleProgressConfiguration", { enumerable: true, get: function () { return progress_2.reconcileCircleProgressConfiguration; } });
+Object.defineProperty(exports, "reconcileCircleProgressRollover", { enumerable: true, get: function () { return progress_2.reconcileCircleProgressRollover; } });
