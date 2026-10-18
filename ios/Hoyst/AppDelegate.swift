@@ -87,42 +87,6 @@ class AppDelegate: RCTAppDelegate {
     )
   }
 
-  override func scene(
-    _ scene: UIScene,
-    willConnectTo session: UISceneSession,
-    options connectionOptions: UIScene.ConnectionOptions
-  ) {
-    connectionOptions.urlContexts.forEach { context in
-      HoystInviteLink.storeIfInvite(context.url)
-    }
-    connectionOptions.userActivities.forEach { userActivity in
-      HoystInviteLink.storeIfInvite(userActivity)
-    }
-  }
-
-  override func scene(
-    _ scene: UIScene,
-    openURLContexts URLContexts: Set<UIOpenURLContext>
-  ) {
-    URLContexts.forEach { context in
-      HoystInviteLink.storeIfInvite(context.url)
-      _ = RCTLinkingManager.application(
-        UIApplication.shared,
-        open: context.url,
-        options: [:]
-      )
-    }
-  }
-
-  override func scene(_ scene: UIScene, continue userActivity: NSUserActivity) {
-    HoystInviteLink.storeIfInvite(userActivity)
-    _ = RCTLinkingManager.application(
-      UIApplication.shared,
-      continue: userActivity,
-      restorationHandler: { _ in }
-    )
-  }
-
   override func sourceURL(for bridge: RCTBridge) -> URL? {
     self.bundleURL()
   }
@@ -133,5 +97,55 @@ class AppDelegate: RCTAppDelegate {
 #else
     Bundle.main.url(forResource: "main", withExtension: "jsbundle")
 #endif
+  }
+}
+
+class SceneDelegate: UIResponder, UIWindowSceneDelegate {
+  var window: UIWindow?
+
+  func scene(
+    _ scene: UIScene,
+    willConnectTo session: UISceneSession,
+    options connectionOptions: UIScene.ConnectionOptions
+  ) {
+    guard
+      let windowScene = scene as? UIWindowScene,
+      let appDelegate = UIApplication.shared.delegate as? AppDelegate
+    else {
+      return
+    }
+
+    let window = UIWindow(windowScene: windowScene)
+    window.rootViewController = appDelegate.window.rootViewController
+    appDelegate.window = window
+    self.window = window
+    window.makeKeyAndVisible()
+
+    connectionOptions.urlContexts.forEach { context in
+      _ = appDelegate.application(UIApplication.shared, open: context.url, options: [:])
+    }
+    connectionOptions.userActivities.forEach { userActivity in
+      _ = appDelegate.application(
+        UIApplication.shared,
+        continue: userActivity,
+        restorationHandler: { _ in }
+      )
+    }
+  }
+
+  func scene(_ scene: UIScene, openURLContexts URLContexts: Set<UIOpenURLContext>) {
+    guard let appDelegate = UIApplication.shared.delegate as? AppDelegate else { return }
+    URLContexts.forEach { context in
+      _ = appDelegate.application(UIApplication.shared, open: context.url, options: [:])
+    }
+  }
+
+  func scene(_ scene: UIScene, continue userActivity: NSUserActivity) {
+    guard let appDelegate = UIApplication.shared.delegate as? AppDelegate else { return }
+    _ = appDelegate.application(
+      UIApplication.shared,
+      continue: userActivity,
+      restorationHandler: { _ in }
+    )
   }
 }
