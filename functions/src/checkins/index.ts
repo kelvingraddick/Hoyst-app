@@ -77,6 +77,7 @@ import {reconcileCircleGroupStreak} from '../circles/group-streak';
 const submitTapInSchema = z.object({
   circleId: z.string().trim().min(1),
   progressVersion: z.literal(1).optional(),
+  completionVersion: z.literal(2).optional(),
   currentValue: z.number().int().min(0).max(100000).optional(),
   note: z.string().trim().max(1000).optional(),
   photoUrl: z.string().trim().url().max(2048).optional(),
@@ -856,6 +857,7 @@ async function processTapInSideEffectsForCheckIn({
 }
 
 async function submitTapInHandler(request: CallableRequest) {
+  const startedAt = Date.now();
   const {profile, uid} = await requireCompletedProfile(
     request.auth?.uid,
     request.data?.idToken,
@@ -867,9 +869,14 @@ async function submitTapInHandler(request: CallableRequest) {
   const now = FieldValue.serverTimestamp();
   const progressRequestId = randomUUID();
   const membership = await memberRef.get();
-  if (membership.data()?.status !== 'active') throw new HttpsError('permission-denied', 'Join this circle first.');
+  if (membership.data()?.status !== 'active')
+    throw new HttpsError('permission-denied', 'Join this circle first.');
   await materializeCurrentCircleOpportunities(input.circleId);
-  const priorCircleProgress = await reconcileCircleProgress({circleId: input.circleId, uid});
+  const priorCircleProgress =
+    input.completionVersion === 2
+      ? undefined
+      : await reconcileCircleProgress({circleId: input.circleId, uid});
+  const transactionStartedAt = Date.now();
 
   const result = await db.runTransaction(async transaction => {
     const [circleSnapshot, memberSnapshot, discoveryConfig] = await Promise.all(
@@ -892,8 +899,18 @@ async function submitTapInHandler(request: CallableRequest) {
     ensureActiveCircle(circle, 'tapping in');
     const dateKey = getDateKey(circle?.timezone ?? profile.timezone ?? 'UTC');
     const joined = memberSnapshot.data()?.joinedAt?.toDate?.();
-    if (joined && memberSnapshot.data()?.opportunityEligibility !== 'include_current' && dateKey <= getDateKeyForDate(circle?.timezone ?? 'UTC', joined)) {
-      throw new HttpsError('failed-precondition', `Your first eligible Tap In is ${shiftCircleDate(getDateKeyForDate(circle?.timezone ?? 'UTC', joined), 1)}.`);
+    if (
+      joined &&
+      memberSnapshot.data()?.opportunityEligibility !== 'include_current' &&
+      dateKey <= getDateKeyForDate(circle?.timezone ?? 'UTC', joined)
+    ) {
+      throw new HttpsError(
+        'failed-precondition',
+        `Your first eligible Tap In is ${shiftCircleDate(
+          getDateKeyForDate(circle?.timezone ?? 'UTC', joined),
+          1,
+        )}.`,
+      );
     }
     const checkInRef = circleRef
       .collection('days')
@@ -985,15 +1002,25 @@ async function submitTapInHandler(request: CallableRequest) {
     });
     const nextStatus = getCheckInStatusForCoverage(coverageStatus);
     const proofRequirement = getTapInProofRequirement(
-      circle ?? {}, existingCheckIn,
+      circle ?? {},
+      existingCheckIn,
     );
-    const photoUrl = input.status === 'skip'
-      ? null : input.photoUrl ?? existingCheckIn?.photoUrl ?? null;
+    const photoUrl =
+      input.status === 'skip'
+        ? null
+        : input.photoUrl ?? existingCheckIn?.photoUrl ?? null;
     requireCompletedTapInProof({
-      requirement: proofRequirement, status: nextStatus, photoUrl,
+      requirement: proofRequirement,
+      status: nextStatus,
+      photoUrl,
     });
     if (proofRequirement === 'photo' && nextStatus === 'done' && photoUrl) {
-      await validateProofPhoto({photoUrl, circleId: input.circleId, dateKey, uid});
+      await validateProofPhoto({
+        photoUrl,
+        circleId: input.circleId,
+        dateKey,
+        uid,
+      });
     }
     const nextCovered =
       coverageStatus === 'covered' || coverageStatus === 'skipped';
@@ -1098,6 +1125,8 @@ async function submitTapInHandler(request: CallableRequest) {
       coverageRevision,
       ...(nextStatus === 'done' ? {progressEventId: progressRequestId} : {}),
       circleId: input.circleId,
+      completionId:
+        input.completionVersion === 2 ? progressRequestId : FieldValue.delete(),
       displayName: profile.displayName,
       handle: profile.handle,
       note: input.note ?? existingCheckIn?.note ?? null,
@@ -1138,7 +1167,8 @@ async function submitTapInHandler(request: CallableRequest) {
     }
 
     if (input.status === 'done') {
-      checkInPayload.buildTrackingMode = quantityConfig.buildTrackingMode ?? FieldValue.delete();
+      checkInPayload.buildTrackingMode =
+        quantityConfig.buildTrackingMode ?? FieldValue.delete();
       checkInPayload.commitmentType = commitmentType;
       checkInPayload.currentValue = currentValue;
       checkInPayload.stepValue = quantityConfig.stepValue;
@@ -1162,7 +1192,8 @@ async function submitTapInHandler(request: CallableRequest) {
         checkInPayload.minimumValue = FieldValue.delete();
       }
     } else {
-      checkInPayload.buildTrackingMode = quantityConfig.buildTrackingMode ?? FieldValue.delete();
+      checkInPayload.buildTrackingMode =
+        quantityConfig.buildTrackingMode ?? FieldValue.delete();
       checkInPayload.commitmentType = commitmentType;
       checkInPayload.currentValue = FieldValue.delete();
       checkInPayload.maximumValue = FieldValue.delete();
@@ -1205,6 +1236,25 @@ async function submitTapInHandler(request: CallableRequest) {
       {merge: true},
     );
 
+    if (input.completionVersion === 2) {
+      transaction.create(
+        db.doc(`userPrivate/${uid}/tapInCompletions/${progressRequestId}`),
+        {
+          completionId: progressRequestId,
+          uid,
+          circleId: input.circleId,
+          dateKey,
+          checkInPath: checkInRef.path,
+          previousCheckIn: existingCheckIn ?? null,
+          status: 'pending',
+          outcome: nextStatus,
+          baseProgress: progress,
+          createdAt: now,
+          updatedAt: now,
+        },
+      );
+    }
+
     return {
       proofRequirement,
       photoUrl,
@@ -1220,6 +1270,26 @@ async function submitTapInHandler(request: CallableRequest) {
       status: nextStatus,
     };
   });
+
+  if (input.completionVersion === 2) {
+    console.info('tap_in_saved', {
+      completionId: progressRequestId,
+      durationMs: Date.now() - startedAt,
+      transactionMs: Date.now() - transactionStartedAt,
+    });
+    return {
+      completionId: progressRequestId,
+      progress: result.progress,
+      proofRequirement: result.proofRequirement,
+      photoUrl: result.photoUrl,
+      checkInId: result.checkInId,
+      coverageStatus: result.coverageStatus,
+      currentValue: result.currentValue,
+      dateKey: result.dateKey,
+      coverageRevision: result.coverageRevision,
+      status: result.status,
+    };
+  }
 
   const momentum = result.shouldReportMomentum
     ? await Promise.all([
@@ -1254,14 +1324,36 @@ async function submitTapInHandler(request: CallableRequest) {
     }
   }
 
-  const circleProgress = await reconcileCircleProgress({circleId: input.circleId, uid}).catch(error => {console.error('circle_progress_pending', error); return undefined;});
+  const circleProgress = await reconcileCircleProgress({
+    circleId: input.circleId,
+    uid,
+  }).catch(error => {
+    console.error('circle_progress_pending', error);
+    return undefined;
+  });
   if (circleProgress) {
-    const delta = (after?: typeof circleProgress.viewer, before?: typeof circleProgress.viewer) => after?.streak.count != null && before?.streak.count != null && after.revision === before.revision ? after.streak.count - before.streak.count : undefined;
-    circleProgress.viewerStreakDelta = delta(circleProgress.viewer, priorCircleProgress?.viewer);
-    circleProgress.groupStreakDelta = delta(circleProgress.group, priorCircleProgress?.group);
+    const delta = (
+      after?: typeof circleProgress.viewer,
+      before?: typeof circleProgress.viewer,
+    ) =>
+      after?.streak.count != null &&
+      before?.streak.count != null &&
+      after.revision === before.revision
+        ? after.streak.count - before.streak.count
+        : undefined;
+    circleProgress.viewerStreakDelta = delta(
+      circleProgress.viewer,
+      priorCircleProgress?.viewer,
+    );
+    circleProgress.groupStreakDelta = delta(
+      circleProgress.group,
+      priorCircleProgress?.group,
+    );
   }
   return {
-    ...(circleProgress ? {circleProgress: JSON.parse(JSON.stringify(circleProgress))} : {}),
+    ...(circleProgress
+      ? {circleProgress: JSON.parse(JSON.stringify(circleProgress))}
+      : {}),
     progress: result.progress,
     proofRequirement: result.proofRequirement,
     photoUrl: result.photoUrl,
@@ -1310,7 +1402,10 @@ async function updateTapInDetailsHandler(request: CallableRequest) {
       note: input.note,
       photoUrl: input.photoUrl,
     });
-    const proofRequirement = getTapInProofRequirement({}, checkInSnapshot.data());
+    const proofRequirement = getTapInProofRequirement(
+      {},
+      checkInSnapshot.data(),
+    );
     requireCompletedTapInProof({
       requirement: proofRequirement,
       status: checkInSnapshot.data()?.status ?? '',
@@ -1318,9 +1413,15 @@ async function updateTapInDetailsHandler(request: CallableRequest) {
     });
     if (
       proofRequirement === 'photo' &&
-      checkInSnapshot.data()?.status === 'done' && patch.photoUrl
+      checkInSnapshot.data()?.status === 'done' &&
+      patch.photoUrl
     ) {
-      await validateProofPhoto({photoUrl: patch.photoUrl, circleId: input.circleId, dateKey, uid});
+      await validateProofPhoto({
+        photoUrl: patch.photoUrl,
+        circleId: input.circleId,
+        dateKey,
+        uid,
+      });
     }
     const shouldDeletePhoto =
       Boolean(checkInSnapshot.data()?.photoUrl) && patch.photoUrl === null;
@@ -1433,7 +1534,7 @@ export const processTapInSideEffects = onDocumentWritten(
       return;
     }
 
-    if (status === 'done') {
+    if (status === 'done' && !checkIn.completionId) {
       await recalculateMomentumSummaryForUser(event.params.uid);
       await reconcileProgress(event.params.uid, true, checkIn.progressEventId);
     }

@@ -833,7 +833,7 @@ describe('CircleDetailScreen reference redesign', () => {
     expect(output).toContain('Circle members');
     expect(output).toContain('5 members total');
     expect(output).toContain('Circle Feed');
-    expect(output).toContain('2 of 4 met goal');
+    expect(output).toMatch(/2 of 4\s+met goal/);
     expect(output).not.toContain('Circle Progress');
     expect(output).toContain('Today');
     expect(output).toContain('Kelvin');
@@ -854,9 +854,9 @@ describe('CircleDetailScreen reference redesign', () => {
       tree.root.findAllByProps({testID: 'circle-member-strip-selected-action'}),
     ).toHaveLength(0);
     expect(output.indexOf('Today')).toBeLessThan(
-      output.indexOf('2 of 4 met goal'),
+      output.search(/2 of 4\s+met goal/),
     );
-    expect(output.indexOf('2 of 4 met goal')).toBeLessThan(
+    expect(output.search(/2 of 4\s+met goal/)).toBeLessThan(
       output.indexOf('Circle members'),
     );
     expect(output).not.toContain('Last 7 days');
@@ -1139,7 +1139,7 @@ describe('CircleDetailScreen reference redesign', () => {
     const {tree} = renderScreen();
     const output = outputOf(tree);
 
-    expect(output).toContain('1 of 4 met goal');
+    expect(output).toMatch(/1 of 4\s+met goal/);
     expect(output).toContain('Daily activity');
   });
 
@@ -1193,7 +1193,7 @@ describe('CircleDetailScreen reference redesign', () => {
       .findAllByType(Text)
       .find(node => textContent(node) === 'Today · 1 tapped in · 1 skipped');
 
-    expect(output).toContain('1 of 4 met goal');
+    expect(output).toMatch(/1 of 4\s+met goal/);
     expect(output).not.toContain('Tap a day for completion and skip details');
     expect(tree.root.findAllByProps({accessibilityHint: 'View completion, skip, and restore details for this day'}).length).toBeGreaterThan(0);
     expect(progressCopy?.props.numberOfLines).toBeUndefined();
@@ -1244,7 +1244,7 @@ describe('CircleDetailScreen reference redesign', () => {
     const output = outputOf(tree);
 
     expect(output).toContain('Review Tap In');
-    expect(output).toContain('0 of 2 met goal');
+    expect(output).toMatch(/0 of 2\s+met goal/);
     expect(output).toContain('Daily activity');
     expect(output).toContain('2 of 3 this week · 1 left');
     expect(tree.root.findByProps({testID: 'circle-group-period-progress'}).findByProps({accessibilityRole: 'progressbar'}).props.accessibilityValue).toEqual({min: 0, max: 2, now: 0});
@@ -1805,12 +1805,12 @@ describe('CircleDetailScreen reference redesign', () => {
     expect(outputOf(tree)).toContain('Owner');
   });
 
-  it('shows separate progress, compact streaks, and daily activity in approved order', () => {
+  it('groups both goals before both streaks after daily activity', () => {
     const {tree} = renderScreen();
     const output = outputOf(tree);
     expect(output).toContain('You');
     expect(output).toContain('Group');
-    expect(output).toContain('2 of 4 met goal');
+    expect(output).toMatch(/2 of 4\s+met goal/);
     const viewer = tree.root.findByProps({testID: 'circle-your-streak'});
     const group = tree.root.findByProps({testID: 'circle-group-streak'});
     expect(viewer.props.accessibilityLabel).toContain('Your streak: 3 days');
@@ -1818,12 +1818,16 @@ describe('CircleDetailScreen reference redesign', () => {
     expect(StyleSheet.flatten(group.props.style).minHeight).toBe(44);
     const periodHeading = tree.root.findAllByProps({accessibilityRole: 'header'}).find(node => textContent(node) === 'Today');
     expect(periodHeading).toBeDefined();
-    expect(output.indexOf('Daily activity')).toBeLessThan(output.indexOf('2 of 4 met goal'));
+    expect(output.indexOf('Daily activity')).toBeLessThan(output.search(/2 of 4\s+met goal/));
     expect(output.indexOf('Group streak')).toBeLessThan(output.indexOf('Circle members'));
-    const viewerTile = tree.root.findByProps({testID: 'circle-viewer-period-progress'});
-    const groupTile = tree.root.findByProps({testID: 'circle-group-period-progress'});
-    expect(textContent(viewerTile)).toContain('Your streak');
-    expect(textContent(groupTile)).toContain('Group streak');
+    const goals = tree.root.findByProps({testID: 'circle-period-goals'});
+    const streaks = tree.root.findByProps({testID: 'circle-period-streaks'});
+    expect(goals.findByProps({testID: 'circle-viewer-period-progress'})).toBeTruthy();
+    expect(goals.findByProps({testID: 'circle-group-period-progress'})).toBeTruthy();
+    expect(textContent(goals)).not.toContain('streak');
+    expect(streaks.findByProps({testID: 'circle-your-streak'})).toBeTruthy();
+    expect(streaks.findByProps({testID: 'circle-group-streak'})).toBeTruthy();
+    expect(output.search(/2 of 4\s+met goal/)).toBeLessThan(output.indexOf('Your streak'));
   });
 
   it.each([[0, '0 days'], [1, '1 day'], [3, '3 days']] as const)('formats a canonical %i-day group streak as %s', (count, expected) => {

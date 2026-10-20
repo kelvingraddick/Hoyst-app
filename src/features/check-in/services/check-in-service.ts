@@ -1,3 +1,5 @@
+import {firebaseFirestore} from '../../../lib/firebase/firestore';
+import type {TapInCompletion} from '../../../../functions/src/shared/tap-in-completion';
 import type {CircleProgressResult} from '../../../shared/circle-progress';
 import {authenticatedCallable} from '../../../lib/firebase/authenticated-callable';
 import {firebaseFunctions} from '../../../lib/firebase/functions';
@@ -15,6 +17,7 @@ export type SubmitTapInInput = {
 };
 
 export type SubmitTapInResult = {
+  completionId?: string;
   proofRequirement?: import('../../../shared/tap-in-proof').ProofRequirement;
   photoUrl?: string | null;
   circleProgress?: CircleProgressResult;
@@ -50,6 +53,7 @@ export async function submitTapIn(input: SubmitTapInInput) {
   return authenticatedCallable<SubmitTapInResult>('submitTapIn', {
     ...input,
     progressVersion: 1,
+    completionVersion: 2,
   });
 }
 
@@ -118,4 +122,19 @@ export async function removeTapIn(input: RemoveTapInInput) {
   }
 
   return payload.result;
+}
+
+export function subscribeTapInCompletion(
+  uid: string,
+  completionId: string,
+  receive: (completion: TapInCompletion) => void,
+  onError: (error: Error) => void,
+) {
+  return firebaseFirestore()
+    .doc(`userPrivate/${uid}/tapInCompletions/${completionId}`)
+    .onSnapshot(snapshot => {
+      if (snapshot.exists()) {
+        receive(snapshot.data() as TapInCompletion);
+      }
+    }, onError);
 }

@@ -35,6 +35,7 @@ const group_streak_1 = require("../circles/group-streak");
 const submitTapInSchema = zod_1.z.object({
     circleId: zod_1.z.string().trim().min(1),
     progressVersion: zod_1.z.literal(1).optional(),
+    completionVersion: zod_1.z.literal(2).optional(),
     currentValue: zod_1.z.number().int().min(0).max(100000).optional(),
     note: zod_1.z.string().trim().max(1000).optional(),
     photoUrl: zod_1.z.string().trim().url().max(2048).optional(),
@@ -596,6 +597,7 @@ async function processTapInSideEffectsForCheckIn({ checkIn, circleId, dateKey, s
     ]);
 }
 async function submitTapInHandler(request) {
+    const startedAt = Date.now();
     const { profile, uid } = await requireCompletedProfile(request.auth?.uid, request.data?.idToken);
     const input = submitTapInSchema.parse(request.data);
     if (input.status === 'skip')
@@ -608,7 +610,10 @@ async function submitTapInHandler(request) {
     if (membership.data()?.status !== 'active')
         throw new https_1.HttpsError('permission-denied', 'Join this circle first.');
     await (0, momentum_1.materializeCurrentCircleOpportunities)(input.circleId);
-    const priorCircleProgress = await (0, progress_1.reconcileCircleProgress)({ circleId: input.circleId, uid });
+    const priorCircleProgress = input.completionVersion === 2
+        ? undefined
+        : await (0, progress_1.reconcileCircleProgress)({ circleId: input.circleId, uid });
+    const transactionStartedAt = Date.now();
     const result = await firebase_1.db.runTransaction(async (transaction) => {
         const [circleSnapshot, memberSnapshot, discoveryConfig] = await Promise.all([
             transaction.get(circleRef),
@@ -625,7 +630,9 @@ async function submitTapInHandler(request) {
         (0, circle_lifecycle_1.ensureActiveCircle)(circle, 'tapping in');
         const dateKey = getDateKey(circle?.timezone ?? profile.timezone ?? 'UTC');
         const joined = memberSnapshot.data()?.joinedAt?.toDate?.();
-        if (joined && memberSnapshot.data()?.opportunityEligibility !== 'include_current' && dateKey <= getDateKeyForDate(circle?.timezone ?? 'UTC', joined)) {
+        if (joined &&
+            memberSnapshot.data()?.opportunityEligibility !== 'include_current' &&
+            dateKey <= getDateKeyForDate(circle?.timezone ?? 'UTC', joined)) {
             throw new https_1.HttpsError('failed-precondition', `Your first eligible Tap In is ${(0, circle_progress_1.shiftCircleDate)(getDateKeyForDate(circle?.timezone ?? 'UTC', joined), 1)}.`);
         }
         const checkInRef = circleRef
@@ -691,12 +698,20 @@ async function submitTapInHandler(request) {
         const nextStatus = (0, commitments_1.getCheckInStatusForCoverage)(coverageStatus);
         const proofRequirement = (0, tap_in_proof_1.getTapInProofRequirement)(circle ?? {}, existingCheckIn);
         const photoUrl = input.status === 'skip'
-            ? null : input.photoUrl ?? existingCheckIn?.photoUrl ?? null;
+            ? null
+            : input.photoUrl ?? existingCheckIn?.photoUrl ?? null;
         (0, proof_1.requireCompletedTapInProof)({
-            requirement: proofRequirement, status: nextStatus, photoUrl,
+            requirement: proofRequirement,
+            status: nextStatus,
+            photoUrl,
         });
         if (proofRequirement === 'photo' && nextStatus === 'done' && photoUrl) {
-            await (0, proof_1.validateProofPhoto)({ photoUrl, circleId: input.circleId, dateKey, uid });
+            await (0, proof_1.validateProofPhoto)({
+                photoUrl,
+                circleId: input.circleId,
+                dateKey,
+                uid,
+            });
         }
         const nextCovered = coverageStatus === 'covered' || coverageStatus === 'skipped';
         const coverageRevision = (0, reconciliation_1.getNextCoverageRevision)({
@@ -785,6 +800,7 @@ async function submitTapInHandler(request) {
             coverageRevision,
             ...(nextStatus === 'done' ? { progressEventId: progressRequestId } : {}),
             circleId: input.circleId,
+            completionId: input.completionVersion === 2 ? progressRequestId : firestore_1.FieldValue.delete(),
             displayName: profile.displayName,
             handle: profile.handle,
             note: input.note ?? existingCheckIn?.note ?? null,
@@ -821,7 +837,8 @@ async function submitTapInHandler(request) {
             checkInPayload.createdAt = now;
         }
         if (input.status === 'done') {
-            checkInPayload.buildTrackingMode = quantityConfig.buildTrackingMode ?? firestore_1.FieldValue.delete();
+            checkInPayload.buildTrackingMode =
+                quantityConfig.buildTrackingMode ?? firestore_1.FieldValue.delete();
             checkInPayload.commitmentType = commitmentType;
             checkInPayload.currentValue = currentValue;
             checkInPayload.stepValue = quantityConfig.stepValue;
@@ -846,7 +863,8 @@ async function submitTapInHandler(request) {
             }
         }
         else {
-            checkInPayload.buildTrackingMode = quantityConfig.buildTrackingMode ?? firestore_1.FieldValue.delete();
+            checkInPayload.buildTrackingMode =
+                quantityConfig.buildTrackingMode ?? firestore_1.FieldValue.delete();
             checkInPayload.commitmentType = commitmentType;
             checkInPayload.currentValue = firestore_1.FieldValue.delete();
             checkInPayload.maximumValue = firestore_1.FieldValue.delete();
@@ -873,6 +891,21 @@ async function submitTapInHandler(request) {
         transaction.set(firebase_1.db.collection('userPrivate').doc(uid), {
             lastTapInAt: now,
         }, { merge: true });
+        if (input.completionVersion === 2) {
+            transaction.create(firebase_1.db.doc(`userPrivate/${uid}/tapInCompletions/${progressRequestId}`), {
+                completionId: progressRequestId,
+                uid,
+                circleId: input.circleId,
+                dateKey,
+                checkInPath: checkInRef.path,
+                previousCheckIn: existingCheckIn ?? null,
+                status: 'pending',
+                outcome: nextStatus,
+                baseProgress: progress,
+                createdAt: now,
+                updatedAt: now,
+            });
+        }
         return {
             proofRequirement,
             photoUrl,
@@ -888,6 +921,25 @@ async function submitTapInHandler(request) {
             status: nextStatus,
         };
     });
+    if (input.completionVersion === 2) {
+        console.info('tap_in_saved', {
+            completionId: progressRequestId,
+            durationMs: Date.now() - startedAt,
+            transactionMs: Date.now() - transactionStartedAt,
+        });
+        return {
+            completionId: progressRequestId,
+            progress: result.progress,
+            proofRequirement: result.proofRequirement,
+            photoUrl: result.photoUrl,
+            checkInId: result.checkInId,
+            coverageStatus: result.coverageStatus,
+            currentValue: result.currentValue,
+            dateKey: result.dateKey,
+            coverageRevision: result.coverageRevision,
+            status: result.status,
+        };
+    }
     const momentum = result.shouldReportMomentum
         ? await Promise.all([
             (0, profile_1.calculatePersonalMetricsForUser)({ profile, uid }),
@@ -920,14 +972,26 @@ async function submitTapInHandler(request) {
             console.error('progress_completion_reconciliation_pending');
         }
     }
-    const circleProgress = await (0, progress_1.reconcileCircleProgress)({ circleId: input.circleId, uid }).catch(error => { console.error('circle_progress_pending', error); return undefined; });
+    const circleProgress = await (0, progress_1.reconcileCircleProgress)({
+        circleId: input.circleId,
+        uid,
+    }).catch(error => {
+        console.error('circle_progress_pending', error);
+        return undefined;
+    });
     if (circleProgress) {
-        const delta = (after, before) => after?.streak.count != null && before?.streak.count != null && after.revision === before.revision ? after.streak.count - before.streak.count : undefined;
+        const delta = (after, before) => after?.streak.count != null &&
+            before?.streak.count != null &&
+            after.revision === before.revision
+            ? after.streak.count - before.streak.count
+            : undefined;
         circleProgress.viewerStreakDelta = delta(circleProgress.viewer, priorCircleProgress?.viewer);
         circleProgress.groupStreakDelta = delta(circleProgress.group, priorCircleProgress?.group);
     }
     return {
-        ...(circleProgress ? { circleProgress: JSON.parse(JSON.stringify(circleProgress)) } : {}),
+        ...(circleProgress
+            ? { circleProgress: JSON.parse(JSON.stringify(circleProgress)) }
+            : {}),
         progress: result.progress,
         proofRequirement: result.proofRequirement,
         photoUrl: result.photoUrl,
@@ -978,8 +1042,14 @@ async function updateTapInDetailsHandler(request) {
             photoUrl: patch.photoUrl,
         });
         if (proofRequirement === 'photo' &&
-            checkInSnapshot.data()?.status === 'done' && patch.photoUrl) {
-            await (0, proof_1.validateProofPhoto)({ photoUrl: patch.photoUrl, circleId: input.circleId, dateKey, uid });
+            checkInSnapshot.data()?.status === 'done' &&
+            patch.photoUrl) {
+            await (0, proof_1.validateProofPhoto)({
+                photoUrl: patch.photoUrl,
+                circleId: input.circleId,
+                dateKey,
+                uid,
+            });
         }
         const shouldDeletePhoto = Boolean(checkInSnapshot.data()?.photoUrl) && patch.photoUrl === null;
         transaction.set(checkInRef, {
@@ -1067,7 +1137,7 @@ exports.processTapInSideEffects = (0, firestore_2.onDocumentWritten)({
         await reconcileGroupStreak();
         return;
     }
-    if (status === 'done') {
+    if (status === 'done' && !checkIn.completionId) {
         await (0, momentum_1.recalculateMomentumSummaryForUser)(event.params.uid);
         await (0, progress_2.reconcileProgress)(event.params.uid, true, checkIn.progressEventId);
     }

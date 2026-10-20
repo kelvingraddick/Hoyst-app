@@ -78,6 +78,9 @@ export type RootStackParamList = {
   ArchivedCircles: undefined;
   TapInComposer: {circleId: string; source: TapInSource};
   TapInComplete: {
+    completionId?: string;
+    completionOwnerUid?: string;
+    submittedAt?: number;
     proofRequirement?: import('../shared/tap-in-proof').ProofRequirement;
     category?: string;
     appearance?: CommitmentAppearance;

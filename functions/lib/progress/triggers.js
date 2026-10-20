@@ -20,7 +20,8 @@ async function reconcileEligible(uid, successful = false, sourceEventId) {
 }
 exports.reconcileProgressTapIn = (0, firestore_1.onDocumentWritten)({ document: 'circles/{circleId}/days/{dateKey}/checkIns/{uid}', retry: true }, async (event) => {
     const before = event.data?.before.data(), after = event.data?.after.data();
-    if (after?.uid !== event.params.uid ||
+    if (after?.completionId ||
+        after?.uid !== event.params.uid ||
         after?.status !== 'done' ||
         !(0, commitments_1.isCoveredCheckInData)(after) ||
         (before?.status === 'done' && (0, commitments_1.isCoveredCheckInData)(before)))

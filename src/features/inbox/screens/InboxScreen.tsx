@@ -138,7 +138,14 @@ function InboxEventRow({
       // NativeWind interop drops functional styles. Keep layout and feedback explicit.
       style={[
         styles.notificationRow,
-        {borderBottomColor},
+        {
+          borderBottomColor,
+          backgroundColor: isUnread
+            ? theme.isDark
+              ? 'rgba(255,255,255,0.05)'
+              : 'rgba(0,0,0,0.03)'
+            : undefined,
+        },
         pressed ? styles.notificationPressed : undefined,
       ]}
       testID={`inbox-event-row-${event.id}`}>
@@ -162,22 +169,12 @@ function InboxEventRow({
       </View>
       <View style={styles.notificationCopy} testID="inbox-event-copy">
         <DSText variant="body" style={styles.notificationCopyText}>
-          <DSText
-            variant="body"
-            style={isUnread ? styles.notificationMessageUnread : undefined}>
-            {lead}{' '}
-          </DSText>
-          <DSText
-            variant="body"
-            tone={visual.messageTone}
-            style={isUnread ? styles.notificationMessageUnread : undefined}>
+          <DSText variant="body">{lead} </DSText>
+          <DSText variant="body" tone={visual.messageTone}>
             {message}
           </DSText>
         </DSText>
-        <DSText
-          variant="secondary"
-          tone={isUnread ? 'text' : 'muted'}
-          style={isUnread ? styles.notificationTimestampUnread : undefined}>
+        <DSText variant="secondary" tone="muted">
           {event.createdAtLabel}
         </DSText>
       </View>
@@ -480,9 +477,6 @@ const styles = StyleSheet.create({
     height: 32,
     width: 32,
   },
-  notificationMessageUnread: {
-    fontWeight: '700',
-  },
   notificationPressed: {opacity: 0.72},
   notificationRow: {
     alignItems: 'center',
@@ -492,9 +486,6 @@ const styles = StyleSheet.create({
     minHeight: 56,
     opacity: 1,
     paddingVertical: space.sm,
-  },
-  notificationTimestampUnread: {
-    fontWeight: '700',
   },
   notificationUnreadDot: {
     borderRadius: 3,

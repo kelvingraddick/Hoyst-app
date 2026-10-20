@@ -300,3 +300,40 @@ final result: passed
 Matched HomeWeekPath locally in CircleGroupWeekPath: 22-point nodes, 1.5-point outlines, 13-point completion checks, the same staggered centers, and 1.4-point connectors with a 5/6 dash pattern and matching light/dark strokes. Member contribution arcs retain green/slate/pale colors and fit within the 22-point markers; today retains its distinct outline. Counts, day details, and large-text scrolling remain. Home was not edited by this follow-up. Native iOS evidence: docs/circle-progress/evidence/home-sized-circle-timeline-ios.png.
 
 Verification: Circle panel and screen suites pass; combined with Home, 102 tests pass and two Home assertions fail (actorless activity icon and PERSONAL label). Both Home failures reproduce when rerunning with the previous Circle geometry. App TypeScript passes; affected lint has zero errors and one existing inline-style warning. Circle native capture was inspected; no new Android, dark-mode, or larger-text capture was performed for this sizing follow-up.
+
+
+## October 20 Circle You and Group redesign
+
+Scoped presentation review only. Earlier Progress feature and release gates above are unchanged.
+
+Source visual truth: `docs/circle-progress/evidence/you-group/approved-mock.png`, the first balanced emoji mock selected by the user. The user's subsequent instruction explicitly changes the grouping: both goals in the first container, both streaks in the second. Implementation: `src/features/circles/components/CircleProgressPanel.tsx`.
+
+### Evidence and normalization
+
+- Final native account capture: `docs/circle-progress/evidence/you-group/ios-light.png`, iPhone 17 Pro, iOS 26.5, 402 x 874 logical points. The latest evidence is a 711 x 1546 pixel app-content crop from the verified Device Hub capture `ios-light-device-hub.jpg` (938 x 1836 pixels), approximately 1.77 pixels per logical point. The recorded capture from this chat was preserved because concurrent simulator work interrupted the later direct screenshot. State matches the mock: October 14 through October 20, You 0 of 1 Tap In, Group 0 of 2 met goal, both streaks 0 days.
+- The source is 995 x 1581 pixels, representing a 390-point-wide mock. `comparison-section.png` places the Daily activity, Today, and Circle members regions together at a normalized 402-point width. `comparison-cards.png` compares the cards at 358 points wide, rendered at 2x. Both combined comparisons were opened and inspected; width normalization preserves aspect ratios without vertical stretching. The regrouping is intentional per the user's final instruction.
+- `implemented-cards.png` is a focused crop of the final native implementation. `ios-group-details.png` records the working Group streak sheet; both Your streak and Group streak production buttons were exercised before regrouping. Their existing handlers are unchanged.
+- `ios-dark-before-regroup.png` and `ios-large-text-before-regroup.png` validate the shared badges, theme colors, text scaling, and stacked metric fallback before the final regrouping. Their fixture dates are fixed to October 11 through October 17. The final regrouped layout was captured in light mode; Android visual QA was not run.
+- System content size was restored to large, preview appearance was restored on closing the fixture, and the simulator was returned to the real Circle screen with the updated bundled app. No Tap In, nudge, message, or settings save was submitted.
+
+### Findings and validation
+
+No actionable P0/P1/P2 findings in the final scoped iOS layout.
+
+- Typography: the same shared DSText variants as Home: title for 16-point semibold values and statCaption for 11-point regular labels/captions. Unavailable progress uses secondary. Full cadence units and native font scaling are preserved.
+- Layout: two white cards sized to their content. The first contains both goals and separate progress tracks; the second contains both streaks. Both use equal flexible columns and centered hairline separators. Narrow screens and larger text stack the metrics within each card.
+- Colors: existing theme tokens preserve green personal, neutral group, and orange streak surfaces. Streak numbers retain the app's existing accessible orange.
+- Assets: native personal/member emoji and the exact Home `ProgressStatBadge`, all using 36-point discs with 22-point emoji. This follows the requested Home component despite Image Gen's enlarged circles in the style reference.
+- Content and behavior: counts, goal eligibility/unavailable states, streak units, personal/nonmember visibility, progressbar accessibility values, and explanatory sheets are retained. Existing assertions now tolerate separate count/caption lines and verify both goals precede both streaks.
+
+Comparison history: the initial paired-metric cards passed their style review. The final regrouping was requested by the user, implemented, captured, and compared again against that style reference. No visual correction was required after the final comparison. Native token, badge-size, scalable-text, and requested grouping adaptations are intentional.
+
+Three focused Jest suites passed, 65 tests total, covering the panel, Circle detail screen, and period calculations. Typecheck, component formatting, and diff checks passed. Scoped lint has no errors and two existing-style inline-style warnings.
+
+Follow-up: removed the shared 95-point minimum card height at the user's request. Goals retain their natural height; the streak card now fits its shorter contents, with the existing 12-point padding, 36-point badges, and 44-point minimum touch targets. The refreshed native capture confirms the thinner streak card without clipping. The nine existing panel tests, formatting, and diff checks passed.
+
+Typography follow-up: replaced the cards' separate HoystText font overrides with Home's actual DSText title/statCaption variants, reducing values from 18 to 16 points and captions from 12 to 11 points with regular weight. The selected layout, colors, fixed badge sizes, content-sized containers, and accessibility behavior remain intact. `ios-home-typography-device-hub.jpg` and its focused crop `home-typography-cards.png` show the updated live Sleep 7 Hours Circle (both goal counts 0 of 1 and both streaks 0 days). The earlier layout captures above are historical. Both affected Jest suites pass, 50 tests total.
+
+Latest check limitation: full app typecheck reports three errors in the separate in-progress Tap In edits: possibly undefined completionState in TapInCompleteScreen, and an argument/state typing pair in TapInComposerScreen. No diagnostic points to CircleProgressPanel. Those files were already modified before this typography follow-up and were left untouched.
+
+final result: passed

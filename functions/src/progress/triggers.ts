@@ -26,6 +26,7 @@ export const reconcileProgressTapIn = onDocumentWritten(
     const before = event.data?.before.data(),
       after = event.data?.after.data();
     if (
+      after?.completionId ||
       after?.uid !== event.params.uid ||
       after?.status !== 'done' ||
       !isCoveredCheckInData(after) ||

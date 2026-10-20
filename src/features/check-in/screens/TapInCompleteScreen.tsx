@@ -1,3 +1,5 @@
+import type {TapInCompletion} from '../../../../functions/src/shared/tap-in-completion';
+import {subscribeTapInCompletion} from '../services/check-in-service';
 import {CircleCardStreaks} from '../../circles/components/CircleCardStreaks';
 import React, {
   useCallback,
@@ -13,7 +15,6 @@ import {
   Animated,
   Easing,
   Image,
-  InteractionManager,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -296,6 +297,32 @@ function getStatusCopy({
   };
 }
 
+function getCircleStatusCopy(
+  circleProgress: RootStackParamList['TapInComplete']['circleProgress'],
+) {
+  const circlePeriod = circleProgress?.viewer;
+  return circlePeriod
+    ? {
+        lead:
+          circlePeriod.progress.outcome === 'unknown'
+            ? 'Circle progress is updating'
+            : circlePeriod.progress.outcome === 'secured'
+            ? `${
+                circlePeriod.cadence === 'daily'
+                  ? 'Daily'
+                  : circlePeriod.cadence === 'monthly'
+                  ? 'Monthly'
+                  : 'Weekly'
+              } goal complete`
+            : `${circlePeriod.progress.covered} of ${circlePeriod.progress.required} Tap Ins covered`,
+        trailing:
+          (circleProgress?.viewerStreakDelta ?? 0) > 0
+            ? 'Your Circle streak extended'
+            : undefined,
+      }
+    : undefined;
+}
+
 export function TapInCompleteScreen(props: Props): React.JSX.Element {
   const appearance = useSettingsStore(state => state.appearance);
   return (
@@ -314,13 +341,17 @@ function TapInCompleteController({
   const haloProgress = useRef(new Animated.Value(0)).current;
   const logoProgress = useRef(new Animated.Value(0)).current;
   const logoSpinProgress = useRef(new Animated.Value(0)).current;
-  const contentProgress = useRef(new Animated.Value(0)).current;
   const particleProgresses = useRef(
     particleConfigs.map(() => new Animated.Value(0)),
   ).current;
   const [detail, setDetail] = useState<CircleDetailModel | undefined>();
-  const [hasLaidOut, setHasLaidOut] = useState(false);
-  const [hasSettledNavigation, setHasSettledNavigation] = useState(false);
+  const [completionState, setCompletionState] = useState<{
+    uid: string;
+    id: string;
+    result: TapInCompletion;
+  }>();
+  const [pendingIsSlow, setPendingIsSlow] = useState(false);
+  const completionVisibleLogged = useRef(false);
   const [hasResolvedDetail, setHasResolvedDetail] = useState(false);
   const savePendingDetailsRef = useRef<(() => void) | undefined>(undefined);
   const [detailsSaveState, setDetailsSaveState] =
@@ -356,9 +387,11 @@ function TapInCompleteController({
   const visiblePhotoUri = pendingPhotoUri ?? savedDetails.photoUrl;
   const isSkip = route.params.status === 'skip';
   const photoRequired =
-    (route.params.proofRequirement ?? detail?.viewerTodayCheckIn?.proofRequirement) === 'photo' &&
+    (route.params.proofRequirement ??
+      detail?.viewerTodayCheckIn?.proofRequirement) === 'photo' &&
     !isSkip &&
-    (detail?.viewerTodayCheckIn?.status ?? route.params.status ?? 'done') === 'done';
+    (detail?.viewerTodayCheckIn?.status ?? route.params.status ?? 'done') ===
+      'done';
   const quantityValue = cleanQuantityValue(route.params.currentValue);
   const isQuantityCompletion =
     route.params.commitmentType !== undefined &&
@@ -429,6 +462,7 @@ function TapInCompleteController({
     return {
       ...(category ? {category} : {}),
       appearance: route.params.appearance,
+      circleMode: route.params.circleMode,
       commitment: commitment ?? "Today's Tap In",
       ...(route.params.commitmentType
         ? {commitmentType: route.params.commitmentType}
@@ -445,6 +479,7 @@ function TapInCompleteController({
   }, [
     route.params.category,
     route.params.appearance,
+    route.params.circleMode,
     route.params.circleTitle,
     route.params.commitment,
     route.params.commitmentType,
@@ -458,8 +493,66 @@ function TapInCompleteController({
   ]);
   const displayDetail = detail ?? snapshotDetail;
   const hasCompletionContent = hasResolvedDetail || Boolean(snapshotDetail);
-  const isReadyForCelebration =
-    hasLaidOut && hasSettledNavigation && hasCompletionContent;
+  const isReadyForCelebration = hasCompletionContent;
+  const completionId = route.params.completionId;
+  const completionOwnerUid = route.params.completionOwnerUid;
+  const completion =
+    completionState &&
+    completionState.uid === user?.uid &&
+    completionState?.uid === completionOwnerUid &&
+    completionState?.id === completionId
+      ? completionState.result
+      : undefined;
+  const finalCompletion =
+    completion?.status === 'complete' ? completion : undefined;
+  const completionPending = Boolean(
+    completionId &&
+      completion?.status !== 'complete' &&
+      completion?.status !== 'superseded',
+  );
+
+  useEffect(() => {
+    if (
+      !completionId ||
+      !completionOwnerUid ||
+      user?.uid !== completionOwnerUid ||
+      !canLoadDetail
+    ) {
+      return;
+    }
+    let activeSubscription = true;
+    const unsubscribe = subscribeTapInCompletion(
+      completionOwnerUid,
+      completionId,
+      result => {
+        if (activeSubscription && result.completionId === completionId) {
+          setCompletionState({
+            uid: completionOwnerUid,
+            id: completionId,
+            result,
+          });
+        }
+      },
+      () => {
+        if (activeSubscription) {
+          setPendingIsSlow(true);
+        }
+      },
+    );
+    return () => {
+      activeSubscription = false;
+      unsubscribe();
+    };
+  }, [completionId, completionOwnerUid, user?.uid, canLoadDetail]);
+
+  useEffect(() => {
+    setPendingIsSlow(false);
+    if (!completionPending) {
+      return;
+    }
+    const timeout = setTimeout(() => setPendingIsSlow(true), 10000);
+    return () => clearTimeout(timeout);
+  }, [completionPending, completionId]);
   const canShowStoryShare = canShareTapInStory(route.params.status);
 
   useEffect(() => {
@@ -542,28 +635,11 @@ function TapInCompleteController({
 
   useEffect(() => {
     let isMounted = true;
-    setHasSettledNavigation(false);
-
-    const interactionTask = InteractionManager.runAfterInteractions(() => {
-      if (isMounted) {
-        setHasSettledNavigation(true);
-      }
-    });
-
-    return () => {
-      isMounted = false;
-      interactionTask.cancel();
-    };
-  }, [route.params.circleId]);
-
-  useEffect(() => {
-    let isMounted = true;
     let entranceAnimation: Animated.CompositeAnimation | undefined;
 
     haloProgress.setValue(0);
     logoProgress.setValue(0);
     logoSpinProgress.setValue(0);
-    contentProgress.setValue(0);
     particleProgresses.forEach(progress => progress.setValue(0));
 
     if (!isReadyForCelebration) {
@@ -583,58 +659,47 @@ function TapInCompleteController({
           haloProgress.setValue(1);
           logoProgress.setValue(1);
           logoSpinProgress.setValue(1);
-          contentProgress.setValue(1);
           particleProgresses.forEach(progress =>
             progress.setValue(showCelebrationParticles ? 1 : 0),
           );
           return;
         }
 
-        entranceAnimation = Animated.sequence([
-          Animated.delay(120),
-          Animated.parallel([
-            Animated.timing(haloProgress, {
-              duration: 3400,
-              easing: Easing.out(Easing.cubic),
-              toValue: 1,
-              useNativeDriver: true,
-            }),
-            Animated.timing(logoProgress, {
-              duration: 1000,
-              easing: Easing.out(Easing.back(1.22)),
-              toValue: 1,
-              useNativeDriver: true,
-            }),
-            Animated.timing(logoSpinProgress, {
-              duration: 1700,
-              easing: Easing.out(Easing.cubic),
-              toValue: 1,
-              useNativeDriver: true,
-            }),
-            Animated.timing(contentProgress, {
-              delay: 560,
-              duration: 560,
-              easing: Easing.out(Easing.cubic),
-              toValue: 1,
-              useNativeDriver: true,
-            }),
-            ...(showCelebrationParticles
-              ? [
-                  Animated.stagger(
-                    90,
-                    particleProgresses.map(progress =>
-                      Animated.timing(progress, {
-                        delay: 140,
-                        duration: 2900,
-                        easing: Easing.out(Easing.cubic),
-                        toValue: 1,
-                        useNativeDriver: true,
-                      }),
-                    ),
+        entranceAnimation = Animated.parallel([
+          Animated.timing(haloProgress, {
+            duration: 3400,
+            easing: Easing.out(Easing.cubic),
+            toValue: 1,
+            useNativeDriver: true,
+          }),
+          Animated.timing(logoProgress, {
+            duration: 1000,
+            easing: Easing.out(Easing.back(1.22)),
+            toValue: 1,
+            useNativeDriver: true,
+          }),
+          Animated.timing(logoSpinProgress, {
+            duration: 1700,
+            easing: Easing.out(Easing.cubic),
+            toValue: 1,
+            useNativeDriver: true,
+          }),
+          ...(showCelebrationParticles
+            ? [
+                Animated.stagger(
+                  90,
+                  particleProgresses.map(progress =>
+                    Animated.timing(progress, {
+                      delay: 140,
+                      duration: 2900,
+                      easing: Easing.out(Easing.cubic),
+                      toValue: 1,
+                      useNativeDriver: true,
+                    }),
                   ),
-                ]
-              : []),
-          ]),
+                ),
+              ]
+            : []),
         ]);
 
         entranceAnimation.start();
@@ -643,7 +708,6 @@ function TapInCompleteController({
         haloProgress.setValue(1);
         logoProgress.setValue(1);
         logoSpinProgress.setValue(1);
-        contentProgress.setValue(1);
         particleProgresses.forEach(progress =>
           progress.setValue(showCelebrationParticles ? 1 : 0),
         );
@@ -654,7 +718,6 @@ function TapInCompleteController({
       entranceAnimation?.stop();
     };
   }, [
-    contentProgress,
     haloProgress,
     isReadyForCelebration,
     logoProgress,
@@ -699,7 +762,8 @@ function TapInCompleteController({
       maximumValue: route.params.maximumValue,
       targetValue: route.params.targetValue,
       unitLabel: route.params.unitLabel,
-      circleProgress: route.params.circleProgress,
+      circleProgress:
+        finalCompletion?.circleProgress ?? route.params.circleProgress,
       source: route.params.source,
       photoUri: visiblePhotoUri,
     });
@@ -720,6 +784,7 @@ function TapInCompleteController({
     route.params.targetValue,
     route.params.unitLabel,
     route.params.circleProgress,
+    finalCompletion?.circleProgress,
     navigation,
     route.params.circleId,
     route.params.circleTitle,
@@ -855,16 +920,23 @@ function TapInCompleteController({
   const loadingCopy = hasCompletionContent
     ? 'Getting the screen ready.'
     : 'Loading your circle.';
-  const xpFeedback = route.params.completionProgress;
-  const circleProgress = route.params.circleProgress;
-  const circlePeriod = circleProgress?.viewer;
-  const circleCopy = circlePeriod ? {lead: circlePeriod.progress.outcome === 'unknown' ? 'Circle progress is updating' : circlePeriod.progress.outcome === 'secured' ? `${circlePeriod.cadence === 'daily' ? 'Daily' : circlePeriod.cadence === 'monthly' ? 'Monthly' : 'Weekly'} goal complete` : `${circlePeriod.progress.covered} of ${circlePeriod.progress.required} Tap Ins covered`, trailing: (circleProgress?.viewerStreakDelta ?? 0) > 0 ? 'Your Circle streak extended' : undefined} : undefined;
+  const xpFeedback =
+    finalCompletion?.progress ?? route.params.completionProgress;
+  const circleProgress =
+    finalCompletion?.circleProgress ?? route.params.circleProgress;
+  // Confirmation copy stays anchored to the saved response. Derived results
+  // arrive in the feedback below the details, without reflowing the hero.
   const statusCopy =
-    quantityOutcomeCopy ?? circleCopy ??
-    getStatusCopy({
-      isSkip,
-      momentum: route.params.completionMomentum,
-    });
+    quantityOutcomeCopy ??
+    getCircleStatusCopy(route.params.circleProgress) ??
+    getStatusCopy({isSkip, momentum: route.params.completionMomentum});
+  const resolvedStatusCopy =
+    !quantityOutcomeCopy && finalCompletion
+      ? getCircleStatusCopy(finalCompletion.circleProgress) ??
+        (finalCompletion.momentum
+          ? getStatusCopy({isSkip, momentum: finalCompletion.momentum})
+          : undefined)
+      : undefined;
   const particleColors =
     completionTone === 'failed'
       ? [
@@ -922,8 +994,8 @@ function TapInCompleteController({
     ? 'No note added. Your Progress was saved.'
     : 'No note added. Your Tap In still counts.';
   const category = getCircleCategoryVisual(
-    detail?.category ?? 'General',
-    detail?.appearance,
+    displayDetail?.category ?? 'General',
+    displayDetail?.appearance,
   );
   const commitmentType = detail
     ? getCommitmentType(detail)
@@ -960,22 +1032,6 @@ function TapInCompleteController({
     inputRange: [0, 1],
     outputRange: ['-720deg', '0deg'],
   });
-  const contentAnimatedStyle = isReadyForCelebration
-    ? {
-        opacity: contentProgress,
-        transform: [
-          {
-            translateY: contentProgress.interpolate({
-              inputRange: [0, 1],
-              outputRange: [12, 0],
-            }),
-          },
-        ],
-      }
-    : {
-        opacity: 1,
-        transform: [{translateY: 0}],
-      };
 
   return (
     <SafeAreaView
@@ -1008,7 +1064,18 @@ function TapInCompleteController({
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}>
           <View
-            onLayout={() => setHasLaidOut(true)}
+            onLayout={() => {
+              if (
+                __DEV__ &&
+                !completionVisibleLogged.current &&
+                route.params.submittedAt
+              ) {
+                completionVisibleLogged.current = true;
+                console.info('tap_in_completion_visible', {
+                  durationMs: Date.now() - route.params.submittedAt,
+                });
+              }
+            }}
             style={styles.contentFrame}
             testID="tap-in-complete-content">
             <View style={styles.heroStack}>
@@ -1091,7 +1158,7 @@ function TapInCompleteController({
                   />
                 </Animated.View>
               </View>
-              <Animated.View style={[styles.titleBlock, contentAnimatedStyle]}>
+              <Animated.View style={styles.titleBlock}>
                 <DSText
                   variant="screenTitle"
                   style={styles.completeTitle}
@@ -1136,26 +1203,13 @@ function TapInCompleteController({
               </Animated.View>
             </View>
 
-            {circleProgress ? <CircleCardStreaks circle={{viewerMembershipStatus: 'active', circleMode: displayDetail?.circleMode, viewerCircleProgress: circleProgress.viewer, groupStreak: circleProgress.group}} /> : null}
-            {xpFeedback && xpFeedback.xpEarned > 0 ? (
-              <DSText
-                accessibilityLiveRegion="polite"
-                tone="success"
-                variant="title">
-                +{xpFeedback.xpEarned} XP
-                {xpFeedback.rewards.skips
-                  ? ` · ${xpFeedback.rewards.skips} skip earned`
-                  : ''}
-                {xpFeedback.rewards.restores
-                  ? ` · ${xpFeedback.rewards.restores} restore earned`
-                  : ''}
-              </DSText>
-            ) : null}
-            <Animated.View style={[styles.detailsStack, contentAnimatedStyle]}>
+            <Animated.View
+              style={styles.detailsStack}
+              testID="tap-in-complete-details">
               <View style={styles.commitmentRow}>
                 <CircleCategoryIcon
-                  category={detail?.category ?? 'General'}
-                  appearance={detail?.appearance}
+                  category={displayDetail?.category ?? 'General'}
+                  appearance={displayDetail?.appearance}
                   showBackplate={false}
                   size={34}
                 />
@@ -1242,6 +1296,56 @@ function TapInCompleteController({
                 />
               ) : null}
             </Animated.View>
+            <View
+              style={styles.completionFeedback}
+              testID="tap-in-complete-feedback">
+              {circleProgress ? (
+                <CircleCardStreaks
+                  circle={{
+                    viewerMembershipStatus: 'active',
+                    circleMode: displayDetail?.circleMode,
+                    viewerCircleProgress: circleProgress.viewer,
+                    groupStreak: circleProgress.group,
+                  }}
+                />
+              ) : null}
+              {xpFeedback && xpFeedback.xpEarned > 0 ? (
+                <DSText
+                  accessibilityLiveRegion="polite"
+                  tone="success"
+                  variant="title">
+                  +{xpFeedback.xpEarned} XP
+                  {xpFeedback.rewards.skips
+                    ? ` · ${xpFeedback.rewards.skips} skip earned`
+                    : ''}
+                  {xpFeedback.rewards.restores
+                    ? ` · ${xpFeedback.rewards.restores} restore earned`
+                    : ''}
+                </DSText>
+              ) : null}
+              {completionPending ? (
+                <DSText
+                  tone="muted"
+                  variant="secondary"
+                  testID="tap-in-complete-progress-pending"
+                  accessibilityLiveRegion="polite">
+                  {pendingIsSlow
+                    ? 'Progress is still updating'
+                    : 'Updating streaks and rewards…'}
+                </DSText>
+              ) : null}
+              {resolvedStatusCopy ? (
+                <DSText
+                  tone="muted"
+                  variant="secondary"
+                  accessibilityLiveRegion="polite">
+                  {resolvedStatusCopy.lead}
+                  {resolvedStatusCopy.trailing
+                    ? ` · ${resolvedStatusCopy.trailing}`
+                    : ''}
+                </DSText>
+              ) : null}
+            </View>
           </View>
         </ScrollView>
         <View
@@ -1304,6 +1408,7 @@ const styles = StyleSheet.create({
   commitmentCopy: {flex: 1, gap: 2, minWidth: 0},
   commitmentRow: {alignItems: 'flex-start', flexDirection: 'row', gap: 10},
   contentFrame: {gap: 24},
+  completionFeedback: {gap: 12},
   detailsStack: {gap: 12},
   dockButton: {
     minHeight: 56,

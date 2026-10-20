@@ -85,6 +85,11 @@ service cloud.firestore {
         allow write: if false;
       }
 
+      match /tapInCompletions/{completionId} {
+        allow read: if isSelf(uid);
+        allow write: if false;
+      }
+
       match /circleProgress/{circleId} {
         allow read: if isSelf(uid);
         allow write: if false;

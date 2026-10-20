@@ -4,6 +4,7 @@ exports.getPersonalStreakTransition = getPersonalStreakTransition;
 exports.summarizeProfileCheckIns = summarizeProfileCheckIns;
 exports.summarizeActiveCircleModes = summarizeActiveCircleModes;
 exports.calculatePersonalMetricsForUser = calculatePersonalMetricsForUser;
+exports.calculatePersonalTransitionForTapIn = calculatePersonalTransitionForTapIn;
 const firebase_1 = require("../firebase");
 const circle_lifecycle_1 = require("../shared/circle-lifecycle");
 const circle_mode_1 = require("../shared/circle-mode");
@@ -22,9 +23,9 @@ function getCheckInCircleId(snapshot) {
     const dayRef = snapshot.ref.parent.parent;
     return dayRef?.parent.parent?.id;
 }
-function getCheckInDateKey(snapshot, timezone) {
-    const data = snapshot.data();
-    if (data.protectionKind === 'restore' && typeof data.effectiveDateKey === 'string')
+function getCheckInDateKey(snapshot, timezone, data = snapshot.data()) {
+    if (data.protectionKind === 'restore' &&
+        typeof data.effectiveDateKey === 'string')
         return data.restoration?.personalEffectiveDateKey || data.effectiveDateKey;
     const createdAt = data.createdAt;
     if (createdAt?.toDate) {
@@ -32,7 +33,7 @@ function getCheckInDateKey(snapshot, timezone) {
     }
     return snapshot.ref.parent.parent?.id;
 }
-function summarizeProfileCheckIns({ activeCircleIds, checkInSnapshots, excludedCheckInPath, timezone, }) {
+function summarizeProfileCheckIns({ activeCircleIds, checkInSnapshots, excludedCheckInPath, replacementCheckIn, timezone, }) {
     const activeCoveredCheckInDateKeys = [];
     const coveredCheckInDateKeys = [];
     let totalTapIns = 0;
@@ -40,7 +41,11 @@ function summarizeProfileCheckIns({ activeCircleIds, checkInSnapshots, excludedC
         if (excludedCheckInPath && snapshot.ref.path === excludedCheckInPath) {
             return;
         }
-        const checkIn = snapshot.data();
+        const checkIn = replacementCheckIn?.path === snapshot.ref.path
+            ? replacementCheckIn.data
+            : snapshot.data();
+        if (!checkIn)
+            return;
         const status = checkIn.status;
         if (status === 'done' && (0, commitments_1.isCoveredCheckInData)(checkIn)) {
             totalTapIns += 1;
@@ -48,7 +53,7 @@ function summarizeProfileCheckIns({ activeCircleIds, checkInSnapshots, excludedC
         if (!(0, commitments_1.isCoveredCheckInData)(checkIn)) {
             return;
         }
-        const dateKey = getCheckInDateKey(snapshot, timezone);
+        const dateKey = getCheckInDateKey(snapshot, timezone, checkIn);
         if (!dateKey) {
             return;
         }
@@ -76,7 +81,7 @@ function summarizeActiveCircleModes(circles) {
         activePersonalCommitmentCount: activeCircles.filter(circle => (0, circle_mode_1.getCircleMode)(circle) === 'personal').length,
     };
 }
-async function calculatePersonalMetricsForUser({ excludedCheckInPath, now = new Date(), profile, uid, }) {
+async function calculatePersonalMetricsPair({ excludedCheckInPath, replacementCheckIn, now = new Date(), profile, uid, }) {
     const resolvedProfile = profile ?? (await firebase_1.db.collection('users').doc(uid).get()).data();
     const timezone = getProfileTimezone(resolvedProfile);
     const membershipsSnapshot = await firebase_1.db
@@ -96,24 +101,41 @@ async function calculatePersonalMetricsForUser({ excludedCheckInPath, now = new 
         .collectionGroup('checkIns')
         .where('uid', '==', uid)
         .get();
-    const { activeCoveredCheckInDateKeys, coveredCheckInDateKeys, totalTapIns } = summarizeProfileCheckIns({
-        activeCircleIds: new Set(lifecycleActiveCircleSnapshots.map(snapshot => snapshot.id)),
-        checkInSnapshots: checkInsSnapshot.docs,
-        excludedCheckInPath,
-        timezone,
-    });
-    const currentStreak = (0, streak_1.calculatePersonalDailyStreak)({
-        checkInDateKeys: activeCoveredCheckInDateKeys,
-        now,
-        timezone,
-    });
-    return {
-        activeCircleCount,
-        activePersonalCommitmentCount,
-        longestStreakDays: (0, streak_1.calculateLongestPersonalDailyStreak)({
-            checkInDateKeys: coveredCheckInDateKeys,
-        }),
-        totalTapIns,
-        ...currentStreak,
+    const compute = (replacement) => {
+        const { activeCoveredCheckInDateKeys, coveredCheckInDateKeys, totalTapIns } = summarizeProfileCheckIns({
+            activeCircleIds: new Set(lifecycleActiveCircleSnapshots.map(snapshot => snapshot.id)),
+            checkInSnapshots: checkInsSnapshot.docs,
+            excludedCheckInPath,
+            replacementCheckIn: replacement,
+            timezone,
+        });
+        return {
+            activeCircleCount,
+            activePersonalCommitmentCount,
+            longestStreakDays: (0, streak_1.calculateLongestPersonalDailyStreak)({
+                checkInDateKeys: coveredCheckInDateKeys,
+            }),
+            totalTapIns,
+            ...(0, streak_1.calculatePersonalDailyStreak)({
+                checkInDateKeys: activeCoveredCheckInDateKeys,
+                now,
+                timezone,
+            }),
+        };
     };
+    return {
+        currentMetrics: compute(),
+        priorMetrics: replacementCheckIn ? compute(replacementCheckIn) : undefined,
+    };
+}
+async function calculatePersonalMetricsForUser(options) {
+    return (await calculatePersonalMetricsPair(options)).currentMetrics;
+}
+/** Both sides use the same loaded history and clock, including an earlier quantity/skip outcome. */
+async function calculatePersonalTransitionForTapIn(options) {
+    const { currentMetrics, priorMetrics } = await calculatePersonalMetricsPair(options);
+    return getPersonalStreakTransition({
+        currentMetrics,
+        priorMetrics: priorMetrics,
+    });
 }

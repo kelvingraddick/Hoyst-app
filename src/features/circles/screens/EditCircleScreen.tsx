@@ -1,22 +1,19 @@
+import React, {useEffect, useMemo, useRef, useState} from 'react';
+import {Alert, Pressable, StyleSheet, View} from 'react-native';
+import type {NativeStackScreenProps} from '@react-navigation/native-stack';
+
+import {CommitmentTypeIcon} from '../../../design/components/CommitmentTypeVisual';
+import {SetupText as HoystText} from '../../create-circle/components/SetupText';
 import {
   GoalEditor,
   ProofSelector,
+  SetupAppearanceEditor,
+  SetupCategoryGrid,
+  SetupChoice,
+  SetupField,
 } from '../../create-circle/components/SetupStepContent';
+import {SetupJourneyFrame} from '../../create-circle/components/SetupJourneyFrame';
 import {validateSetup} from '../../create-circle/services/setup-journey';
-import {CommitmentAppearanceControl} from '../../../design/components/CommitmentAppearanceControl';
-import React, {useEffect, useMemo, useRef, useState} from 'react';
-import {Alert, Pressable, StyleSheet, View} from 'react-native';
-import {ArrowLeft} from 'lucide-react-native';
-import type {NativeStackScreenProps} from '@react-navigation/native-stack';
-
-import {GlassPanel} from '../../../design/components/GlassPanel';
-import {FrostedBackdrop} from '../../../design/components/FrostedBackdrop';
-import {HoystChip} from '../../../design/components/HoystChip';
-import {HoystInput} from '../../../design/components/HoystInput';
-import {HoystScreen} from '../../../design/components/HoystScreen';
-import {HoystText} from '../../../design/components/HoystText';
-import {CircleCategoryPill} from '../../../design/components/CircleCategoryIcon';
-import {radius} from '../../../design/tokens/radius';
 import {useSetupTheme} from '../../create-circle/services/setup-presentation';
 import type {RootStackParamList} from '../../../navigation/types';
 import {useSessionStore} from '../../../store/session-store';
@@ -33,19 +30,13 @@ import {
 } from '../../create-circle/services/create-circle-draft';
 import {subscribeToMemberCircleDetail} from '../../home/services/home-data-service';
 import {updateCircle} from '../services/circle-service';
-import {CommitmentSetupScaffold} from '../../create-circle/components/CommitmentSetupScaffold';
 import {
-  categoryOptions as setupCategoryOptions,
-  commitmentPaceOptions as setupCommitmentPaceOptions,
-  commitmentTypeOptions as setupCommitmentTypeOptions,
-  formatAccessSummary,
-  formatJoinMode,
-  privacyOptions as setupPrivacyOptions,
-  publicJoinOptions as setupPublicJoinOptions,
-  SetupIconButton,
+  commitmentPaceOptions,
+  commitmentTypeOptions,
+  privacyOptions,
+  publicJoinOptions,
   SetupNumericStepper,
-  SetupOptionList,
-  SetupSummaryRow,
+  type SetupOption,
 } from '../../create-circle/components/CommitmentSetupFields';
 import type {
   CircleDetailModel,
@@ -55,6 +46,56 @@ import type {
   CommitmentType,
   CreateCircleDraft,
 } from '../../../types/models';
+
+function EditChoices<T extends string>({
+  label,
+  options,
+  selected,
+  onSelect,
+  disabled,
+}: {
+  label: string;
+  options: SetupOption<T>[];
+  selected: T;
+  onSelect: (value: T) => void;
+  disabled: boolean;
+}) {
+  const theme = useSetupTheme();
+  return (
+    <View
+      accessibilityRole="radiogroup"
+      accessibilityLabel={label}
+      style={styles.group}>
+      {options.map(option => {
+        const Icon = option.icon;
+        return (
+          <SetupChoice
+            key={option.id}
+            title={option.label}
+            body={option.description}
+            tone={
+              option.commitmentType === 'avoid'
+                ? 'red'
+                : option.tone === 'neutral'
+                ? 'gray'
+                : option.tone
+            }
+            icon={
+              option.commitmentType ? (
+                <CommitmentTypeIcon commitmentType={option.commitmentType} />
+              ) : Icon ? (
+                <Icon color={theme.textMuted} size={28} />
+              ) : undefined
+            }
+            selected={option.id === selected}
+            onPress={() => onSelect(option.id)}
+            disabled={disabled}
+          />
+        );
+      })}
+    </View>
+  );
+}
 
 type Props = NativeStackScreenProps<RootStackParamList, 'EditCircle'>;
 
@@ -287,45 +328,20 @@ export function EditCircleScreen({
     }
   };
 
-  if (detail && detail.viewerRole !== 'owner') {
+  if (!detail || !draft || detail.viewerRole !== 'owner') {
     return (
-      <HoystScreen
-        background={<FrostedBackdrop />}
-        contentContainerStyle={styles.content}>
-        <View style={styles.header}>
-          <SetupIconButton
-            accessibilityLabel="Go back"
-            icon={ArrowLeft}
-            onPress={() => navigation.goBack()}
-          />
-          <View style={styles.headerCopy}>
-            <HoystText variant="largeTitle">Edit Circle</HoystText>
-            <HoystText tone="muted">
-              Only the circle owner can edit these settings.
-            </HoystText>
-          </View>
-        </View>
-      </HoystScreen>
-    );
-  }
-
-  if (!detail || !draft) {
-    return (
-      <HoystScreen
-        background={<FrostedBackdrop />}
-        contentContainerStyle={styles.content}>
-        <View style={styles.header}>
-          <SetupIconButton
-            accessibilityLabel="Go back"
-            icon={ArrowLeft}
-            onPress={() => navigation.goBack()}
-          />
-          <View style={styles.headerCopy}>
-            <HoystText variant="largeTitle">Edit Circle</HoystText>
-            <HoystText tone="muted">Loading owner settings...</HoystText>
-          </View>
-        </View>
-      </HoystScreen>
+      <SetupJourneyFrame
+        title={
+          detail?.circleMode === 'personal' ? 'Edit Commitment' : 'Edit Circle'
+        }
+        step="edit-loading"
+        onBack={() => navigation.goBack()}>
+        <HoystText tone="muted" style={styles.copy}>
+          {detail && detail.viewerRole !== 'owner'
+            ? 'Only the circle owner can edit these settings.'
+            : 'Loading owner settings...'}
+        </HoystText>
+      </SetupJourneyFrame>
     );
   }
 
@@ -336,346 +352,252 @@ export function EditCircleScreen({
       : 'request_to_join';
 
   return (
-    <CommitmentSetupScaffold
-      body={
-        isPersonal
-          ? 'Update the Commitment Goal, Pace, and timing.'
-          : 'Update the Circle name, rules, access, timing, and capacity.'
-      }
-      eyebrow="Owner settings"
+    <SetupJourneyFrame
+      title={isPersonal ? 'Edit Commitment' : 'Edit Circle'}
+      step="edit-circle"
       onBack={() => navigation.goBack()}
-      primaryAction={{
+      primary={{
         disabled: !canSave,
         label: isSaving ? 'Saving...' : 'Save changes',
         onPress: () => handleSave().catch(() => undefined),
-      }}
-      title={isPersonal ? 'Edit Commitment' : 'Edit Circle'}>
-      <GlassPanel>
-        <View style={styles.sectionHeader}>
-          <HoystText variant="title">Basics</HoystText>
-          <CircleCategoryPill
-            category={draft.category}
-            appearance={draft.appearance}
-          />
-        </View>
-        <SetupOptionList
-          onSelect={value => setField('category', value)}
-          options={setupCategoryOptions}
-          selected={draft.category}
-        />
-        <CommitmentAppearanceControl
-          title={draft.title || draft.commitment}
-          category={draft.category}
-          appearance={draft.appearance}
-          onChange={value => setField('appearance', value)}
-        />
-        {draft ? (
-          <View style={styles.fieldBlock}>
-            <HoystText tone="muted" variant="label">
-              {isPersonal ? 'Commitment name' : 'Circle name'}
-            </HoystText>
-            <HoystInput
-              autoCapitalize="words"
-              maxLength={80}
-              onChangeText={value => setField('title', value)}
-              placeholder="The 5AM Vanguard"
-              value={draft.title}
-            />
-            <HoystText
-              tone={titleLength > 0 && titleLength <= 80 ? 'muted' : 'danger'}
-              variant="caption">
-              {titleLength}/80 characters
-            </HoystText>
-          </View>
-        ) : null}
-        <View style={styles.fieldBlock}>
-          <HoystText tone="muted" variant="label">
-            Commitment statement
+      }}>
+      <View style={styles.sections} pointerEvents={isSaving ? 'none' : 'auto'}>
+        <View style={styles.group}>
+          <HoystText accessibilityRole="header" style={styles.section}>
+            Basics
           </HoystText>
-          <HoystInput
+          <SetupField
+            label={isPersonal ? 'Commitment name' : 'Circle name'}
+            autoCapitalize="words"
+            value={draft.title}
+            onChange={value => setField('title', value)}
+            maxLength={80}
+            helper={`${titleLength}/80 characters`}
+            helperTone={
+              titleLength > 0 && titleLength <= 80 ? 'muted' : 'danger'
+            }
+            disabled={isSaving}
+          />
+          <SetupField
+            label="Commitment statement"
+            value={draft.commitment}
+            onChange={value => setField('commitment', value)}
             maxLength={160}
             multiline
-            numberOfLines={4}
-            onChangeText={value => setField('commitment', value)}
-            placeholder="Read 20 pages, then Tap In with one takeaway."
-            style={styles.textArea}
-            textAlignVertical="top"
-            value={draft.commitment}
-          />
-          <HoystText
-            tone={
+            helper={`${commitmentLength}/160 characters`}
+            helperTone={
               commitmentLength > 0 && commitmentLength <= 160
                 ? 'muted'
                 : 'danger'
             }
-            variant="caption">
-            {commitmentLength}/160 characters
-          </HoystText>
-        </View>
-      </GlassPanel>
-
-      {!isPersonal ? (
-        <GlassPanel>
-          <View style={styles.sectionHeader}>
-            <HoystText variant="title">Access and capacity</HoystText>
-            <HoystChip
-              label={formatAccessSummary(draft.privacyMode, draft.joinMode)}
-              tone="green"
-            />
-          </View>
-          <SetupOptionList
-            onSelect={selectPrivacyMode}
-            options={setupPrivacyOptions}
-            selected={draft.privacyMode}
+            disabled={isSaving}
           />
-          {draft.privacyMode === 'public' ? (
-            <View style={styles.nestedBlock}>
-              <View style={styles.sectionHeader}>
-                <HoystText variant="bodyStrong">Public join rule</HoystText>
-                <HoystChip
-                  label={formatJoinMode(draft.joinMode)}
-                  tone="green"
+          <HoystText style={styles.fieldLabel}>Category</HoystText>
+          <SetupCategoryGrid
+            category={draft.category}
+            onChange={value => setField('category', value)}
+          />
+          <HoystText style={styles.fieldLabel}>Appearance</HoystText>
+          <SetupAppearanceEditor draft={draft} onChange={setDraft} />
+        </View>
+
+        {!isPersonal ? (
+          <View style={styles.group}>
+            <HoystText accessibilityRole="header" style={styles.section}>
+              Access and capacity
+            </HoystText>
+            <EditChoices
+              label="Visibility"
+              options={privacyOptions}
+              selected={draft.privacyMode}
+              onSelect={selectPrivacyMode}
+              disabled={isSaving}
+            />
+            {draft.privacyMode === 'public' ? (
+              <View style={styles.group}>
+                <HoystText style={styles.fieldLabel}>
+                  Public join rule
+                </HoystText>
+                <EditChoices
+                  label="Public join rule"
+                  options={publicJoinOptions}
+                  selected={publicJoinMode}
+                  onSelect={selectPublicJoinMode}
+                  disabled={isSaving}
                 />
               </View>
-              <SetupOptionList
-                onSelect={selectPublicJoinMode}
-                options={setupPublicJoinOptions}
-                selected={publicJoinMode}
-              />
+            ) : null}
+            <SetupNumericStepper
+              label="Maximum Members"
+              max={100}
+              min={2}
+              onChange={value => setField('maxSize', clampCircleMaxSize(value))}
+              value={draft.maxSize}
+            />
+            <View style={styles.presets}>
+              {[2, 5, 10, 25, 100].map(size => (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`${size} Members`}
+                  accessibilityState={{
+                    selected: draft.maxSize === size,
+                    disabled: isSaving,
+                  }}
+                  disabled={isSaving}
+                  key={size}
+                  onPress={() => setField('maxSize', size)}
+                  style={[
+                    styles.preset,
+                    {
+                      backgroundColor:
+                        draft.maxSize === size
+                          ? theme.accent
+                          : theme.surfaceSoft,
+                    },
+                  ]}>
+                  <HoystText
+                    style={{
+                      color: draft.maxSize === size ? '#FFFFFF' : theme.text,
+                    }}>
+                    {size}
+                  </HoystText>
+                </Pressable>
+              ))}
             </View>
-          ) : null}
-          <SetupSummaryRow
-            label="Visible setting"
-            value={formatAccessSummary(draft.privacyMode, draft.joinMode)}
-          />
-          <SetupNumericStepper
-            label="Maximum Members"
-            max={100}
-            min={2}
-            onChange={value => setField('maxSize', clampCircleMaxSize(value))}
-            value={draft.maxSize}
-          />
-          <View style={styles.sizePresets}>
-            {[2, 5, 10, 25, 100].map(size => (
-              <Pressable
-                accessibilityRole="button"
-                key={size}
-                onPress={() => setField('maxSize', size)}
-                style={({pressed}) => [
-                  styles.presetButton,
-                  {
-                    backgroundColor:
-                      draft.maxSize === size
-                        ? `${theme.accentSecondaryForeground}22`
-                        : theme.glassSurfaceStrong,
-                    borderColor:
-                      draft.maxSize === size
-                        ? theme.accentSecondaryForeground
-                        : theme.glassBorder,
-                    opacity: pressed ? 0.9 : 1,
-                  },
-                ]}>
-                <HoystText variant="caption">{size}</HoystText>
-              </Pressable>
-            ))}
+            {maxSizeError ? (
+              <HoystText
+                accessibilityRole="alert"
+                tone="danger"
+                style={styles.helper}>
+                {maxSizeError}
+              </HoystText>
+            ) : null}
           </View>
-          {maxSizeError ? (
-            <HoystText tone="danger" variant="caption">
-              {maxSizeError}
-            </HoystText>
-          ) : null}
-        </GlassPanel>
-      ) : null}
+        ) : null}
 
-      <GlassPanel>
-        <View style={styles.sectionHeader}>
-          <HoystText variant="title">Commitment rules</HoystText>
-        </View>
-        <View style={styles.sectionHeader}>
-          <HoystText variant="bodyStrong">Commitment type</HoystText>
-          <HoystChip
-            label={
-              draft.commitmentType === 'limit'
-                ? 'Limit'
-                : draft.commitmentType === 'avoid'
-                ? 'Avoid'
-                : 'Build'
-            }
-            tone={
-              draft.commitmentType === 'limit'
-                ? 'orange'
-                : draft.commitmentType === 'avoid'
-                ? 'blue'
-                : 'green'
-            }
+        <View style={styles.group}>
+          <HoystText accessibilityRole="header" style={styles.section}>
+            Commitment rules
+          </HoystText>
+          <HoystText style={styles.fieldLabel}>Commitment type</HoystText>
+          <EditChoices
+            label="Commitment type"
+            options={commitmentTypeOptions}
+            selected={draft.commitmentType}
+            onSelect={setCommitmentType}
+            disabled={isSaving}
           />
+          <HoystText style={styles.fieldLabel}>Goal for each Tap In</HoystText>
+          <GoalEditor draft={draft} onChange={setDraft} disabled={isSaving} />
+          <HoystText style={styles.fieldLabel}>Tap In proof</HoystText>
+          <ProofSelector
+            value={draft.proofRequirement ?? 'none'}
+            onChange={value => setField('proofRequirement', value)}
+            disabled={isSaving}
+          />
+          <HoystText tone="muted" style={styles.copy}>
+            Changes apply to new Tap Ins. Saved Tap Ins keep their original
+            proof rule.
+          </HoystText>
         </View>
-        <SetupOptionList
-          onSelect={setCommitmentType}
-          options={setupCommitmentTypeOptions}
-          selected={draft.commitmentType}
-        />
-        <HoystText variant="bodyStrong">Goal for each Tap In</HoystText>
-        <GoalEditor draft={draft} onChange={setDraft} disabled={isSaving} />
-        <HoystText variant="bodyStrong">Tap In proof</HoystText>
-        <ProofSelector
-          value={draft.proofRequirement ?? 'none'}
-          onChange={value => setField('proofRequirement', value)}
-          disabled={isSaving}
-        />
-        <HoystText tone="muted">
-          Changes apply to new Tap Ins. Saved Tap Ins keep their original proof
-          rule.
-        </HoystText>
-      </GlassPanel>
 
-      <GlassPanel>
-        <View style={styles.sectionHeader}>
-          <HoystText variant="title">Pace and timing</HoystText>
-          <HoystChip
-            label={
-              draft.commitmentCadence === 'daily'
-                ? 'Daily'
-                : draft.commitmentCadence === 'monthly'
-                ? `${
-                    draft.commitmentFrequency.opportunitiesPerPeriod ??
-                    draft.commitmentFrequency.tapInsPerWeek
-                  }/month`
-                : `${draft.commitmentFrequency.tapInsPerWeek}/week`
-            }
-            tone={draft.commitmentCadence === 'monthly' ? 'orange' : 'green'}
+        <View style={styles.group}>
+          <HoystText accessibilityRole="header" style={styles.section}>
+            Pace and timing
+          </HoystText>
+          <EditChoices
+            label="Pace"
+            options={commitmentPaceOptions}
+            selected={draft.commitmentCadence}
+            onSelect={selectCommitmentPace}
+            disabled={isSaving}
           />
-        </View>
-        <SetupOptionList
-          onSelect={selectCommitmentPace}
-          options={setupCommitmentPaceOptions}
-          selected={draft.commitmentCadence}
-        />
-        {draft.commitmentCadence === 'weekly' ? (
-          <>
-            <SetupNumericStepper
-              label="Tap Ins per week"
-              max={7}
-              min={1}
-              onChange={value =>
-                setField('commitmentFrequency', {tapInsPerWeek: value})
-              }
-              value={draft.commitmentFrequency.tapInsPerWeek}
-            />
-            <HoystText tone="muted">
+          {draft.commitmentCadence === 'weekly' ? (
+            <>
+              <SetupNumericStepper
+                label="Tap Ins per week"
+                max={7}
+                min={1}
+                onChange={value =>
+                  setField('commitmentFrequency', {tapInsPerWeek: value})
+                }
+                value={draft.commitmentFrequency.tapInsPerWeek}
+              />
+              <HoystText tone="muted" style={styles.copy}>
+                {isPersonal
+                  ? 'You Tap In this many days from Monday to Sunday in this Commitment timezone.'
+                  : 'Each Member taps in this many days from Monday to Sunday in the Circle timezone.'}
+              </HoystText>
+            </>
+          ) : draft.commitmentCadence === 'monthly' ? (
+            <>
+              <SetupNumericStepper
+                label="Tap Ins per month"
+                max={31}
+                min={1}
+                onChange={value =>
+                  setField('commitmentFrequency', {
+                    opportunitiesPerPeriod: value,
+                    tapInsPerWeek: Math.min(7, value),
+                  })
+                }
+                value={
+                  draft.commitmentFrequency.opportunitiesPerPeriod ??
+                  draft.commitmentFrequency.tapInsPerWeek
+                }
+              />
+              <HoystText tone="muted" style={styles.copy}>
+                Tap In windows are spaced across the month in the selected
+                timezone.
+              </HoystText>
+            </>
+          ) : (
+            <HoystText tone="muted" style={styles.copy}>
               {isPersonal
-                ? 'You Tap In this many days from Monday to Sunday in this Commitment timezone.'
-                : 'Each Member taps in this many days from Monday to Sunday in the Circle timezone.'}
+                ? 'This Commitment needs one Tap In or Skip each day.'
+                : 'Daily Circles need one Tap In or Skip from each Member every day.'}
             </HoystText>
-          </>
-        ) : draft.commitmentCadence === 'monthly' ? (
-          <>
-            <SetupNumericStepper
-              label="Tap Ins per month"
-              max={31}
-              min={1}
-              onChange={value =>
-                setField('commitmentFrequency', {
-                  opportunitiesPerPeriod: value,
-                  tapInsPerWeek: Math.min(7, value),
-                })
-              }
-              value={
-                draft.commitmentFrequency.opportunitiesPerPeriod ??
-                draft.commitmentFrequency.tapInsPerWeek
-              }
-            />
-            <HoystText tone="muted">
-              Tap In windows are spaced across the month in the selected
-              timezone.
+          )}
+          <TimezonePicker
+            actionColors={{
+              fill: theme.accent,
+              foreground: theme.accentForeground,
+            }}
+            helperText={`This controls when each Tap In day resets for this ${
+              isPersonal ? 'Commitment' : 'Circle'
+            }.`}
+            modalTitle={`${isPersonal ? 'Commitment' : 'Circle'} timezone`}
+            onChange={value => setField('timezone', value)}
+            value={draft.timezone}
+          />
+          {timezoneLength > 0 && timezoneLength <= 80 ? null : (
+            <HoystText
+              accessibilityRole="alert"
+              tone="danger"
+              style={styles.helper}>
+              Choose a timezone before saving.
             </HoystText>
-          </>
-        ) : (
-          <HoystText tone="muted">
-            {isPersonal
-              ? 'This Commitment needs one Tap In or Skip each day.'
-              : 'Daily Circles need one Tap In or Skip from each Member every day.'}
-          </HoystText>
-        )}
-        <TimezonePicker
-          actionColors={{
-            fill: theme.accent,
-            foreground: theme.accentForeground,
-          }}
-          helperText={`This controls when each Tap In day resets for this ${
-            isPersonal ? 'Commitment' : 'Circle'
-          }.`}
-          modalTitle={`${isPersonal ? 'Commitment' : 'Circle'} timezone`}
-          onChange={value => setField('timezone', value)}
-          value={draft.timezone}
-        />
-        {timezoneLength > 0 && timezoneLength <= 80 ? null : (
-          <HoystText tone="danger" variant="caption">
-            Choose a timezone before saving.
-          </HoystText>
-        )}
-      </GlassPanel>
-    </CommitmentSetupScaffold>
+          )}
+        </View>
+      </View>
+    </SetupJourneyFrame>
   );
 }
 
 const styles = StyleSheet.create({
-  content: {
-    paddingBottom: 60,
-  },
-  fieldBlock: {
-    gap: 8,
-  },
-  header: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: 12,
-  },
-  headerCopy: {
-    flex: 1,
-    gap: 3,
-    minWidth: 0,
-  },
-  nestedBlock: {
-    gap: 12,
-    paddingTop: 4,
-  },
-  optionCopy: {
-    flex: 1,
-    gap: 4,
-    minWidth: 0,
-  },
-  presetButton: {
-    alignItems: 'center',
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    justifyContent: 'center',
+  sections: {gap: 20},
+  group: {gap: 12},
+  section: {fontSize: 18, lineHeight: 23, fontWeight: '600'},
+  fieldLabel: {fontSize: 16, lineHeight: 21, fontWeight: '600'},
+  copy: {fontSize: 14, lineHeight: 20},
+  helper: {fontSize: 12, lineHeight: 16},
+  presets: {flexDirection: 'row', flexWrap: 'wrap', gap: 8},
+  preset: {
     minHeight: 44,
-    minWidth: 46,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
-  sectionHeader: {
+    minWidth: 48,
+    paddingHorizontal: 16,
+    justifyContent: 'center',
     alignItems: 'center',
-    flexDirection: 'row',
-    gap: 12,
-    justifyContent: 'space-between',
-  },
-  sizePresets: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  textArea: {
-    minHeight: 116,
-  },
-  toggleRow: {
-    alignItems: 'center',
-    borderRadius: radius.md,
-    borderWidth: 1,
-    flexDirection: 'row',
-    gap: 12,
-    minHeight: 76,
-    padding: 14,
+    borderRadius: 24,
   },
 });

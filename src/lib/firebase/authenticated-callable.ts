@@ -6,9 +6,14 @@ export async function authenticatedCallable<T>(
   data: Record<string, unknown> = {},
 ): Promise<T> {
   const user = firebaseAuth().currentUser;
-  const idToken = await user?.getIdToken(true);
-  if (!idToken || !user || firebaseAuth().currentUser?.uid !== user.uid)
+  const startedAt = Date.now();
+  const idToken = await user?.getIdToken(name !== 'submitTapIn');
+  if (__DEV__ && name === 'submitTapIn') {
+    console.info('tap_in_token', {durationMs: Date.now() - startedAt});
+  }
+  if (!idToken || !user || firebaseAuth().currentUser?.uid !== user.uid) {
     throw new Error('Sign in is required.');
+  }
   const response = await fetch(
     `https://us-central1-${
       getFirebaseApp().options.projectId
@@ -27,11 +32,13 @@ export async function authenticatedCallable<T>(
     data?: T;
     error?: {message?: string};
   };
-  if (firebaseAuth().currentUser?.uid !== user.uid)
+  if (firebaseAuth().currentUser?.uid !== user.uid) {
     throw new Error('Your account changed. Please try again.');
-  if (!response.ok || payload.error)
+  }
+  if (!response.ok || payload.error) {
     throw new Error(
       payload.error?.message || 'This request is unavailable. Try again.',
     );
+  }
   return (payload.result ?? payload.data) as T;
 }

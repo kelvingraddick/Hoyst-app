@@ -9,12 +9,14 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
-import {Flame, Info, UserRound, UsersRound, X} from 'lucide-react-native';
+import {Info, X} from 'lucide-react-native';
 import {DateTime} from 'luxon';
+import {CircularEmoji} from '../../../design/components/CircularEmoji';
 import {HoystText} from '../../../design/components/HoystText';
 import {useHoystTheme} from '../../../design/theme/useHoystTheme';
 import {
   DSSectionHeading,
+  DSText,
   minimumTarget,
   useSystemTheme,
 } from '../../../design/system';
@@ -26,6 +28,7 @@ import {
 import type {CircleDetailModel} from '../../../types/models';
 import {CircleGroupWeekPath} from './CircleGroupWeekPath';
 import {loadCircleDayDetails} from '../services/circle-progress-service';
+import {ProgressStatBadge} from '../../progress/components/ProgressStatBadge';
 
 export function CircleProgressPanel({
   detail,
@@ -44,7 +47,8 @@ export function CircleProgressPanel({
 }) {
   const theme = useHoystTheme();
   const systemTheme = useSystemTheme();
-  const {fontScale} = useWindowDimensions();
+  const {width, fontScale} = useWindowDimensions();
+  const stackMetrics = width < 390 || fontScale > 1.15;
   const personal = detail.circleMode === 'personal';
   const member = detail.viewerMembershipStatus === 'active';
   const [sheet, setSheet] = useState<{title: string; lines: string[]}>();
@@ -143,7 +147,6 @@ export function CircleProgressPanel({
     summary: CircleProgressSummary | undefined,
     isGroup: boolean,
   ) => {
-    const Icon = isGroup ? UsersRound : UserRound;
     const known = summary && summary.progress.outcome !== 'unknown';
     const {covered = 0, required = 0} = summary?.progress ?? {};
     const copy = !known
@@ -161,28 +164,35 @@ export function CircleProgressPanel({
         : copy;
     return (
       <View
-        style={[styles.tile, {backgroundColor: systemTheme.surface}]}
+        style={[styles.metric, stackMetrics && styles.stackedMetric]}
         testID={
           isGroup
             ? 'circle-group-period-progress'
             : 'circle-viewer-period-progress'
         }>
-        <View style={styles.tileHeading}>
-          <Icon size={20} color={theme.textMuted} accessible={false} />
-          <HoystText tone="muted" style={styles.tileTitle}>
-            {isGroup ? 'Group' : 'You'}
-          </HoystText>
+        <View style={styles.metricRow}>
+          <CircularEmoji
+            kind={isGroup ? 'members' : 'personal'}
+            size={36}
+            emojiSize={22}
+            backgroundColor={
+              systemTheme.category[isGroup ? 'neutral' : 'green'].surface
+            }
+          />
+          <View style={styles.metricCopy}>
+            <DSText variant="statCaption" tone="muted">
+              {isGroup ? 'Group' : 'You'}
+            </DSText>
+            <DSText variant={known && required > 0 ? 'title' : 'secondary'}>
+              {known && required > 0 ? `${covered} of ${required}` : copy}
+            </DSText>
+            {known && required > 0 ? (
+              <DSText variant="statCaption" tone="muted">
+                {isGroup ? 'met goal' : `Tap In${required === 1 ? '' : 's'}`}
+              </DSText>
+            ) : null}
+          </View>
         </View>
-        <HoystText style={styles.progressValue}>
-          {!known || required === 0
-            ? copy
-            : `${covered} of ${required} `}
-          {known && required > 0 ? (
-            <HoystText style={styles.progressEmphasis}>
-              {isGroup ? 'met goal' : `Tap In${required === 1 ? '' : 's'}`}
-            </HoystText>
-          ) : null}
-        </HoystText>
         <View
           accessibilityRole="progressbar"
           accessibilityLabel={`${
@@ -211,10 +221,6 @@ export function CircleProgressPanel({
             }}
           />
         </View>
-        <View
-          style={[styles.streakFooter, {borderTopColor: systemTheme.track}]}>
-          {streak(summary, isGroup)}
-        </View>
       </View>
     );
   };
@@ -228,23 +234,45 @@ export function CircleProgressPanel({
       accessibilityLabel={`${
         isGroup ? 'Group streak' : 'Your streak'
       }: ${formatCircleStreak(summary?.streak)}. Learn how it works.`}
-      style={styles.streak}
+      style={[
+        styles.metric,
+        styles.streak,
+        stackMetrics && styles.stackedMetric,
+      ]}
       testID={isGroup ? 'circle-group-streak' : 'circle-your-streak'}>
-      <View style={styles.streakLabel}>
-        <HoystText style={styles.label} tone="muted">
-          {isGroup ? 'Group streak' : 'Your streak'}
-        </HoystText>
-        <Info size={12} color={theme.textMuted} accessible={false} />
-      </View>
-      <View style={styles.streakMetric}>
-        <Flame size={14} color={theme.streakForeground} accessible={false} />
-        <HoystText
-          style={[styles.streakValue, {color: theme.streakForeground}]}>
-          {formatCircleStreak(summary?.streak)}
-        </HoystText>
+      <View style={styles.metricRow}>
+        <ProgressStatBadge tone="orange" />
+        <View style={styles.metricCopy}>
+          <View style={styles.streakLabel}>
+            <DSText
+              variant="statCaption"
+              tone="muted"
+              style={styles.metricLabel}>
+              {isGroup ? 'Group streak' : 'Your streak'}
+            </DSText>
+            <Info size={12} color={theme.textMuted} accessible={false} />
+          </View>
+          <DSText variant="title" style={{color: theme.streakForeground}}>
+            {formatCircleStreak(summary?.streak)}
+          </DSText>
+        </View>
       </View>
     </Pressable>
   );
+  const divider = () => (
+    <View
+      style={[
+        styles.metricDivider,
+        stackMetrics && styles.stackedDivider,
+        {backgroundColor: systemTheme.track},
+      ]}
+    />
+  );
+  const tileStyle = [
+    styles.tile,
+    stackMetrics && styles.stackedTile,
+    {backgroundColor: systemTheme.surface},
+  ];
   return (
     <View
       key={fontScale}
@@ -307,10 +335,20 @@ export function CircleProgressPanel({
       ) : null}
       <View style={styles.period}>
         <DSSectionHeading title={caption} />
-        <View style={styles.row}>
-          {member ? progress(viewer, false) : null}
-          {!personal ? progress(group, true) : null}
-        </View>
+        {member || !personal ? (
+          <View style={styles.row}>
+            <View style={tileStyle} testID="circle-period-goals">
+              {member ? progress(viewer, false) : null}
+              {member && !personal ? divider() : null}
+              {!personal ? progress(group, true) : null}
+            </View>
+            <View style={tileStyle} testID="circle-period-streaks">
+              {member ? streak(viewer, false) : null}
+              {member && !personal ? divider() : null}
+              {!personal ? streak(group, true) : null}
+            </View>
+          </View>
+        ) : null}
       </View>
       <Modal
         visible={Boolean(sheet)}
@@ -362,41 +400,34 @@ export function CircleProgressPanel({
 const styles = StyleSheet.create({
   section: {gap: 12},
   period: {gap: 12},
-  row: {flexDirection: 'row', gap: 12},
-  tile: {flex: 1, minWidth: 0, gap: 6, padding: 12, borderRadius: 20},
-  tileHeading: {flexDirection: 'row', alignItems: 'center', gap: 6},
-  tileTitle: {fontSize: 14, lineHeight: 20, fontWeight: '600', flexShrink: 1},
+  row: {gap: 12},
+  tile: {flexDirection: 'row', padding: 12, borderRadius: 20},
+  stackedTile: {flexDirection: 'column'},
+  metric: {flex: 1, minWidth: 0},
+  stackedMetric: {flex: 0},
+  metricRow: {flexDirection: 'row', alignItems: 'center', gap: 10},
+  metricCopy: {flex: 1, minWidth: 0},
+  metricLabel: {flexShrink: 1},
   label: {fontSize: 12, lineHeight: 17, flexShrink: 1},
-  progressValue: {fontSize: 14, lineHeight: 20, fontWeight: '400'},
-  progressEmphasis: {fontSize: 14, lineHeight: 20, fontWeight: '600'},
-  track: {height: 5, borderRadius: 5, overflow: 'hidden'},
-  streakFooter: {
-    borderTopWidth: StyleSheet.hairlineWidth,
-    marginTop: 'auto',
-    paddingTop: 4,
+  track: {height: 5, borderRadius: 5, overflow: 'hidden', marginTop: 8},
+  metricDivider: {width: StyleSheet.hairlineWidth, marginHorizontal: 12},
+  stackedDivider: {
+    width: '100%',
+    height: StyleSheet.hairlineWidth,
+    marginHorizontal: 0,
+    marginVertical: 12,
   },
   streak: {
     minHeight: minimumTarget(),
     minWidth: 0,
     justifyContent: 'center',
-    alignItems: 'flex-start',
-    gap: 4,
   },
-  streakValue: {fontSize: 16, lineHeight: 21, fontWeight: '600', flexShrink: 1},
   streakLabel: {
     flexDirection: 'row',
     alignItems: 'center',
     flexShrink: 1,
     minWidth: 0,
     gap: 2,
-  },
-  streakMetric: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexShrink: 0,
-    minWidth: 0,
-    gap: 2,
-    maxWidth: '100%',
   },
   activity: {gap: 8},
   activityHeading: {

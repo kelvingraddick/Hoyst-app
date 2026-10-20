@@ -20,6 +20,14 @@ const mockUpdateTapInDetails = jest.fn();
 const mockUploadTapInPhoto = jest.fn();
 const mockLaunchCamera = jest.fn();
 const mockLaunchImageLibrary = jest.fn();
+const mockSubscribeTapInCompletion = jest.fn(
+  (
+    _uid: string,
+    _id: string,
+    _receive: (value: unknown) => void,
+    _onError: (error: Error) => void,
+  ) => jest.fn(),
+);
 let mockAppearance: 'light' | 'dark' = 'light';
 
 jest.mock('react-native-image-picker', () => ({
@@ -28,6 +36,9 @@ jest.mock('react-native-image-picker', () => ({
 }));
 
 jest.mock('../src/features/check-in/services/check-in-service', () => ({
+  subscribeTapInCompletion: (
+    ...args: Parameters<typeof mockSubscribeTapInCompletion>
+  ) => mockSubscribeTapInCompletion(...args),
   updateTapInDetails: (...args: unknown[]) => mockUpdateTapInDetails(...args),
   uploadTapInPhoto: (...args: unknown[]) => mockUploadTapInPhoto(...args),
 }));
@@ -160,6 +171,7 @@ async function renderReadyCompleteScreen(
 describe('TapInCompleteScreen', () => {
   beforeEach(() => {
     mockAppearance = 'light';
+    mockSubscribeTapInCompletion.mockClear();
     mockSubscribeToMemberCircleDetail.mockClear();
     mockUpdateTapInDetails.mockReset();
     mockUploadTapInPhoto.mockReset();
@@ -188,6 +200,216 @@ describe('TapInCompleteScreen', () => {
 
   afterEach(() => {
     jest.restoreAllMocks();
+  });
+
+  it('shows confirmed content without waiting for interactions and replaces rewards when results arrive', async () => {
+    jest
+      .spyOn(InteractionManager, 'runAfterInteractions')
+      .mockImplementation(() => ({cancel: jest.fn()} as never));
+    let tree!: renderer.ReactTestRenderer;
+    await act(async () => {
+      tree = renderCompleteScreen({
+        completionId: 'operation-1',
+        completionOwnerUid: 'user-1',
+        completionProgress: {xpEarned: 10, rewards: {skips: 0, restores: 0}},
+        completionMomentum: undefined,
+      });
+    });
+    expect(JSON.stringify(tree.toJSON())).toContain('Tap In complete');
+    expect(JSON.stringify(tree.toJSON())).not.toContain('Finalizing Tap In');
+    expect(
+      tree.root.findByProps({testID: 'tap-in-complete-share-action'}).props
+        .disabled,
+    ).toBeFalsy();
+    expect(JSON.stringify(tree.toJSON())).toContain(
+      'Updating streaks and rewards',
+    );
+    const receive = mockSubscribeTapInCompletion.mock.calls[0][2];
+    await act(async () =>
+      receive({
+        completionId: 'operation-1',
+        status: 'complete',
+        progress: {xpEarned: 30, rewards: {skips: 1, restores: 0}},
+        momentum: {currentStreak: 6, streakDelta: 1},
+      }),
+    );
+    const output = JSON.stringify(tree.toJSON());
+    expect(output).toContain('30');
+    expect(output).not.toContain('Updating streaks and rewards');
+    expect(output).toContain('+1 day Daily Tap In streak');
+    await act(async () =>
+      receive({
+        completionId: 'operation-1',
+        status: 'complete',
+        progress: {xpEarned: 30, rewards: {skips: 1, restores: 0}},
+      }),
+    );
+    expect(JSON.stringify(tree.toJSON())).not.toContain('+40');
+    await act(async () => tree.unmount());
+  });
+
+  it.each([
+    {
+      name: 'partial personal progress',
+      circleMode: 'personal' as const,
+      status: 'partial' as const,
+      currentValue: 0,
+      xpEarned: 0,
+    },
+    {
+      name: 'covered group progress with bonus XP',
+      circleMode: 'group' as const,
+      status: 'done' as const,
+      currentValue: undefined,
+      xpEarned: 30,
+    },
+  ])(
+    'keeps confirmation, details and actions stable when $name resolves',
+    async ({circleMode, status, currentValue, xpEarned}) => {
+      let tree!: renderer.ReactTestRenderer;
+      await act(async () => {
+        tree = renderCompleteScreen({
+          completionId: 'layout-1',
+          completionOwnerUid: 'user-1',
+          circleMode,
+          status,
+          currentValue,
+          targetValue: 3,
+          unitLabel: 'Tap Ins',
+          completionMomentum: undefined,
+          completionProgress: {
+            xpEarned: status === 'done' ? 10 : 0,
+            rewards: {skips: 0, restores: 0},
+          },
+        });
+      });
+      const findNode = (testID: string) => {
+        const visit = (
+          node: renderer.ReactTestRendererJSON,
+        ): renderer.ReactTestRendererJSON | undefined => {
+          if (node.props.testID === testID) {
+            return node;
+          }
+          for (const child of node.children ?? []) {
+            if (typeof child === 'string') {
+              continue;
+            }
+            const found = visit(child);
+            if (found) {
+              return found;
+            }
+          }
+          return undefined;
+        };
+        const output = tree.toJSON();
+        return (Array.isArray(output) ? output : output ? [output] : [])
+          .map(visit)
+          .find(Boolean)!;
+      };
+      const readStableContent = () =>
+        JSON.stringify([
+          findNode('tap-in-complete-title'),
+          findNode('tap-in-complete-status'),
+          findNode('tap-in-complete-details'),
+          findNode('tap-in-complete-action-dock'),
+        ]);
+      const before = readStableContent();
+      const reduceMotionChecks = jest.mocked(
+        AccessibilityInfo.isReduceMotionEnabled,
+      ).mock.calls.length;
+      const summary = {
+        version: 2,
+        revision: 'layout-test',
+        asOfDateKey: '2026-05-29',
+        cadence: 'daily',
+        period: {key: '2026-05-29', start: '2026-05-29', end: '2026-05-29'},
+        streak: {
+          count: status === 'done' ? 1 : 0,
+          unit: 'day',
+          availability: 'ready',
+        },
+        progress: {
+          covered: status === 'done' ? 1 : 0,
+          required: 1,
+          outcome: status === 'done' ? 'secured' : 'open',
+        },
+      };
+      await act(async () =>
+        mockSubscribeTapInCompletion.mock.calls[0][2]({
+          completionId: 'layout-1',
+          status: 'complete',
+          circleProgress: {
+            viewer: summary,
+            ...(circleMode === 'group' ? {group: summary} : {}),
+            viewerStreakDelta: 1,
+          },
+          progress: {xpEarned, rewards: {skips: 1, restores: 0}},
+          momentum: {currentStreak: 1, streakDelta: 1},
+        }),
+      );
+      expect(readStableContent()).toBe(before);
+      const feedback = JSON.stringify(findNode('tap-in-complete-feedback'));
+      expect(feedback).toContain('Your streak');
+      expect(feedback).not.toContain('Updating streaks and rewards');
+      if (circleMode === 'group') {
+        expect(feedback).toContain('Group streak');
+        expect(feedback).toContain('Your Circle streak extended');
+        expect(feedback).toContain('30');
+      }
+      const sections = findNode('tap-in-complete-content').children?.flatMap(
+        child => (typeof child === 'string' ? [] : [child.props.testID]),
+      );
+      expect(sections?.slice(-2)).toEqual([
+        'tap-in-complete-details',
+        'tap-in-complete-feedback',
+      ]);
+      expect(AccessibilityInfo.isReduceMotionEnabled).toHaveBeenCalledTimes(
+        reduceMotionChecks,
+      );
+      await act(async () => tree.unmount());
+    },
+  );
+
+  it('keeps actions available after ten seconds and ignores results after unmount', async () => {
+    jest.useFakeTimers();
+    let tree!: renderer.ReactTestRenderer;
+    try {
+      await act(async () => {
+        tree = renderCompleteScreen({
+          completionId: 'slow-1',
+          completionOwnerUid: 'user-1',
+        });
+      });
+      await act(async () => {
+        jest.advanceTimersByTime(10000);
+      });
+      expect(JSON.stringify(tree.toJSON())).toContain(
+        'Progress is still updating',
+      );
+      expect(
+        tree.root.findByProps({testID: 'tap-in-complete-share-action'}).props
+          .disabled,
+      ).toBeFalsy();
+      const unsubscribe = mockSubscribeTapInCompletion.mock.results[0].value;
+      const receive = mockSubscribeTapInCompletion.mock.calls[0][2];
+      await act(async () => tree.unmount());
+      expect(unsubscribe).toHaveBeenCalled();
+      receive({completionId: 'slow-1', status: 'complete'});
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('does not subscribe to a completion owned by another session', async () => {
+    let tree!: renderer.ReactTestRenderer;
+    await act(async () => {
+      tree = renderCompleteScreen({
+        completionId: 'other-1',
+        completionOwnerUid: 'other-user',
+      });
+    });
+    expect(mockSubscribeTapInCompletion).not.toHaveBeenCalled();
+    await act(async () => tree.unmount());
   });
 
   it('renders completion from route snapshot before detail subscription emits', async () => {
@@ -405,20 +627,23 @@ describe('TapInCompleteScreen', () => {
       shareButton!.props.onPress();
     });
 
-    expect(navigation.navigate).toHaveBeenCalledWith('TapInStoryShare', expect.objectContaining({
-      category: 'Fitness',
-      circleId: 'circle-1',
-      dateKey: '2026-05-29',
-      status: 'done',
-      circleTitle: 'Morning Movers',
-      commitment: 'Move for 30 minutes',
-      commitmentType: 'build',
-      inviteUrl: 'https://hoyst.app/join/circle-1',
-      memberCount: 4,
-      members: [],
-      photoUri: undefined,
-      source: 'home',
-    }));
+    expect(navigation.navigate).toHaveBeenCalledWith(
+      'TapInStoryShare',
+      expect.objectContaining({
+        category: 'Fitness',
+        circleId: 'circle-1',
+        dateKey: '2026-05-29',
+        status: 'done',
+        circleTitle: 'Morning Movers',
+        commitment: 'Move for 30 minutes',
+        commitmentType: 'build',
+        inviteUrl: 'https://hoyst.app/join/circle-1',
+        memberCount: 4,
+        members: [],
+        photoUri: undefined,
+        source: 'home',
+      }),
+    );
   });
 
   it('saves notes on the Tap In without including them in story sharing', async () => {
@@ -468,7 +693,9 @@ describe('TapInCompleteScreen', () => {
       'TapInStoryShare',
       expect.objectContaining({dateKey: '2026-05-29'}),
     );
-    expect(navigation.navigate.mock.calls.at(-1)?.[1]).not.toHaveProperty('note');
+    expect(navigation.navigate.mock.calls.at(-1)?.[1]).not.toHaveProperty(
+      'note',
+    );
   });
 
   it('shows selected proof immediately and saves it after Tap In completion', async () => {
@@ -860,7 +1087,9 @@ describe('TapInCompleteScreen', () => {
     expect(output).toContain('Skip Recorded');
     expect(output).toContain('Skip used');
     expect(output).toContain('6 days Daily Tap In streak held');
-    expect(output).toContain('No note added. Your skip still protects this opportunity.');
+    expect(output).toContain(
+      'No note added. Your skip still protects this opportunity.',
+    );
     expect(output).not.toContain('Share as story');
     expect(output).not.toContain('Add details');
   });

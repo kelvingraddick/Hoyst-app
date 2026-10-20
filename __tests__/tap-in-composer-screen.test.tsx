@@ -14,6 +14,7 @@ const mockUploadTapInPhoto = jest.fn();
 const mockSubmitTapIn = jest.fn();
 const mockRemoveTapIn = jest.fn();
 const mockSubscribeToMemberCircleDetail = jest.fn();
+let mockEmitDetail: ((detail: CircleDetailModel) => void) | undefined;
 const mockLaunchCamera = jest.fn();
 const mockLaunchImageLibrary = jest.fn();
 const mockNavigationListeners: Record<
@@ -136,6 +137,7 @@ jest.mock('../src/features/home/services/home-data-service', () => ({
     onError: () => void;
   }) => {
     mockSubscribeToMemberCircleDetail();
+    mockEmitDetail = onDetail;
     if (mockLoadMode === 'ready') {
       onDetail(mockDetail);
     }
@@ -431,6 +433,59 @@ describe('TapInComposerScreen', () => {
     expect(JSON.stringify(tree.toJSON())).toContain('Morning Movers');
   });
 
+  it('keeps the submitting view stable when the saved check-in arrives before the response', async () => {
+    let resolveSubmit!: (value: unknown) => void;
+    mockSubmitTapIn.mockReturnValue(
+      new Promise(resolve => {
+        resolveSubmit = resolve;
+      }),
+    );
+    let tree!: renderer.ReactTestRenderer;
+    await act(async () => {
+      tree = renderComposerScreen();
+    });
+    const action = tree.root
+      .findAllByType(DSButton)
+      .find(button => button.props.label === 'Tap In')!;
+    const navigation =
+      tree.root.findByType(TapInComposerScreen).props.navigation;
+    await act(async () => {
+      action.props.onPress();
+    });
+    const optionCount = navigation.setOptions.mock.calls.length;
+    await act(async () => {
+      mockEmitDetail?.({
+        ...baseMockDetail,
+        viewerHasTappedInToday: true,
+        viewerTodayStatus: 'done',
+        viewerHasCheckedIn: true,
+      });
+    });
+    expect(JSON.stringify(tree.toJSON())).toContain('Submitting...');
+    expect(JSON.stringify(tree.toJSON())).not.toContain("Today's proof");
+    expect(navigation.setOptions).toHaveBeenCalledTimes(optionCount);
+    await act(async () => {
+      action.props.onPress();
+    });
+    expect(mockSubmitTapIn).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      resolveSubmit({
+        dateKey: '2026-10-20',
+        completionId: 'operation-1',
+        status: 'done',
+      });
+    });
+    expect(navigation.replace).toHaveBeenCalledWith(
+      'TapInComplete',
+      expect.objectContaining({
+        completionId: 'operation-1',
+        completionOwnerUid: 'user-1',
+      }),
+    );
+    expect(JSON.stringify(tree.toJSON())).not.toContain("Today's proof");
+    await act(async () => tree.unmount());
+  });
+
   it('passes circle snapshot params to the complete screen after submit', async () => {
     let tree: renderer.ReactTestRenderer | undefined;
 
@@ -466,6 +521,7 @@ describe('TapInComposerScreen', () => {
     });
 
     expect(navigation.replace).toHaveBeenCalledWith('TapInComplete', {
+      submittedAt: expect.any(Number),
       proofRequirement: 'none',
       category: 'Fitness',
       circleId: 'circle-1',
@@ -1162,18 +1218,21 @@ describe('TapInComposerScreen', () => {
       shareButton.props.onPress();
     });
 
-    expect(navigation.navigate).toHaveBeenCalledWith('TapInStoryShare', expect.objectContaining({
-      category: 'Fitness',
-      circleId: 'circle-1',
-      circleTitle: 'Morning Movers',
-      commitment: 'Move for 30 minutes',
-      commitmentType: 'build',
-      inviteUrl: 'https://hoyst.app/join/circle-1',
-      memberCount: 4,
-      members: [],
-      source: 'home',
-      photoUri: undefined,
-    }));
+    expect(navigation.navigate).toHaveBeenCalledWith(
+      'TapInStoryShare',
+      expect.objectContaining({
+        category: 'Fitness',
+        circleId: 'circle-1',
+        circleTitle: 'Morning Movers',
+        commitment: 'Move for 30 minutes',
+        commitmentType: 'build',
+        inviteUrl: 'https://hoyst.app/join/circle-1',
+        memberCount: 4,
+        members: [],
+        source: 'home',
+        photoUri: undefined,
+      }),
+    );
   });
 
   it.each([
@@ -1248,18 +1307,21 @@ describe('TapInComposerScreen', () => {
       shareButton.props.onPress();
     });
 
-    expect(navigation.navigate).toHaveBeenCalledWith('TapInStoryShare', expect.objectContaining({
-      category: 'Fitness',
-      circleId: 'circle-1',
-      circleTitle: 'Morning Movers',
-      commitment: 'Move for 30 minutes',
-      commitmentType: 'build',
-      inviteUrl: 'https://hoyst.app/join/circle-1',
-      memberCount: 4,
-      members: [],
-      photoUri: 'https://example.com/proof.jpg',
-      source: 'home',
-    }));
+    expect(navigation.navigate).toHaveBeenCalledWith(
+      'TapInStoryShare',
+      expect.objectContaining({
+        category: 'Fitness',
+        circleId: 'circle-1',
+        circleTitle: 'Morning Movers',
+        commitment: 'Move for 30 minutes',
+        commitmentType: 'build',
+        inviteUrl: 'https://hoyst.app/join/circle-1',
+        memberCount: 4,
+        members: [],
+        photoUri: 'https://example.com/proof.jpg',
+        source: 'home',
+      }),
+    );
   });
 
   it('offers optional photos before quantity logging', async () => {
@@ -1349,75 +1411,162 @@ describe('TapInComposerScreen', () => {
     alertSpy.mockRestore();
   });
   async function selectRequiredPhoto(tree: renderer.ReactTestRenderer) {
-    mockLaunchImageLibrary.mockResolvedValueOnce({assets: [{uri: 'file:///required.jpg'}]});
-    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
-    await act(async () => tree.root.findByProps({testID: 'photo-picker-add'}).props.onPress());
+    mockLaunchImageLibrary.mockResolvedValueOnce({
+      assets: [{uri: 'file:///required.jpg'}],
+    });
+    const alertSpy = jest
+      .spyOn(Alert, 'alert')
+      .mockImplementation(() => undefined);
+    await act(async () =>
+      tree.root.findByProps({testID: 'photo-picker-add'}).props.onPress(),
+    );
     const buttons = alertSpy.mock.calls.at(-1)?.[2];
     await act(async () => {
-      buttons?.find(button => button.text === 'Choose from Library')?.onPress?.();
+      buttons
+        ?.find(button => button.text === 'Choose from Library')
+        ?.onPress?.();
       await Promise.resolve();
     });
     return alertSpy;
   }
-  const primaryAction = (tree: renderer.ReactTestRenderer) => tree.root.findAllByType(DSButton).find(button => ['Tap In', 'Log Progress', 'Update Progress'].includes(button.props.label))!;
+  const primaryAction = (tree: renderer.ReactTestRenderer) =>
+    tree.root
+      .findAllByType(DSButton)
+      .find(button =>
+        ['Tap In', 'Log Progress', 'Update Progress'].includes(
+          button.props.label,
+        ),
+      )!;
 
   it('blocks completion without required proof and allows an exempt partial entry', async () => {
     mockDetail = {...baseMockDetail, proofRequirement: 'photo'};
     let tree!: renderer.ReactTestRenderer;
-    await act(async () => {tree = renderComposerScreen();});
+    await act(async () => {
+      tree = renderComposerScreen();
+    });
     expect(primaryAction(tree).props.disabled).toBe(true);
     await act(async () => primaryAction(tree).props.onPress());
     expect(mockSubmitTapIn).not.toHaveBeenCalled();
     await act(async () => tree.unmount());
-    mockDetail = {...baseMockDetail, proofRequirement: 'photo', commitmentType: 'build', buildTrackingMode: 'quantity', targetValue: 10, currentValue: 3};
-    await act(async () => {tree = renderComposerScreen();});
+    mockDetail = {
+      ...baseMockDetail,
+      proofRequirement: 'photo',
+      commitmentType: 'build',
+      buildTrackingMode: 'quantity',
+      targetValue: 10,
+      currentValue: 3,
+    };
+    await act(async () => {
+      tree = renderComposerScreen();
+    });
     expect(primaryAction(tree).props.disabled).toBe(false);
     await act(async () => primaryAction(tree).props.onPress());
-    expect(mockSubmitTapIn).toHaveBeenCalledWith({circleId: 'circle-1', currentValue: 3, status: 'done'});
+    expect(mockSubmitTapIn).toHaveBeenCalledWith({
+      circleId: 'circle-1',
+      currentValue: 3,
+      status: 'done',
+    });
     expect(mockUploadTapInPhoto).not.toHaveBeenCalled();
     await act(async () => tree.unmount());
   });
   it('uploads required proof before saving and passes a remote photo to completion', async () => {
     mockDetail = {...baseMockDetail, proofRequirement: 'photo'};
-    mockUploadTapInPhoto.mockResolvedValueOnce('https://example.test/uploaded.jpg');
+    mockUploadTapInPhoto.mockResolvedValueOnce(
+      'https://example.test/uploaded.jpg',
+    );
     let tree!: renderer.ReactTestRenderer;
-    await act(async () => {tree = renderComposerScreen();});
+    await act(async () => {
+      tree = renderComposerScreen();
+    });
     const alertSpy = await selectRequiredPhoto(tree);
     expect(primaryAction(tree).props.disabled).toBe(false);
     await act(async () => primaryAction(tree).props.onPress());
-    expect(mockUploadTapInPhoto).toHaveBeenCalledWith(expect.objectContaining({circleId: 'circle-1', uid: 'user-1', uri: 'file:///required.jpg'}));
-    expect(mockUploadTapInPhoto.mock.invocationCallOrder.at(-1)).toBeLessThan(mockSubmitTapIn.mock.invocationCallOrder.at(-1)!);
-    expect(mockSubmitTapIn).toHaveBeenCalledWith({circleId: 'circle-1', status: 'done', photoUrl: 'https://example.test/uploaded.jpg'});
-    expect(tree.root.findByType(TapInComposerScreen).props.navigation.replace).toHaveBeenCalledWith('TapInComplete', expect.objectContaining({proofRequirement: 'photo', photoUri: 'https://example.test/uploaded.jpg'}));
-    alertSpy.mockRestore(); await act(async () => tree.unmount());
+    expect(mockUploadTapInPhoto).toHaveBeenCalledWith(
+      expect.objectContaining({
+        circleId: 'circle-1',
+        uid: 'user-1',
+        uri: 'file:///required.jpg',
+      }),
+    );
+    expect(mockUploadTapInPhoto.mock.invocationCallOrder.at(-1)).toBeLessThan(
+      mockSubmitTapIn.mock.invocationCallOrder.at(-1)!,
+    );
+    expect(mockSubmitTapIn).toHaveBeenCalledWith({
+      circleId: 'circle-1',
+      status: 'done',
+      photoUrl: 'https://example.test/uploaded.jpg',
+    });
+    expect(
+      tree.root.findByType(TapInComposerScreen).props.navigation.replace,
+    ).toHaveBeenCalledWith(
+      'TapInComplete',
+      expect.objectContaining({
+        proofRequirement: 'photo',
+        photoUri: 'https://example.test/uploaded.jpg',
+      }),
+    );
+    alertSpy.mockRestore();
+    await act(async () => tree.unmount());
   });
   it('retains selected proof after an upload failure and reuses it across a submission retry', async () => {
     mockDetail = {...baseMockDetail, proofRequirement: 'photo'};
-    mockUploadTapInPhoto.mockRejectedValueOnce(new Error('Upload failed')).mockResolvedValueOnce('https://example.test/retry.jpg');
+    mockUploadTapInPhoto
+      .mockRejectedValueOnce(new Error('Upload failed'))
+      .mockResolvedValueOnce('https://example.test/retry.jpg');
     let tree!: renderer.ReactTestRenderer;
-    await act(async () => {tree = renderComposerScreen();});
+    await act(async () => {
+      tree = renderComposerScreen();
+    });
     const alertSpy = await selectRequiredPhoto(tree);
     await act(async () => primaryAction(tree).props.onPress());
     expect(mockSubmitTapIn).not.toHaveBeenCalled();
-    expect(tree.root.findByProps({testID: 'photo-picker-preview'}).props.source.uri).toBe('file:///required.jpg');
+    expect(
+      tree.root.findByProps({testID: 'photo-picker-preview'}).props.source.uri,
+    ).toBe('file:///required.jpg');
     mockSubmitTapIn.mockRejectedValueOnce(new Error('Network failed'));
     await act(async () => primaryAction(tree).props.onPress());
     const uploads = mockUploadTapInPhoto.mock.calls.length;
     await act(async () => primaryAction(tree).props.onPress());
     expect(mockUploadTapInPhoto).toHaveBeenCalledTimes(uploads);
-    alertSpy.mockRestore(); await act(async () => tree.unmount());
+    alertSpy.mockRestore();
+    await act(async () => tree.unmount());
   });
   it('uses a saved Tap In proof snapshot and photo while updating quantity', async () => {
-    mockDetail = {...baseMockDetail, proofRequirement: 'none', commitmentType: 'build', buildTrackingMode: 'quantity', targetValue: 10, viewerHasTappedInToday: true, viewerTodayStatus: 'partial', viewerTodayCheckIn: {status: 'partial', currentValue: 5, proofRequirement: 'photo', photoUrl: 'https://example.test/existing.jpg', dateKey: '2026-10-17'}};
+    mockDetail = {
+      ...baseMockDetail,
+      proofRequirement: 'none',
+      commitmentType: 'build',
+      buildTrackingMode: 'quantity',
+      targetValue: 10,
+      viewerHasTappedInToday: true,
+      viewerTodayStatus: 'partial',
+      viewerTodayCheckIn: {
+        status: 'partial',
+        currentValue: 5,
+        proofRequirement: 'photo',
+        photoUrl: 'https://example.test/existing.jpg',
+        dateKey: '2026-10-17',
+      },
+    };
     let tree!: renderer.ReactTestRenderer;
-    await act(async () => {tree = renderComposerScreen();});
-    await act(async () => tree.root.findByProps({testID: 'tap-in-composer-quantity-input'}).props.onChangeText('10'));
+    await act(async () => {
+      tree = renderComposerScreen();
+    });
+    await act(async () =>
+      tree.root
+        .findByProps({testID: 'tap-in-composer-quantity-input'})
+        .props.onChangeText('10'),
+    );
     await act(async () => primaryAction(tree).props.onPress());
-    expect(mockSubmitTapIn).toHaveBeenCalledWith(expect.objectContaining({photoUrl: 'https://example.test/existing.jpg', currentValue: 10}));
+    expect(mockSubmitTapIn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        photoUrl: 'https://example.test/existing.jpg',
+        currentValue: 10,
+      }),
+    );
     expect(mockUploadTapInPhoto).not.toHaveBeenCalled();
     await act(async () => tree.unmount());
   });
-
 });
 
 // The server-backed wallet is a separate tested subscription boundary.

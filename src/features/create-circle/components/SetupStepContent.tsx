@@ -162,6 +162,8 @@ export function SetupField({
   helper,
   disabled,
   prefix,
+  autoCapitalize,
+  helperTone = 'muted',
 }: {
   label: string;
   value: string;
@@ -172,6 +174,8 @@ export function SetupField({
   helper?: string;
   disabled?: boolean;
   prefix?: string;
+  autoCapitalize?: React.ComponentProps<typeof HoystInput>['autoCapitalize'];
+  helperTone?: 'muted' | 'danger';
 }) {
   const theme = useSetupTheme();
   return (
@@ -193,6 +197,7 @@ export function SetupField({
         )}
         <HoystInput
           accessibilityLabel={label}
+          autoCapitalize={autoCapitalize}
           value={value}
           onChangeText={onChange}
           maxLength={maxLength}
@@ -205,7 +210,7 @@ export function SetupField({
         />
       </View>
       {helper && (
-        <HoystText tone="muted" style={styles.helper}>
+        <HoystText tone={helperTone} style={styles.helper}>
           {helper}
         </HoystText>
       )}
@@ -529,6 +534,122 @@ export function setupCopy(
   return copy[step] ?? {title: 'Your setup', message: 'Let’s keep going.'};
 }
 
+export function SetupCategoryGrid({
+  category,
+  onChange,
+}: {
+  category: string;
+  onChange: (category: string) => void;
+}) {
+  const theme = useSetupTheme();
+  return (
+    <View style={styles.grid}>
+      {categories.map(option => (
+        <Pressable
+          key={option.label}
+          accessibilityRole="radio"
+          accessibilityState={{selected: category === option.label}}
+          onPress={() => onChange(option.label)}
+          style={[
+            styles.category,
+            {
+              backgroundColor: theme.surfaceSoft,
+              borderColor:
+                category === option.label ? theme.accent : 'transparent',
+            },
+          ]}>
+          <CircleCategoryIcon category={option.label} size={36} />
+          <HoystText style={[styles.copy, styles.flex]}>
+            {option.label}
+          </HoystText>
+          {category === option.label && (
+            <Check color={theme.accentForeground} size={16} />
+          )}
+        </Pressable>
+      ))}
+    </View>
+  );
+}
+
+export function SetupAppearanceEditor({
+  draft,
+  onChange,
+}: {
+  draft: CreateCircleDraft;
+  onChange: (draft: CreateCircleDraft) => void;
+}) {
+  const theme = useSetupTheme();
+  const resolved = resolveAppearance(draft.category, draft.appearance);
+  const set = (patch: Partial<CreateCircleDraft>) =>
+    onChange({...draft, ...patch});
+  return (
+    <>
+      <View
+        style={[
+          styles.preview,
+          styles.row,
+          {
+            backgroundColor: theme.isDark
+              ? resolved.darkBackground
+              : resolved.background,
+          },
+        ]}>
+        <CircleCategoryIcon
+          category={draft.category}
+          appearance={draft.appearance}
+          size={44}
+        />
+        <View style={styles.flex}>
+          <HoystText style={styles.cardTitle}>{draft.title}</HoystText>
+          <HoystText tone="muted" style={styles.copy}>
+            {draft.commitment}
+          </HoystText>
+        </View>
+      </View>
+      <HoystText style={styles.section}>Emoji</HoystText>
+      <CommitmentAppearanceControl
+        emojiOnly
+        category={draft.category}
+        title={draft.title}
+        appearance={draft.appearance}
+        onChange={appearance => set({appearance})}
+      />
+      <HoystText style={styles.section}>Color</HoystText>
+      <View style={styles.chips}>
+        {(Object.keys(palettes) as Array<keyof typeof palettes>).map(
+          palette => (
+            <Pressable
+              key={palette}
+              accessibilityRole="button"
+              accessibilityState={{selected: resolved.palette === palette}}
+              onPress={() => set({appearance: {...draft.appearance, palette}})}
+              style={[
+                styles.swatch,
+                {
+                  backgroundColor: theme.isDark
+                    ? palettes[palette].accent + '20'
+                    : palettes[palette].background,
+                  borderColor:
+                    resolved.palette === palette ? theme.accent : 'transparent',
+                },
+              ]}>
+              <View
+                style={[
+                  styles.dot,
+                  {backgroundColor: palettes[palette].accent},
+                ]}
+              />
+              <HoystText style={styles.helper}>
+                {palettes[palette].label}
+              </HoystText>
+            </Pressable>
+          ),
+        )}
+      </View>
+    </>
+  );
+}
+
 export function SetupStepContent({
   step,
   draft,
@@ -594,33 +715,10 @@ export function SetupStepContent({
     );
   if (step === 'category')
     return (
-      <View style={styles.grid}>
-        {categories.map(category => (
-          <Pressable
-            key={category.label}
-            accessibilityRole="radio"
-            accessibilityState={{selected: draft.category === category.label}}
-            onPress={() => set({category: category.label})}
-            style={[
-              styles.category,
-              {
-                backgroundColor: theme.surfaceSoft,
-                borderColor:
-                  draft.category === category.label
-                    ? theme.accent
-                    : 'transparent',
-              },
-            ]}>
-            <CircleCategoryIcon category={category.label} size={36} />
-            <HoystText style={[styles.copy, styles.flex]}>
-              {category.label}
-            </HoystText>
-            {draft.category === category.label && (
-              <Check color={theme.accentForeground} size={16} />
-            )}
-          </Pressable>
-        ))}
-      </View>
+      <SetupCategoryGrid
+        category={draft.category}
+        onChange={category => set({category})}
+      />
     );
   if (step === 'name')
     return (
@@ -869,79 +967,8 @@ export function SetupStepContent({
         onChange={timezone => set({timezone})}
       />
     );
-  if (step === 'appearance') {
-    const resolved = resolveAppearance(draft.category, draft.appearance);
-    return (
-      <>
-        <View
-          style={[
-            styles.preview,
-            styles.row,
-            {
-              backgroundColor: theme.isDark
-                ? resolved.darkBackground
-                : resolved.background,
-            },
-          ]}>
-          <CircleCategoryIcon
-            category={draft.category}
-            appearance={draft.appearance}
-            size={44}
-          />
-          <View style={styles.flex}>
-            <HoystText style={styles.cardTitle}>{draft.title}</HoystText>
-            <HoystText tone="muted" style={styles.copy}>
-              {draft.commitment}
-            </HoystText>
-          </View>
-        </View>
-        <HoystText style={styles.section}>Emoji</HoystText>
-        <CommitmentAppearanceControl
-          emojiOnly
-          category={draft.category}
-          title={draft.title}
-          appearance={draft.appearance}
-          onChange={appearance => set({appearance})}
-        />
-        <HoystText style={styles.section}>Color</HoystText>
-        <View style={styles.chips}>
-          {(Object.keys(palettes) as Array<keyof typeof palettes>).map(
-            palette => (
-              <Pressable
-                key={palette}
-                accessibilityRole="button"
-                accessibilityState={{selected: resolved.palette === palette}}
-                onPress={() =>
-                  set({appearance: {...draft.appearance, palette}})
-                }
-                style={[
-                  styles.swatch,
-                  {
-                    backgroundColor: theme.isDark
-                      ? palettes[palette].accent + '20'
-                      : palettes[palette].background,
-                    borderColor:
-                      resolved.palette === palette
-                        ? theme.accent
-                        : 'transparent',
-                  },
-                ]}>
-                <View
-                  style={[
-                    styles.dot,
-                    {backgroundColor: palettes[palette].accent},
-                  ]}
-                />
-                <HoystText style={styles.helper}>
-                  {palettes[palette].label}
-                </HoystText>
-              </Pressable>
-            ),
-          )}
-        </View>
-      </>
-    );
-  }
+  if (step === 'appearance')
+    return <SetupAppearanceEditor draft={draft} onChange={onChange} />;
   if (step === 'review') {
     const rows: Array<[string, string, SetupStep]> = [
       ['Category', draft.category, 'category'],

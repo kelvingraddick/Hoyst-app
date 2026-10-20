@@ -91,4 +91,12 @@ export {refreshPublicProfile} from './profile/public';
 
 export {expireHomeGreetingData} from './auth/greeting-data';
 
-export {refreshCircleProgress, reconcileCircleProgressCheckIn, reconcileCircleProgressMembership, reconcileCircleProgressConfiguration, reconcileCircleProgressRollover} from './circles/progress';
+export {
+  refreshCircleProgress,
+  reconcileCircleProgressCheckIn,
+  reconcileCircleProgressMembership,
+  reconcileCircleProgressConfiguration,
+  reconcileCircleProgressRollover,
+} from './circles/progress';
+
+export {finalizeTapInCompletion} from './checkins/completion';

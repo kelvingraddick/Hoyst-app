@@ -26,7 +26,9 @@ async function eligibleProfile(uid, idToken) {
         throw new https_1.HttpsError('unauthenticated', 'Sign in to earn and use rewards.');
     }
     const snapshot = await firebase_1.db.collection('users').doc(uid).get();
-    if (!snapshot.exists || snapshot.data()?.onboardingStatus !== 'complete') {
+    if (!snapshot.exists ||
+        snapshot.data()?.accountDeletionStartedAt ||
+        snapshot.data()?.onboardingStatus !== 'complete') {
         throw new https_1.HttpsError('failed-precondition', 'Complete your profile first.');
     }
     return { uid, profile: snapshot.data() };
@@ -34,6 +36,12 @@ async function eligibleProfile(uid, idToken) {
 async function reconcileProgress(uid, successfulEvent = false, sourceEventId) {
     const { profile } = await eligibleProfile(uid);
     return firebase_1.db.runTransaction(async (transaction) => {
+        // Keep delayed reconciliation inside the account-deletion transaction boundary.
+        const currentProfile = await transaction.get(firebase_1.db.collection('users').doc(uid));
+        if (!currentProfile.exists ||
+            currentProfile.data()?.accountDeletionStartedAt) {
+            throw new https_1.HttpsError('failed-precondition', 'Account is unavailable.');
+        }
         const economy = await (0, ledger_1.readEconomy)(transaction, uid, profile.timezone || 'UTC');
         const beforeXP = economy.wallet.totalXP;
         const [members, checks, privateData, momentum, historicalNotifications] = await Promise.all([

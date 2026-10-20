@@ -84,7 +84,14 @@ function TapInComposerController({
       blur();
     };
   }, [navigation]);
-  const [detail, setDetail] = useState<CircleDetailModel | undefined>();
+  const [liveDetail, setDetail] = useState<CircleDetailModel | undefined>();
+  const submissionView = useRef<
+    | {
+        detail: CircleDetailModel;
+        rewardState: ReturnType<typeof useProgress>;
+      }
+    | undefined
+  >(undefined);
   const [hasResolvedDetail, setHasResolvedDetail] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isRemovingTapIn, setIsRemovingTapIn] = useState(false);
@@ -92,7 +99,9 @@ function TapInComposerController({
   const [selectedPhotoUri, setSelectedPhotoUri] = useState<string>();
   const [quantityDraft, setQuantityDraft] = useState({text: '0', value: 0});
   const [hasEditedQuantity, setHasEditedQuantity] = useState(false);
-  const rewardState = useProgress();
+  const liveRewardState = useProgress();
+  const detail = submissionView.current?.detail ?? liveDetail;
+  const rewardState = submissionView.current?.rewardState ?? liveRewardState;
   const profile = useUserProfileStore(state => state.profile);
   const status = useSessionStore(state => state.status);
   const user = useSessionStore(state => state.user);
@@ -408,7 +417,10 @@ function TapInComposerController({
       return;
     }
     submissionLock.current = true;
+    submissionView.current = {detail, rewardState};
     setIsSubmitting(true);
+    const submittedAt = Date.now();
+    let didNavigate = false;
     try {
       let savedPhotoUrl = viewerTodayPhotoUrl;
       // Optional confirmation photos retain the post-completion upload flow.
@@ -484,6 +496,10 @@ function TapInComposerController({
       }
 
       navigation.replace('TapInComplete', {
+        ...(result.completionId
+          ? {completionId: result.completionId, completionOwnerUid: user?.uid}
+          : {}),
+        submittedAt,
         proofRequirement: result.proofRequirement ?? proofRequirement,
         category: detail.category,
         appearance: detail.appearance,
@@ -528,6 +544,7 @@ function TapInComposerController({
           ? {photoUri: result.photoUrl || savedPhotoUrl || selectedPhotoUri}
           : {}),
       });
+      didNavigate = true;
     } catch (error) {
       const reason = (error as {details?: {reason?: string}}).details?.reason;
       if (
@@ -543,8 +560,11 @@ function TapInComposerController({
           'Could not submit your Tap In. Try again.',
       );
     } finally {
-      submissionLock.current = false;
-      setIsSubmitting(false);
+      if (!didNavigate) {
+        submissionLock.current = false;
+        submissionView.current = undefined;
+        setIsSubmitting(false);
+      }
     }
   };
 
@@ -619,7 +639,9 @@ function TapInComposerController({
       timezone: detail.timezone,
       dateKey:
         viewerTodayCheckIn?.dateKey ??
-        DateTime.now().setZone(detail.timezone ?? timezone).toISODate()!,
+        DateTime.now()
+          .setZone(detail.timezone ?? timezone)
+          .toISODate()!,
       status: viewerTodayCheckIn?.status,
       coverageStatus: viewerTodayCheckIn?.coverageStatus,
       currentValue: viewerTodayCheckIn?.currentValue,

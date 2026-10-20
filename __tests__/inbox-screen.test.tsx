@@ -235,47 +235,80 @@ describe('InboxScreen', () => {
     ).toBeGreaterThan(0);
   });
 
-  it('shows unread rows with a status-colored dot and stronger text', () => {
-    mockInboxEvents = [
-      inboxEvent({
-        id: 'at-risk-unread',
-        isRead: false,
-        type: 'circle_at_risk',
-      }),
-    ];
+  it.each(['light', 'dark'] as const)(
+    'shows unread rows with a status-colored dot, subtle background, and regular text in %s mode',
+    appearance => {
+      mockAppearance = appearance;
+      mockInboxEvents = [
+        inboxEvent({
+          id: 'at-risk-unread',
+          isRead: false,
+          type: 'circle_at_risk',
+        }),
+      ];
 
-    const {tree} = renderInbox();
-    const unreadDots = tree.root.findAll(
-      node => node.props.testID === 'inbox-unread-dot',
-    );
-    const message = tree.root
-      .findAll(node => typeof node.type === 'string')
-      .find(node => node.props.children === 'Workout Circle needs an update.');
-    const timestamp = tree.root
-      .findAll(node => typeof node.type === 'string')
-      .find(node => node.props.children === '11h ago');
-    const messageStyle = StyleSheet.flatten(message?.props.style);
-    const timestampStyle = StyleSheet.flatten(timestamp?.props.style);
+      const {tree} = renderInbox();
+      const unreadDots = tree.root.findAll(
+        node => node.props.testID === 'inbox-unread-dot',
+      );
+      const message = tree.root
+        .findAll(node => typeof node.type === 'string')
+        .find(
+          node => node.props.children === 'Workout Circle needs an update.',
+        );
+      const timestamp = tree.root
+        .findAll(node => typeof node.type === 'string')
+        .find(node => node.props.children === '11h ago');
+      const messageStyle = StyleSheet.flatten(message?.props.style);
+      const timestampStyle = StyleSheet.flatten(timestamp?.props.style);
 
-    expect(unreadDots.length).toBeGreaterThan(0);
-    expect(
-      unreadDots.some(dot =>
-        JSON.stringify(dot.props.style).includes('#A83A00'),
-      ),
-    ).toBe(true);
-    expect(messageStyle).toMatchObject({
-      fontWeight: '700',
-      fontSize: 14,
-      lineHeight: 20,
-    });
-    expect(timestampStyle).toMatchObject({
-      fontWeight: '700',
-      fontSize: 12,
-      lineHeight: 16,
-    });
-    expect(markAllInboxEventsRead).toHaveBeenCalledTimes(1);
-    expect(clearDeliveredNotifications).toHaveBeenCalledTimes(1);
-  });
+      expect(unreadDots.length).toBeGreaterThan(0);
+      expect(
+        unreadDots.some(dot =>
+          JSON.stringify(dot.props.style).includes(
+            appearance === 'light' ? '#A83A00' : '#FF8A3D',
+          ),
+        ),
+      ).toBe(true);
+      expect(messageStyle).toMatchObject({
+        fontWeight: '400',
+        fontSize: 14,
+        lineHeight: 20,
+      });
+      const lead = tree.root
+        .findAllByType(DSText)
+        .find(node => node.props.children?.[0] === 'Circle check-in')!;
+      const leadText = lead.findAll(node => typeof node.type === 'string')[0]!;
+      expect(StyleSheet.flatten(leadText.props.style).fontWeight).toBe('400');
+      expect(timestampStyle).toMatchObject({
+        fontWeight: '400',
+        fontSize: 12,
+        lineHeight: 16,
+        color: appearance === 'light' ? '#4D5873' : '#B4BCD1',
+      });
+      const row = () => nativeNodes(tree, 'inbox-event-row-at-risk-unread')[0]!;
+      const backgroundColor =
+        appearance === 'light' ? 'rgba(0,0,0,0.03)' : 'rgba(255,255,255,0.05)';
+      const button = tree.root
+        .findAllByType(Pressable)
+        .find(node => node.props.testID === 'inbox-event-row-at-risk-unread')!;
+      expect(StyleSheet.flatten(row().props.style).backgroundColor).toBe(
+        backgroundColor,
+      );
+      act(() => button.props.onPressIn());
+      expect(StyleSheet.flatten(row().props.style)).toMatchObject({
+        backgroundColor,
+        opacity: 0.72,
+      });
+      act(() => button.props.onPressOut());
+      expect(StyleSheet.flatten(row().props.style)).toMatchObject({
+        backgroundColor,
+        opacity: 1,
+      });
+      expect(markAllInboxEventsRead).toHaveBeenCalledTimes(1);
+      expect(clearDeliveredNotifications).toHaveBeenCalledTimes(1);
+    },
+  );
 
   it('does not render an unread marker for read rows', () => {
     mockInboxEvents = [
@@ -291,6 +324,11 @@ describe('InboxScreen', () => {
     );
 
     expect(unreadDots).toHaveLength(0);
+    expect(
+      StyleSheet.flatten(
+        nativeNodes(tree, 'inbox-event-row-already-read')[0]!.props.style,
+      ).backgroundColor,
+    ).toBeUndefined();
   });
 
   it('keeps a row visually unread for the current Inbox visit', () => {
@@ -305,6 +343,12 @@ describe('InboxScreen', () => {
     expect(
       tree.root.findAll(node => node.props.testID === 'inbox-unread-dot'),
     ).not.toHaveLength(0);
+    expect(
+      StyleSheet.flatten(
+        nativeNodes(tree, 'inbox-event-row-current-visit-unread')[0]!.props
+          .style,
+      ).backgroundColor,
+    ).toBe('rgba(0,0,0,0.03)');
 
     act(() => {
       emitInboxEvents?.([{...unreadEvent, isRead: true}]);
@@ -313,6 +357,12 @@ describe('InboxScreen', () => {
     expect(
       tree.root.findAll(node => node.props.testID === 'inbox-unread-dot'),
     ).not.toHaveLength(0);
+    expect(
+      StyleSheet.flatten(
+        nativeNodes(tree, 'inbox-event-row-current-visit-unread')[0]!.props
+          .style,
+      ).backgroundColor,
+    ).toBe('rgba(0,0,0,0.03)');
   });
 
   it('marks new unread rows that arrive while the Inbox is open', () => {
