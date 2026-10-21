@@ -72,6 +72,59 @@ function homeCard(
 }
 
 describe('home data mapping', () => {
+  it.each(['owner', 'admin', 'member'] as const)(
+    'offers invite sharing to an active %s without changing action priorities',
+    viewerRole => {
+      for (const access of [
+        {privacy: 'public', joinMode: 'open'},
+        {privacy: 'private', joinMode: 'request_to_join'},
+        {privacy: 'private', joinMode: 'invite_only'},
+      ] as const) {
+        const circle = homeCard({
+          ...access,
+          viewerRole,
+          viewerHasTappedInToday: true,
+          viewerTodayStatus: 'done',
+          nudgeTargetCount: 0,
+          inviteUrl: 'https://hoyst.app/join/example',
+        });
+
+        expect(getHomeCircleActionVariant(circle)).toBe('share');
+        expect(
+          getHomeCircleActionVariant({...circle, nudgeTargetCount: 1}),
+        ).toBe('nudge');
+        expect(
+          getHomeCircleActionVariant({
+            ...circle,
+            viewerHasTappedInToday: false,
+            nudgeTargetCount: 1,
+          }),
+        ).toBe('check_in');
+        for (const overrides of [
+          {viewerMembershipStatus: 'pending' as const},
+          {viewerMembershipStatus: undefined},
+          {circleMode: 'personal' as const},
+          {lifecycleStatus: 'archived' as const},
+          {inviteUrl: undefined},
+        ]) {
+          expect(getHomeCircleActionVariant({...circle, ...overrides})).toBe(
+            'view',
+          );
+        }
+      }
+    },
+  );
+
+  it('maps pending request identity and preserves it when building Circle detail', () => {
+    const requestedAt = new Date('2026-10-20T12:00:00Z');
+    const card = mapHomeCircleFromData({circleId: 'circle', circleData, membershipData: {uid: 'owner', status: 'active', role: 'owner'}, membersData: [
+      {uid: 'owner', status: 'active', role: 'owner'},
+      {uid: 'requester', status: 'pending', requestedAt: {toDate: () => requestedAt}},
+    ]});
+    expect(card?.members.find(member => member.id === 'requester')).toMatchObject({membershipStatus: 'pending', requestedAt});
+    expect(buildCircleDetailFromHomeCircle(card!).members).toEqual(card!.members);
+  });
+
   it('keeps personal commitments out of social card actions', () => {
     const personal = homeCard({
       circleMode: 'personal',

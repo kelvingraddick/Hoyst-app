@@ -3,7 +3,7 @@ import {ScrollView, StyleSheet, Text} from 'react-native';
 import {UserPlus} from 'lucide-react-native';
 import renderer, {act, type ReactTestInstance} from 'react-test-renderer';
 
-import {DesignSystemProvider} from '../src/design/system';
+import {DesignSystemProvider, getSystemTheme} from '../src/design/system';
 import {
   CircleMemberStrip,
   getMemberProgressConfig,
@@ -11,9 +11,12 @@ import {
 import {getHoystThemeColors} from '../src/design/tokens/colors';
 import type {CircleMemberStatus} from '../src/types/models';
 
+let mockAppearance: 'light' | 'dark' = 'light';
+
 jest.mock('../src/store/settings-store', () => ({
-  useSettingsStore: (selector: (state: {appearance: 'light'}) => unknown) =>
-    selector({appearance: 'light'}),
+  useSettingsStore: (
+    selector: (state: {appearance: 'light' | 'dark'}) => unknown,
+  ) => selector({appearance: mockAppearance}),
 }));
 
 const members: CircleMemberStatus[] = [
@@ -46,7 +49,7 @@ function renderStrip(
 
   act(() => {
     tree = renderer.create(
-      <DesignSystemProvider scheme="light">
+      <DesignSystemProvider scheme={mockAppearance}>
         <CircleMemberStrip
           belowStripAction={<Text>Nudge all</Text>}
           inviteAction={{
@@ -66,6 +69,10 @@ function renderStrip(
 
   return {onInvite, onSelectMember, tree};
 }
+
+beforeEach(() => {
+  mockAppearance = 'light';
+});
 
 afterEach(() => {
   jest.clearAllMocks();
@@ -94,7 +101,9 @@ it('uses a subtle Invite icon and places the bulk row before selected-member act
       tone: 'nudge',
     },
   });
-  const inviteIcon = tree.root.findByType(UserPlus);
+  const inviteIcon = tree.root
+    .findByProps({testID: 'circle-member-strip-invite-avatar'})
+    .findByType(UserPlus);
   const strip = tree.root.findByProps({testID: 'circle-member-strip'});
   const belowAction = tree.root.findByProps({
     testID: 'circle-member-strip-below-action',
@@ -141,16 +150,64 @@ it('matches completed member rings and badges to the completed day green', () =>
 
 it('preserves Invite and member selection callbacks', () => {
   const {onInvite, onSelectMember, tree} = renderStrip();
-  const invite = tree.root.findByProps({accessibilityLabel: 'Invite members'});
   const member = tree.root.findByProps({
     testID: 'circle-member-strip-member-member-2',
   });
 
-  act(() => invite.props.onPress());
+  for (const testID of [
+    'circle-member-heading-invite',
+    'circle-member-strip-invite',
+  ]) {
+    act(() => tree.root.findByProps({testID}).props.onPress());
+  }
   act(() => member.props.onPress());
 
-  expect(onInvite).toHaveBeenCalledTimes(1);
+  expect(onInvite).toHaveBeenCalledTimes(2);
   expect(onSelectMember).toHaveBeenCalledWith(members[1]);
+});
+
+it.each(['light', 'dark'] as const)(
+  'uses category button colors and keeps the avatar shortcut neutral in %s mode',
+  appearance => {
+    mockAppearance = appearance;
+    const theme = getSystemTheme(appearance);
+    const {tree} = renderStrip({inviteCategory: 'blue'});
+    const headingInvite = tree.root.findByProps({
+      testID: 'circle-member-heading-invite',
+    });
+    const inviteAvatar = tree.root.findByProps({
+      testID: 'circle-member-strip-invite-avatar',
+    });
+    const foreground = theme.isDark ? theme.canvas : theme.onAction;
+
+    expect(
+      StyleSheet.flatten(headingInvite.props.style),
+    ).toEqual(
+      expect.objectContaining({
+        backgroundColor: theme.category.blue.foreground,
+        minHeight: 44,
+        minWidth: 92,
+      }),
+    );
+    expect(headingInvite.findByType(UserPlus).props.color).toBe(foreground);
+    expect(
+      StyleSheet.flatten(headingInvite.findByType(Text).props.style).color,
+    ).toBe(foreground);
+    expect(StyleSheet.flatten(inviteAvatar.props.style).backgroundColor).toBe(
+      theme.isDark ? 'rgba(255,255,255,0.07)' : 'rgba(16,24,40,0.055)',
+    );
+  },
+);
+
+it('hides both member-section invite controls without an invite action', () => {
+  const {tree} = renderStrip({inviteAction: undefined});
+
+  for (const testID of [
+    'circle-member-heading-invite',
+    'circle-member-strip-invite',
+  ]) {
+    expect(tree.root.findAllByProps({testID})).toHaveLength(0);
+  }
 });
 
 it('prioritizes a weekly goal and announces today activity separately', () => {

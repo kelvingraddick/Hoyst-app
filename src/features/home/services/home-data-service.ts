@@ -604,6 +604,9 @@ function mapMemberStatus(
     id: uid,
     initials: getInitials(name),
     membershipStatus: status,
+    requestedAt: memberData.requestedAt instanceof Date
+      ? memberData.requestedAt
+      : asDate(memberData.requestedAt),
     joinedAt:
       memberData.joinedAt instanceof Date
         ? memberData.joinedAt

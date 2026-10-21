@@ -6,6 +6,10 @@ export const env = {
   googleWebClientId: Config.GOOGLE_WEB_CLIENT_ID ?? '',
   instagramAppId: Config.INSTAGRAM_APP_ID ?? '',
   oneSignalAppId: Config.ONESIGNAL_APP_ID ?? '',
+  posthogKey: Config.POSTHOG_PROJECT_KEY ?? '',
+  posthogHost: Config.POSTHOG_HOST ?? 'https://us.i.posthog.com',
+  analyticsDebug: Config.ANALYTICS_DEBUG === 'true',
+  analyticsInternal: Config.ANALYTICS_INTERNAL === 'true',
   sentryDsn: Config.SENTRY_DSN ?? '',
 } as const;
 

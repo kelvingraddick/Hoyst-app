@@ -26,7 +26,7 @@ export async function openLegalPage(page: keyof typeof legalUrls) {
   } catch {
     Alert.alert(
       'Could not open page',
-      `Please visit ${legalUrls[page]} in your browser or contact support@hoyst.app.`,
+      `Please visit ${legalUrls[page]} in your browser or contact development@wavelinkllc.com.`,
     );
   }
 }

@@ -15,6 +15,8 @@ const {
   completeProgressTask,
 } = require('../functions/lib/progress');
 const {submitTapIn, removeTapIn} = require('../functions/lib/checkins');
+const {joinCircle} = require('../functions/lib/circles');
+const {rotateCircleInvite} = require('../functions/lib/invites');
 const {applyVerifiedPurchase} = require('../functions/lib/progress/purchases');
 const {
   getRestoreOptions,
@@ -288,6 +290,140 @@ describe('Progress server transactions and rules', () => {
       /cannot share/,
     );
   });
+  for (const role of ['owner', 'admin', 'member']) {
+    for (const [privacyMode, privacy, joinMode] of [
+      ['public', 'public', 'open'],
+      ['private', 'private', 'request_to_join'],
+      ['link_only', 'private', 'invite_only'],
+    ]) {
+      it(`credits an active ${role} sharing a ${privacyMode} Circle exactly once`, async () => {
+        await db.doc('circles/a').set(
+          {circleMode: 'group', inviteCode: 'valid', privacy, joinMode},
+          {merge: true},
+        );
+        await db.doc('circles/a/members/other').set({
+          uid: 'other',
+          role,
+          status: 'active',
+        });
+        const results = await Promise.all(
+          Array.from({length: 3}, () =>
+            completeProgressTask.run(
+              request('other', {task: 'share_invite', circleId: 'a'}),
+            ),
+          ),
+        );
+        for (const result of results) {
+          assert.equal(result.tasks.share_invite, true);
+          assert.equal(result.totalXP, 10);
+        }
+        const ledger = await db
+          .collection('userPrivate/other/progressLedger')
+          .where('kind', '==', 'xp')
+          .get();
+        assert.equal(ledger.size, 1);
+      });
+    }
+  }
+
+  for (const [label, circleChanges, membership] of [
+    ['nonmember', {}, undefined],
+    ['pending member', {}, {role: 'member', status: 'pending'}],
+    ['former member', {}, {role: 'member', status: 'left'}],
+    ['inactive owner', {}, {role: 'owner', status: 'pending'}],
+    ['archived Circle', {lifecycleStatus: 'archived'}, {status: 'active'}],
+    ['personal Commitment', {circleMode: 'personal'}, {status: 'active'}],
+    ['missing invite', {inviteCode: null}, {status: 'active'}],
+  ]) {
+    it(`rejects sharing credit for a ${label}`, async () => {
+      await db.doc('circles/a').set(
+        {circleMode: 'group', inviteCode: 'valid', ...circleChanges},
+        {merge: true},
+      );
+      if (membership) {
+        await db
+          .doc('circles/a/members/other')
+          .set({uid: 'other', ...membership});
+      }
+      await assert.rejects(
+        completeProgressTask.run(
+          request('other', {task: 'share_invite', circleId: 'a'}),
+        ),
+        error => error.code === 'permission-denied',
+      );
+      assert.equal(
+        (await db.doc('userPrivate/other/progress/current').get()).exists,
+        false,
+      );
+    });
+  }
+
+  it('rejects sharing credit for a nonexistent Circle', async () => {
+    await assert.rejects(
+      completeProgressTask.run(
+        request('other', {task: 'share_invite', circleId: 'missing'}),
+      ),
+      error => error.code === 'permission-denied',
+    );
+  });
+
+  it('keeps private link joins pending approval and enforces invite validity and capacity', async () => {
+    await db.doc('circles/a').set(
+      {
+        circleMode: 'group',
+        ownerId: null,
+        privacy: 'private',
+        joinMode: 'request_to_join',
+        inviteCode: 'valid',
+        maxSize: 8,
+      },
+      {merge: true},
+    );
+    await assert.rejects(
+      joinCircle.run(request('other', {circleId: 'a', inviteCode: 'invalid'})),
+      error => error.code === 'permission-denied',
+    );
+    const result = await joinCircle.run(
+      request('other', {circleId: 'a', inviteCode: 'valid'}),
+    );
+    assert.equal(result.status, 'pending');
+    assert.equal(
+      (await db.doc('circles/a/members/other').get()).data().status,
+      'pending',
+    );
+    assert.equal(
+      (await db.doc('circles/a/joinRequests/other').get()).data().status,
+      'pending',
+    );
+    await db.doc('circles/a').update({memberCount: 8});
+    await assert.rejects(
+      joinCircle.run(request('other', {circleId: 'a', inviteCode: 'valid'})),
+      error => error.code === 'resource-exhausted',
+    );
+  });
+
+  it('keeps resetting the shared link restricted to the active owner', async () => {
+    await db.doc('circles/a').set(
+      {circleMode: 'group', inviteCode: 'valid'},
+      {merge: true},
+    );
+    for (const role of ['member', 'admin']) {
+      await db.doc('circles/a/members/other').set({role, status: 'active'});
+      await assert.rejects(
+        rotateCircleInvite.run(request('other', {circleId: 'a'})),
+        error => error.code === 'permission-denied',
+      );
+    }
+    assert.equal((await db.doc('circles/a').get()).data().inviteCode, 'valid');
+    await db.doc('circles/a/members/owner').update({role: 'owner'});
+    const reset = await rotateCircleInvite.run(request('owner', {circleId: 'a'}));
+    assert.notEqual(reset.inviteCode, 'valid');
+    assert.equal(
+      (await db.doc('circles/a').get()).data().inviteCode,
+      reset.inviteCode,
+    );
+  });
+
   it('returns an open skip when replaced by an actual success, without crediting protection itself', async () => {
     const initial = await ensureProgress.run(request('owner'));
     const skipped = await submitTapIn.run(

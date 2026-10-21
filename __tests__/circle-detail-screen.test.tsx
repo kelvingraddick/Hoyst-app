@@ -7,6 +7,7 @@ jest.mock('../src/features/circles/services/circle-progress-service', () => ({
 }));
 jest.mock('../src/features/progress/services/progress-service', () => ({
   recordProgressTask: jest.fn().mockResolvedValue(undefined),
+  shareCircleInvitation: jest.fn().mockResolvedValue(undefined),
 }));
 import React from 'react';
 import {
@@ -20,6 +21,7 @@ import renderer, {act, type ReactTestInstance} from 'react-test-renderer';
 
 import {TapInPulseButton} from '../src/design/components/TapInPulseButton';
 import {CircleDetailScreen} from '../src/features/circles/screens/CircleDetailScreen';
+import {shareCircleInvitation} from '../src/features/progress/services/progress-service';
 import {subscribeToPublicCircle} from '../src/features/circles/services/public-circle-service';
 import {subscribeToMemberCircleDetail} from '../src/features/home/services/home-data-service';
 import type {CircleDetailModel, CircleThreadItem} from '../src/types/models';
@@ -332,12 +334,13 @@ function detail(overrides: Partial<CircleDetailModel> = {}): CircleDetailModel {
   };
 }
 
-function renderScreen(resumeAction?: 'join') {
+function renderScreen(resumeAction?: 'join', reviewJoinRequests?: true) {
   const navigation = {
     canGoBack: jest.fn(() => false),
     goBack: jest.fn(),
     navigate: jest.fn(),
     replace: jest.fn(),
+    setParams: jest.fn(),
   };
   let tree: renderer.ReactTestRenderer | undefined;
 
@@ -349,7 +352,7 @@ function renderScreen(resumeAction?: 'join') {
           {
             key: 'CircleDetail',
             name: 'CircleDetail',
-            params: {circleId: 'circle-1', resumeAction},
+            params: {circleId: 'circle-1', resumeAction, reviewJoinRequests},
           } as never
         }
       />,
@@ -874,7 +877,7 @@ describe('CircleDetailScreen reference redesign', () => {
     expect(output).not.toContain('Member Tools');
     expect(output).not.toContain('Leaderboard');
     expect(output).not.toContain('Goals');
-    expect(output).not.toContain('Invite Members');
+    expect(output).toContain('Invite Members');
     expect(
       StyleSheet.flatten(
         tree.root.findByProps({testID: 'circle-detail-body-stack'}).props.style,
@@ -900,7 +903,15 @@ describe('CircleDetailScreen reference redesign', () => {
       mockMemberDetail = detail({category});
       mockAppearance = 'light';
 
-      const lightButton = getHeroTapInButton(renderScreen().tree);
+      const lightTree = renderScreen().tree;
+      const lightButton = getHeroTapInButton(lightTree);
+      const lightInvite = lightTree.root.findByProps({
+        testID: 'circle-member-heading-invite',
+      });
+
+      expect(
+        StyleSheet.flatten(lightInvite.props.style),
+      ).toEqual(expect.objectContaining({backgroundColor: light, minHeight: 44}));
 
       expect(lightButton.props.heroPalette).toEqual({
         backgroundColor: light,
@@ -911,7 +922,15 @@ describe('CircleDetailScreen reference redesign', () => {
 
       mockAppearance = 'dark';
 
-      const darkButton = getHeroTapInButton(renderScreen().tree);
+      const darkTree = renderScreen().tree;
+      const darkButton = getHeroTapInButton(darkTree);
+      const darkInvite = darkTree.root.findByProps({
+        testID: 'circle-member-heading-invite',
+      });
+
+      expect(
+        StyleSheet.flatten(darkInvite.props.style),
+      ).toEqual(expect.objectContaining({backgroundColor: dark, minHeight: 44}));
 
       expect(darkButton.props.heroPalette).toEqual({
         backgroundColor: dark,
@@ -921,6 +940,23 @@ describe('CircleDetailScreen reference redesign', () => {
       });
     }
   });
+
+  it.each([
+    ['light', '#A83A00'],
+    ['dark', '#FFB36B'],
+  ] as const)(
+    'uses the Circle appearance override for Invite in %s mode',
+    (appearance, color) => {
+      mockAppearance = appearance;
+      mockMemberDetail = detail({category: 'Work', appearance: {palette: 'orange'}});
+      const {tree} = renderScreen();
+      const invite = tree.root.findByProps({testID: 'circle-member-heading-invite'});
+
+      expect(StyleSheet.flatten(invite.props.style)).toEqual(
+        expect.objectContaining({backgroundColor: color}),
+      );
+    },
+  );
 
   it('embeds Circle Feed below the Member grid without navigation', () => {
     const {navigation, tree} = renderScreen();
@@ -973,6 +1009,68 @@ describe('CircleDetailScreen reference redesign', () => {
       circleId: 'circle-1',
       source: 'circle_detail',
     });
+  });
+
+  it.each(['owner', 'admin', 'member'] as const)(
+    'lets an active %s invite across Circle privacy modes',
+    async viewerRole => {
+      for (const access of [
+        {privacy: 'public', joinMode: 'open'},
+        {privacy: 'private', joinMode: 'request_to_join'},
+        {privacy: 'private', joinMode: 'invite_only'},
+      ] as const) {
+        mockMemberDetail = detail({viewerRole, ...access});
+        const {tree, navigation} = renderScreen();
+
+        const headerInvite = tree.root.findByProps({
+          testID: 'circle-detail-header-invite',
+        });
+        const rightActions = headerInvite.parent!;
+        expect(
+          rightActions.findAllByProps({
+            accessibilityLabel: 'Open circle settings',
+          }).length,
+        ).toBeGreaterThan(0);
+        expect(rightActions.children[0]).toBe(headerInvite);
+
+        for (const testID of [
+          'circle-detail-header-invite',
+          'circle-member-heading-invite',
+          'circle-member-strip-invite',
+        ]) {
+          await act(async () => {
+            tree.root.findByProps({testID}).props.onPress();
+          });
+
+          expect(shareCircleInvitation).toHaveBeenLastCalledWith('circle-1', {
+            title: 'Join Morning Movers on Hoyst',
+            message:
+              'Join Morning Movers on Hoyst: https://hoyst.app/join/circle-1',
+            url: 'https://hoyst.app/join/circle-1',
+          });
+        }
+        expect(navigation.navigate).not.toHaveBeenCalled();
+      }
+    },
+  );
+
+  it.each([
+    {viewerMembershipStatus: 'pending' as const},
+    {viewerMembershipStatus: undefined, viewerRole: undefined},
+    {inviteUrl: undefined},
+    {circleMode: 'personal' as const},
+    {lifecycleStatus: 'archived' as const},
+  ])('hides Invite for ineligible viewers or Circles: %j', overrides => {
+    mockMemberDetail = detail(overrides);
+    const {tree} = renderScreen();
+
+    for (const testID of [
+      'circle-detail-header-invite',
+      'circle-member-heading-invite',
+      'circle-member-strip-invite',
+    ]) {
+      expect(tree.root.findAllByProps({testID})).toHaveLength(0);
+    }
   });
 
   it('opens story sharing from the selected Circle Feed Tap In record', () => {
@@ -1196,7 +1294,8 @@ describe('CircleDetailScreen reference redesign', () => {
     expect(output).toMatch(/1 of 4\s+met goal/);
     expect(output).not.toContain('Tap a day for completion and skip details');
     expect(tree.root.findAllByProps({accessibilityHint: 'View completion, skip, and restore details for this day'}).length).toBeGreaterThan(0);
-    expect(progressCopy?.props.numberOfLines).toBeUndefined();
+    expect(progressCopy?.props.numberOfLines).toBe(1);
+    expect(progressCopy?.props.adjustsFontSizeToFit).toBe(true);
     expect(todayCopy?.props.numberOfLines).toBeUndefined();
   });
 
@@ -1540,7 +1639,7 @@ describe('CircleDetailScreen reference redesign', () => {
     expect(output).toContain('Daily activity');
     expect(output).not.toContain('Leaderboard');
     expect(output).not.toContain('Goals');
-    expect(output).not.toContain('Review');
+    expect(output).toContain('Review 1 join request');
     expect(output).not.toContain('Edit Circle');
     expect(output).not.toContain('Delete Circle');
   });
@@ -1569,15 +1668,9 @@ describe('CircleDetailScreen reference redesign', () => {
       reviewButton.props.onPress();
     });
 
-    expect(alertSpy).toHaveBeenCalledWith(
-      'Review join request',
-      "Approve or deny Jordan's request to join Morning Movers?",
-      expect.arrayContaining([
-        expect.objectContaining({text: 'Cancel'}),
-        expect.objectContaining({style: 'destructive', text: 'Deny'}),
-        expect.objectContaining({text: 'Approve'}),
-      ]),
-    );
+    expect(outputOf(tree)).toContain('Join requests');
+    expect(tree.root.findByProps({accessibilityLabel: "Approve Jordan's join request"})).toBeTruthy();
+    expect(alertSpy).not.toHaveBeenCalled();
   });
 
   it('approves a pending request from the selected member row', async () => {
@@ -1603,7 +1696,7 @@ describe('CircleDetailScreen reference redesign', () => {
     act(() => {
       reviewButton.props.onPress();
     });
-    pressAlertButton('Review join request', 'Approve');
+    act(() => {tree.root.findByProps({accessibilityLabel: "Approve Jordan's join request"}).props.onPress();});
     await act(async () => {
       await Promise.resolve();
     });
@@ -1639,7 +1732,8 @@ describe('CircleDetailScreen reference redesign', () => {
     act(() => {
       reviewButton.props.onPress();
     });
-    pressAlertButton('Review join request', 'Deny');
+    act(() => {tree.root.findByProps({accessibilityLabel: "Deny Jordan's join request"}).props.onPress();});
+    pressAlertButton('Deny join request?', 'Deny');
     await act(async () => {
       await Promise.resolve();
     });
@@ -1649,6 +1743,37 @@ describe('CircleDetailScreen reference redesign', () => {
       circleId: 'circle-1',
       requesterId: 'requester-1',
     });
+  });
+
+  it('opens review from the banner and consumes the navigation intent once', () => {
+    mockMemberDetail = detail({viewerRole: 'owner'});
+    const {tree, navigation} = renderScreen(undefined, true);
+    expect(navigation.setParams).toHaveBeenCalledWith({reviewJoinRequests: undefined});
+    expect(tree.root.findByProps({accessibilityLabel: 'Close join requests'})).toBeTruthy();
+    act(() => {tree.root.findByProps({accessibilityLabel: 'Close join requests'}).props.onPress();});
+    expect(tree.root.findAllByProps({accessibilityLabel: 'Close join requests'})).toHaveLength(0);
+    act(() => {tree.root.findByProps({accessibilityLabel: 'Review 1 join request'}).props.onPress();});
+    expect(tree.root.findByProps({accessibilityLabel: 'Close join requests'})).toBeTruthy();
+    expect(navigation.setParams).toHaveBeenCalledTimes(1);
+  });
+
+  it('waits for authoritative owner data before opening the requested review', () => {
+    let receive!: (value?: CircleDetailModel) => void;
+    jest.mocked(subscribeToMemberCircleDetail).mockImplementationOnce(options => {
+      receive = options.onDetail;
+      return jest.fn();
+    });
+    const {tree, navigation} = renderScreen(undefined, true);
+    expect(navigation.setParams).not.toHaveBeenCalled();
+    act(() => {receive(detail({viewerRole: 'owner'}));});
+    expect(tree.root.findByProps({accessibilityLabel: 'Close join requests'})).toBeTruthy();
+    expect(navigation.setParams).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not open requested review for a non-owner', () => {
+    const {tree, navigation} = renderScreen(undefined, true);
+    expect(navigation.setParams).toHaveBeenCalledTimes(1);
+    expect(tree.root.findAllByProps({accessibilityLabel: 'Close join requests'})).toHaveLength(0);
   });
 
   it('shows the Nudge all row only when targets exist', async () => {
@@ -1695,7 +1820,7 @@ describe('CircleDetailScreen reference redesign', () => {
       output.indexOf('Nudge all'),
     );
     expect(output).not.toContain('Send a Nudge');
-    expect(output).not.toContain('Invite');
+    expect(output).toContain('Invite');
 
     act(() => {
       nudgeButton?.props.onPress();
@@ -1922,8 +2047,8 @@ describe('CircleDetailScreen reference redesign', () => {
       tree.root.findAllByProps({accessibilityLabel: 'Open Inbox'}),
     ).toHaveLength(0);
     expect(
-      tree.root.findAllByProps({accessibilityLabel: 'Invite Members'}),
-    ).toHaveLength(0);
+      tree.root.findAllByProps({accessibilityLabel: 'Invite Members'}).length,
+    ).toBeGreaterThan(0);
 
     act(() => {
       settingsButton.props.onPress();

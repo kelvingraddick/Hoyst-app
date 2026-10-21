@@ -1,3 +1,5 @@
+import {CircleJoinRequestPrompt} from '../../circles/components/CircleJoinRequestPrompt';
+import {getPendingCircleJoinRequests} from '../../circles/services/join-request-selectors';
 import {SetupResumeBanner} from '../../create-circle/components/SetupResumeBanner';
 import React, {
   useCallback,
@@ -1130,9 +1132,9 @@ export function HomeScreen(): React.JSX.Element {
                 style={styles.progressPlaceholder}
               />
             )}
-            <SetupResumeBanner navigation={rootNavigation}/>
+            <SetupResumeBanner navigation={rootNavigation} />
 
-          {isGuestHome ? (
+            {isGuestHome ? (
               <HoystText style={styles.guestProgressCopy} tone="muted">
                 Your first streak starts with one Tap In.
               </HoystText>
@@ -1362,6 +1364,24 @@ export function HomeScreen(): React.JSX.Element {
               homeData.hasResolvedGreetingContext ? (
                 <HomeCommitmentStack
                   cards={commitmentStackCircles}
+                  renderBelowCard={circle => {
+                    const requests = getPendingCircleJoinRequests(circle);
+                    return requests.length > 0 ? (
+                      <View style={styles.joinRequestRow}>
+                        <CircleJoinRequestPrompt
+                          requests={requests}
+                          circleTitle={circle.title}
+                          variant="home"
+                          onPress={() =>
+                            rootNavigation?.navigate('CircleDetail', {
+                              circleId: circle.id,
+                              reviewJoinRequests: true,
+                            })
+                          }
+                        />
+                      </View>
+                    ) : null;
+                  }}
                   focusedCardId={focusedCommitmentId}
                   isNudged={circleId =>
                     Boolean(
@@ -1387,7 +1407,8 @@ export function HomeScreen(): React.JSX.Element {
               ) : !showAuthenticatedEmptyState &&
                 homeData.hasResolvedGreetingContext &&
                 !isLoadingHomeData &&
-                !hasHomeDataError ? (
+                !hasHomeDataError &&
+                dailyProgress.remainingJoinRequests === 0 ? (
                 <GlassPanel style={[styles.emptyPanel, homeCardLiftStyle]}>
                   <SectionHeader
                     description="No Tap In or Nudge needs your attention today."
@@ -1565,6 +1586,7 @@ export function HomeScreen(): React.JSX.Element {
 }
 
 const styles = StyleSheet.create({
+  joinRequestRow: {marginVertical: 12},
   hidden: {display: 'none'},
   secondaryCopy: homeTypography.secondary,
   progressPlaceholder: {

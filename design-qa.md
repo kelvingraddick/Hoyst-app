@@ -337,3 +337,65 @@ Typography follow-up: replaced the cards' separate HoystText font overrides with
 Latest check limitation: full app typecheck reports three errors in the separate in-progress Tap In edits: possibly undefined completionState in TapInCompleteScreen, and an argument/state typing pair in TapInComposerScreen. No diagnostic points to CircleProgressPanel. Those files were already modified before this typography follow-up and were left untouched.
 
 final result: passed
+
+
+---
+
+# Circle Detail invite controls
+
+**final result: passed for the scoped invite controls**
+
+## Visual target and scope
+
+- Approved references: [light](docs/circle-invite-controls/evidence/approved-light.png) and [dark](docs/circle-invite-controls/evidence/approved-dark.png), each 853 × 1844 pixels, representing approximately 390 × 844 logical points.
+- Active group Circle member, Work category, October 21, daily goal, all three Invite controls. The header icon sits immediately left of Settings, the labeled button uses the category filled-button palette, and the existing avatar shortcut stays neutral. Tap In remains primary.
+- Surrounding production content is preserved. The reference's simplified progress cards, orange Member label, blue Today ring, and sample avatar initials are incidental mock differences, not changes requested for this implementation.
+
+## Evidence and normalization
+
+- iOS 26.5, isolated iPhone 17 Pro simulator: [light](docs/circle-invite-controls/evidence/ios-light.png), [dark](docs/circle-invite-controls/evidence/ios-dark.png), 1206 × 2622 pixels, 402 × 874 logical points at 3×.
+- Android Pixel 10 emulator: [light](docs/circle-invite-controls/evidence/android-light.png), [dark](docs/circle-invite-controls/evidence/android-dark.png), 1080 × 2424 pixels at 420 dpi, approximately 411 logical points wide.
+- Full-screen comparisons: [light](docs/circle-invite-controls/evidence/comparison-full-light.png), [dark](docs/circle-invite-controls/evidence/comparison-full-dark.png). Each source is proportionally resized to 390 pixels wide without vertical stretching. Native status/safe areas remain visible, so full-page vertical coordinates intentionally differ.
+- Focused comparisons: [light controls](docs/circle-invite-controls/evidence/comparison-controls-light.png), [dark controls](docs/circle-invite-controls/evidence/comparison-controls-dark.png). Header and member regions are cropped from the same width-normalized images and placed beside the approved source. Full-screen and focused artifacts were opened and reviewed together.
+- Narrow/larger text: [iOS header](docs/circle-invite-controls/evidence/ios-large-text-header.png), [iOS members](docs/circle-invite-controls/evidence/ios-large-text-members.png), using a 360-point content container and accessibility-medium text. [Android header](docs/circle-invite-controls/evidence/android-large-text-header.png), [Android members](docs/circle-invite-controls/evidence/android-large-text-members.png), using 480 dpi for a 360-dp viewport and font scale 1.3. The Invite label, icon and fill remain intact. Circle members wraps on iOS without overlapping the button. Existing member status captions ellipsize at iOS accessibility size; that unchanged strip behavior is outside this invite-control change.
+- Native iOS [share-sheet evidence](docs/circle-invite-controls/evidence/ios-share-sheet.png) uses the dummy message “Hoyst Circle invitation preview.” The sheet was opened and dismissed without selecting a recipient or sending anything. The isolated fixture neither reads nor writes an account or awards sharing credit.
+
+## Findings and corrections
+
+No unresolved P0/P1/P2 findings in the scoped invite controls.
+
+1. Initial native verification was blocked by an older installed Release bundle that threw a missing DesignSystemProvider error in AcquisitionQuestion. The current owning source already supplied that provider. Installing the fresh Debug build resolved launch without changing that unrelated screen.
+2. Native rendering then exposed a P1 issue in the new heading button: the Pressable callback style did not produce its intended background or horizontal layout through the native styling setup. [Before evidence](docs/circle-invite-controls/evidence/ios-before-style-fix.png) records this control failure in a different fixture state. Replaced the callback style with a static style array and explicit press state. Post-fix light, dark and larger-text captures on both platforms show the category pill, aligned icon and label, and preserved touch target.
+3. The final full and focused comparisons confirm the requested placement and hierarchy. Header controls have separate 44-point targets and the heading pill has a minimum 44-point height. The filled pill uses existing category tokens with white text in light mode and canvas-colored text in dark mode. Work is blue/cyan; no new purple Invite treatment was added.
+
+## Fidelity surfaces
+
+- Typography: existing HoystText/native system fonts; 14-point semibold Invite label with scalable text. iOS and Android retain their native font differences. Larger text expands the pill and wraps the heading without collision.
+- Layout: neutral header UserPlus before Settings, symmetric header slots keep Circle centered, dedicated heading action outside the member scroller, and original avatar Invite retained. The Circle identity can wrap below the toolbar without displacing the header controls.
+- Colors: category foreground supplies the filled background, matching the existing category button convention. Tests cover category palettes, both themes and appearance overrides. The existing avatar remains neutral.
+- Assets: existing Lucide UserPlus and native brand assets remain sharp; no generated raster mock is embedded in the app.
+- Copy: visual label Invite; accessibility label Invite Members. Existing production screen copy and action priorities are retained.
+
+## Functional verification
+
+- 83 focused Jest tests pass across Circle Detail, member strip, invite eligibility and share completion.
+- All three production entry points use the existing share handler and correct invitation payload for owners, admins and active regular members across public, private and link-only Circles.
+- Pending members, nonmembers, archived Circles, personal Commitments and missing links exclude all Invite controls. Link resets and join approval policy are unchanged.
+- TypeScript checking and scoped diff checks pass. Targeted lint has zero errors, with existing curly-brace and preview inline-style warnings.
+- Native visual checks pass on iOS and Android in light/dark mode and the narrow/larger-text conditions above. iOS native sharing was exercised with a dummy preview payload. Android recipient-sheet interaction, physical devices and TestFlight were not tested; Android production callbacks/payloads are covered by the shared Jest tests.
+- Temporary Metro/HMR proxy errors during fixture refresh were confined to the local isolated harness; valid evidence was captured after cold launches. No new app fatal error was found in the final Android runtime log.
+
+## Implementation checklist
+
+- [x] Header Invite icon immediately left of Settings.
+- [x] Category-filled Invite button next to Circle members.
+- [x] Original neutral avatar shortcut preserved.
+- [x] Existing eligibility and native sharing handler retained for all three controls.
+- [x] Focused tests, TypeScript, lint and diff checks.
+- [x] Current iOS/Android light/dark screenshots and full/focused comparisons.
+- [x] Narrow screens and larger text checked on both platforms.
+- [x] iOS native preview sharing opened and dismissed without sending.
+
+Temporary preview routing and device text/density overrides were restored after capture. No production deployment or mobile distribution was performed for this UI change. Existing unrelated checkout work is preserved.
+
+final result: passed for the scoped invite controls

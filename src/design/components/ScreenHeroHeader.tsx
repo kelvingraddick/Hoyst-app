@@ -22,10 +22,12 @@ export function HeroIconButton({
   accessibilityLabel,
   children,
   onPress,
+  testID,
 }: {
   accessibilityLabel: string;
   children: React.ReactNode;
   onPress: () => void;
+  testID?: string;
 }): React.JSX.Element {
   const theme = useHoystTheme();
 
@@ -35,6 +37,7 @@ export function HeroIconButton({
       accessibilityRole="button"
       hitSlop={6}
       onPress={onPress}
+      testID={testID}
       style={({pressed}) => [
         styles.iconButton,
         {

@@ -140,7 +140,7 @@ export function DesignSystemDevHost() {
   }
   if (circleProgressMode) {
     const {CircleProgressPreview} = require('../../features/circles/components/CircleProgressPreview');
-    return <View accessibilityViewIsModal style={{position: 'absolute', top: 0, right: 0, bottom: 0, left: 0}}><CircleProgressPreview mode={circleProgressMode} onClose={() => setCircleProgressMode(undefined)} /></View>;
+    return <View accessibilityViewIsModal style={{position: 'absolute', top: 0, right: 0, bottom: 0, left: 0}}><SafeAreaProvider initialMetrics={initialWindowMetrics}><CircleProgressPreview mode={circleProgressMode} onClose={() => setCircleProgressMode(undefined)} /></SafeAreaProvider></View>;
   }
   if (profileMode) {
     const {GestureHandlerRootView} = require('react-native-gesture-handler');

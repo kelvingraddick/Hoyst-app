@@ -1,3 +1,4 @@
+import {trackEventOnce} from '../../../lib/analytics';
 import {useEffect, useRef} from 'react';
 import {type NavigationContainerRef} from '@react-navigation/native';
 import {AppState, Linking, NativeModules, Settings} from 'react-native';
@@ -114,6 +115,11 @@ export function CircleInviteCoordinator({
 
       const code = parseCircleInviteUrl(url);
       if (code) {
+        void trackEventOnce(
+          'invite_opened',
+          {},
+          `invite:${code}:${Date.now() - (Date.now() % 1800000)}`,
+        );
         setInviteCode(code);
       }
     };
@@ -169,6 +175,11 @@ export function CircleInviteCoordinator({
     const code = parseCircleInviteUrl(queuedUrlRef.current);
     queuedUrlRef.current = undefined;
     if (code) {
+      void trackEventOnce(
+        'invite_opened',
+        {},
+        `invite:${code}:${Date.now() - (Date.now() % 1800000)}`,
+      );
       setInviteCode(code);
     }
   }, [hasHydrated, setInviteCode]);

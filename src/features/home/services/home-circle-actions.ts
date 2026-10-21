@@ -1,4 +1,5 @@
 import type {CircleManagementCard} from '../../../types/models';
+import {canShareCircleInvite} from '../../circle-invites/services/invite-eligibility';
 
 export type HomeCircleActionVariant = 'check_in' | 'nudge' | 'share' | 'view';
 
@@ -33,12 +34,6 @@ export function canTapInToday(circle: TapInTodayInput) {
 export function getHomeCircleActionVariant(
   circle: CircleManagementCard,
 ): HomeCircleActionVariant {
-  const canShareInvite = Boolean(
-    circle.lifecycleStatus !== 'archived' &&
-    circle.inviteUrl &&
-      (circle.viewerRole === 'owner' || circle.viewerRole === 'admin'),
-  );
-
   if (circle.viewerMembershipStatus === 'pending') {
     return 'view';
   }
@@ -55,7 +50,7 @@ export function getHomeCircleActionVariant(
     return 'nudge';
   }
 
-  if (canShareInvite) {
+  if (canShareCircleInvite(circle)) {
     return 'share';
   }
 

@@ -41,6 +41,7 @@ type Props = {
   onActionPress: (card: CircleManagementCard) => void;
   onFocusCard: (circleId: string) => void;
   onViewDetails: (circleId: string) => void;
+  renderBelowCard?: (card: CircleManagementCard) => React.ReactNode;
 };
 
 function statusCopy(card: CircleManagementCard) {
@@ -182,6 +183,7 @@ export function HomeCommitmentStack({
   onActionPress,
   onFocusCard,
   onViewDetails,
+  renderBelowCard,
 }: Props) {
   const theme = useHoystTheme();
   const {fontScale} = useWindowDimensions();
@@ -209,152 +211,160 @@ export function HomeCommitmentStack({
         const goal = getCommitmentGoalPresentation(card);
         if (isFocused) {
           return (
-            <TouchableWithoutFeedback
-              key={card.id}
-              accessible={false}
-              onPress={() => onViewDetails(card.id)}>
-              <View
-                style={[
-                  styles.focused,
-                  {
-                    shadowColor: focusedShadowColor,
-                    backgroundColor: theme.isDark
-                      ? `${visual.accentColor}20`
-                      : visual.backplateColor,
-                  },
-                ]}
-                testID={`home-commitment-focused-${card.id}`}>
+            <React.Fragment key={card.id}>
+              <TouchableWithoutFeedback
+                accessible={false}
+                onPress={() => onViewDetails(card.id)}>
                 <View
-                  pointerEvents="none"
-                  style={styles.detailArrow}
-                  testID={`home-commitment-detail-arrow-${card.id}`}>
-                  <ArrowUpRight color={theme.textMuted} size={18} />
-                </View>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={`View details for ${card.title}`}
-                  onPress={event => {
-                    event?.stopPropagation();
-                    onViewDetails(card.id);
-                  }}
-                  style={styles.titleRow}
-                  testID={`home-commitment-details-${card.id}`}>
-                  <CircleCategoryIcon
-                    category={card.category}
-                    appearance={card.appearance}
-                    showBackplate={false}
-                    size={HOME_ROW_ICON_SIZE}
-                  />
-                  <View style={styles.copy}>
-                    <HoystText style={styles.title}>{card.title}</HoystText>
-                    <HoystText style={[styles.category, {color}]}>
-                      {visual.label.toUpperCase()}
-                    </HoystText>
+                  style={[
+                    styles.focused,
+                    {
+                      shadowColor: focusedShadowColor,
+                      backgroundColor: theme.isDark
+                        ? `${visual.accentColor}20`
+                        : visual.backplateColor,
+                    },
+                  ]}
+                  testID={`home-commitment-focused-${card.id}`}>
+                  <View
+                    pointerEvents="none"
+                    style={styles.detailArrow}
+                    testID={`home-commitment-detail-arrow-${card.id}`}>
+                    <ArrowUpRight color={theme.textMuted} size={18} />
                   </View>
-                </Pressable>
-                <View style={styles.descriptionGroup}>
-                  <HoystText style={styles.description} tone="muted">
-                    {card.commitment}
-                  </HoystText>
-                  {goal ? (
-                    <View
-                      style={styles.goalLine}
-                      testID={`home-commitment-goal-${card.id}`}>
-                      <Target
-                        accessible={false}
-                        color={theme.textMuted}
-                        size={14}
-                        strokeWidth={2.2}
-                        style={styles.goalIcon}
-                      />
-                      <HoystText
-                        style={[styles.meta, styles.goalText]}
-                        tone="muted">
-                        {goal.label}
-                      </HoystText>
-                      <HoystText
-                        style={[styles.meta, styles.goalText]}
-                        tone="muted">
-                        {goal.label === 'Goal' ? ': ' : ' · '}
-                      </HoystText>
-                      <HoystText
-                        style={[styles.meta, styles.goalText, styles.goalValue]}
-                        tone="muted">
-                        {goal.value}
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={`View details for ${card.title}`}
+                    onPress={event => {
+                      event?.stopPropagation();
+                      onViewDetails(card.id);
+                    }}
+                    style={styles.titleRow}
+                    testID={`home-commitment-details-${card.id}`}>
+                    <CircleCategoryIcon
+                      category={card.category}
+                      appearance={card.appearance}
+                      showBackplate={false}
+                      size={HOME_ROW_ICON_SIZE}
+                    />
+                    <View style={styles.copy}>
+                      <HoystText style={styles.title}>{card.title}</HoystText>
+                      <HoystText style={[styles.category, {color}]}>
+                        {visual.label.toUpperCase()}
                       </HoystText>
                     </View>
-                  ) : null}
+                  </Pressable>
+                  <View style={styles.descriptionGroup}>
+                    <HoystText style={styles.description} tone="muted">
+                      {card.commitment}
+                    </HoystText>
+                    {goal ? (
+                      <View
+                        style={styles.goalLine}
+                        testID={`home-commitment-goal-${card.id}`}>
+                        <Target
+                          accessible={false}
+                          color={theme.textMuted}
+                          size={14}
+                          strokeWidth={2.2}
+                          style={styles.goalIcon}
+                        />
+                        <HoystText
+                          style={[styles.meta, styles.goalText]}
+                          tone="muted">
+                          {goal.label}
+                        </HoystText>
+                        <HoystText
+                          style={[styles.meta, styles.goalText]}
+                          tone="muted">
+                          {goal.label === 'Goal' ? ': ' : ' · '}
+                        </HoystText>
+                        <HoystText
+                          style={[
+                            styles.meta,
+                            styles.goalText,
+                            styles.goalValue,
+                          ]}
+                          tone="muted">
+                          {goal.value}
+                        </HoystText>
+                      </View>
+                    ) : null}
+                  </View>
+                  {!actionable && (
+                    <HoystText style={styles.meta} tone="muted">
+                      {statusCopy(card)}
+                    </HoystText>
+                  )}
+                  <CircleCardStreaks circle={card} />
+                  <View style={styles.footer}>
+                    <Members card={card} />
+                    <Action
+                      card={card}
+                      prominent
+                      busy={isNudging(card.id)}
+                      onPress={() => onActionPress(card)}
+                    />
+                  </View>
                 </View>
-                {!actionable && (
-                  <HoystText style={styles.meta} tone="muted">
+              </TouchableWithoutFeedback>
+              {renderBelowCard?.(card)}
+            </React.Fragment>
+          );
+        }
+        return (
+          <React.Fragment key={card.id}>
+            <View
+              style={[
+                styles.row,
+                largeType && styles.largeRow,
+                {borderBottomColor: theme.border},
+              ]}
+              testID={`home-commitment-collapsed-surface-${card.id}`}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`Expand ${card.title}. ${statusCopy(card)}`}
+                accessibilityState={{expanded: false}}
+                onPress={() => onFocusCard(card.id)}
+                style={[styles.rowContent, largeType && styles.largeContent]}
+                testID={`home-commitment-collapsed-${card.id}`}>
+                <CircleCategoryIcon
+                  category={card.category}
+                  appearance={card.appearance}
+                  size={HOME_ROW_ICON_SIZE}
+                />
+                <View style={styles.copy}>
+                  <HoystText style={styles.title}>{card.title}</HoystText>
+                  <HoystText
+                    style={[
+                      styles.meta,
+                      {color: actionable ? color : theme.textMuted},
+                    ]}>
                     {statusCopy(card)}
                   </HoystText>
-                )}
-                <CircleCardStreaks circle={card} />
-                <View style={styles.footer}>
-                  <Members card={card} />
+                </View>
+              </Pressable>
+              {actionable && (
+                <View style={largeType && styles.largeAction}>
                   <Action
                     card={card}
-                    prominent
                     busy={isNudging(card.id)}
                     onPress={() => onActionPress(card)}
                   />
                 </View>
-              </View>
-            </TouchableWithoutFeedback>
-          );
-        }
-        return (
-          <View
-            key={card.id}
-            style={[
-              styles.row,
-              largeType && styles.largeRow,
-              {borderBottomColor: theme.border},
-            ]}
-            testID={`home-commitment-collapsed-surface-${card.id}`}>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={`Expand ${card.title}. ${statusCopy(card)}`}
-              accessibilityState={{expanded: false}}
-              onPress={() => onFocusCard(card.id)}
-              style={[styles.rowContent, largeType && styles.largeContent]}
-              testID={`home-commitment-collapsed-${card.id}`}>
-              <CircleCategoryIcon
-                category={card.category}
-                appearance={card.appearance}
-                size={HOME_ROW_ICON_SIZE}
-              />
-              <View style={styles.copy}>
-                <HoystText style={styles.title}>{card.title}</HoystText>
-                <HoystText
-                  style={[
-                    styles.meta,
-                    {color: actionable ? color : theme.textMuted},
-                  ]}>
-                  {statusCopy(card)}
-                </HoystText>
-              </View>
-            </Pressable>
-            {actionable && (
-              <View style={largeType && styles.largeAction}>
-                <Action
-                  card={card}
-                  busy={isNudging(card.id)}
-                  onPress={() => onActionPress(card)}
-                />
-              </View>
-            )}
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={`Expand ${card.title}`}
-              accessibilityState={{expanded: false}}
-              onPress={() => onFocusCard(card.id)}
-              style={[styles.chevron, largeType && styles.largeChevron]}
-              testID={`home-commitment-expand-${card.id}`}>
-              <ChevronRight size={18} color={theme.textMuted} />
-            </Pressable>
-          </View>
+              )}
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`Expand ${card.title}`}
+                accessibilityState={{expanded: false}}
+                onPress={() => onFocusCard(card.id)}
+                style={[styles.chevron, largeType && styles.largeChevron]}
+                testID={`home-commitment-expand-${card.id}`}>
+                <ChevronRight size={18} color={theme.textMuted} />
+              </Pressable>
+            </View>
+            {renderBelowCard?.(card)}
+          </React.Fragment>
         );
       })}
     </View>

@@ -258,9 +258,7 @@ export const completeProgressTask = onCall(async request => {
       member.data()?.status !== 'active' ||
       getCircleMode(circle.data()) !== 'group' ||
       getCircleLifecycleStatus(circle.data()) !== 'active' ||
-      !circle.data()?.inviteCode ||
-      (!['owner', 'admin'].includes(member.data()?.role) &&
-        circle.data()?.ownerId !== uid)
+      !circle.data()?.inviteCode
     ) {
       throw new HttpsError(
         'permission-denied',

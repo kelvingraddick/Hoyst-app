@@ -1,3 +1,4 @@
+import {trackEvent, trackEventOnce} from '../../../lib/analytics';
 import type {CommitmentAppearance} from '../../../shared/commitment-appearance';
 import {getFirebaseApp} from '../../../lib/firebase/app';
 import {firebaseAuth} from '../../../lib/firebase/auth';
@@ -53,7 +54,13 @@ export type ConvertPersonalCircleInput = {
 export async function createCircle(input: CreateCircleInput) {
   const callable = firebaseFunctions().httpsCallable('createCircle');
   const result = await callable(input);
-  return result.data as {circleId: string; inviteCode?: string};
+  const created = result.data as {circleId: string; inviteCode?: string};
+  void trackEventOnce(
+    'commitment_created',
+    {mode: input.circleMode ?? 'group', cadence: input.commitmentCadence},
+    `create:${firebaseAuth().currentUser?.uid}:${created.circleId}`,
+  );
+  return created;
 }
 
 export async function updateCircle(input: UpdateCircleInput) {
@@ -109,7 +116,13 @@ export async function convertPersonalCircle(input: ConvertPersonalCircleInput) {
 export async function joinCircle(circleId: string, inviteCode?: string) {
   const callable = firebaseFunctions().httpsCallable('joinCircle');
   const result = await callable({circleId, inviteCode});
-  return result.data as {status: 'active' | 'pending'};
+  const joined = result.data as {status: 'active' | 'pending'};
+  void trackEventOnce(
+    joined.status === 'active' ? 'circle_joined' : 'circle_join_requested',
+    {mode: 'group'},
+    `join:${firebaseAuth().currentUser?.uid}:${circleId}:${joined.status}`,
+  );
+  return joined;
 }
 
 export async function reviewJoinRequest({
@@ -123,7 +136,9 @@ export async function reviewJoinRequest({
 }) {
   const callable = firebaseFunctions().httpsCallable('reviewJoinRequest');
   const result = await callable({approved, circleId, requesterId});
-  return result.data as {status: 'approved' | 'declined'};
+  const reviewed = result.data as {status: 'approved' | 'declined'};
+  trackEvent('circle_join_reviewed', {outcome: reviewed.status});
+  return reviewed;
 }
 
 export async function nudgeCircleMembers(circleId: string, targetUid?: string) {

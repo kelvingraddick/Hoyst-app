@@ -17,6 +17,9 @@ importers:
       '@react-native-async-storage/async-storage':
         specifier: ^2.2.0
         version: 2.2.0(react-native@0.78.3(@babel/core@7.29.7(supports-color@8.1.1))(@babel/preset-env@7.29.7(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@react-native-community/cli@15.0.1(supports-color@8.1.1)(typescript@5.9.3))(@types/react@19.2.18)(react@19.0.0)(supports-color@8.1.1))
+      '@react-native-clipboard/clipboard':
+        specifier: 1.16.3
+        version: 1.16.3(react-native@0.78.3(@babel/core@7.29.7(supports-color@8.1.1))(@babel/preset-env@7.29.7(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@react-native-community/cli@15.0.1(supports-color@8.1.1)(typescript@5.9.3))(@types/react@19.2.18)(react@19.0.0)(supports-color@8.1.1))(react@19.0.0)
       '@react-native-community/blur':
         specifier: ^4.4.1
         version: 4.4.1(react-native@0.78.3(@babel/core@7.29.7(supports-color@8.1.1))(@babel/preset-env@7.29.7(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@react-native-community/cli@15.0.1(supports-color@8.1.1)(typescript@5.9.3))(@types/react@19.2.18)(react@19.0.0)(supports-color@8.1.1))(react@19.0.0)
@@ -62,6 +65,9 @@ importers:
       nativewind:
         specifier: ^4.1.23
         version: 4.2.6(a30ab1f1474b87a8d49f8aca407cdf7c)
+      posthog-react-native:
+        specifier: 4.81.5
+        version: 4.81.5(0a44a47bbc17b3c3ddbc8151e6f28d3c)
       react:
         specifier: 19.0.0
         version: 19.0.0
@@ -74,6 +80,9 @@ importers:
       react-native-config:
         specifier: 1.5.5
         version: 1.5.5
+      react-native-device-info:
+        specifier: 14.1.1
+        version: 14.1.1(react-native@0.78.3(@babel/core@7.29.7(supports-color@8.1.1))(@babel/preset-env@7.29.7(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@react-native-community/cli@15.0.1(supports-color@8.1.1)(typescript@5.9.3))(@types/react@19.2.18)(react@19.0.0)(supports-color@8.1.1))
       react-native-gesture-handler:
         specifier: 2.25.0
         version: 2.25.0(react-native@0.78.3(@babel/core@7.29.7(supports-color@8.1.1))(@babel/preset-env@7.29.7(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@react-native-community/cli@15.0.1(supports-color@8.1.1)(typescript@5.9.3))(@types/react@19.2.18)(react@19.0.0)(supports-color@8.1.1))(react@19.0.0)
@@ -86,6 +95,9 @@ importers:
       react-native-linear-gradient:
         specifier: ^2.8.3
         version: 2.8.3(react-native@0.78.3(@babel/core@7.29.7(supports-color@8.1.1))(@babel/preset-env@7.29.7(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@react-native-community/cli@15.0.1(supports-color@8.1.1)(typescript@5.9.3))(@types/react@19.2.18)(react@19.0.0)(supports-color@8.1.1))(react@19.0.0)
+      react-native-localize:
+        specifier: 3.6.0
+        version: 3.6.0(react-native@0.78.3(@babel/core@7.29.7(supports-color@8.1.1))(@babel/preset-env@7.29.7(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@react-native-community/cli@15.0.1(supports-color@8.1.1)(typescript@5.9.3))(@types/react@19.2.18)(react@19.0.0)(supports-color@8.1.1))(react@19.0.0)
       react-native-onesignal:
         specifier: 5.2.12
         version: 5.2.12
@@ -1766,6 +1778,12 @@ packages:
     resolution: {integrity: sha512-//0sR/cow/s4ICQaYoAobOl4aU8cjU6x/V24V7XkKotb9+O+3zySIYp146vpaobYHnxa4pZX8NkV54Z5AwbDKA==}
     engines: {node: '>=12'}
 
+  '@posthog/core@1.59.1':
+    resolution: {integrity: sha512-P39YgzQVDh6oz6wAzQXEnoHgTYpM7gifonmVKq1scAJco79h31XmmNVurRq9tTmmyIrr1uX8FHT0riCsyfV9AQ==}
+
+  '@posthog/types@1.416.0':
+    resolution: {integrity: sha512-0/9+02s/0uDyrH4G/qUg1yyl6gXUg8Uuxw/PlDad3KLzo9FFS9zS/kAQaEshx/saVGupj1aAy/4EUBxWisBogw==}
+
   '@protobufjs/aspromise@1.1.2':
     resolution: {integrity: sha512-j+gKExEuLmKwvz3OgROXtrJ2UG2x8Ch2YZUxahh+s1F2HZ+wAceUNLkvy6zKCPVRkU++ZWQrdxsUeQXmcg4uoQ==}
 
@@ -1797,6 +1815,19 @@ packages:
     resolution: {integrity: sha512-gvRvjR5JAaUZF8tv2Kcq/Gbt3JHwbKFYfmb445rhOj6NUMx3qPLixmDx5pZAyb9at1bYvJ4/eTUipU5aki45xw==}
     peerDependencies:
       react-native: ^0.0.0-0 || >=0.65 <1.0
+
+  '@react-native-clipboard/clipboard@1.16.3':
+    resolution: {integrity: sha512-cMIcvoZKIrShzJHEaHbTAp458R9WOv0fB6UyC7Ek4Qk561Ow/DrzmmJmH/rAZg21Z6ixJ4YSdFDC14crqIBmCQ==}
+    peerDependencies:
+      react: '>= 16.9.0'
+      react-native: '>= 0.61.5'
+      react-native-macos: '>= 0.61.0'
+      react-native-windows: '>= 0.61.0'
+    peerDependenciesMeta:
+      react-native-macos:
+        optional: true
+      react-native-windows:
+        optional: true
 
   '@react-native-community/blur@4.4.1':
     resolution: {integrity: sha512-XBSsRiYxE/MOEln2ayunShfJtWztHwUxLFcSL20o+HNNRnuUDv+GXkF6FmM2zE8ZUfrnhQ/zeTqvnuDPGw6O8A==}
@@ -5395,6 +5426,54 @@ packages:
     resolution: {integrity: sha512-9ZhXKM/rw350N1ovuWHbGxnGh/SNJ4cnxHiM0rxE4VN41wsg8P8zWn9hv/buK00RP4WvlOyr/RBDiptyxVbkZQ==}
     engines: {node: '>=0.10.0'}
 
+  posthog-react-native@4.81.5:
+    resolution: {integrity: sha512-ryghqzkj2OCcc9ZMw3lMaDsZPRQOIfOB4dpWr+6PBhdb1uzDXMJXYynh5L+KpWvPqhou/0hXDSQBwV0bC13V7Q==}
+    hasBin: true
+    peerDependencies:
+      '@posthog/react-native-plugin': '>= 2.9.3'
+      '@react-native-async-storage/async-storage': '>=1.0.0'
+      '@react-navigation/native': '>= 5.0.0'
+      expo-application: '>= 4.0.0'
+      expo-device: '>= 4.0.0'
+      expo-file-system: '>= 13.0.0'
+      expo-localization: '>= 11.0.0'
+      expo-updates: '>= 0.25.0'
+      posthog-react-native-session-replay: '>= 1.6.0'
+      react-native-device-info: '>= 10.0.0'
+      react-native-localize: '>= 3.0.0'
+      react-native-navigation: '>= 6.0.0'
+      react-native-safe-area-context: '>= 4.0.0'
+      react-native-svg: '>= 15.0.0'
+    peerDependenciesMeta:
+      '@posthog/react-native-plugin':
+        optional: true
+      '@react-native-async-storage/async-storage':
+        optional: true
+      '@react-navigation/native':
+        optional: true
+      expo-application:
+        optional: true
+      expo-device:
+        optional: true
+      expo-file-system:
+        optional: true
+      expo-localization:
+        optional: true
+      expo-updates:
+        optional: true
+      posthog-react-native-session-replay:
+        optional: true
+      react-native-device-info:
+        optional: true
+      react-native-localize:
+        optional: true
+      react-native-navigation:
+        optional: true
+      react-native-safe-area-context:
+        optional: true
+      react-native-svg:
+        optional: true
+
   prelude-ls@1.2.1:
     resolution: {integrity: sha512-vkcDPrRZo1QZLbn5RLGPpg/WmIQ65qoWWhcGKf/b5eplkkarX0m9z8ppCat4mlOqUsWpyNuYgO3VRyrYHSzX5g==}
     engines: {node: '>= 0.8.0'}
@@ -5577,6 +5656,11 @@ packages:
       react-native-svg:
         optional: true
 
+  react-native-device-info@14.1.1:
+    resolution: {integrity: sha512-lXFpe6DJmzbQXNLWxlMHP2xuTU5gwrKAvI8dCAZuERhW9eOXSubOQIesk9lIBnsi9pI19GMrcpJEvs4ARPRYmw==}
+    peerDependencies:
+      react-native: '*'
+
   react-native-gesture-handler@2.25.0:
     resolution: {integrity: sha512-NPjJi6mislXxvjxQPU9IYwBjb1Uejp8GvAbE1Lhh+xMIMEvmgAvVIp5cz1P+xAbV6uYcRRArm278+tEInGOqWg==}
     peerDependencies:
@@ -5609,6 +5693,19 @@ packages:
     peerDependencies:
       react: '*'
       react-native: '*'
+
+  react-native-localize@3.6.0:
+    resolution: {integrity: sha512-CByn67b9dPDBA7qvAx18PpXhuLqBbdTpedobGOUcjqiGuSAEXZzwas9ziMYSShAR2AvX2Cl7ePErCpj9V39Ctw==}
+    peerDependencies:
+      '@expo/config-plugins': '*'
+      react: '*'
+      react-native: '*'
+      react-native-macos: '*'
+    peerDependenciesMeta:
+      '@expo/config-plugins':
+        optional: true
+      react-native-macos:
+        optional: true
 
   react-native-onesignal@5.2.12:
     resolution: {integrity: sha512-++IzWhFwDIVvMTLuWxFEMhQ85CWXAxpg1D0IUteSQ9MJQxFBd3eFCoL/LrHxdACv2djVXSdWlpS/jIjzsAREAg==}
@@ -8782,6 +8879,12 @@ snapshots:
       '@pnpm/network.ca-file': 1.0.2
       config-chain: 1.1.13
 
+  '@posthog/core@1.59.1':
+    dependencies:
+      '@posthog/types': 1.416.0
+
+  '@posthog/types@1.416.0': {}
+
   '@protobufjs/aspromise@1.1.2': {}
 
   '@protobufjs/base64@1.1.2': {}
@@ -8805,6 +8908,11 @@ snapshots:
   '@react-native-async-storage/async-storage@2.2.0(react-native@0.78.3(@babel/core@7.29.7(supports-color@8.1.1))(@babel/preset-env@7.29.7(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@react-native-community/cli@15.0.1(supports-color@8.1.1)(typescript@5.9.3))(@types/react@19.2.18)(react@19.0.0)(supports-color@8.1.1))':
     dependencies:
       merge-options: 3.0.4
+      react-native: 0.78.3(@babel/core@7.29.7(supports-color@8.1.1))(@babel/preset-env@7.29.7(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@react-native-community/cli@15.0.1(supports-color@8.1.1)(typescript@5.9.3))(@types/react@19.2.18)(react@19.0.0)(supports-color@8.1.1)
+
+  '@react-native-clipboard/clipboard@1.16.3(react-native@0.78.3(@babel/core@7.29.7(supports-color@8.1.1))(@babel/preset-env@7.29.7(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@react-native-community/cli@15.0.1(supports-color@8.1.1)(typescript@5.9.3))(@types/react@19.2.18)(react@19.0.0)(supports-color@8.1.1))(react@19.0.0)':
+    dependencies:
+      react: 19.0.0
       react-native: 0.78.3(@babel/core@7.29.7(supports-color@8.1.1))(@babel/preset-env@7.29.7(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@react-native-community/cli@15.0.1(supports-color@8.1.1)(typescript@5.9.3))(@types/react@19.2.18)(react@19.0.0)(supports-color@8.1.1)
 
   '@react-native-community/blur@4.4.1(react-native@0.78.3(@babel/core@7.29.7(supports-color@8.1.1))(@babel/preset-env@7.29.7(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@react-native-community/cli@15.0.1(supports-color@8.1.1)(typescript@5.9.3))(@types/react@19.2.18)(react@19.0.0)(supports-color@8.1.1))(react@19.0.0)':
@@ -12771,7 +12879,7 @@ snapshots:
       '@babel/types': 7.29.8
       flow-enums-runtime: 0.0.6
       invariant: 2.2.4
-      metro-symbolicate: 0.81.5(supports-color@8.1.1)
+      metro-symbolicate: 0.81.5
       nullthrows: 1.1.1
       ob1: 0.81.5
       source-map: 0.5.7
@@ -12779,7 +12887,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  metro-symbolicate@0.81.5(supports-color@8.1.1):
+  metro-symbolicate@0.81.5:
     dependencies:
       flow-enums-runtime: 0.0.6
       invariant: 2.2.4
@@ -12787,8 +12895,6 @@ snapshots:
       nullthrows: 1.1.1
       source-map: 0.5.7
       vlq: 1.0.1
-    transitivePeerDependencies:
-      - supports-color
 
   metro-transform-plugins@0.81.5(supports-color@8.1.1):
     dependencies:
@@ -12853,7 +12959,7 @@ snapshots:
       metro-resolver: 0.81.5
       metro-runtime: 0.81.5
       metro-source-map: 0.81.5(supports-color@8.1.1)
-      metro-symbolicate: 0.81.5(supports-color@8.1.1)
+      metro-symbolicate: 0.81.5
       metro-transform-plugins: 0.81.5(supports-color@8.1.1)
       metro-transform-worker: 0.81.5(supports-color@8.1.1)
       mime-types: 2.1.35
@@ -13372,6 +13478,18 @@ snapshots:
     dependencies:
       xtend: 4.0.2
 
+  posthog-react-native@4.81.5(0a44a47bbc17b3c3ddbc8151e6f28d3c):
+    dependencies:
+      '@posthog/core': 1.59.1
+      '@posthog/types': 1.416.0
+    optionalDependencies:
+      '@react-native-async-storage/async-storage': 2.2.0(react-native@0.78.3(@babel/core@7.29.7(supports-color@8.1.1))(@babel/preset-env@7.29.7(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@react-native-community/cli@15.0.1(supports-color@8.1.1)(typescript@5.9.3))(@types/react@19.2.18)(react@19.0.0)(supports-color@8.1.1))
+      '@react-navigation/native': 7.3.18(react-native@0.78.3(@babel/core@7.29.7(supports-color@8.1.1))(@babel/preset-env@7.29.7(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@react-native-community/cli@15.0.1(supports-color@8.1.1)(typescript@5.9.3))(@types/react@19.2.18)(react@19.0.0)(supports-color@8.1.1))(react@19.0.0)
+      react-native-device-info: 14.1.1(react-native@0.78.3(@babel/core@7.29.7(supports-color@8.1.1))(@babel/preset-env@7.29.7(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@react-native-community/cli@15.0.1(supports-color@8.1.1)(typescript@5.9.3))(@types/react@19.2.18)(react@19.0.0)(supports-color@8.1.1))
+      react-native-localize: 3.6.0(react-native@0.78.3(@babel/core@7.29.7(supports-color@8.1.1))(@babel/preset-env@7.29.7(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@react-native-community/cli@15.0.1(supports-color@8.1.1)(typescript@5.9.3))(@types/react@19.2.18)(react@19.0.0)(supports-color@8.1.1))(react@19.0.0)
+      react-native-safe-area-context: 5.4.0(react-native@0.78.3(@babel/core@7.29.7(supports-color@8.1.1))(@babel/preset-env@7.29.7(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@react-native-community/cli@15.0.1(supports-color@8.1.1)(typescript@5.9.3))(@types/react@19.2.18)(react@19.0.0)(supports-color@8.1.1))(react@19.0.0)
+      react-native-svg: 15.11.2(react-native@0.78.3(@babel/core@7.29.7(supports-color@8.1.1))(@babel/preset-env@7.29.7(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@react-native-community/cli@15.0.1(supports-color@8.1.1)(typescript@5.9.3))(@types/react@19.2.18)(react@19.0.0)(supports-color@8.1.1))(react@19.0.0)
+
   prelude-ls@1.2.1: {}
 
   prettier@2.8.8: {}
@@ -13571,6 +13689,10 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
+  react-native-device-info@14.1.1(react-native@0.78.3(@babel/core@7.29.7(supports-color@8.1.1))(@babel/preset-env@7.29.7(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@react-native-community/cli@15.0.1(supports-color@8.1.1)(typescript@5.9.3))(@types/react@19.2.18)(react@19.0.0)(supports-color@8.1.1)):
+    dependencies:
+      react-native: 0.78.3(@babel/core@7.29.7(supports-color@8.1.1))(@babel/preset-env@7.29.7(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@react-native-community/cli@15.0.1(supports-color@8.1.1)(typescript@5.9.3))(@types/react@19.2.18)(react@19.0.0)(supports-color@8.1.1)
+
   react-native-gesture-handler@2.25.0(react-native@0.78.3(@babel/core@7.29.7(supports-color@8.1.1))(@babel/preset-env@7.29.7(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@react-native-community/cli@15.0.1(supports-color@8.1.1)(typescript@5.9.3))(@types/react@19.2.18)(react@19.0.0)(supports-color@8.1.1))(react@19.0.0):
     dependencies:
       '@egjs/hammerjs': 2.0.17
@@ -13596,6 +13718,11 @@ snapshots:
       react-native: 0.78.3(@babel/core@7.29.7(supports-color@8.1.1))(@babel/preset-env@7.29.7(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@react-native-community/cli@15.0.1(supports-color@8.1.1)(typescript@5.9.3))(@types/react@19.2.18)(react@19.0.0)(supports-color@8.1.1)
 
   react-native-linear-gradient@2.8.3(react-native@0.78.3(@babel/core@7.29.7(supports-color@8.1.1))(@babel/preset-env@7.29.7(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@react-native-community/cli@15.0.1(supports-color@8.1.1)(typescript@5.9.3))(@types/react@19.2.18)(react@19.0.0)(supports-color@8.1.1))(react@19.0.0):
+    dependencies:
+      react: 19.0.0
+      react-native: 0.78.3(@babel/core@7.29.7(supports-color@8.1.1))(@babel/preset-env@7.29.7(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@react-native-community/cli@15.0.1(supports-color@8.1.1)(typescript@5.9.3))(@types/react@19.2.18)(react@19.0.0)(supports-color@8.1.1)
+
+  react-native-localize@3.6.0(react-native@0.78.3(@babel/core@7.29.7(supports-color@8.1.1))(@babel/preset-env@7.29.7(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@react-native-community/cli@15.0.1(supports-color@8.1.1)(typescript@5.9.3))(@types/react@19.2.18)(react@19.0.0)(supports-color@8.1.1))(react@19.0.0):
     dependencies:
       react: 19.0.0
       react-native: 0.78.3(@babel/core@7.29.7(supports-color@8.1.1))(@babel/preset-env@7.29.7(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@react-native-community/cli@15.0.1(supports-color@8.1.1)(typescript@5.9.3))(@types/react@19.2.18)(react@19.0.0)(supports-color@8.1.1)

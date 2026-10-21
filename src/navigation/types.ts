@@ -72,6 +72,7 @@ export type RootStackParamList = {
   CircleDetail: {
     circleId: string;
     resumeAction?: 'join';
+    reviewJoinRequests?: true;
     source?: 'notification';
   };
   PastCircle: {summary: PastCircleSummary};

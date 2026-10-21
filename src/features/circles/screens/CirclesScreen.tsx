@@ -1,5 +1,8 @@
+import {CircleJoinRequestPrompt} from '../components/CircleJoinRequestPrompt';
+import {getPendingCircleJoinRequests} from '../services/join-request-selectors';
 import {CircleCardStreaks} from '../components/CircleCardStreaks';
 import {shareCircleInvitation} from '../../progress/services/progress-service';
+import {canShareCircleInvite} from '../../circle-invites/services/invite-eligibility';
 import React, {useCallback, useEffect, useMemo, useState} from 'react';
 import {
   Alert,
@@ -87,6 +90,9 @@ function getCircleStatus(circle: CircleManagementCard): StatusFilter {
   if (circle.viewerMembershipStatus === 'pending') {
     return 'pending';
   }
+  if (getPendingCircleJoinRequests(circle).length > 0) {
+    return 'needsYou';
+  }
   if (hasViewerMetCycleGoal(circle)) {
     return 'done';
   }
@@ -122,13 +128,6 @@ function sortCircles(
     });
   }
   return sortHomeCircles([...circles]);
-}
-
-function canInvite(circle: CircleManagementCard) {
-  return Boolean(
-    circle.inviteUrl &&
-      (circle.viewerRole === 'owner' || circle.viewerRole === 'admin'),
-  );
 }
 
 function actionLabel(circle: CircleManagementCard) {
@@ -469,7 +468,7 @@ function CirclesScreenContent({navigation}: Props) {
 
   const shareCircle = useCallback(
     (circle: CircleManagementCard) => {
-      if (!canInvite(circle) || !circle.inviteUrl) {
+      if (!canShareCircleInvite(circle) || !circle.inviteUrl) {
         openCircle(circle.id);
         return;
       }
@@ -563,24 +562,42 @@ function CirclesScreenContent({navigation}: Props) {
             }
           : undefined;
       return (
-        <DSCommitmentPreview
-          action={action}
-          category={item.category}
-          appearance={item.appearance}
-          context={memberContext(item)}
-          description={item.commitment}
-          expanded
-          goal={getCommitmentGoalPresentation(item)}
-          members={memberSources(item)}
-          onDetails={() => openCircle(item.id)}
-          onExpand={() => undefined}
-          streaks={<CircleCardStreaks circle={item} />}
-          status={statusCopy(item, locallyNudged)}
-          title={item.title}
-        />
+        <View style={styles.commitmentWithRequests}>
+          <DSCommitmentPreview
+            action={action}
+            category={item.category}
+            appearance={item.appearance}
+            context={memberContext(item)}
+            description={item.commitment}
+            expanded
+            goal={getCommitmentGoalPresentation(item)}
+            members={memberSources(item)}
+            onDetails={() => openCircle(item.id)}
+            onExpand={() => undefined}
+            streaks={<CircleCardStreaks circle={item} />}
+            status={statusCopy(item, locallyNudged)}
+            title={item.title}
+          />
+          <CircleJoinRequestPrompt
+            circleTitle={item.title}
+            requests={getPendingCircleJoinRequests(item)}
+            onPress={() =>
+              navigation.navigate('CircleDetail', {
+                circleId: item.id,
+                reviewJoinRequests: true,
+              })
+            }
+          />
+        </View>
       );
     },
-    [handleCircleAction, nudgedCircleIds, nudgingCircleIds, openCircle],
+    [
+      handleCircleAction,
+      navigation,
+      nudgedCircleIds,
+      nudgingCircleIds,
+      openCircle,
+    ],
   );
 
   const selectedSortLabel =
@@ -810,6 +827,7 @@ export function CirclesScreen(props: Props): React.JSX.Element {
 }
 
 const styles = StyleSheet.create({
+  commitmentWithRequests: {gap: 12},
   screen: {flex: 1},
   listContent: {
     flexGrow: 1,

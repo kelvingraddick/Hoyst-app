@@ -90,6 +90,50 @@ describe('Home daily progress', () => {
       ]),
     ).toMatchObject({completed: 1, total: 1});
   });
+  it('counts outstanding owner reviews without replacing Tap In or Nudge or crediting completed actions', () => {
+    const owner = card({
+      viewerRole: 'owner',
+      members: [
+        {
+          id: 'a',
+          name: 'Alex',
+          initials: 'A',
+          state: 'pending',
+          membershipStatus: 'pending',
+        },
+        {
+          id: 'b',
+          name: 'Blair',
+          initials: 'B',
+          state: 'pending',
+          membershipStatus: 'pending',
+        },
+      ],
+    });
+    expect(getHomeDailyAction(owner)).toBe('tap_in');
+    expect(getHomeDailyProgress([owner])).toMatchObject({
+      completed: 0,
+      remaining: 3,
+      total: 3,
+      remainingJoinRequests: 2,
+    });
+    const tappedIn = {...owner, viewerHasTappedInToday: true};
+    expect(getHomeDailyAction(tappedIn)).toBe('nudge');
+    expect(getHomeDailyProgress([tappedIn])).toMatchObject({
+      completed: 1,
+      remaining: 3,
+    });
+    const handled = {...tappedIn, viewerHasNudgedToday: true};
+    expect(
+      getHomeDailyActionProgressLabel(getHomeDailyProgress([handled])),
+    ).toBe('2 actions needed today');
+    expect(getHomeDailyProgress([{...handled, members: []}])).toMatchObject({
+      completed: 2,
+      remaining: 0,
+      total: 2,
+    });
+  });
+
   it('has a real empty state', () =>
     expect(getHomeDailyProgress([])).toMatchObject({completed: 0, total: 0}));
   it('describes the number of actions still needed today', () => {

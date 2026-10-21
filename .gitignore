@@ -210,3 +210,6 @@ __pycache__/
 /packages/react-native/**/api/codegen
 /packages/react-native/**/.doxygen.config.*.generated
 /scripts/cxx-api/codegen
+
+# Private beta exports, project tokens and dashboard provisioning state
+/.beta-private/

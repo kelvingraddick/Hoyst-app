@@ -344,10 +344,23 @@ it('opens guest support and shows About information without an account', async (
   mockSessionStatus = 'guest';
   const openURL = jest.spyOn(Linking, 'openURL').mockResolvedValue(undefined);
   mount(SettingsScreen);
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
   await act(async () => button('settings-support').props.onPress());
-  expect(openURL).toHaveBeenLastCalledWith(
-    'mailto:support@hoyst.app?subject=Hoyst%20support',
+  expect(alert).toHaveBeenLastCalledWith(
+    'Get help / Report a problem',
+    expect.stringContaining('@kg.codes'),
+    expect.any(Array),
   );
+  const choices = alert.mock.calls.at(-1)![2]!;
+  await act(async () => {
+    await choices.find(choice => choice.text === 'Email Hoyst')!.onPress?.();
+  });
+  expect(openURL).toHaveBeenLastCalledWith(
+    expect.stringMatching(
+      /^mailto:development@wavelinkllc.com\?subject=Hoyst%20support/,
+    ),
+  );
+  expect(button('settings-feature-request')).toBeTruthy();
   act(() => screen.unmount());
   mount(AboutHoystScreen);
   expect(text()).toContain('Version');

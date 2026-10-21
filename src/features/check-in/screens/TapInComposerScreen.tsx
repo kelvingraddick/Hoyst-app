@@ -452,16 +452,19 @@ function TapInComposerController({
         }
         savedPhotoUrl = uploadedPhoto.current.url;
       }
-      const result = await submitTapIn({
-        ...(checkInStatus === 'done' && savedPhotoUrl
-          ? {photoUrl: savedPhotoUrl}
-          : {}),
-        circleId: route.params.circleId,
-        ...(checkInStatus === 'done' && isQuantityTapIn
-          ? {currentValue: quantityValue}
-          : {}),
-        status: checkInStatus,
-      });
+      const result = await submitTapIn(
+        {
+          ...(checkInStatus === 'done' && savedPhotoUrl
+            ? {photoUrl: savedPhotoUrl}
+            : {}),
+          circleId: route.params.circleId,
+          ...(checkInStatus === 'done' && isQuantityTapIn
+            ? {currentValue: quantityValue}
+            : {}),
+          status: checkInStatus,
+        },
+        {mode: detail.circleMode, cadence: detail.commitmentCadence},
+      );
 
       if (checkInStatus === 'done' && result.status !== 'failed') {
         triggerTapInSuccessHaptic();

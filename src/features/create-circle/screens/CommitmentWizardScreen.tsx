@@ -1,3 +1,5 @@
+import {trackEventOnce, identifyAnalytics} from '../../../lib/analytics';
+import {useAcquisitionStore} from '../../beta/services/acquisition-store';
 import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {
   ActivityIndicator,
@@ -257,6 +259,15 @@ export function CommitmentWizardScreen({
       };
       if (existing) update(key, initial);
       else ensure(key, initial);
+    }
+    if (isOnboarding && !profile?.onboardingStatus) {
+      void trackEventOnce(
+        'onboarding_started',
+        {entry: activeInvite ? 'invite' : 'standard'},
+        `onboarding-start:${key}:${
+          useSetupJourneyStore.getState().records[key]?.requestId ?? key
+        }`,
+      );
     }
     if (isOnboarding)
       useOnboardingStore.setState({
@@ -588,7 +599,8 @@ export function CommitmentWizardScreen({
       current.status === 'saving'
     )
       return;
-    const isLegacySubmission = current.submittedDraft &&
+    const isLegacySubmission =
+      current.submittedDraft &&
       current.submittedDraft.proofRequirement === undefined;
     const draft = current.submittedDraft ?? {
       ...current.draft,
@@ -674,13 +686,39 @@ export function CommitmentWizardScreen({
           : {}),
         onboardingPreferences: {categories: current.interests},
       };
+      const saveProfile: typeof completeProfile = async input => {
+        const completed = await (gateway?.completeProfile ?? completeProfile)(
+          input,
+        );
+        identifyAnalytics(account.uid);
+        if (!existingProfile?.onboardingStatus) {
+          void trackEventOnce(
+            'onboarding_completed',
+            {},
+            `onboarding:${account.uid}`,
+          );
+          useAcquisitionStore.getState().queue(account.uid);
+        }
+        if (completed.starterCircle && input.starterCircle) {
+          void trackEventOnce(
+            'commitment_created',
+            {
+              mode: input.starterCircle.circleMode ?? 'group',
+              cadence: input.starterCircle.commitmentCadence,
+            },
+            `create:${account.uid}:${completed.starterCircle.circleId}`,
+          );
+        }
+        return completed;
+      };
       const circlePayload = buildCreateCirclePayload(draft);
       // Preserve the exact payload for an uncertain save started before proof existed.
-      if (isLegacySubmission) { delete circlePayload.proofRequirement; }
+      if (isLegacySubmission) {
+        delete circlePayload.proofRequirement;
+      }
       let result: SetupJourney['result'];
       if (current.selection?.kind === 'circle') {
-        if (!existingProfile?.onboardingStatus)
-          await (gateway?.completeProfile ?? completeProfile)(payload);
+        if (!existingProfile?.onboardingStatus) await saveProfile(payload);
         const joined = await (gateway?.joinCircle ?? joinCircle)(
           current.selection.circle.id,
           current.selection.inviteCode,
@@ -691,15 +729,13 @@ export function CommitmentWizardScreen({
         };
       } else if (draft.commitment.trim()) {
         if (isOnboarding) {
-          const completed = await (gateway?.completeProfile ?? completeProfile)(
-            {
-              ...payload,
-              starterCircle: {
-                ...circlePayload,
-                setupId: current.requestId,
-              },
+          const completed = await saveProfile({
+            ...payload,
+            starterCircle: {
+              ...circlePayload,
+              setupId: current.requestId,
             },
-          );
+          });
           if (!completed.starterCircle)
             throw new Error('Could not confirm your commitment was saved.');
           result = {...completed.starterCircle, membership: 'active'};
@@ -711,7 +747,7 @@ export function CommitmentWizardScreen({
           result = {...created, membership: 'active'};
         }
       } else {
-        await (gateway?.completeProfile ?? completeProfile)(payload);
+        await saveProfile(payload);
       }
       useOnboardingStore.setState({
         categories: current.interests,

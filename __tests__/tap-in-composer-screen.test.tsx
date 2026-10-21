@@ -273,6 +273,7 @@ describe('TapInComposerScreen', () => {
       expect(mockSubmitTapIn).toHaveBeenCalledTimes(1);
       expect(mockSubmitTapIn).toHaveBeenCalledWith(
         expect.objectContaining({currentValue: 100}),
+        expect.objectContaining({cadence: 'weekly'}),
       );
       await act(async () => tree.unmount());
     },
@@ -767,6 +768,7 @@ describe('TapInComposerScreen', () => {
         currentValue: 3,
         status: 'done',
       }),
+      expect.objectContaining({cadence: 'weekly'}),
     );
     expect(navigation.replace).toHaveBeenCalledWith(
       'TapInComplete',
@@ -897,6 +899,7 @@ describe('TapInComposerScreen', () => {
         currentValue: 3,
         status: 'done',
       }),
+      expect.objectContaining({cadence: 'weekly'}),
     );
     expect(navigation.replace).toHaveBeenCalledWith(
       'TapInComplete',
@@ -1167,6 +1170,7 @@ describe('TapInComposerScreen', () => {
         circleId: 'circle-1',
         status: 'skip',
       }),
+      expect.objectContaining({cadence: 'weekly'}),
     );
     expect(
       useHoyFeedbackStore.getState().pendingTapInCelebration,
@@ -1461,11 +1465,14 @@ describe('TapInComposerScreen', () => {
     });
     expect(primaryAction(tree).props.disabled).toBe(false);
     await act(async () => primaryAction(tree).props.onPress());
-    expect(mockSubmitTapIn).toHaveBeenCalledWith({
-      circleId: 'circle-1',
-      currentValue: 3,
-      status: 'done',
-    });
+    expect(mockSubmitTapIn).toHaveBeenCalledWith(
+      {
+        circleId: 'circle-1',
+        currentValue: 3,
+        status: 'done',
+      },
+      expect.objectContaining({cadence: 'weekly'}),
+    );
     expect(mockUploadTapInPhoto).not.toHaveBeenCalled();
     await act(async () => tree.unmount());
   });
@@ -1491,11 +1498,14 @@ describe('TapInComposerScreen', () => {
     expect(mockUploadTapInPhoto.mock.invocationCallOrder.at(-1)).toBeLessThan(
       mockSubmitTapIn.mock.invocationCallOrder.at(-1)!,
     );
-    expect(mockSubmitTapIn).toHaveBeenCalledWith({
-      circleId: 'circle-1',
-      status: 'done',
-      photoUrl: 'https://example.test/uploaded.jpg',
-    });
+    expect(mockSubmitTapIn).toHaveBeenCalledWith(
+      {
+        circleId: 'circle-1',
+        status: 'done',
+        photoUrl: 'https://example.test/uploaded.jpg',
+      },
+      expect.objectContaining({cadence: 'weekly'}),
+    );
     expect(
       tree.root.findByType(TapInComposerScreen).props.navigation.replace,
     ).toHaveBeenCalledWith(
@@ -1563,6 +1573,7 @@ describe('TapInComposerScreen', () => {
         photoUrl: 'https://example.test/existing.jpg',
         currentValue: 10,
       }),
+      expect.objectContaining({cadence: 'weekly'}),
     );
     expect(mockUploadTapInPhoto).not.toHaveBeenCalled();
     await act(async () => tree.unmount());

@@ -118,15 +118,18 @@ export async function shareCircleInvitation(
 ) {
   const sharingUid = firebaseAuth().currentUser?.uid;
   const nativeShare = NativeModules.HoystShareCompletion;
+  const {url, message, ...shareContent} = content;
+  // A separate URL item duplicates links already in the text in some share targets.
+  const shareMessage = [message, url && !message?.includes(url) ? url : undefined]
+    .filter(Boolean)
+    .join('\n');
   const result =
     Platform.OS === 'android' && nativeShare
       ? ((await nativeShare.share(
-          [content.message, 'url' in content ? content.url : undefined]
-            .filter(Boolean)
-            .join('\n'),
+          shareMessage,
           content.title || 'Share Circle invitation',
         )) as {action: string})
-      : await Share.share(content);
+      : await Share.share({...shareContent, message: shareMessage});
   // RN Android Share resolves when the sheet opens, so an older binary cannot prove completion.
   if (
     sharingUid &&

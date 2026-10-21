@@ -10,6 +10,7 @@ import {
   DSScreen,
   DSSurface,
   DSText,
+  layout,
   space,
   useSystemTheme,
 } from '../../../design/system';
@@ -141,9 +142,7 @@ function InboxEventRow({
         {
           borderBottomColor,
           backgroundColor: isUnread
-            ? theme.isDark
-              ? 'rgba(255,255,255,0.05)'
-              : 'rgba(0,0,0,0.03)'
+            ? `${theme[visual.messageTone]}${theme.isDark ? '14' : '0D'}`
             : undefined,
         },
         pressed ? styles.notificationPressed : undefined,
@@ -390,7 +389,7 @@ function InboxScreenContent({navigation}: Props): React.JSX.Element {
           </View>
         </DSSurface>
       ) : events.length > 0 ? (
-        <View style={styles.notificationList}>
+        <View style={styles.notificationList} testID="inbox-notification-list">
           {events.map(event => (
             <InboxEventRow
               event={event}
@@ -470,6 +469,7 @@ const styles = StyleSheet.create({
   },
   notificationList: {
     gap: 0,
+    marginHorizontal: -layout.gutter,
   },
   notificationMediaImage: {
     borderRadius: 8,
@@ -485,6 +485,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     minHeight: 56,
     opacity: 1,
+    paddingHorizontal: layout.gutter,
     paddingVertical: space.sm,
   },
   notificationUnreadDot: {

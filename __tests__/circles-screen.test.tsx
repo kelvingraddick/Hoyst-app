@@ -97,28 +97,10 @@ jest.mock('../src/features/home/services/home-data-service', () => {
       todayDateKey: '2026-05-26',
       todayLabel: 'Today',
     })),
-    getHomeCircleActionVariant: jest.fn((circle: CircleManagementCard) => {
-      if (circle.viewerMembershipStatus === 'pending') {
-        return 'view';
-      }
-
-      if (needsTapInToday(circle)) {
-        return 'check_in';
-      }
-
-      if ((circle.nudgeTargetCount ?? 0) > 0) {
-        return 'nudge';
-      }
-
-      if (
-        circle.inviteUrl &&
-        (circle.viewerRole === 'owner' || circle.viewerRole === 'admin')
-      ) {
-        return 'share';
-      }
-
-      return 'view';
-    }),
+    getHomeCircleActionVariant: jest.fn(
+      jest.requireActual('../src/features/home/services/home-circle-actions')
+        .getHomeCircleActionVariant,
+    ),
     sortHomeCircles: jest.fn((circles: CircleManagementCard[]) => circles),
     subscribeToHomeData: jest.fn(({onData, onError}) => {
       if (mockHomeSubscriptionMode === 'data') {
@@ -272,6 +254,19 @@ describe('CirclesScreen render paths', () => {
     expect(output).not.toContain('Need Attention');
     expect(output).not.toContain('All Circles');
     expect(output).not.toContain('Discover Circles');
+  });
+
+  it('flags owner requests under Needs you even after the weekly goal is complete', () => {
+    mockHomeData = homeData([makeCircle({viewerRole: 'owner', commitmentCadence: 'weekly', viewerCycleCoveredCount: 3, viewerCycleRequiredCount: 3, viewerHasTappedInToday: true, members: [
+      {id: 'requester', name: 'Jordan', initials: 'J', state: 'pending', membershipStatus: 'pending'},
+    ]})]);
+    const {screen, rootNavigate} = renderScreenWithNavigation();
+    const needsYou = screen.root.findByProps({accessibilityLabel: 'Needs you, 1'});
+    act(() => needsYou.props.onPress());
+    expect(renderedText(screen)).toContain('Morning Movers');
+    act(() => screen.root.findByProps({accessibilityLabel: 'Review 1 join request for Morning Movers'}).props.onPress());
+    expect(rootNavigate).toHaveBeenCalledWith('CircleDetail', {circleId: mockHomeData.circles[0].id, reviewJoinRequests: true});
+    expect(screen.root.findByProps({accessibilityLabel: 'Pending, 0'})).toBeTruthy();
   });
 
   it('renders personal commitments in the unified focused-card list', () => {
@@ -643,36 +638,38 @@ describe('CirclesScreen render paths', () => {
     await act(async () => resolveNudge({nudged: 2}));
   });
 
-  it('keeps native Share separate from card navigation', async () => {
-    const share = jest.spyOn(Share, 'share').mockResolvedValue({
-      action: Share.sharedAction,
-    });
-    mockHomeData = homeData([
-      makeCircle({
-        id: 'share-circle',
-        nudgeTargetCount: 0,
-        title: 'Share Circle',
-        viewerHasTappedInToday: true,
-        viewerRole: 'owner',
-        viewerTodayStatus: 'done',
-      }),
-    ]);
-    const {rootNavigate, screen} = renderScreenWithNavigation();
+  it.each(['owner', 'admin', 'member'] as const)(
+    'lets an active %s share without navigating',
+    async viewerRole => {
+      const share = jest.spyOn(Share, 'share').mockResolvedValue({
+        action: Share.sharedAction,
+      });
+      mockHomeData = homeData([
+        makeCircle({
+          id: 'share-circle',
+          nudgeTargetCount: 0,
+          title: 'Share Circle',
+          viewerHasTappedInToday: true,
+          viewerRole,
+          viewerTodayStatus: 'done',
+        }),
+      ]);
+      const {rootNavigate, screen} = renderScreenWithNavigation();
 
-    await act(async () =>
-      screen.root
-        .findByProps({accessibilityLabel: 'Share for Share Circle'})
-        .props.onPress(),
-    );
+      await act(async () =>
+        screen.root
+          .findByProps({accessibilityLabel: 'Share for Share Circle'})
+          .props.onPress(),
+      );
 
-    expect(share).toHaveBeenCalledWith(
-      expect.objectContaining({
-        message: expect.stringContaining('https://example.com/invite'),
-      }),
-    );
-    expect(rootNavigate).not.toHaveBeenCalled();
-    share.mockRestore();
-  });
+      expect(share).toHaveBeenCalledWith({
+        title: 'Join Share Circle on Hoyst',
+        message: 'Join Share Circle on Hoyst: https://example.com/invite',
+      });
+      expect(rootNavigate).not.toHaveBeenCalled();
+      share.mockRestore();
+    },
+  );
 
   it('shows truthful pending and completed states without Tap In actions', () => {
     mockHomeData = homeData([

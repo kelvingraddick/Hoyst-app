@@ -1,4 +1,5 @@
 import {shareCircleInvitation} from '../../progress/services/progress-service';
+import {canShareCircleInvite} from '../../circle-invites/services/invite-eligibility';
 import React, {useEffect, useRef, useState} from 'react';
 import {Alert} from 'react-native';
 import {DateTime} from 'luxon';
@@ -185,7 +186,7 @@ function TapInPickerController({navigation}: Props): React.JSX.Element {
   };
 
   const shareInvite = (circle: CircleManagementCard) => {
-    if (!circle.inviteUrl) {
+    if (!canShareCircleInvite(circle) || !circle.inviteUrl) {
       return;
     }
 
@@ -253,7 +254,7 @@ function TapInPickerController({navigation}: Props): React.JSX.Element {
   const utilities: PickerUtility[] = secondaryCircles.map(circle => {
     const count = circle.nudgeTargetCount ?? 0;
     const canNudge = count > 0;
-    const canShare = !canNudge && Boolean(circle.inviteUrl);
+    const canShare = !canNudge && canShareCircleInvite(circle);
     const busy = nudgingCircleIds.has(circle.id);
     const sent = nudgedCircleIds.has(circle.id);
     const goalMetLabel = getGoalMetLabel(circle);

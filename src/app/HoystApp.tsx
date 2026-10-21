@@ -1,3 +1,11 @@
+import {BetaMembershipAnalytics} from '../features/beta/components/BetaMembershipAnalytics';
+import {
+  initializeAnalytics,
+  trackEvent,
+  flushAnalytics,
+} from '../lib/analytics';
+import {initializeMonitoring} from '../lib/monitoring';
+import {AcquisitionQuestion} from '../features/beta/components/AcquisitionQuestion';
 import React, {useEffect, useState} from 'react';
 import {AppState, StatusBar} from 'react-native';
 import {
@@ -20,9 +28,22 @@ import {CircleInviteCoordinator} from '../features/circle-invites/providers/Circ
 function HoystAppInner(): React.JSX.Element {
   const theme = useHoystTheme();
   const navigationRef = useNavigationContainerRef<RootStackParamList>();
+  const [routeName, setRouteName] = useState<string>();
+  const previousScreen = React.useRef<string | undefined>(undefined);
+  const reportScreen = () => {
+    const name = navigationRef.getCurrentRoute()?.name;
+    setRouteName(name);
+    if (name && name !== previousScreen.current) {
+      previousScreen.current = name;
+      trackEvent('screen_viewed', {screen: name});
+    }
+  };
   const [isNavigationReady, setIsNavigationReady] = useState(false);
 
   useEffect(() => {
+    initializeMonitoring();
+    initializeAnalytics();
+    trackEvent('app_opened', {entry: 'launch'});
     initializePushNotifications();
     setNotificationNavigationRef(navigationRef);
 
@@ -30,7 +51,10 @@ function HoystAppInner(): React.JSX.Element {
       'change',
       nextState => {
         if (nextState === 'active') {
+          trackEvent('app_opened', {entry: 'foreground'});
           syncPushSubscription().catch(() => undefined);
+        } else {
+          flushAnalytics();
         }
       },
     );
@@ -48,7 +72,11 @@ function HoystAppInner(): React.JSX.Element {
         backgroundColor={theme.background}
       />
       <NavigationContainer
-        onReady={() => setIsNavigationReady(true)}
+        onReady={() => {
+          setIsNavigationReady(true);
+          reportScreen();
+        }}
+        onStateChange={reportScreen}
         ref={navigationRef}
         theme={createNavigationTheme(theme)}>
         <CircleInviteCoordinator
@@ -56,6 +84,10 @@ function HoystAppInner(): React.JSX.Element {
           navigationRef={navigationRef}
         />
         <RootNavigator />
+        <BetaMembershipAnalytics />
+        <AcquisitionQuestion
+          canShow={isNavigationReady && routeName === 'Home'}
+        />
       </NavigationContainer>
     </>
   );

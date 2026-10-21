@@ -1,4 +1,5 @@
 import {shareCircleInvitation} from '../../progress/services/progress-service';
+import {canShareCircleInvite} from '../../circle-invites/services/invite-eligibility';
 import {isFirstTapInPending} from '../services/member-tap-in-eligibility';
 import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {
@@ -67,8 +68,15 @@ import {
 } from '../../profile/services/profile-display';
 import {removeTapIn} from '../../check-in/services/check-in-service';
 import {getCircleDetail} from '../mockData';
+import {CircleJoinRequestPrompt} from '../components/CircleJoinRequestPrompt';
+import {CircleJoinRequestSheet} from '../components/CircleJoinRequestSheet';
+import {
+  canReviewCircleJoinRequests,
+  getPendingCircleJoinRequests,
+} from '../services/join-request-selectors';
 import {CircleThreadSection} from '../components/CircleThreadSection';
 import {CircleProgressPanel} from '../components/CircleProgressPanel';
+import {getSingleTapInCoverageDates} from '../services/single-tap-in-presentation';
 import {
   readCircleProgress,
   refreshCircleProgress,
@@ -85,11 +93,7 @@ import {
   CircleMemberStrip,
   type CircleMemberStripAction,
 } from '../components/CircleMemberStrip';
-import {
-  joinCircle,
-  nudgeCircleMembers,
-  reviewJoinRequest,
-} from '../services/circle-service';
+import {joinCircle, nudgeCircleMembers} from '../services/circle-service';
 import {subscribeToPublicCircle} from '../services/public-circle-service';
 import {circleProgressToWeekCells} from '../services/week-progress-adapter';
 import {
@@ -506,6 +510,7 @@ function CircleDetailBackground({
 export function CircleDetailHero({
   detail,
   onBack,
+  onInvite,
   onOpenSettings,
   onTintLayout,
   primaryAction,
@@ -513,6 +518,7 @@ export function CircleDetailHero({
 }: {
   detail: CircleDetailModel;
   onBack: () => void;
+  onInvite?: () => void;
   onOpenSettings: () => void;
   onTintLayout: (event: LayoutChangeEvent) => void;
   primaryAction?: React.ReactNode;
@@ -554,7 +560,11 @@ export function CircleDetailHero({
         style={styles.circleHeroTintRegion}
         testID="circle-detail-hero-tint-region">
         <View style={styles.circleHeroNav}>
-          <View style={styles.circleHeroNavSide}>
+          <View
+            style={[
+              styles.circleHeroNavSide,
+              onInvite && styles.circleHeroNavSideWithInvite,
+            ]}>
             <HeroIconButton accessibilityLabel="Go back" onPress={onBack}>
               <ArrowLeft color={theme.text} size={22} strokeWidth={2.3} />
             </HeroIconButton>
@@ -562,7 +572,24 @@ export function CircleDetailHero({
           <HoystText numberOfLines={1} style={styles.circleHeroNavTitle}>
             {isPersonal ? 'Personal Commitment' : 'Circle'}
           </HoystText>
-          <View style={[styles.circleHeroNavSide, styles.circleHeroNavSideEnd]}>
+          <View
+            style={[
+              styles.circleHeroNavSide,
+              onInvite && styles.circleHeroNavSideWithInvite,
+              styles.circleHeroNavSideEnd,
+            ]}>
+            {onInvite ? (
+              <HeroIconButton
+                accessibilityLabel="Invite Members"
+                onPress={onInvite}
+                testID="circle-detail-header-invite">
+                <UserPlus
+                  color={theme.textMuted}
+                  size={20}
+                  strokeWidth={2.2}
+                />
+              </HeroIconButton>
+            ) : null}
             <HeroIconButton
               accessibilityLabel="Open circle settings"
               onPress={onOpenSettings}>
@@ -632,9 +659,6 @@ export function CircleDetailHero({
             ) : null}
           </View>
 
-          <HoystText tone="muted" variant="caption" testID="circle-detail-proof-rule">
-            {detail.proofRequirement === 'photo' ? 'Photo proof required to complete a Tap In' : 'No proof needed'}
-          </HoystText>
           <View style={styles.circleHeroMetaRow}>
             <HeroInlineMetaSegment>
               <HeroInlineMetaItem
@@ -828,7 +852,37 @@ function CircleStatsSection({
       })),
     [today, weekCells],
   );
-  const dates = JSON.stringify(timeline.map(day => day.dateKey));
+  const progressResult = result?.key === key ? result.value : undefined;
+  const source = detail as unknown as Record<string, unknown>;
+  const resolvedViewer = readCircleProgress(
+    progressResult?.viewer ?? detail.viewerCircleProgress,
+    source,
+  );
+  const dates = JSON.stringify(
+    getSingleTapInCoverageDates(
+      resolvedViewer,
+      timeline.map(day => day.dateKey),
+    ),
+  );
+  useEffect(() => {
+    if (!uid || detail.viewerMembershipStatus !== 'active') {
+      return;
+    }
+    let active = true;
+    const stop = subscribeCircleDailyCoverage(
+      detail.id,
+      JSON.parse(dates),
+      coverageDays => {
+        if (active) {
+          setDaily({key, value: coverageDays});
+        }
+      },
+    );
+    return () => {
+      active = false;
+      stop();
+    };
+  }, [dates, detail.id, detail.viewerMembershipStatus, key, uid]);
   useEffect(() => {
     if (!uid || detail.viewerMembershipStatus !== 'active') return;
     let active = true;
@@ -853,13 +907,6 @@ function CircleStatsSection({
         if (active) setResult({key, value: {}});
       },
     );
-    const stopDays = subscribeCircleDailyCoverage(
-      detail.id,
-      JSON.parse(dates),
-      value => {
-        if (active) setDaily({key, value});
-      },
-    );
     const checkDay = () => setToday(circleDateKey(detail.timezone ?? 'UTC'));
     const onFocus = () => {
       checkDay();
@@ -873,13 +920,11 @@ function CircleStatsSection({
     return () => {
       active = false;
       unsubscribe();
-      stopDays();
       stopFocus?.();
       app.remove();
       clearInterval(timer);
     };
   }, [
-    dates,
     detail.id,
     detail.timezone,
     detail.viewerMembershipStatus,
@@ -887,16 +932,14 @@ function CircleStatsSection({
     navigation,
     uid,
   ]);
-  const value = result?.key === key ? result.value : undefined;
-  const source = detail as unknown as Record<string, unknown>;
   return (
     <CircleProgressPanel
       detail={{...detail, viewerUid: uid}}
-      viewer={readCircleProgress(
-        value?.viewer ?? detail.viewerCircleProgress,
+      viewer={resolvedViewer}
+      group={readCircleProgress(
+        progressResult?.group ?? detail.groupStreak,
         source,
       )}
-      group={readCircleProgress(value?.group ?? detail.groupStreak, source)}
       days={timeline}
       coverage={daily?.key === key ? daily.value : new Map()}
     />
@@ -926,7 +969,8 @@ function CircleDetailScreenContent({
   const [nudgingMemberIds, setNudgingMemberIds] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
-  const [reviewingRequestId, setReviewingRequestId] = useState<string>();
+  const [joinReview, setJoinReview] = useState<{firstRequesterId?: string}>();
+  const consumedReviewRoute = useRef(false);
   const [selectedMemberId, setSelectedMemberId] = useState<string>();
   const [joinRequested, setJoinRequested] = useState(false);
   const [isJoining, setIsJoining] = useState(false);
@@ -1257,6 +1301,37 @@ function CircleDetailScreenContent({
     route.params.resumeAction,
   ]);
 
+  useEffect(() => {
+    setJoinReview(undefined);
+  }, [circleId, user?.uid]);
+
+  useEffect(() => {
+    if (memberCircleResolved && !canReviewCircleJoinRequests(memberCircle)) {
+      setJoinReview(undefined);
+    }
+  }, [memberCircle, memberCircleResolved]);
+
+  const pendingJoinRequests = getPendingCircleJoinRequests(detail);
+  useEffect(() => {
+    if (!route.params.reviewJoinRequests) {
+      consumedReviewRoute.current = false;
+      return;
+    }
+    if (isCircleLoading || consumedReviewRoute.current) {
+      return;
+    }
+    consumedReviewRoute.current = true;
+    navigation.setParams({reviewJoinRequests: undefined});
+    if (canReviewCircleJoinRequests(memberCircle)) {
+      setJoinReview({});
+    }
+  }, [
+    isCircleLoading,
+    memberCircle,
+    navigation,
+    route.params.reviewJoinRequests,
+  ]);
+
   if (!detail && isCircleLoading) {
     return (
       <HoystScreen
@@ -1319,10 +1394,7 @@ function CircleDetailScreenContent({
   const isMemberCircle = Boolean(detail.viewerRole) && !isPendingMembership;
   const isPersonal = detail.circleMode === 'personal';
   const isArchived = detail.lifecycleStatus === 'archived';
-  const canInvite =
-    !isArchived &&
-    Boolean(detail.inviteUrl) &&
-    (detail.viewerRole === 'owner' || detail.viewerRole === 'admin');
+  const canInvite = canShareCircleInvite(detail);
   const detailStatusPill = getDetailStatusPill(detail);
   const nudgeTargetCount = Math.min(
     detail.nudgeTargetCount ?? nudgeTargetMembers.length,
@@ -1353,11 +1425,7 @@ function CircleDetailScreenContent({
     ? 'Review Tap In'
     : 'Tap In';
   const tapInPulseRingState = getPulseRingStateForCircle(detail);
-  const canReviewJoinRequests =
-    !isArchived &&
-    !isPersonal &&
-    isMemberCircle &&
-    detail.viewerRole === 'owner';
+  const canReviewJoinRequests = canReviewCircleJoinRequests(detail);
   const removeActionLabel =
     detail.viewerTodayStatus === 'skip' ? 'Remove Skip' : 'Remove Tap In';
   const removeProgressCopy = canUpdateTodayQuantity
@@ -1577,63 +1645,8 @@ function CircleDetailScreenContent({
     ]);
   };
 
-  const handleReviewJoinRequest = async (
-    requesterId: string,
-    approved: boolean,
-  ) => {
-    if (reviewingRequestId) {
-      return;
-    }
-
-    setReviewingRequestId(requesterId);
-    try {
-      const result = await reviewJoinRequest({
-        approved,
-        circleId: detail.id,
-        requesterId,
-      });
-      Alert.alert(
-        result.status === 'approved' ? 'Request approved' : 'Request declined',
-        result.status === 'approved'
-          ? 'Their first Tap In starts at the next window.'
-          : 'The request has been declined.',
-      );
-    } catch (error) {
-      Alert.alert(
-        'Review failed',
-        (error as {message?: string}).message ??
-          'Could not review this request.',
-      );
-    } finally {
-      setReviewingRequestId(undefined);
-    }
-  };
-
   const openReviewJoinRequestSheet = (member: CircleMemberStatus) => {
-    if (reviewingRequestId) {
-      return;
-    }
-
-    Alert.alert(
-      'Review join request',
-      `Approve or deny ${member.name}'s request to join ${detail.title}?`,
-      [
-        {style: 'cancel', text: 'Cancel'},
-        {
-          onPress: () => {
-            handleReviewJoinRequest(member.id, false).catch(() => undefined);
-          },
-          style: 'destructive',
-          text: 'Deny',
-        },
-        {
-          onPress: () => {
-            handleReviewJoinRequest(member.id, true).catch(() => undefined);
-          },
-          text: 'Approve',
-        },
-      ],
-    );
+    setJoinReview({firstRequesterId: member.id});
   };
 
   const removeTapInAction = canRemoveTodayCheckIn ? (
@@ -1683,14 +1696,8 @@ function CircleDetailScreenContent({
           }
         : selectedMember.membershipStatus === 'pending' && canReviewJoinRequests
         ? {
-            accessibilityLabel:
-              reviewingRequestId === selectedMember.id
-                ? `Reviewing ${selectedMember.name}'s join request`
-                : `Review ${selectedMember.name}'s join request`,
-            disabled: reviewingRequestId === selectedMember.id,
-            isLoading: reviewingRequestId === selectedMember.id,
-            label:
-              reviewingRequestId === selectedMember.id ? 'Reviewing' : 'Review',
+            accessibilityLabel: `Review ${selectedMember.name}'s join request`,
+            label: 'Review',
             onPress: () => openReviewJoinRequestSheet(selectedMember),
             tone: 'review',
           }
@@ -1743,6 +1750,7 @@ function CircleDetailScreenContent({
         <CircleDetailHero
           detail={detail}
           onBack={navigateBack}
+          onInvite={canInvite ? shareInvite : undefined}
           onOpenSettings={openCircleSettings}
           onTintLayout={handleHeroTintLayout}
           primaryAction={
@@ -1791,6 +1799,11 @@ function CircleDetailScreenContent({
             </GlassPanel>
           ) : null}
 
+          <CircleJoinRequestPrompt
+            requests={pendingJoinRequests}
+            onPress={() => setJoinReview({})}
+          />
+
           <View style={styles.progressAndMembers}>
             <CircleStatsSection
               navigation={navigation}
@@ -1813,6 +1826,7 @@ function CircleDetailScreenContent({
                         }
                       : undefined
                   }
+                  inviteCategory={categoryVisual.tone}
                   members={detail.members}
                   onSelectMember={member => setSelectedMemberId(member.id)}
                   selectedMemberId={selectedMemberId}
@@ -1907,6 +1921,15 @@ function CircleDetailScreenContent({
           ) : null}
         </View>
       </View>
+      {canReviewJoinRequests ? (
+        <CircleJoinRequestSheet
+          key={`${detail.id}:${user?.uid}`}
+          circle={detail}
+          visible={Boolean(joinReview)}
+          firstRequesterId={joinReview?.firstRequesterId}
+          onClose={() => setJoinReview(undefined)}
+        />
+      ) : null}
     </HoystScreen>
   );
 }
@@ -2015,7 +2038,13 @@ const styles = StyleSheet.create({
     width: 84,
   },
   circleHeroNavSideEnd: {
-    alignItems: 'flex-end',
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 8,
+    justifyContent: 'flex-end',
+  },
+  circleHeroNavSideWithInvite: {
+    width: 96,
   },
   circleHeroNavTitle: {
     flex: 1,

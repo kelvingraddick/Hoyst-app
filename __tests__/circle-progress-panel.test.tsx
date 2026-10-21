@@ -1,5 +1,6 @@
 import React from 'react';
-import {Modal, Pressable, Text} from 'react-native';
+import {Modal, Pressable, Text, StyleSheet} from 'react-native';
+import * as ReactNative from 'react-native';
 import renderer, {act} from 'react-test-renderer';
 import {DesignSystemProvider, DSSectionHeading} from '../src/design/system';
 import {CircleProgressPanel} from '../src/features/circles/components/CircleProgressPanel';
@@ -78,7 +79,51 @@ function mount(
 }
 afterEach(() => {
   act(() => tree?.unmount());
+  jest.restoreAllMocks();
 });
+
+it.each([
+  [360, 1],
+  [440, 1.6],
+])(
+  'keeps amount status and streak access readable at width %s and font scale %s',
+  (width, fontScale) => {
+    jest
+      .spyOn(ReactNative, 'useWindowDimensions')
+      .mockReturnValue({width, height: 850, fontScale, scale: 3});
+    mount({
+      detail: {
+        ...detail,
+        commitmentType: 'build',
+        buildTrackingMode: 'quantity',
+        targetValue: 7,
+        unitLabel: 'Hours of sleep',
+        viewerTodayCheckIn: {dateKey: day, status: 'partial', currentValue: 5},
+      },
+      viewer: {
+        ...summary,
+        progress: {covered: 0, required: 1, outcome: 'open'},
+      },
+    });
+    expect(text()).toContain('In progress 5 of 7 Hours of sleep');
+    const metric = tree.root.findByProps({
+      testID: 'circle-viewer-period-progress',
+    });
+    expect(metric.props.accessibilityLabel).toBe(
+      'You. In progress. 5 of 7 Hours of sleep',
+    );
+    expect(
+      metric.findAllByProps({accessibilityRole: 'progressbar'}),
+    ).toHaveLength(0);
+    expect(
+      StyleSheet.flatten(
+        tree.root.findByProps({testID: 'circle-period-goals'}).props.style,
+      ).flexDirection,
+    ).toBe('column');
+    act(() => press('Your streak:'));
+    expect(tree.root.findByType(Modal).props.visible).toBe(true);
+  },
+);
 
 it('uses equal member fractions and explicit cadence units independently of the goal target', () => {
   mount();
@@ -113,8 +158,8 @@ it.each([
       .findAllByType(DSSectionHeading)
       .map(node => node.props.title);
     expect(headings).toEqual(['Daily activity', heading]);
-    expect(text()).toContain('0 of 1 Tap In');
-    expect(text()).not.toContain('0 of 1 Tap Ins');
+    expect(text()).toContain('Needs Tap In');
+    expect(text()).not.toContain('0 of 1 Tap In');
     expect(text()).toContain('0 of 1 met goal');
     expect(
       tree.root.findAllByProps({
@@ -122,6 +167,17 @@ it.each([
       }).length,
     ).toBeGreaterThan(0);
     expect(text()).not.toContain('Tap a day for completion and skip details');
+    expect(
+      tree.root
+        .findByProps({testID: 'circle-viewer-period-progress'})
+        .findAllByProps({accessibilityRole: 'progressbar'}),
+    ).toHaveLength(0);
+    expect(
+      tree.root
+        .findByProps({testID: 'circle-group-period-progress'})
+        .findByProps({accessibilityRole: 'progressbar'}).props
+        .accessibilityValue,
+    ).toEqual({min: 0, max: 1, now: 0});
   },
 );
 it('shows only the group tile and no member activity for a nonmember', () => {

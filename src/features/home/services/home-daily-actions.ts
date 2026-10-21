@@ -1,6 +1,7 @@
 import {DateTime} from 'luxon';
 import type {CircleManagementCard} from '../../../types/models';
 import {canTapInToday} from './home-circle-actions';
+import {getPendingCircleJoinRequests} from '../../circles/services/join-request-selectors';
 
 export type HomeDailyAction =
   | 'tap_in'
@@ -55,6 +56,7 @@ export function getHomeDailyProgress(circles: readonly CircleManagementCard[]) {
   let completed = 0;
   let remainingTapIns = 0;
   let remainingNudges = 0;
+  let remainingJoinRequests = 0;
   for (const circle of circles) {
     if (
       circle.lifecycleStatus === 'archived' ||
@@ -66,16 +68,18 @@ export function getHomeDailyProgress(circles: readonly CircleManagementCard[]) {
     completed += Number(
       circle.circleMode !== 'personal' && Boolean(circle.viewerHasNudgedToday),
     );
+    remainingJoinRequests += getPendingCircleJoinRequests(circle).length;
     const action = getHomeDailyAction(circle);
     remainingTapIns += Number(action === 'tap_in');
     remainingNudges += Number(action === 'nudge');
   }
-  const remaining = remainingTapIns + remainingNudges;
+  const remaining = remainingTapIns + remainingNudges + remainingJoinRequests;
   return {
     completed,
     remaining,
     remainingTapIns,
     remainingNudges,
+    remainingJoinRequests,
     total: completed + remaining,
   };
 }

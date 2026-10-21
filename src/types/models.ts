@@ -162,6 +162,7 @@ export type CircleMemberStatus = {
   avatarImage?: ImageSourcePropType;
   avatarUrl?: string;
   membershipStatus?: CircleMembershipStatus;
+  requestedAt?: Date;
   joinedAt?: Date;
   opportunityEligibility?: 'include_current' | 'next_opening';
   firstTapInPending?: boolean;

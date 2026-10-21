@@ -29,6 +29,7 @@ import type {CircleDetailModel} from '../../../types/models';
 import {CircleGroupWeekPath} from './CircleGroupWeekPath';
 import {loadCircleDayDetails} from '../services/circle-progress-service';
 import {ProgressStatBadge} from '../../progress/components/ProgressStatBadge';
+import {getSingleTapInPresentation} from '../services/single-tap-in-presentation';
 
 export function CircleProgressPanel({
   detail,
@@ -66,6 +67,18 @@ export function CircleProgressPanel({
       : detail.commitmentCadence === 'monthly'
       ? 'This month'
       : 'This week';
+  const singleTapIn = getSingleTapInPresentation({
+    detail,
+    summary: viewer,
+    coverage,
+  });
+  const metricStyle = [
+    styles.metric,
+    styles.tile,
+    stackMetrics && styles.stackedMetric,
+    {backgroundColor: systemTheme.surface},
+  ];
+  const rowStyle = [styles.row, stackMetrics && styles.stackedRow];
   const showStreak = (kind: 'viewer' | 'group') =>
     setSheet({
       title: kind === 'viewer' ? 'Your streak' : 'Group streak',
@@ -149,6 +162,15 @@ export function CircleProgressPanel({
   ) => {
     const known = summary && summary.progress.outcome !== 'unknown';
     const {covered = 0, required = 0} = summary?.progress ?? {};
+    const single = isGroup ? undefined : singleTapIn;
+    const groupCount = Boolean(isGroup && known && required > 0);
+    const supportingText = single
+      ? single.supportingText
+      : known && required > 0
+      ? isGroup
+        ? 'met goal'
+        : `Tap In${required === 1 ? '' : 's'}`
+      : undefined;
     const copy = !known
       ? 'Progress unavailable'
       : required === 0
@@ -164,7 +186,16 @@ export function CircleProgressPanel({
         : copy;
     return (
       <View
-        style={[styles.metric, stackMetrics && styles.stackedMetric]}
+        accessible={Boolean(single)}
+        accessibilityRole={single ? 'text' : undefined}
+        accessibilityLabel={
+          single
+            ? ['You', single.status, single.supportingText]
+                .filter(Boolean)
+                .join('. ')
+            : undefined
+        }
+        style={metricStyle}
         testID={
           isGroup
             ? 'circle-group-period-progress'
@@ -183,44 +214,56 @@ export function CircleProgressPanel({
             <DSText variant="statCaption" tone="muted">
               {isGroup ? 'Group' : 'You'}
             </DSText>
-            <DSText variant={known && required > 0 ? 'title' : 'secondary'}>
-              {known && required > 0 ? `${covered} of ${required}` : copy}
+            <DSText
+              variant={known && required > 0 ? 'title' : 'secondary'}
+              numberOfLines={groupCount ? 1 : undefined}
+              adjustsFontSizeToFit={groupCount}
+              minimumFontScale={0.8}>
+              {single?.status ??
+                (known && required > 0 ? `${covered} of ${required}` : copy)}
+              {groupCount ? (
+                <DSText variant="statCaption" tone="muted">
+                  {' met goal'}
+                </DSText>
+              ) : null}
             </DSText>
-            {known && required > 0 ? (
+            {supportingText && !groupCount ? (
               <DSText variant="statCaption" tone="muted">
-                {isGroup ? 'met goal' : `Tap In${required === 1 ? '' : 's'}`}
+                {supportingText}
               </DSText>
             ) : null}
           </View>
         </View>
-        <View
-          accessibilityRole="progressbar"
-          accessibilityLabel={`${
-            isGroup ? 'Group' : 'Your'
-          } progress: ${accessibleCopy}`}
-          accessibilityValue={
-            known && required
-              ? {min: 0, max: required, now: covered}
-              : undefined
-          }
-          style={[styles.track, {backgroundColor: systemTheme.track}]}>
+        {!single ? (
           <View
-            style={{
-              height: 5,
-              width: `${
-                known && required
-                  ? Math.min(100, (covered / required) * 100)
-                  : 0
-              }%`,
-              backgroundColor: isGroup
-                ? theme.isDark
-                  ? '#A2ADC0'
-                  : '#7C879A'
-                : theme.success,
-              borderRadius: 5,
-            }}
-          />
-        </View>
+            accessibilityRole="progressbar"
+            accessibilityLabel={`${
+              isGroup ? 'Group' : 'Your'
+            } progress: ${accessibleCopy}`}
+            accessibilityValue={
+              known && required
+                ? {min: 0, max: required, now: covered}
+                : undefined
+            }
+            style={[styles.track, {backgroundColor: systemTheme.track}]}>
+            <View
+              style={{
+                height: 5,
+                width: `${
+                  known && required
+                    ? Math.min(100, (covered / required) * 100)
+                    : 0
+                }%`,
+                backgroundColor: isGroup
+                  ? theme.isDark
+                    ? '#A2ADC0'
+                    : '#7C879A'
+                  : theme.success,
+                borderRadius: 5,
+              }}
+            />
+          </View>
+        ) : null}
       </View>
     );
   };
@@ -228,51 +271,36 @@ export function CircleProgressPanel({
     summary: CircleProgressSummary | undefined,
     isGroup: boolean,
   ) => (
-    <Pressable
-      onPress={() => showStreak(isGroup ? 'group' : 'viewer')}
-      accessibilityRole="button"
-      accessibilityLabel={`${
-        isGroup ? 'Group streak' : 'Your streak'
-      }: ${formatCircleStreak(summary?.streak)}. Learn how it works.`}
-      style={[
-        styles.metric,
-        styles.streak,
-        stackMetrics && styles.stackedMetric,
-      ]}
-      testID={isGroup ? 'circle-group-streak' : 'circle-your-streak'}>
-      <View style={styles.metricRow}>
-        <ProgressStatBadge tone="orange" />
-        <View style={styles.metricCopy}>
-          <View style={styles.streakLabel}>
-            <DSText
-              variant="statCaption"
-              tone="muted"
-              style={styles.metricLabel}>
-              {isGroup ? 'Group streak' : 'Your streak'}
+    <View style={metricStyle}>
+      <Pressable
+        onPress={() => showStreak(isGroup ? 'group' : 'viewer')}
+        accessibilityRole="button"
+        accessibilityLabel={`${
+          isGroup ? 'Group streak' : 'Your streak'
+        }: ${formatCircleStreak(summary?.streak)}. Learn how it works.`}
+        style={styles.streak}
+        hitSlop={12}
+        testID={isGroup ? 'circle-group-streak' : 'circle-your-streak'}>
+        <View style={styles.metricRow}>
+          <ProgressStatBadge tone="orange" />
+          <View style={styles.metricCopy}>
+            <View style={styles.streakLabel}>
+              <DSText
+                variant="statCaption"
+                tone="muted"
+                style={styles.metricLabel}>
+                {isGroup ? 'Group streak' : 'Your streak'}
+              </DSText>
+              <Info size={12} color={theme.textMuted} accessible={false} />
+            </View>
+            <DSText variant="title" style={{color: theme.streakForeground}}>
+              {formatCircleStreak(summary?.streak)}
             </DSText>
-            <Info size={12} color={theme.textMuted} accessible={false} />
           </View>
-          <DSText variant="title" style={{color: theme.streakForeground}}>
-            {formatCircleStreak(summary?.streak)}
-          </DSText>
         </View>
-      </View>
-    </Pressable>
+      </Pressable>
+    </View>
   );
-  const divider = () => (
-    <View
-      style={[
-        styles.metricDivider,
-        stackMetrics && styles.stackedDivider,
-        {backgroundColor: systemTheme.track},
-      ]}
-    />
-  );
-  const tileStyle = [
-    styles.tile,
-    stackMetrics && styles.stackedTile,
-    {backgroundColor: systemTheme.surface},
-  ];
   return (
     <View
       key={fontScale}
@@ -336,15 +364,13 @@ export function CircleProgressPanel({
       <View style={styles.period}>
         <DSSectionHeading title={caption} />
         {member || !personal ? (
-          <View style={styles.row}>
-            <View style={tileStyle} testID="circle-period-goals">
+          <View style={styles.cards}>
+            <View style={rowStyle} testID="circle-period-goals">
               {member ? progress(viewer, false) : null}
-              {member && !personal ? divider() : null}
               {!personal ? progress(group, true) : null}
             </View>
-            <View style={tileStyle} testID="circle-period-streaks">
+            <View style={rowStyle} testID="circle-period-streaks">
               {member ? streak(viewer, false) : null}
-              {member && !personal ? divider() : null}
               {!personal ? streak(group, true) : null}
             </View>
           </View>
@@ -400,23 +426,17 @@ export function CircleProgressPanel({
 const styles = StyleSheet.create({
   section: {gap: 12},
   period: {gap: 12},
-  row: {gap: 12},
-  tile: {flexDirection: 'row', padding: 12, borderRadius: 20},
-  stackedTile: {flexDirection: 'column'},
-  metric: {flex: 1, minWidth: 0},
-  stackedMetric: {flex: 0},
+  cards: {gap: 12},
+  row: {flexDirection: 'row', gap: 12},
+  stackedRow: {flexDirection: 'column'},
+  tile: {padding: 12, borderRadius: 20},
+  metric: {flex: 1, width: 0, minWidth: 0, justifyContent: 'center'},
+  stackedMetric: {flex: 0, width: '100%'},
   metricRow: {flexDirection: 'row', alignItems: 'center', gap: 10},
   metricCopy: {flex: 1, minWidth: 0},
   metricLabel: {flexShrink: 1},
   label: {fontSize: 12, lineHeight: 17, flexShrink: 1},
   track: {height: 5, borderRadius: 5, overflow: 'hidden', marginTop: 8},
-  metricDivider: {width: StyleSheet.hairlineWidth, marginHorizontal: 12},
-  stackedDivider: {
-    width: '100%',
-    height: StyleSheet.hairlineWidth,
-    marginHorizontal: 0,
-    marginVertical: 12,
-  },
   streak: {
     minHeight: minimumTarget(),
     minWidth: 0,

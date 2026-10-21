@@ -1,5 +1,6 @@
 jest.mock('@react-native-firebase/firestore', () => jest.fn());
 
+import {getPendingCircleJoinRequests} from '../src/features/circles/services/join-request-selectors';
 import {firebaseFirestore} from '../src/lib/firebase/firestore';
 import {subscribeToMemberCircleDetail} from '../src/features/home/services/home-data-service';
 
@@ -166,7 +167,7 @@ it.each(['user-1', 'user-2'])(
       data: () => ({
         uid: 'user-1',
         status: 'active',
-        role: 'member',
+        role: 'owner',
         displayName: 'Alex',
       }),
     });
@@ -210,6 +211,12 @@ it.each(['user-1', 'user-2'])(
         ],
       }),
     );
+    const owner = {uid: 'user-1', status: 'active', role: 'owner', displayName: 'Alex'};
+    const pending = {uid: 'requester', status: 'pending', role: 'member', displayName: 'Jordan'};
+    membersSnapshot({docs: [owner, pending].map(data => ({id: data.uid, data: () => data}))});
+    expect(getPendingCircleJoinRequests(onDetail.mock.calls.at(-1)?.[0])).toHaveLength(1);
+    membersSnapshot({docs: [owner, {...pending, status: 'active'}].map(data => ({id: data.uid, data: () => data}))});
+    expect(getPendingCircleJoinRequests(onDetail.mock.calls.at(-1)?.[0])).toHaveLength(0);
     stop();
   },
 );

@@ -650,6 +650,40 @@ describe('HomeScreen Circle activity updates', () => {
     },
   );
 
+  it('surfaces owner join requests as separate Home actions and opens their review', () => {
+    const value = attentionCircle({viewerRole: 'owner', members: [
+      {id: 'requester', name: 'Jordan', initials: 'J', state: 'pending', membershipStatus: 'pending'},
+    ]});
+    mockHomeData = {...homeData(), circles: [value], membershipCount: 1, hasLoadedMemberships: true, hasResolvedGreetingContext: true};
+    const tree = renderScreenTree();
+    expect(tree.root.findByProps({testID: 'home-daily-action-progress'}).props.accessibilityLabel).toBe('2 actions needed today');
+    expect(tree.root.findByProps({testID: `home-commitment-action-${value.id}`})).toBeTruthy();
+    act(() => tree.root.findByProps({accessibilityLabel: 'Review 1 join request for Sleep 8 Hours'}).props.onPress());
+    expect(mockRootNavigate).toHaveBeenCalledWith('CircleDetail', {circleId: value.id, reviewJoinRequests: true});
+    const receive = (subscribeToHomeData as jest.Mock).mock.calls.at(-1)[0].onData;
+    act(() => receive({...mockHomeData, circles: [{...value, members: [], viewerHasTappedInToday: true, nudgeTargetCount: 0}]}));
+    expect(tree.root.findAllByProps({accessibilityLabel: 'Review 1 join request for Sleep 8 Hours'})).toHaveLength(0);
+    expect(tree.root.findByProps({testID: 'home-daily-action-progress'}).props.accessibilityLabel).toBe('All actions complete');
+  });
+
+  it('keeps multiple requesters grouped below their own Circle and counts every request', () => {
+    const requests = [
+      {id: 'alex', name: 'Alex', initials: 'A', state: 'pending' as const, membershipStatus: 'pending' as const},
+      {id: 'blair', name: 'Blair', initials: 'B', state: 'pending' as const, membershipStatus: 'pending' as const},
+    ];
+    const first = attentionCircle({id: 'first', title: 'First Circle', viewerRole: 'owner', members: requests, viewerHasTappedInToday: true, nudgeTargetCount: 0});
+    const second = attentionCircle({id: 'second', title: 'Second Circle', viewerRole: 'owner', members: [requests[0]], viewerHasTappedInToday: true, nudgeTargetCount: 0});
+    mockHomeData = {...homeData(), circles: [first, second], membershipCount: 2, hasLoadedMemberships: true, hasResolvedGreetingContext: true};
+    const tree = renderScreenTree();
+    expect(tree.root.findByProps({testID: 'home-daily-action-progress'}).props.accessibilityLabel).toBe('3 actions needed today');
+    const output = JSON.stringify(tree.toJSON());
+    expect(output.indexOf('home-commitment-collapsed-first')).toBeLessThan(output.indexOf('Review 2 join requests for First Circle'));
+    expect(output.indexOf('Review 2 join requests for First Circle')).toBeLessThan(output.indexOf('home-commitment-collapsed-second'));
+    expect(output.indexOf('home-commitment-collapsed-second')).toBeLessThan(output.indexOf('Review 1 join request for Second Circle'));
+    act(() => tree.root.findByProps({accessibilityLabel: 'Review 1 join request for Second Circle'}).props.onPress());
+    expect(mockRootNavigate).toHaveBeenCalledWith('CircleDetail', {circleId: 'second', reviewJoinRequests: true});
+  });
+
   it('uses meaning icons for actorless Home activity', () => {
     const reminder = renderActivityRow(
       activityItem({eventType: 'member_due_prompt', id: 'reminder'}),

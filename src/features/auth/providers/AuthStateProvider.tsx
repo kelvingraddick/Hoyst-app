@@ -1,3 +1,4 @@
+import {identifyAnalytics} from '../../../lib/analytics';
 import React, {useEffect, type PropsWithChildren} from 'react';
 import type {FirebaseAuthTypes} from '@react-native-firebase/auth';
 
@@ -47,12 +48,14 @@ export function AuthStateProvider({
       unsubscribeProfile = undefined;
 
       if (!user) {
+        identifyAnalytics(undefined);
         setProfile(undefined);
         clearPushUser().catch(() => undefined);
         setGuest();
         return;
       }
 
+      identifyAnalytics(user.uid);
       const sessionUser = mapAuthUser(user);
       identifyPushUser(user.uid).catch(() => undefined);
       setAuthenticating(sessionUser);

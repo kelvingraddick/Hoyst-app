@@ -1,6 +1,6 @@
 /** Debug-only native fixtures. Never read or write an account. */
-import React, {useEffect} from 'react';
-import {Pressable, ScrollView, View} from 'react-native';
+import React, {useEffect, useRef} from 'react';
+import {Pressable, ScrollView, Share, View} from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import {DesignSystemProvider} from '../../../design/system';
@@ -8,6 +8,7 @@ import {useSettingsStore} from '../../../store/settings-store';
 import {useHoystTheme} from '../../../design/theme/useHoystTheme';
 import {HoystText} from '../../../design/components/HoystText';
 import {TapInPulseButton} from '../../../design/components/TapInPulseButton';
+import {getCircleCategoryVisual} from '../../../design/components/CircleCategoryIcon';
 import {
   circleProgressConfiguration,
   circlePeriodForDate,
@@ -28,12 +29,28 @@ export function CircleProgressPreview({
 }) {
   const dark = mode.includes('dark');
   useEffect(() => {
+    if (mode === 'website') {
+      let previous:
+        | ReturnType<typeof useSettingsStore.getState>['appearance']
+        | undefined;
+      const apply = () => {
+        previous = useSettingsStore.getState().appearance;
+        useSettingsStore.getState().setAppearancePreference('light');
+      };
+      const unsubscribe = useSettingsStore.persist.onFinishHydration(apply);
+      if (useSettingsStore.persist.hasHydrated()) apply();
+      return () => {
+        unsubscribe();
+        if (previous)
+          useSettingsStore.getState().setAppearancePreference(previous);
+      };
+    }
     const previous = useSettingsStore.getState().appearance;
     useSettingsStore
       .getState()
       .setAppearancePreference(dark ? 'dark' : 'light');
     return () => useSettingsStore.getState().setAppearancePreference(previous);
-  }, [dark]);
+  }, [dark, mode]);
   return (
     <DesignSystemProvider scheme={dark ? 'dark' : 'light'}>
       <PreviewContent mode={mode} onClose={onClose} />
@@ -42,7 +59,18 @@ export function CircleProgressPreview({
 }
 
 function PreviewContent({mode, onClose}: {mode: string; onClose: () => void}) {
+  const scrollRef = useRef<ScrollView>(null);
   const theme = useHoystTheme();
+  const website = mode === 'website';
+  const invitePreview = mode.includes('invite');
+  const previewDate = website || invitePreview ? '2026-10-21' : '2026-10-17';
+  const shareInvitePreview = () => {
+    if (invitePreview) {
+      Share.share({message: 'Hoyst Circle invitation preview.'}).catch(
+        () => undefined,
+      );
+    }
+  };
   const cadence = mode.includes('monthly')
     ? 'monthly'
     : mode.includes('daily')
@@ -61,16 +89,17 @@ function PreviewContent({mode, onClose}: {mode: string; onClose: () => void}) {
   const coveredCount = emptyToday ? 0 : cadence === 'daily' ? 1 : 2;
   const detail = {
     id: 'preview',
-    title: 'Building Hoyst',
-    category: 'Work',
+    title: website ? 'Workout Crew' : 'Building Hoyst',
+    category: website ? 'Fitness' : 'Work',
     circleMode: personal ? 'personal' : 'group',
     viewerUid: 'you',
-    commitment:
-      cadence === 'daily'
-        ? 'Make progress on Hoyst every day'
-        : `Make progress on Hoyst 3 times a ${
-            cadence === 'monthly' ? 'month' : 'week'
-          }`,
+    commitment: website
+      ? 'Three workouts a week. In it together.'
+      : cadence === 'daily'
+      ? 'Make progress on Hoyst every day'
+      : `Make progress on Hoyst 3 times a ${
+          cadence === 'monthly' ? 'month' : 'week'
+        }`,
     commitmentCadence: cadence,
     commitmentFrequency: {
       tapInsPerWeek: cadence === 'daily' ? 7 : 3,
@@ -79,9 +108,12 @@ function PreviewContent({mode, onClose}: {mode: string; onClose: () => void}) {
     timezone: 'America/New_York',
     members: [
       {
-        id: 'kelvin',
-        name: 'Kelvin',
-        initials: 'K',
+        id: website ? 'mia' : 'kelvin',
+        name: website ? 'Mia' : 'Kelvin',
+        initials: website ? 'M' : 'K',
+        avatarImage: website
+          ? require('../../../assets/avatars/mia.png')
+          : undefined,
         state: 'done',
         membershipStatus: 'active',
         cycleGoalMet: true,
@@ -91,17 +123,46 @@ function PreviewContent({mode, onClose}: {mode: string; onClose: () => void}) {
       {
         id: 'you',
         name: 'You',
-        initials: 'P',
+        initials: website ? 'Y' : 'P',
+        avatarImage: website
+          ? require('../../../assets/avatars/noah.png')
+          : undefined,
         state: 'pending',
         membershipStatus: 'active',
         cycleGoalMet: false,
         cycleCoveredCount: 2,
         cycleRequiredCount: 3,
       },
+      ...(website
+        ? [
+            {
+              id: 'ava',
+              name: 'Ava',
+              initials: 'A',
+              avatarImage: require('../../../assets/avatars/ava.png'),
+              state: 'done',
+              membershipStatus: 'active',
+              cycleGoalMet: true,
+              cycleCoveredCount: 3,
+              cycleRequiredCount: 3,
+            },
+            {
+              id: 'marcus',
+              name: 'Marcus',
+              initials: 'M',
+              avatarImage: require('../../../assets/avatars/marcus.png'),
+              state: 'pending',
+              membershipStatus: 'active',
+              cycleGoalMet: false,
+              cycleCoveredCount: 1,
+              cycleRequiredCount: 3,
+            },
+          ]
+        : []),
     ],
-    memberCount: 2,
-    maxSize: 10,
-    viewerRole: 'owner',
+    memberCount: website ? 4 : 2,
+    maxSize: website ? 8 : 10,
+    viewerRole: invitePreview ? 'member' : 'owner',
     privacy: 'public',
     viewerMembershipStatus: 'active',
   } as CircleDetailModel;
@@ -111,9 +172,9 @@ function PreviewContent({mode, onClose}: {mode: string; onClose: () => void}) {
   const summary = (group: boolean): CircleProgressSummary => ({
     version: 2,
     revision: config.revision,
-    asOfDateKey: '2026-10-17',
+    asOfDateKey: previewDate,
     cadence,
-    period: circlePeriodForDate('2026-10-17', cadence),
+    period: circlePeriodForDate(previewDate, cadence),
     streak: {
       count: unavailable
         ? null
@@ -129,40 +190,54 @@ function PreviewContent({mode, onClose}: {mode: string; onClose: () => void}) {
       availability: unavailable ? 'unavailable' : 'ready',
     },
     progress: {
-      covered: emptyToday ? 0 : group ? 1 : coveredCount,
-      required: group ? 2 : target,
+      covered: emptyToday ? 0 : group ? (website ? 2 : 1) : coveredCount,
+      required: group ? (website ? 4 : 2) : target,
       outcome: unavailable ? 'unknown' : 'open',
     },
   });
-  const dates = [
-    '2026-10-11',
-    '2026-10-12',
-    '2026-10-13',
-    '2026-10-14',
-    '2026-10-15',
-    '2026-10-16',
-    '2026-10-17',
-  ];
+  const dates =
+    website || invitePreview
+      ? [
+          '2026-10-15',
+          '2026-10-16',
+          '2026-10-17',
+          '2026-10-18',
+          '2026-10-19',
+          '2026-10-20',
+          '2026-10-21',
+        ]
+      : [
+          '2026-10-11',
+          '2026-10-12',
+          '2026-10-13',
+          '2026-10-14',
+          '2026-10-15',
+          '2026-10-16',
+          '2026-10-17',
+        ];
   const days = new Map<string, CircleDayCoverage>(
     dates.map((day, index) => [
       day,
       {
         known: !unavailable,
-        expectedUids: ['you', 'kelvin'],
+        expectedUids: website
+          ? ['you', 'mia', 'ava', 'marcus']
+          : ['you', 'kelvin'],
         completedUids: emptyToday
           ? index >= 2 && index <= 5
-            ? ['kelvin']
+            ? [website ? 'mia' : 'kelvin']
             : []
           : index === 0
           ? ['you']
           : index === 1
-          ? ['you', 'kelvin']
+          ? ['you', website ? 'mia' : 'kelvin']
           : index === 2 || index === 6
-          ? ['kelvin']
+          ? [website ? 'mia' : 'kelvin']
           : index === 3
           ? ['you']
           : [],
-        skippedUids: !emptyToday && index === 0 ? ['kelvin'] : [],
+        skippedUids:
+          !emptyToday && index === 0 ? [website ? 'mia' : 'kelvin'] : [],
         restoredUids: [],
       },
     ]),
@@ -171,6 +246,13 @@ function PreviewContent({mode, onClose}: {mode: string; onClose: () => void}) {
     <SafeAreaView
       style={{flex: 1, backgroundColor: theme.isDark ? '#090B12' : '#FAFAF7'}}>
       <ScrollView
+        key={mode}
+        ref={scrollRef}
+        onContentSizeChange={() => {
+          if (invitePreview && mode.includes('bottom')) {
+            scrollRef.current?.scrollToEnd({animated: false});
+          }
+        }}
         contentContainerStyle={{
           maxWidth: mode.includes('narrow') ? 360 : undefined,
           width: '100%',
@@ -184,6 +266,7 @@ function PreviewContent({mode, onClose}: {mode: string; onClose: () => void}) {
             }>
             <CircleDetailHero
               detail={detail}
+              onInvite={personal ? undefined : shareInvitePreview}
               onBack={onClose}
               onOpenSettings={() => undefined}
               onTintLayout={() => undefined}
@@ -224,20 +307,23 @@ function PreviewContent({mode, onClose}: {mode: string; onClose: () => void}) {
               members={detail.members}
               viewerUid="you"
               onSelectMember={() => undefined}
-              subtitle="2 members total"
+              subtitle={`${website ? 4 : 2} members total`}
               inviteAction={{
                 accessibilityLabel: 'Invite Members',
-                onPress: () => undefined,
+                onPress: shareInvitePreview,
               }}
+              inviteCategory={getCircleCategoryVisual(detail.category).tone}
               commitmentCadence={cadence}
             />
           ) : null}
-          <Pressable
-            accessibilityRole="button"
-            onPress={onClose}
-            style={{minHeight: 44, justifyContent: 'center'}}>
-            <HoystText tone="muted">Close preview</HoystText>
-          </Pressable>
+          {!website && (
+            <Pressable
+              accessibilityRole="button"
+              onPress={onClose}
+              style={{minHeight: 44, justifyContent: 'center'}}>
+              <HoystText tone="muted">Close preview</HoystText>
+            </Pressable>
+          )}
         </View>
       </ScrollView>
     </SafeAreaView>

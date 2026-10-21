@@ -190,9 +190,7 @@ exports.completeProgressTask = (0, https_1.onCall)(async (request) => {
             member.data()?.status !== 'active' ||
             (0, circle_mode_1.getCircleMode)(circle.data()) !== 'group' ||
             (0, circle_lifecycle_1.getCircleLifecycleStatus)(circle.data()) !== 'active' ||
-            !circle.data()?.inviteCode ||
-            (!['owner', 'admin'].includes(member.data()?.role) &&
-                circle.data()?.ownerId !== uid)) {
+            !circle.data()?.inviteCode) {
             throw new https_1.HttpsError('permission-denied', 'You cannot share this Circle invitation.');
         }
         (0, ledger_1.creditTask)(economy, 'share_invite');

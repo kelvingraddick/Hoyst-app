@@ -70,3 +70,41 @@ it('credits Android only after the native chosen-target callback', async () => {
   expect(mockShare).not.toHaveBeenCalled();
   expect(mockCall).toHaveBeenCalledTimes(1);
 });
+
+describe.each([
+  ['iOS', 'ios', true],
+  ['Android native', 'android', true],
+  ['Android fallback', 'android', false],
+] as const)('%s invite links', (_label, platform, nativeAvailable) => {
+  const url = 'https://hoyst.app/join/bad1d70e015e90d7';
+  const title = 'Join Morning Movers on Hoyst';
+
+  it.each([
+    [
+      'already in the message',
+      `Join Morning Movers on Hoyst: ${url}`,
+      `Join Morning Movers on Hoyst: ${url}`,
+    ],
+    [
+      'separate from the message',
+      'Join Morning Movers on Hoyst:',
+      `Join Morning Movers on Hoyst:\n${url}`,
+    ],
+    ['without a message', undefined, url],
+  ])('shares one link when %s', async (_scenario, message, expectedMessage) => {
+    mockPlatform = platform;
+    mockNativeAvailable = nativeAvailable;
+    mockShare.mockResolvedValue({action: 'sharedAction'});
+    mockNativeShare.mockResolvedValue({action: 'sharedAction'});
+
+    await shareCircleInvitation('circle', {title, message, url});
+
+    if (platform === 'android' && nativeAvailable) {
+      expect(mockNativeShare).toHaveBeenCalledWith(expectedMessage, title);
+      expect(mockShare).not.toHaveBeenCalled();
+    } else {
+      expect(mockShare).toHaveBeenCalledWith({title, message: expectedMessage});
+      expect(mockNativeShare).not.toHaveBeenCalled();
+    }
+  });
+});

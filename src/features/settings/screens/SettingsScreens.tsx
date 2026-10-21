@@ -1,3 +1,5 @@
+import {getAnalyticsEnabled, setAnalyticsEnabled} from '../../../lib/analytics';
+import {chooseFeedbackContact} from '../../beta/services/feedback-contact';
 import React, {useEffect, useRef, useState, type ReactNode} from 'react';
 import {
   Alert,
@@ -121,6 +123,16 @@ function SettingsContent({navigation}: Props<'Settings'>) {
     : status === 'authenticatedReady' && Boolean(uid);
   const appearance = useSettingsStore(state => state.appearance);
   const info = getInstalledAppInfo();
+  const [usageAnalytics, setUsageAnalytics] = useState(true);
+  useEffect(() => {
+    let mounted = true;
+    void getAnalyticsEnabled().then(value => {
+      if (mounted) setUsageAnalytics(value);
+    });
+    return () => {
+      mounted = false;
+    };
+  }, []);
   const [deleteVisible, setDeleteVisible] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
   const signOut = () => {
@@ -216,17 +228,35 @@ function SettingsContent({navigation}: Props<'Settings'>) {
       ) : null}
       <Group title="Help & about">
         <DSListRow
-          title="Contact support"
-          subtitle="Get help with Hoyst"
-          leading={<ProfileIcon icon={LifeBuoy} />}
-          onPress={() =>
-            void Linking.openURL(
-              'mailto:support@hoyst.app?subject=Hoyst%20support',
-            ).catch(() =>
-              Alert.alert('Contact Hoyst', 'Email support@hoyst.app for help.'),
-            )
+          title="Usage analytics"
+          subtitle="Help improve onboarding and the beta"
+          leading={<ProfileIcon icon={Shield} />}
+          action={
+            <Switch
+              accessibilityLabel="Usage analytics"
+              value={usageAnalytics}
+              onValueChange={value => {
+                if (preview) return;
+                setUsageAnalytics(value);
+                void setAnalyticsEnabled(value);
+              }}
+            />
           }
+          testID="settings-usage-analytics"
+        />
+        <DSListRow
+          title="Get help / Report a problem"
+          subtitle="Instagram, email or TestFlight feedback"
+          leading={<ProfileIcon icon={LifeBuoy} />}
+          onPress={() => chooseFeedbackContact('support')}
           testID="settings-support"
+        />
+        <DSListRow
+          title="Request a feature"
+          subtitle="Tell us what would help you"
+          leading={<ProfileIcon icon={Megaphone} />}
+          onPress={() => chooseFeedbackContact('feature')}
+          testID="settings-feature-request"
         />
         <DSListRow
           title="About Hoyst"

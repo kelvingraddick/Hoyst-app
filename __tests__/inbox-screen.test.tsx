@@ -288,7 +288,7 @@ describe('InboxScreen', () => {
       });
       const row = () => nativeNodes(tree, 'inbox-event-row-at-risk-unread')[0]!;
       const backgroundColor =
-        appearance === 'light' ? 'rgba(0,0,0,0.03)' : 'rgba(255,255,255,0.05)';
+        appearance === 'light' ? '#A83A000D' : '#FF8A3D14';
       const button = tree.root
         .findAllByType(Pressable)
         .find(node => node.props.testID === 'inbox-event-row-at-risk-unread')!;
@@ -307,6 +307,31 @@ describe('InboxScreen', () => {
       });
       expect(markAllInboxEventsRead).toHaveBeenCalledTimes(1);
       expect(clearDeliveredNotifications).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it.each(['light', 'dark'] as const)(
+    'matches unread backgrounds to notification accents in %s mode',
+    appearance => {
+      mockAppearance = appearance;
+      const cases = [
+        ['evening_summary', '#086CA8', '#8FE2FF'],
+        ['circle_complete', '#07763E', '#4BE083'],
+        ['nudge', '#5A1CFF', '#B89FFF'],
+        ['tap_in_midday_reminder', '#A83A00', '#FF8A3D'],
+      ] as const;
+      mockInboxEvents = cases.map(([type]) => inboxEvent({id: type, type}));
+      const {tree} = renderInbox();
+
+      for (const [type, light, dark] of cases) {
+        const row = nativeNodes(tree, `inbox-event-row-${type}`)[0]!;
+        expect(StyleSheet.flatten(row.props.style)).toMatchObject({
+          backgroundColor: `${appearance === 'light' ? light : dark}${
+            appearance === 'light' ? '0D' : '14'
+          }`,
+          paddingHorizontal: 22,
+        });
+      }
     },
   );
 
@@ -348,7 +373,7 @@ describe('InboxScreen', () => {
         nativeNodes(tree, 'inbox-event-row-current-visit-unread')[0]!.props
           .style,
       ).backgroundColor,
-    ).toBe('rgba(0,0,0,0.03)');
+    ).toBe('#A83A000D');
 
     act(() => {
       emitInboxEvents?.([{...unreadEvent, isRead: true}]);
@@ -362,7 +387,7 @@ describe('InboxScreen', () => {
         nativeNodes(tree, 'inbox-event-row-current-visit-unread')[0]!.props
           .style,
       ).backgroundColor,
-    ).toBe('rgba(0,0,0,0.03)');
+    ).toBe('#A83A000D');
   });
 
   it('marks new unread rows that arrive while the Inbox is open', () => {
@@ -708,7 +733,15 @@ describe('InboxScreen', () => {
       mockAppearance = appearance;
       mockInboxEvents = [inboxEvent({isRead: true})];
       const {tree} = renderInbox();
+      expect(
+        StyleSheet.flatten(
+          nativeNodes(tree, 'inbox-notification-list')[0]!.props.style,
+        ),
+      ).toMatchObject({marginHorizontal: -22});
       const row = () => nativeNodes(tree, 'inbox-event-row-event-1')[0]!;
+      expect(
+        StyleSheet.flatten(row().props.style).backgroundColor,
+      ).toBeUndefined();
       const button = tree.root
         .findAllByType(Pressable)
         .find(node => node.props.testID === 'inbox-event-row-event-1')!;
@@ -716,6 +749,7 @@ describe('InboxScreen', () => {
         flexDirection: 'row',
         alignItems: 'center',
         paddingVertical: 8,
+        paddingHorizontal: 22,
         minHeight: 56,
         gap: 12,
         borderBottomWidth: StyleSheet.hairlineWidth,

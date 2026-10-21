@@ -1,3 +1,4 @@
+import {trackEventOnce} from '../../../lib/analytics';
 import {firebaseFirestore} from '../../../lib/firebase/firestore';
 import type {TapInCompletion} from '../../../../functions/src/shared/tap-in-completion';
 import type {CircleProgressResult} from '../../../shared/circle-progress';
@@ -17,6 +18,7 @@ export type SubmitTapInInput = {
 };
 
 export type SubmitTapInResult = {
+  coverageRevision?: number;
   completionId?: string;
   proofRequirement?: import('../../../shared/tap-in-proof').ProofRequirement;
   photoUrl?: string | null;
@@ -49,12 +51,29 @@ export type UpdateTapInDetailsResult = {
   photoUrl: string | null;
 };
 
-export async function submitTapIn(input: SubmitTapInInput) {
-  return authenticatedCallable<SubmitTapInResult>('submitTapIn', {
+export async function submitTapIn(
+  input: SubmitTapInInput,
+  analytics?: {
+    mode?: 'personal' | 'group';
+    cadence?: 'daily' | 'weekly' | 'monthly';
+  },
+) {
+  const uid = firebaseAuth().currentUser?.uid;
+  const result = await authenticatedCallable<SubmitTapInResult>('submitTapIn', {
     ...input,
     progressVersion: 1,
     completionVersion: 2,
   });
+  if (result.status && uid && firebaseAuth().currentUser?.uid === uid) {
+    void trackEventOnce(
+      'tap_in_saved',
+      {...analytics, outcome: result.status},
+      `tap:${uid}:${input.circleId}:${result.dateKey}:${
+        result.coverageRevision ?? result.completionId ?? result.status
+      }`,
+    );
+  }
+  return result;
 }
 
 export async function uploadTapInPhoto({

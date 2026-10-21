@@ -1,4 +1,4 @@
-import React, {type ReactNode} from 'react';
+import React, {useState, type ReactNode} from 'react';
 import {Pressable, ScrollView, StyleSheet, View} from 'react-native';
 import {ArrowUp, Check, UserPlus} from 'lucide-react-native';
 
@@ -9,7 +9,11 @@ import {useHoystTheme} from '../../../design/theme/useHoystTheme';
 import {GradientRing} from '../../../design/components/GradientRing';
 import {HoystText} from '../../../design/components/HoystText';
 import {LayeredAvatar} from '../../../design/components/LayeredAvatar';
-import {DSSectionHeading} from '../../../design/system';
+import {
+  DSSectionHeading,
+  useSystemTheme,
+  type CategoryTone,
+} from '../../../design/system';
 
 type MemberInviteAction = {
   accessibilityLabel: string;
@@ -30,6 +34,7 @@ type CircleMemberStripProps = {
   belowStripAction?: ReactNode;
   commitmentCadence?: CommitmentPace;
   inviteAction?: MemberInviteAction;
+  inviteCategory?: CategoryTone;
   members: CircleMemberStatus[];
   onSelectMember: (member: CircleMemberStatus) => void;
   selectedMemberId?: string;
@@ -445,6 +450,7 @@ export function CircleMemberStrip({
   belowStripAction,
   commitmentCadence,
   inviteAction,
+  inviteCategory = 'neutral',
   members,
   onSelectMember,
   selectedMemberId,
@@ -452,11 +458,42 @@ export function CircleMemberStrip({
   title = 'Circle members',
   viewerUid,
 }: CircleMemberStripProps): React.JSX.Element {
+  const systemTheme = useSystemTheme();
+  const [invitePressed, setInvitePressed] = useState(false);
+  const inviteBackground = systemTheme.category[inviteCategory].foreground;
+  const inviteForeground = systemTheme.isDark
+    ? systemTheme.canvas
+    : systemTheme.onAction;
   const selectedMember = members.find(member => member.id === selectedMemberId);
 
   return (
     <View style={styles.section}>
-      <DSSectionHeading subtitle={subtitle} title={title} />
+      <DSSectionHeading
+        action={
+          inviteAction ? (
+            <Pressable
+              accessibilityLabel={inviteAction.accessibilityLabel}
+              accessibilityRole="button"
+              onPress={inviteAction.onPress}
+              onPressIn={() => setInvitePressed(true)}
+              onPressOut={() => setInvitePressed(false)}
+              style={[
+                styles.headingInvite,
+                {backgroundColor: inviteBackground},
+                invitePressed && styles.headingInvitePressed,
+              ]}
+              testID="circle-member-heading-invite">
+              <UserPlus color={inviteForeground} size={18} strokeWidth={2} />
+              <HoystText
+                style={[styles.headingInviteLabel, {color: inviteForeground}]}>
+                Invite
+              </HoystText>
+            </Pressable>
+          ) : undefined
+        }
+        subtitle={subtitle}
+        title={title}
+      />
       {members.length > 0 ? (
         <ScrollView
           horizontal
@@ -503,6 +540,27 @@ export function CircleMemberStrip({
 }
 
 const styles = StyleSheet.create({
+  headingInvite: {
+    alignItems: 'center',
+    borderRadius: radius.pill,
+    flexDirection: 'row',
+    flexShrink: 0,
+    gap: 6,
+    justifyContent: 'center',
+    minHeight: 44,
+    minWidth: 92,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  headingInviteLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    lineHeight: 20,
+  },
+  headingInvitePressed: {
+    opacity: actionMotion.pressedOpacity,
+    transform: [{scale: actionMotion.pressedScale}],
+  },
   avatarFrame: {
     alignItems: 'center',
     height: RING_SIZE + 4,
