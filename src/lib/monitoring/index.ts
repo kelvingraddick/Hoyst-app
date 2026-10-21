@@ -1,4 +1,5 @@
 import {sanitizeMonitoringEvent} from './sanitize-event';
+import {Platform} from 'react-native';
 import {env} from '../../config/env';
 import {getInstalledAppInfo} from '../../features/settings/services/app-info';
 
@@ -27,6 +28,8 @@ export function initializeMonitoring(): void {
       attachScreenshot: false,
       attachViewHierarchy: false,
       enableCaptureFailedRequests: false,
+      enableNative: Platform.OS === 'ios',
+      autoInitializeNativeSdk: false,
       beforeSend: sanitizeMonitoringEvent,
     });
     initialized = true;
