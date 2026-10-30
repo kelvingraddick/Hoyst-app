@@ -1,0 +1,43 @@
+[
+  {
+    "case": "missing",
+    "status": 400,
+    "message": "Please agree to receive Hoyst emails. Refresh this page if the checkbox is missing."
+  },
+  {
+    "case": "false",
+    "status": 400,
+    "message": "Please agree to receive Hoyst emails. Refresh this page if the checkbox is missing."
+  },
+  {
+    "case": "string",
+    "status": 400,
+    "message": "Please agree to receive Hoyst emails. Refresh this page if the checkbox is missing."
+  },
+  {
+    "case": "invalid",
+    "status": 400,
+    "message": "Enter a valid email address."
+  },
+  {
+    "case": "cross-origin",
+    "status": 403,
+    "message": "Please use the signup form on the Hoyst website."
+  },
+  {
+    "path": "/",
+    "status": 200
+  },
+  {
+    "path": "/privacy",
+    "status": 200
+  },
+  {
+    "path": "/updates.js?v=checkbox-20261022",
+    "status": 200
+  },
+  {
+    "path": "/site.css?v=checkbox-20261022",
+    "status": 200
+  }
+]

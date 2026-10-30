@@ -14,7 +14,7 @@ They are deliberately outside the Firebase Hosting public directory. An ordinary
 - Keep the existing **Gemini Home greeting integration**. No removal or provider switch is requested.
 - Public profile: **display name, username, avatar, and bio only**. Keep timezone, sign-in provider details, and internal account fields private. This requires a code/rules/data transition; policy wording alone does not establish that privacy.
 - Personal history: **retain when leaving or archiving a Circle, until account deletion**, subject to supported user deletions and the limited retention exceptions accurately disclosed in the policy.
-- Keep `support@hoyst.app` for support and privacy requests.
+- Keep `development@wavelinkllc.com` for support and privacy requests.
 - Adult signup: required checkbox, **“I’m 18 or older and agree to the Terms,”** with linked Terms and a Privacy Policy link. Do not collect a date of birth for this choice. Record the acknowledgment and policy version privately. Self-attestation is not verified age or a guarantee of compliance with provider requirements.
 - Business practices: **no personal-data sales, no sharing for targeted advertising, and no members’ posts/photos in Hoyst marketing**. Provider processing needed to operate Hoyst still requires separate verification.
 - No further business questionnaire is pending. Local implementation is prepared. Remaining work is deployment/configuration verification, final text review, and setting the effective date at publication. No publication has occurred.

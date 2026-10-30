@@ -399,3 +399,42 @@ No unresolved P0/P1/P2 findings in the scoped invite controls.
 Temporary preview routing and device text/density overrides were restored after capture. No production deployment or mobile distribution was performed for this UI change. Existing unrelated checkout work is preserved.
 
 final result: passed for the scoped invite controls
+
+
+# Hoyst website redesign, 2026-10-21
+
+Website QA is recorded in [the detailed report](docs/website-redesign/design-qa.md). Source: [approved homepage/invitation mock](docs/website-redesign/approved-mockup.png), 899 × 1750 pixels. Implementation: [matched 899 CSS pixel capture](docs/website-redesign/home-reference-width.png), DPR 1, 899 × 2381 pixels, light/default state. [Full core comparison](docs/website-redesign/comparison-final.png), [focused hero comparison](docs/website-redesign/comparison-hero.png), and [standalone invitation comparison](docs/website-redesign/comparison-invitation.png) were opened and reviewed. No vertical stretching was used. The detailed report records responsive dimensions, five fidelity surfaces, earlier spacing/art/wrapping fixes, browser confirmation-header fix, post-fix evidence, tested interactions, contrast/reflow/reduced motion, clean console checks, automated results, and publication limits.
+
+Local preview: http://localhost:4173/ and /join/workout-crew. No production publication or live email subscription occurred. No unresolved P0/P1/P2 website findings remain.
+
+final result: passed
+
+
+# Hoyst website palette revision, 2026-10-22
+
+The approved blue/sage revision is verified in [palette QA](docs/website-redesign/palette/design-qa.md). Its source is the original approved layout plus the user-approved color plan. [Before](docs/website-redesign/palette/home-before.png) and [after](docs/website-redesign/palette/home-after.png) use the same light/default state, 899 CSS pixel viewport, DPR 1, and identical 899 × 2381 image dimensions. [Full side-by-side comparison](docs/website-redesign/palette/comparison-full.png), [focused hero](docs/website-redesign/palette/comparison-hero.png), and [focused signup section](docs/website-redesign/palette/comparison-hoy-signup.png) were opened and reviewed. Typography, layout, copy, screenshot bytes and behavior remain unchanged. Sage replaces the lavender surface; blue/green/warm accents replace repeated purple artwork; existing app Hoy variants supply blue, purple, green and gold. Desktop/tablet/narrow pages, image proportions, contrast, blue keyboard focus, and clean browser console checks pass. The Functions build, 13 focused Node tests, targeted lint and diff checks pass. No unresolved P0/P1/P2 findings remain. No publication or live email enablement occurred.
+
+final result: passed
+
+
+# Hoyst website production publication, 2026-10-22
+
+Explicitly authorized production publication completed at https://hoyst.app/. [Release verification](docs/website-redesign/publication/README.md) records Hosting version abdf5eb85ddb00a8, scoped function deployment, live desktop/mobile/invitation browser evidence, asset byte checks, preserved Universal Links and request validation. No live email was sent or subscription changed. Signup remains disabled pending the user's controlled test inbox selection and delivery verification. The earlier no-deployment statements are historical local-review results.
+
+final result: passed
+
+
+# Hoyst production signup enablement, 2026-10-22
+
+Live signup is enabled in Hosting version df697a9cde6a5a97. The user authorized development@wavelinkllc.com for the controlled test. One delivered confirmation, read-only GET, successful live confirmation button, topic opt-out, no additional duplicate email, and token-replay preference preservation were verified. The test address remains opted out, with unrelated contacts and preferences unchanged. The actual Resend topic PATCH array contract was corrected, regression-checked and redeployed. [Publication and evidence](docs/website-redesign/publication/README.md) supersede the earlier disabled-signup status. Functions build, targeted lint, 13 focused tests and diff checks passed.
+
+final result: passed
+
+
+# Hoyst one-step checkbox signup, 2026-10-22
+
+The user's approved checkbox revision is verified in [the scoped report](docs/website-redesign/checkbox/README.md). [Before](docs/website-redesign/checkbox/before.png) and [after](docs/website-redesign/checkbox/after.png) use 899 CSS pixels, DPR 1, default light state, and measure 899 × 2381 and 899 × 2437 pixels. The extra 56 pixels accommodate consent. [Full comparison](docs/website-redesign/checkbox/comparison-full.png) and [focused form comparison](docs/website-redesign/checkbox/comparison-form.png) were opened together. The approved typography, palette, layout and artwork are retained. Required unchecked consent, keyboard order/focus, 44-pixel label target, desktop/tablet/narrow layouts and clean console pass. 32 focused checks, Functions build and lint pass, including no-email immediate signup, consent evidence, durable leases/retries, opt-out preservation and old-link compatibility.
+
+final result: passed
+
+Checkbox publication completed in Hosting version `b6dbc9c9770f2ab2` at `2026-10-23T02:32:44.540Z`. Live required-consent validation, immediate saved-state feedback, form reset, request guards and clean desktop/mobile console passed. The authorized test address's original consent and Hoyst opt-out remain unchanged. No additional email or campaign was sent. Application TypeScript also passed. [Live form evidence](docs/website-redesign/checkbox/production-form.png) and [production verification](docs/website-redesign/checkbox/README.md) record the result.

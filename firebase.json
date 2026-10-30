@@ -10,7 +10,9 @@
         "firebase-debug.*.log",
         "*.local"
       ],
-      "predeploy": ["npm --prefix \"$RESOURCE_DIR\" run build"]
+      "predeploy": [
+        "npm --prefix \"$RESOURCE_DIR\" run build"
+      ]
     }
   ],
   "firestore": {
@@ -22,7 +24,11 @@
   },
   "hosting": {
     "public": "hosting",
-    "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
     "cleanUrls": true,
     "headers": [
       {
@@ -57,6 +63,22 @@
         "source": "/join/**",
         "function": {
           "functionId": "invitePage",
+          "region": "us-central1",
+          "pinTag": true
+        }
+      },
+      {
+        "source": "/api/launch-signup",
+        "function": {
+          "functionId": "launchSignup",
+          "region": "us-central1",
+          "pinTag": true
+        }
+      },
+      {
+        "source": "/updates/confirm",
+        "function": {
+          "functionId": "updatesConfirmation",
           "region": "us-central1",
           "pinTag": true
         }

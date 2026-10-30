@@ -1,0 +1,49 @@
+{
+  "object": "domain",
+  "id": "a348fe15-2db8-4398-aeab-3239e1660cab",
+  "name": "hoyst.app",
+  "created_at": "2026-10-21 07:27:06.129426+00",
+  "status": "verified",
+  "capabilities": {
+    "sending": "enabled",
+    "receiving": "disabled"
+  },
+  "records": [
+    {
+      "record": "DKIM",
+      "name": "resend._domainkey",
+      "value": "p=MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQCe3lrqK4TSq7GKn7LFywegEtBJzkhAGt0ASuIdlRGbKemVmHs0LIUhh3Wr4Gf77ZBNzOxLmQlR7ybkAmSNd35ut6P7ImGSYTndWeUjDQK9EnAOn6cG39sTxXGVi6SxH587E3UK9Z6ma4Njb/BZeJfr1NQ8sVo0pNM0z86T7JBbgQIDAQAB",
+      "type": "TXT",
+      "status": "verified",
+      "ttl": "Auto"
+    },
+    {
+      "record": "SPF",
+      "name": "send",
+      "type": "MX",
+      "ttl": "Auto",
+      "status": "verified",
+      "value": "feedback-smtp.us-east-1.amazonses.com",
+      "priority": 10
+    },
+    {
+      "record": "SPF",
+      "name": "send",
+      "value": "v=spf1 include:amazonses.com ~all",
+      "type": "TXT",
+      "ttl": "Auto",
+      "status": "verified"
+    },
+    {
+      "record": "SPF",
+      "name": "rsend",
+      "value": "send.forge.rmta.net",
+      "type": "CNAME",
+      "status": "verified",
+      "ttl": "Auto"
+    }
+  ],
+  "region": "us-east-1",
+  "open_tracking": false,
+  "click_tracking": false
+}

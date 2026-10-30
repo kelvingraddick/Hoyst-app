@@ -1,6 +1,7 @@
 import {onRequest} from 'firebase-functions/v2/https';
 
 export {emailModules} from './emails';
+export {launchSignup, updatesConfirmation} from './updates';
 export {
   markInboxEventsRead,
   markInboxEventRead,

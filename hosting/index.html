@@ -2,277 +2,356 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#090B12" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="theme-color" content="#FAFAF7" />
     <meta
       name="description"
-      content="Build consistency with shared Commitments, supportive Circles, and one clear daily Tap In." />
+      content="Your goals deserve good company. Build an accountability Circle, share your Commitment, and help each other keep going. Try Hoyst's free iPhone beta." />
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Hoyst" />
     <meta
       property="og:title"
-      content="Hoyst | Consistency with the right support" />
+      content="Hoyst | Your goals deserve good company" />
     <meta
       property="og:description"
-      content="Build consistency with shared Commitments, supportive Circles, and one clear daily Tap In." />
+      content="Build better habits with people who show up for you. Create a Circle, Tap In, and keep each other going." />
     <meta
       property="og:image"
       content="https://hoyst.app/assets/hoyst-icon.png" />
     <meta name="twitter:card" content="summary" />
+    <link rel="canonical" href="https://hoyst.app/" />
     <link rel="icon" href="/assets/hoyst-icon.png" />
-    <title>Hoyst | Consistency with the right support</title>
-    <style>
-      :root {
-        color-scheme: dark;
-        font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont,
-          'Segoe UI', sans-serif;
-        background: #090b12;
-        color: #fff;
-      }
-      * {
-        box-sizing: border-box;
-      }
-      body {
-        margin: 0;
-        min-height: 100vh;
-        overflow-x: hidden;
-        background: radial-gradient(
-            circle at 10% 8%,
-            rgba(122, 85, 255, 0.34),
-            transparent 30%
-          ),
-          radial-gradient(
-            circle at 90% 20%,
-            rgba(24, 185, 255, 0.24),
-            transparent 29%
-          ),
-          radial-gradient(
-            circle at 62% 92%,
-            rgba(16, 185, 103, 0.18),
-            transparent 34%
-          ),
-          #090b12;
-      }
-      a {
-        color: inherit;
-      }
-      .page {
-        width: min(1180px, calc(100% - 36px));
-        margin: 0 auto;
-      }
-      header {
-        min-height: 88px;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-      }
-      .logo {
-        width: 126px;
-        height: auto;
-      }
-      .beta {
-        padding: 8px 12px;
-        border-radius: 999px;
-        border: 1px solid rgba(255, 255, 255, 0.16);
-        color: #c9c2ff;
-        background: rgba(255, 255, 255, 0.05);
-        font-size: 0.78rem;
-        font-weight: 800;
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
-      }
-      main {
-        min-height: calc(100vh - 88px);
-        display: grid;
-        grid-template-columns: minmax(0, 1.08fr) minmax(320px, 0.92fr);
-        gap: clamp(42px, 8vw, 110px);
-        align-items: center;
-        padding: 48px 0 96px;
-      }
-      .eyebrow {
-        margin-bottom: 18px;
-        color: #9e87ff;
-        font-size: 0.8rem;
-        font-weight: 850;
-        letter-spacing: 0.15em;
-        text-transform: uppercase;
-      }
-      h1 {
-        max-width: 780px;
-        margin: 0;
-        font-size: clamp(3.3rem, 7.2vw, 6.9rem);
-        line-height: 0.91;
-        letter-spacing: -0.065em;
-      }
-      .gradient {
-        color: transparent;
-        background: linear-gradient(
-          105deg,
-          #9e87ff 10%,
-          #18b9ff 48%,
-          #10b967 86%
-        );
-        -webkit-background-clip: text;
-        background-clip: text;
-      }
-      .lede {
-        max-width: 650px;
-        margin: 28px 0 0;
-        color: #bbc3d6;
-        font-size: clamp(1.06rem, 1.8vw, 1.28rem);
-        line-height: 1.6;
-      }
-      .actions {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 13px;
-        margin-top: 34px;
-      }
-      .button {
-        min-height: 56px;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        padding: 14px 24px;
-        border-radius: 999px;
-        text-decoration: none;
-        font-weight: 850;
-      }
-      .button-primary {
-        background: linear-gradient(135deg, #5a1cff, #7a55ff);
-        box-shadow: 0 16px 46px rgba(90, 28, 255, 0.34);
-      }
-      .button-secondary {
-        border: 1px solid rgba(255, 255, 255, 0.18);
-        background: rgba(255, 255, 255, 0.06);
-      }
-      .availability {
-        margin-top: 16px;
-        color: #778198;
-        font-size: 0.85rem;
-      }
-      .product-card {
-        position: relative;
-        padding: clamp(26px, 4vw, 38px);
-        border: 1px solid rgba(255, 255, 255, 0.17);
-        border-radius: 34px;
-        background: rgba(18, 20, 34, 0.7);
-        box-shadow: 0 30px 100px rgba(0, 0, 0, 0.42);
-        backdrop-filter: blur(24px);
-      }
-      .ring {
-        width: 126px;
-        aspect-ratio: 1;
-        margin: 0 auto 30px;
-        display: grid;
-        place-items: center;
-        border-radius: 50%;
-        background: radial-gradient(circle, #131728 50%, transparent 52%),
-          conic-gradient(#10b967, #ffc400, #ff6d00, #5a1cff, #18b9ff, #10b967);
-        box-shadow: 0 0 62px rgba(122, 85, 255, 0.25);
-      }
-      .ring img {
-        width: 56px;
-        height: 56px;
-        object-fit: contain;
-        border-radius: 15px;
-      }
-      .feature-list {
-        display: grid;
-        gap: 13px;
-      }
-      .feature {
-        padding: 16px 17px;
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        border-radius: 18px;
-        background: rgba(255, 255, 255, 0.045);
-      }
-      .feature strong {
-        display: block;
-        margin-bottom: 4px;
-        font-size: 0.95rem;
-      }
-      .feature span {
-        color: #98a2b8;
-        font-size: 0.88rem;
-        line-height: 1.45;
-      }
-      footer {
-        padding: 0 0 30px;
-        color: #687289;
-        font-size: 0.8rem;
-      }
-      @media (max-width: 820px) {
-        main {
-          grid-template-columns: 1fr;
-          padding-top: 54px;
-        }
-        .product-card {
-          max-width: 620px;
-        }
-      }
-    </style>
+    <link
+      rel="preload"
+      href="/assets/fonts/manrope.ttf"
+      as="font"
+      type="font/ttf"
+      crossorigin />
+    <link rel="stylesheet" href="/site.css?v=checkbox-20261022" />
+    <title>Hoyst | Your goals deserve good company</title>
   </head>
   <body>
-    <div class="page">
-      <header>
-        <img class="logo" src="/assets/hoyst-logo.png" alt="Hoyst" />
-        <span class="beta">iPhone beta</span>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <div class="shell">
+      <header class="site-header">
+        <a class="brand" href="/" aria-label="Hoyst home"
+          ><img
+            src="/assets/hoyst-logo-black.webp"
+            width="380"
+            height="160"
+            alt="Hoyst"
+        /></a>
+        <nav class="site-nav" aria-label="Main navigation">
+          <a href="#how-it-works">How it works</a>
+          <a href="#meet-hoy">Meet Hoy</a>
+          <a class="nav-beta" href="#getting-started">Try the beta</a>
+        </nav>
+        <a
+          class="button button-small header-cta"
+          data-beta-action="testflight"
+          href="https://testflight.apple.com/join/uzrHGy3t"
+          >Try Hoyst on iPhone</a
+        >
       </header>
-      <main>
-        <section>
-          <div class="eyebrow">Commit. Tap In. Keep moving.</div>
-          <h1>
-            Consistency feels lighter with the
-            <span class="gradient">right support.</span>
-          </h1>
-          <p class="lede">
-            Build a Commitment, share the rhythm with a Circle, and make your
-            progress visible through one clear Tap In.
-          </p>
-          <div class="actions">
-            <a
-              class="button button-primary"
-              href="https://testflight.apple.com/join/uzrHGy3t"
-              >Join the TestFlight beta</a
-            >
-            <a class="button button-secondary" href="mailto:support@hoyst.app"
-              >Contact Hoyst</a
-            >
+      <main id="main" tabindex="-1">
+        <section class="hero" aria-labelledby="hero-title">
+          <div class="hero-main">
+            <div class="hero-copy">
+              <p class="eyebrow">Accountability, with a human side.</p>
+              <h1 id="hero-title">Your goals deserve good company.</h1>
+              <p class="hero-description">
+                Build a Circle around what matters to you. Share your
+                Commitment, Tap In, and help each other keep going.
+              </p>
+              <a
+                class="button"
+                data-beta-action="testflight"
+                href="https://testflight.apple.com/join/uzrHGy3t"
+                >Try Hoyst on iPhone
+                <img
+                  class="button-icon"
+                  src="/assets/arrow-right.svg"
+                  width="18"
+                  height="18"
+                  alt=""
+                  aria-hidden="true"
+              /></a>
+              <p class="availability">Free iPhone beta through TestFlight</p>
+            </div>
+            <div class="hero-visual">
+              <div class="phone">
+                <img
+                  class="phone-screen"
+                  src="/assets/workout-circle.webp"
+                  width="1206"
+                  height="2622"
+                  alt="Hoyst's Workout Crew Circle on iPhone: three workouts a week, a Tap In action, shared activity, and personal and group progress." />
+                <img
+                  class="phone-frame"
+                  src="/assets/iphone-bezel.webp"
+                  width="1533"
+                  height="2904"
+                  alt=""
+                  aria-hidden="true" />
+              </div>
+              <p class="speech">One step<br />at a time.</p>
+              <img
+                class="hero-hoy"
+                src="/assets/hoy-blue.webp"
+                width="384"
+                height="384"
+                alt="Hoy, Hoyst's smiling blue companion" />
+            </div>
           </div>
-          <p class="availability">
-            Hoyst is currently available to invited iPhone beta testers.
-          </p>
+          <div class="connection-ribbon">
+            <img
+              src="/assets/circle-connections.webp"
+              width="840"
+              height="560"
+              alt="Four people connected around a shared workout goal" />
+            <div>
+              <h2>A shared goal. A little support. Your Circle.</h2>
+              <p>People who notice your effort and help you keep going.</p>
+            </div>
+          </div>
         </section>
-        <aside class="product-card" aria-label="How Hoyst works">
-          <div class="ring">
-            <img src="/assets/hoyst-icon.png" alt="" />
+        <section class="story" id="how-it-works" aria-labelledby="story-title">
+          <h2 class="section-title" id="story-title">
+            A small rhythm. A stronger Circle.
+          </h2>
+          <div class="story-steps">
+            <article class="story-step">
+              <span class="step-number" aria-hidden="true">01</span>
+              <div class="step-copy">
+                <h3>Find your people.</h3>
+                <p>
+                  Create a Circle with friends or join people working toward
+                  something that matters to you.
+                </p>
+              </div>
+              <img
+                class="step-art"
+                src="/assets/circle-connections.webp"
+                width="840"
+                height="560"
+                alt="A Circle connects people around the same goal"
+                loading="lazy" />
+            </article>
+            <article class="story-step">
+              <span class="step-number" aria-hidden="true">02</span>
+              <div class="step-copy">
+                <h3>Show up with a Tap In.</h3>
+                <p>
+                  Let your Circle know how it went. Small actions become shared
+                  progress.
+                </p>
+              </div>
+              <img
+                class="step-art"
+                src="/assets/tap-in-together.webp"
+                width="840"
+                height="500"
+                alt="One person says Workout done! A friend replies Nice work!"
+                loading="lazy" />
+            </article>
+            <article class="story-step">
+              <span class="step-number" aria-hidden="true">03</span>
+              <div class="step-copy">
+                <h3>Keep each other going.</h3>
+                <p>Notice the effort. Send a nudge. Celebrate showing up.</p>
+              </div>
+              <img
+                class="step-art"
+                src="/assets/shared-goal.webp"
+                width="840"
+                height="500"
+                alt="Friends connected to a shared goal, with the encouragement We've got this"
+                loading="lazy" />
+            </article>
           </div>
-          <div class="feature-list">
-            <div class="feature">
-              <strong>Choose a clear Commitment</strong>
-              <span
-                >Define what counts and the rhythm you want to protect.</span
-              >
-            </div>
-            <div class="feature">
-              <strong>Tap In when you follow through</strong>
-              <span>Keep daily, weekly, or monthly Progression visible.</span>
-            </div>
-            <div class="feature">
-              <strong>Move with a Circle</strong>
-              <span
-                >Share accountability with companions who understand the
-                goal.</span
-              >
+        </section>
+        <section class="hoy-section" id="meet-hoy" aria-labelledby="hoy-title">
+          <div class="hoy-intro">
+            <img
+              src="/assets/hoy.webp"
+              width="384"
+              height="384"
+              alt=""
+              loading="lazy" />
+            <div>
+              <h2 id="hoy-title">
+                Meet Hoy. A little encouragement, every day.
+              </h2>
+              <p>
+                Hoy is here to make momentum feel lighter, with guidance on your
+                next action and celebrations when you and your Circle show up.
+              </p>
             </div>
           </div>
-        </aside>
+          <section class="updates" aria-labelledby="updates-title">
+            <div>
+              <h2 id="updates-title">Stay in the loop.</h2>
+              <p id="updates-description">
+                Hoyst news, new features, and launch updates, including Android.
+              </p>
+            </div>
+            <form
+              id="updates-form"
+              action="/api/launch-signup"
+              method="post"
+              aria-describedby="updates-description">
+              <div class="signup-fields">
+                <label class="visually-hidden" for="updates-email"
+                  >Your email address</label
+                >
+                <input
+                  id="updates-email"
+                  name="email"
+                  type="email"
+                  autocomplete="email"
+                  inputmode="email"
+                  placeholder="Your email address"
+                  maxlength="254"
+                  required />
+                <label class="signup-consent">
+                  <input
+                    id="updates-consent"
+                    name="consent"
+                    type="checkbox"
+                    value="yes"
+                    required />
+                  <span
+                    >Email me Hoyst news, new features, and launch updates.
+                    Unsubscribe anytime.</span
+                  >
+                </label>
+                <button class="button" type="submit">Keep me updated</button>
+              </div>
+              <p class="signup-note">
+                Occasional emails. Unsubscribe anytime.
+                <a href="/privacy#updates">Privacy</a>
+              </p>
+              <p
+                class="form-status"
+                id="updates-status"
+                role="status"
+                aria-live="polite"
+                hidden></p>
+            </form>
+          </section>
+        </section>
+        <section
+          class="getting-started"
+          id="getting-started"
+          aria-labelledby="start-title">
+          <div class="faq-grid">
+            <div>
+              <h2 id="start-title">Your Circle starts here.</h2>
+              <ol class="install-steps">
+                <li>
+                  Open this page on your iPhone and tap
+                  <strong>Try Hoyst on iPhone</strong>.
+                </li>
+                <li>
+                  Install Apple’s TestFlight app if asked, then accept the Hoyst
+                  beta and install Hoyst.
+                </li>
+                <li>
+                  Create a Circle with friends or find one that fits your goal.
+                  Make a Commitment and record your first Tap In when it is due.
+                </li>
+              </ol>
+              <p class="help-copy">
+                Free iPhone beta. United States. Ages 18+.<br />Have an
+                invitation? After installing, return to that invitation and tap
+                <strong>Open Hoyst</strong>.
+              </p>
+            </div>
+            <div>
+              <h2>A few good questions.</h2>
+              <details>
+                <summary>What is an accountability Circle?</summary>
+                <p>
+                  A Circle is a group of people following through on a shared
+                  Commitment. You can see each other’s Tap Ins, notice progress,
+                  and send a helpful nudge when someone needs one.
+                </p>
+              </details>
+              <details>
+                <summary>Can I bring my friends?</summary>
+                <p>
+                  Yes. Create a Circle and share its invitation link. Circle
+                  access can be open, invite only, or require approval.
+                </p>
+              </details>
+              <details>
+                <summary>Do I have to join a Circle?</summary>
+                <p>
+                  You can also keep personal Commitments. Circles add direct
+                  support from other people when you want it.
+                </p>
+              </details>
+              <details>
+                <summary>Is Hoyst available on Android?</summary>
+                <p>
+                  The public beta is currently for iPhone. Join the updates list
+                  above for news about future platform availability.
+                </p>
+              </details>
+              <details>
+                <summary>How do I share feedback?</summary>
+                <p>
+                  In Hoyst, open Settings and choose Get help / Report a problem
+                  or Request a feature. You can also use TestFlight feedback,
+                  <a
+                    data-beta-action="support"
+                    href="mailto:development@wavelinkllc.com"
+                    >email Hoyst</a
+                  >, or
+                  <a
+                    data-beta-action="support"
+                    data-channel="instagram"
+                    href="https://www.instagram.com/kg.codes/"
+                    >message @kg.codes</a
+                  >.
+                </p>
+              </details>
+            </div>
+          </div>
+        </section>
+        <section class="bottom-cta" aria-labelledby="cta-title">
+          <h2 id="cta-title">You don’t have to do it alone.</h2>
+          <a
+            class="button"
+            data-beta-action="testflight"
+            href="https://testflight.apple.com/join/uzrHGy3t"
+            >Try Hoyst on iPhone
+            <img
+              class="button-icon"
+              src="/assets/arrow-right.svg"
+              width="18"
+              height="18"
+              alt=""
+              aria-hidden="true"
+          /></a>
+        </section>
       </main>
-      <footer>
-        © 2026 Hoyst. All rights reserved.
-        <a href="/privacy">Privacy Policy</a> · <a href="/terms">Terms</a>
+      <footer class="site-footer">
+        <span>© 2026 Hoyst. A little progress, together.</span>
+        <div class="footer-links">
+          <a href="/privacy">Privacy</a><a href="/terms">Terms</a
+          ><a
+            data-beta-action="support"
+            href="mailto:development@wavelinkllc.com"
+            >Contact Hoyst</a
+          ><button type="button" data-analytics-toggle>
+            Analytics preferences
+          </button>
+        </div>
       </footer>
     </div>
+    <script src="/beta-config.js"></script>
+    <script src="/beta.js" defer></script>
+    <script src="/updates.js?v=checkbox-20261022" defer></script>
   </body>
 </html>

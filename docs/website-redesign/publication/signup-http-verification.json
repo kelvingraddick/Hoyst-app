@@ -1,0 +1,25 @@
+[
+  {
+    "route": "/api/launch-signup",
+    "status": 400,
+    "expected": 400,
+    "passed": true
+  },
+  {
+    "route": "/api/launch-signup",
+    "status": 403,
+    "expected": 403,
+    "passed": true
+  },
+  {
+    "route": "/api/launch-signup",
+    "status": 202,
+    "expected": 202,
+    "passed": true
+  },
+  {
+    "route": "/updates/confirm",
+    "status": 200,
+    "replayPreservesPreferences": true
+  }
+]

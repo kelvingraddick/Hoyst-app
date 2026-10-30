@@ -1,0 +1,14 @@
+{
+  "recipient": "development@wavelinkllc.com",
+  "emailId": "01a1666f-a518-7a61-a4b5-b54186ba3cec",
+  "deliveryEvent": "delivered",
+  "confirmed": true,
+  "hoystSegment": true,
+  "topicOptOutPreserved": true,
+  "duplicateSentEmails": 0,
+  "replayResult": "already",
+  "globalPreferenceUnchanged": true,
+  "unrelatedTopicsAndSegmentsUnchanged": true,
+  "finalTestTopicPreference": "opt_out",
+  "verifiedAt": "2026-10-23T01:51:33.830Z"
+}

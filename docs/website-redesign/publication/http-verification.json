@@ -1,0 +1,104 @@
+[
+  {
+    "path": "/",
+    "status": 200,
+    "contentType": "text/html; charset=utf-8",
+    "approvedHeadline": true,
+    "blueHoy": true
+  },
+  {
+    "path": "/site.css",
+    "status": 200,
+    "contentType": "text/css; charset=utf-8",
+    "sage": true
+  },
+  {
+    "path": "/assets/hoy-blue.webp",
+    "status": 200,
+    "contentType": "image/webp",
+    "matchesLocal": true
+  },
+  {
+    "path": "/assets/hoy-green.webp",
+    "status": 200,
+    "contentType": "image/webp",
+    "matchesLocal": true
+  },
+  {
+    "path": "/assets/hoy-golden.webp",
+    "status": 200,
+    "contentType": "image/webp",
+    "matchesLocal": true
+  },
+  {
+    "path": "/assets/workout-circle.webp",
+    "status": 200,
+    "contentType": "image/webp",
+    "matchesLocal": true
+  },
+  {
+    "path": "/privacy",
+    "status": 200,
+    "contentType": "text/html; charset=utf-8"
+  },
+  {
+    "path": "/terms",
+    "status": 200,
+    "contentType": "text/html; charset=utf-8"
+  },
+  {
+    "path": "/apple-app-site-association",
+    "status": 200,
+    "contentType": "application/json",
+    "universalLinkScope": [
+      {
+        "/": "/join/*",
+        "comment": "Open Hoyst Circle invitation links in the iOS app."
+      }
+    ]
+  },
+  {
+    "path": "/.well-known/apple-app-site-association",
+    "status": 200,
+    "contentType": "application/json",
+    "universalLinkScope": [
+      {
+        "/": "/join/*",
+        "comment": "Open Hoyst Circle invitation links in the iOS app."
+      }
+    ]
+  },
+  {
+    "path": "/updates/confirm",
+    "status": 200,
+    "contentType": "text/html; charset=utf-8"
+  },
+  {
+    "path": "/join/[provided]",
+    "status": 200,
+    "contentType": "text/html; charset=utf-8"
+  },
+  {
+    "path": "/join/[invalid]",
+    "status": 404,
+    "contentType": "text/html; charset=utf-8"
+  },
+  {
+    "path": "/api/launch-signup",
+    "status": 400,
+    "expected": 400,
+    "passed": true
+  },
+  {
+    "path": "/api/launch-signup",
+    "status": 403,
+    "expected": 403,
+    "passed": true
+  },
+  {
+    "path": "/api/launch-signup",
+    "status": 503,
+    "expected": 503,
+    "passed": true
+  }
+]
