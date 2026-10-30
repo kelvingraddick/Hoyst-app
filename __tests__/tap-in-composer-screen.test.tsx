@@ -17,6 +17,7 @@ const mockSubscribeToMemberCircleDetail = jest.fn();
 let mockEmitDetail: ((detail: CircleDetailModel) => void) | undefined;
 const mockLaunchCamera = jest.fn();
 const mockLaunchImageLibrary = jest.fn();
+let mockSceneFrame = {x: 0, y: 0, width: 402, height: 874};
 const mockNavigationListeners: Record<
   string,
   (event: {data: {index: number; stable: boolean}}) => void
@@ -86,6 +87,7 @@ jest.mock('react-native-safe-area-context', () => {
     SafeAreaView: ({children, ...props}: {children?: React.ReactNode}) =>
       MockReact.createElement(View, props, children),
     useSafeAreaInsets: () => ({bottom: 0, left: 0, right: 0, top: 0}),
+    useSafeAreaFrame: () => mockSceneFrame,
   };
 });
 
@@ -205,6 +207,7 @@ function findPressableContainingText(
 
 describe('TapInComposerScreen', () => {
   beforeEach(() => {
+    mockSceneFrame = {x: 0, y: 0, width: 402, height: 874};
     mockProgress = {
       loading: false,
       summary: {inventory: {skips: 3, restores: 1}, flags: {inventory: true}},
@@ -1433,6 +1436,41 @@ describe('TapInComposerScreen', () => {
     });
     return alertSpy;
   }
+  it('retains typed quantity and selected proof through repeated scene resizes', async () => {
+    mockDetail = {
+      ...baseMockDetail,
+      commitmentType: 'build',
+      buildTrackingMode: 'quantity',
+      currentValue: 0,
+      targetValue: 100,
+      unitLabel: 'pages',
+    };
+    let tree!: renderer.ReactTestRenderer;
+    await act(async () => {tree = renderComposerScreen();});
+    const alertSpy = await selectRequiredPhoto(tree);
+    try {
+      await act(async () => {
+        tree.root.findByProps({testID: 'tap-in-composer-quantity-input'}).props.onChangeText('37');
+      });
+      const props = tree.root.findByType(TapInComposerScreen).props as React.ComponentProps<typeof TapInComposerScreen>;
+      for (const frame of [
+        {x: 0, y: 0, width: 800, height: 620},
+        {x: 0, y: 0, width: 340, height: 620},
+        {x: 0, y: 0, width: 402, height: 874},
+      ]) {
+        mockSceneFrame = frame;
+        await act(async () => {tree.update(<TapInComposerScreen {...props} />);});
+        expect(tree.root.findByProps({testID: 'tap-in-composer-quantity-input'}).props.value).toBe('37');
+        expect(tree.root.findByProps({testID: 'photo-picker-preview'}).props.source.uri).toBe('file:///required.jpg');
+      }
+      expect(mockSubscribeToMemberCircleDetail).toHaveBeenCalledTimes(1);
+      expect(mockSubmitTapIn).not.toHaveBeenCalled();
+      expect(mockUploadTapInPhoto).not.toHaveBeenCalled();
+    } finally {
+      alertSpy.mockRestore();
+      await act(async () => tree.unmount());
+    }
+  });
   const primaryAction = (tree: renderer.ReactTestRenderer) =>
     tree.root
       .findAllByType(DSButton)

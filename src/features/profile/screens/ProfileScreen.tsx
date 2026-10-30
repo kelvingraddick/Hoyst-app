@@ -53,6 +53,7 @@ import {
 import {useProfileOverview} from '../hooks/useProfileOverview';
 import {getEarnedProfileMilestones} from '../services/profile-personalization';
 import {useProfilePreview} from '../components/ProfilePreviewContext';
+import {useLayoutWidth} from '../../../design/hooks/useLayoutWidth';
 
 type Props = BottomTabScreenProps<AppTabsParamList, 'Profile'>;
 export function ProfileScreen(props: Props) {
@@ -67,7 +68,10 @@ function Content({navigation}: Props) {
   const overview = useProfileOverview();
   const preview = useProfilePreview();
   const {width, fontScale} = useWindowDimensions();
-  const stackBests = width < 360 || fontScale > 1.3;
+  const {width: bestsWidth, onLayout: measureBests} = useLayoutWidth(
+    width - 76,
+  );
+  const stackBests = bestsWidth < 284 || fontScale > 1.3;
   const scrollRef = useRef<ScrollView>(null);
   const fallbackUrl = useSessionStore(state => state.user?.photoURL);
   const root =
@@ -324,6 +328,7 @@ function Content({navigation}: Props) {
                 {backgroundColor: theme.isDark ? '#302717' : '#FFF6DC'},
               ]}>
               <View
+                onLayout={measureBests}
                 style={[
                   styles.bestMetrics,
                   stackBests && styles.bestMetricsStack,

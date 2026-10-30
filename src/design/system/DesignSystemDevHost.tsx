@@ -79,6 +79,18 @@ export function DesignSystemDevHost() {
       DevSettings.addMenuItem(`Circle progress: ${mode}`, () => {if (mounted) setCircleProgressMode(mode);});
     });
     const openPreview = (url: string | null) => {
+      if (url === 'hoyst://tap-in-composer-preview' || url === 'hoyst://tap-in-composer-preview/close') {
+        if (mounted) {
+          setTapInVisible(!url.endsWith('/close'));
+        }
+        return;
+      }
+      if (url === 'hoyst://tap-in-picker-preview' || url === 'hoyst://tap-in-picker-preview/close') {
+        if (mounted) {
+          setPickerVisible(!url.endsWith('/close'));
+        }
+        return;
+      }
       const storyMatch = url?.match(/^hoyst:\/\/tap-in-story-preview\/([a-z-]+)$/);
       if (mounted && storyMatch) {
         setStoryMode(storyMatch[1] === 'close' ? undefined : storyMatch[1]);

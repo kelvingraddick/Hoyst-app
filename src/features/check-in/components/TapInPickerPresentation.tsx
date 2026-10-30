@@ -31,7 +31,8 @@ import {
   useSystemTheme,
 } from '../../../design/system';
 import {
-  initialWindowMetrics,
+  SafeAreaView,
+  useSafeAreaFrame,
   useSafeAreaInsets,
 } from 'react-native-safe-area-context';
 import {TAP_IN_EXPANDED_DETENT} from '../../../navigation/tap-in-sheet-options';
@@ -268,16 +269,15 @@ export function TapInPickerPresentation({
   const theme = useSystemTheme();
   const [createPressed, setCreatePressed] = useState(false);
   const insets = useSafeAreaInsets();
-  const {height, fontScale} = useWindowDimensions();
-  const maximumSheetHeight = Math.max(
-    1,
-    height - (initialWindowMetrics?.insets.top ?? insets.top) - 10,
-  );
+  const {fontScale} = useWindowDimensions();
+  const {height} = useSafeAreaFrame();
+  const maximumSheetHeight = Math.max(1, height - insets.top - 10);
   const initialSheetHeight = Math.round(
     maximumSheetHeight * TAP_IN_EXPANDED_DETENT,
   );
   return (
-    <View
+    <SafeAreaView
+      edges={['left', 'right']}
       collapsable={false}
       style={[
         styles.sheet,
@@ -414,7 +414,7 @@ export function TapInPickerPresentation({
           </View>
         ) : null}
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 }
 

@@ -1284,9 +1284,12 @@ describe('CircleDetailScreen reference redesign', () => {
 
     const {tree} = renderScreen();
     const output = outputOf(tree);
-    const progressCopy = tree.root
+    const groupProgress = tree.root.findByProps({
+      testID: 'circle-group-period-progress',
+    });
+    const progressCopy = groupProgress
       .findAllByType(Text)
-      .find(node => textContent(node) === '1 of 4 met goal');
+      .find(node => textContent(node) === '1 of 4');
     const todayCopy = tree.root
       .findAllByType(Text)
       .find(node => textContent(node) === 'Today · 1 tapped in · 1 skipped');
@@ -1294,8 +1297,9 @@ describe('CircleDetailScreen reference redesign', () => {
     expect(output).toMatch(/1 of 4\s+met goal/);
     expect(output).not.toContain('Tap a day for completion and skip details');
     expect(tree.root.findAllByProps({accessibilityHint: 'View completion, skip, and restore details for this day'}).length).toBeGreaterThan(0);
-    expect(progressCopy?.props.numberOfLines).toBe(1);
-    expect(progressCopy?.props.adjustsFontSizeToFit).toBe(true);
+    expect(progressCopy).toBeDefined();
+    expect(progressCopy?.props.numberOfLines).toBeUndefined();
+    expect(progressCopy?.props.adjustsFontSizeToFit).toBeFalsy();
     expect(todayCopy?.props.numberOfLines).toBeUndefined();
   });
 

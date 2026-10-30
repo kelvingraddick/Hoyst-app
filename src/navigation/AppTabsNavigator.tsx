@@ -1,5 +1,5 @@
 import React, {useEffect, useRef, useState} from 'react';
-import {Platform, StyleSheet, View} from 'react-native';
+import {StyleSheet, View} from 'react-native';
 import {createBottomTabNavigator} from '@react-navigation/bottom-tabs';
 import type {NativeStackScreenProps} from '@react-navigation/native-stack';
 
@@ -18,6 +18,7 @@ import {ProgressScreen} from '../features/progress/screens/ProgressScreen';
 import {ProfileScreen} from '../features/profile/screens/ProfileScreen';
 import {useHoystTheme} from '../design/theme/useHoystTheme';
 import {HoystTabBarBackground} from './components/HoystTabBarBackground';
+import {HoystBottomTabBar} from './components/HoystBottomTabBar';
 import {getAppTabBarColors} from './tab-bar-colors';
 import {canResumePendingAction} from './pending-action-resume';
 import {navigateToAuthWelcome} from './auth-modal-navigation';
@@ -171,6 +172,7 @@ export function AppTabsNavigator({
 
   return (
     <Tab.Navigator
+      tabBar={HoystBottomTabBar}
       screenOptions={({route}) => ({
         headerShown: false,
         sceneStyle: {
@@ -184,12 +186,12 @@ export function AppTabsNavigator({
         tabBarInactiveTintColor: tabBarColors.label,
         tabBarItemStyle: styles.tabBarItem,
         tabBarLabelStyle: styles.tabBarLabel,
+        tabBarLabelPosition: 'below-icon',
         tabBarStyle: [
           styles.tabBar,
           {
             backgroundColor: 'transparent',
             borderTopWidth: 0,
-            bottom: Platform.OS === 'ios' ? 18 : 12,
             shadowColor: theme.shadow,
           },
         ],

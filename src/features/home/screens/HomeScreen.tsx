@@ -1084,7 +1084,14 @@ export function HomeScreen(): React.JSX.Element {
         contentInsetAdjustmentBehavior="never"
         automaticallyAdjustContentInsets={false}
         automaticallyAdjustsScrollIndicatorInsets={false}
-        contentContainerStyle={[styles.scrollContent, {paddingTop: insets.top}]}
+        contentContainerStyle={[
+          styles.scrollContent,
+          {
+            paddingTop: insets.top,
+            paddingLeft: insets.left,
+            paddingRight: insets.right,
+          },
+        ]}
         showsVerticalScrollIndicator={false}
         style={styles.scroll}>
         <HomeHeroHeader

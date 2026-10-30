@@ -73,23 +73,24 @@ export function HoystScreen({
   );
 
   return (
-    <SafeAreaView
-      style={[styles.safeArea, {backgroundColor: theme.background}]}>
+    <View style={[styles.safeArea, {backgroundColor: theme.background}]}>
       {background ? (
         <View pointerEvents="none" style={StyleSheet.absoluteFill}>
           {background}
         </View>
       ) : null}
-      {keyboardAvoiding ? (
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          style={styles.safeArea}>
-          {screenContent}
-        </KeyboardAvoidingView>
-      ) : (
-        screenContent
-      )}
-    </SafeAreaView>
+      <SafeAreaView style={styles.safeArea}>
+        {keyboardAvoiding ? (
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            style={styles.safeArea}>
+            {screenContent}
+          </KeyboardAvoidingView>
+        ) : (
+          screenContent
+        )}
+      </SafeAreaView>
+    </View>
   );
 }
 

@@ -13,6 +13,7 @@ import {actionMotion} from '../tokens/actions';
 import {brandColors} from '../tokens/colors';
 import {radius} from '../tokens/radius';
 import {useHoystTheme} from '../theme/useHoystTheme';
+import {useLayoutWidth} from '../hooks/useLayoutWidth';
 import {GlassPanel} from './GlassPanel';
 import {GradientRing} from './GradientRing';
 import {HoystText} from './HoystText';
@@ -50,6 +51,7 @@ type CircleMemberGridProps = {
 const GRID_GAP = 12;
 const PAGE_SIDE_INSET = 40;
 const OVERFLOW_PEEK = 34;
+const MIN_CARD_WIDTH = 140;
 const AVATAR_RING_SIZE = 64;
 const AVATAR_RING_STROKE_WIDTH = 4.5;
 const AVATAR_SIZE = 56;
@@ -450,9 +452,7 @@ function InviteCard({
             width: cardWidth,
           },
         ]}>
-        <View
-          style={styles.inviteCardInner}
-          testID="circle-member-invite-card">
+        <View style={styles.inviteCardInner} testID="circle-member-invite-card">
           <View
             style={[
               styles.inviteIconRing,
@@ -569,20 +569,31 @@ export function CircleMemberGrid({
   viewerUid,
 }: CircleMemberGridProps): React.JSX.Element {
   const {width} = useWindowDimensions();
+  const {width: contentWidth, onLayout} = useLayoutWidth(
+    width - PAGE_SIDE_INSET,
+  );
   const slots = React.useMemo(
     () => buildMemberSlots(members, inviteAction),
     [inviteAction, members],
   );
   const pages = React.useMemo(() => chunkSlots(slots), [slots]);
   const hasOverflow = slots.length > 4;
-  const pageWidth = Math.max(
-    294,
-    width - PAGE_SIDE_INSET - (hasOverflow ? OVERFLOW_PEEK : 0),
+  const columns = contentWidth < MIN_CARD_WIDTH * 2 + GRID_GAP ? 1 : 2;
+  const peek =
+    hasOverflow && contentWidth >= MIN_CARD_WIDTH * 2 + GRID_GAP + OVERFLOW_PEEK
+      ? OVERFLOW_PEEK
+      : 0;
+  const pageWidth = Math.max(1, contentWidth - peek);
+  const cardWidth = Math.max(
+    1,
+    (pageWidth - GRID_GAP * (columns - 1)) / columns,
   );
-  const cardWidth = (pageWidth - GRID_GAP) / 2;
 
   return (
-    <View style={styles.section}>
+    <View
+      style={styles.section}
+      onLayout={onLayout}
+      testID="circle-member-grid">
       <View style={styles.header}>
         <SectionEyebrow>{title}</SectionEyebrow>
         <SectionEyebrowTrailing>{subtitle}</SectionEyebrowTrailing>

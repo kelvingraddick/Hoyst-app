@@ -77,6 +77,41 @@ function outputOf(tree: renderer.ReactTestRenderer) {
   return JSON.stringify(tree.toJSON());
 }
 
+it('fits pages to the actual container as the window folds and unfolds', () => {
+  const tree = renderGrid([
+    member('a', 'Avery', 'done'),
+    member('b', 'Blair', 'done'),
+  ]);
+  for (const width of [280, 760, 340]) {
+    act(() => {
+      tree.root.findByProps({testID: 'circle-member-grid'}).props.onLayout({
+        nativeEvent: {layout: {width}},
+      });
+    });
+    const page = tree.root.findByProps({testID: 'circle-member-grid-page-0'});
+    expect(StyleSheet.flatten(page.props.style).width).toBe(width);
+    expect(outputOf(tree)).toContain('Avery');
+  }
+  act(() => tree.unmount());
+});
+
+it('keeps overflow member actions wide enough in a narrow split view', () => {
+  const tree = renderGrid(Array.from({length: 6}, (_, index) => member(String(index), `Member ${index}`, 'done')));
+  for (const width of [280, 310]) {
+    act(() => tree.root.findByProps({testID: 'circle-member-grid'}).props.onLayout({
+      nativeEvent: {layout: {width}},
+    }));
+    const page = tree.root.findByProps({testID: 'circle-member-grid-page-0'});
+    expect(StyleSheet.flatten(page.props.style).width).toBe(width);
+    // At 280 points the grid has one column. At 310 it keeps two without a peek.
+    const expectedCardWidth = width === 280 ? 280 : 149;
+    const widths = page.findAll(node => node.type === require('react-native').View)
+      .map(node => StyleSheet.flatten(node.props.style)?.width);
+    expect(widths).toContain(expectedCardWidth);
+  }
+  act(() => tree.unmount());
+});
+
 function textContent(node: ReactTestInstance): string {
   return node.children
     .map(child =>

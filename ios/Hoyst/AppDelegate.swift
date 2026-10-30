@@ -137,6 +137,8 @@ private enum HoystInviteLink {
 
 @main
 class AppDelegate: RCTAppDelegate {
+  private(set) var reactNativeLaunchOptions: [UIApplication.LaunchOptionsKey: Any]?
+
   override func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey : Any]? = nil) -> Bool {
     HoystNativeMonitoring.initialize()
     if let url = launchOptions?[.url] as? URL {
@@ -150,6 +152,10 @@ class AppDelegate: RCTAppDelegate {
     // You can add your custom initial props in the dictionary below.
     // They will be passed down to the ViewController used by React Native.
     self.initialProps = [:]
+    // The connected scene owns the window and its initial bounds. The RN 0.78
+    // default otherwise creates a temporary window sized from UIScreen.main.
+    self.automaticallyLoadReactNativeWindow = false
+    self.reactNativeLaunchOptions = launchOptions
 
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
@@ -213,7 +219,16 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     }
 
     let window = UIWindow(windowScene: windowScene)
-    window.rootViewController = appDelegate.window.rootViewController
+    let rootView = appDelegate.rootViewFactory().view(
+      withModuleName: appDelegate.moduleName ?? "Hoyst",
+      initialProperties: appDelegate.initialProps,
+      launchOptions: appDelegate.reactNativeLaunchOptions
+    )
+    rootView.frame = window.bounds
+    rootView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+    let rootViewController = appDelegate.createRootViewController()
+    appDelegate.setRootView(rootView, toRootViewController: rootViewController)
+    window.rootViewController = rootViewController
     appDelegate.window = window
     self.window = window
     window.makeKeyAndVisible()
@@ -228,6 +243,37 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         restorationHandler: { _ in }
       )
     }
+  }
+
+  func sceneDidBecomeActive(_ scene: UIScene) {
+    notifyReactNativeOfWindowGeometryChange()
+  }
+
+  @available(iOS 26.0, *)
+  func windowScene(
+    _ windowScene: UIWindowScene,
+    didUpdateEffectiveGeometry previousEffectiveGeometry: UIWindowScene.Geometry
+  ) {
+    notifyReactNativeOfWindowGeometryChange()
+  }
+
+  func windowScene(
+    _ windowScene: UIWindowScene,
+    didUpdate previousCoordinateSpace: UICoordinateSpace,
+    interfaceOrientation previousInterfaceOrientation: UIInterfaceOrientation,
+    traitCollection previousTraitCollection: UITraitCollection
+  ) {
+    if #available(iOS 26.0, *) {
+      return
+    }
+    notifyReactNativeOfWindowGeometryChange()
+  }
+
+  private func notifyReactNativeOfWindowGeometryChange() {
+    NotificationCenter.default.post(
+      name: .RCTWindowFrameDidChange,
+      object: window
+    )
   }
 
   func scene(_ scene: UIScene, openURLContexts URLContexts: Set<UIOpenURLContext>) {

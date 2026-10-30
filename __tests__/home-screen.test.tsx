@@ -1559,6 +1559,8 @@ describe('HomeScreen Circle activity updates', () => {
       expect(StyleSheet.flatten(scroll.props.contentContainerStyle)).toEqual({
         flexGrow: 1,
         paddingTop: 62,
+        paddingLeft: 0,
+        paddingRight: 0,
       });
       expect(scroll.props.contentInsetAdjustmentBehavior).toBe('never');
       expect(scroll.props.automaticallyAdjustContentInsets).toBe(false);
@@ -1577,6 +1579,23 @@ describe('HomeScreen Circle activity updates', () => {
       ).toBe(242);
     },
   );
+
+  it('responds to asymmetric side-inset changes without changing the window size', () => {
+    const tree = renderScreenTree();
+    for (const insets of [
+      {top: 0, bottom: 0, left: 0, right: 74},
+      {top: 0, bottom: 0, left: 74, right: 0},
+      {top: 62, bottom: 34, left: 0, right: 0},
+    ]) {
+      mockInsets = insets;
+      act(() => tree.update(<HomeScreen />));
+      expect(StyleSheet.flatten(tree.root.findByType(ScrollView).props.contentContainerStyle)).toMatchObject({
+        paddingTop: insets.top,
+        paddingLeft: insets.left,
+        paddingRight: insets.right,
+      });
+    }
+  });
 
   it('opens the matching progress details from the two Home stat cards', () => {
     mockHomeData = {

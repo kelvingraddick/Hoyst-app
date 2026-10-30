@@ -4,6 +4,7 @@ import {ChevronRight} from 'lucide-react-native';
 import {DSSurface, DSText, useSystemTheme} from '../../../design/system';
 import {ProgressStatBadge} from './ProgressStatBadge';
 import type {CircularEmojiKind} from '../../../design/components/CircularEmoji';
+import {useLayoutWidth} from '../../../design/hooks/useLayoutWidth';
 
 export function ProgressStatCard({
   title,
@@ -61,9 +62,11 @@ export function ProgressStatsRow({
   testIDPrefix?: string;
 }) {
   const {width, fontScale} = useWindowDimensions();
-  const columns = (viewportWidth ?? width) >= 390 && fontScale <= 1.15;
+  const {width: contentWidth, onLayout} = useLayoutWidth(width - 44);
+  const columns =
+    (viewportWidth ?? contentWidth + 44) >= 390 && fontScale <= 1.15;
   return (
-    <View style={columns ? styles.columns : styles.stack}>
+    <View onLayout={onLayout} style={columns ? styles.columns : styles.stack}>
       {[
         {
           key: 'streak',

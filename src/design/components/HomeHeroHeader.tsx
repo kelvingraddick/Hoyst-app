@@ -12,6 +12,7 @@ import {
 import Svg, {Path} from 'react-native-svg';
 import type {HoyState} from '../../features/home/services/hoy-state';
 import {useHoystTheme} from '../theme/useHoystTheme';
+import {useLayoutWidth} from '../hooks/useLayoutWidth';
 import {BrandMark} from './BrandMark';
 import {HoystText} from './HoystText';
 import {HoyOrb} from './HoyOrb';
@@ -60,7 +61,8 @@ export function HomeHeroHeader({
   surfaceColor: string;
 }) {
   const theme = useHoystTheme();
-  const {width, fontScale} = useWindowDimensions();
+  const {width: windowWidth, fontScale} = useWindowDimensions();
+  const {width, onLayout: measureWidth} = useLayoutWidth(windowWidth);
   const insets = useSafeAreaInsets();
   const state = hoyState ?? 'thinking';
   const visual = homeHoyVisuals[state];
@@ -72,7 +74,10 @@ export function HomeHeroHeader({
   const messageOpacity = isHoyActionDisabled ? 0.8 : 1;
   return (
     <View
-      onLayout={onLayout}
+      onLayout={event => {
+        measureWidth(event);
+        onLayout?.(event);
+      }}
       style={[
         styles.header,
         {paddingTop: (topInsetApplied ? 0 : insets.top) + 4},
@@ -91,7 +96,7 @@ export function HomeHeroHeader({
             styles.bubbleSurface,
             {
               opacity: messageOpacity,
-              width: stacked ? width - 44 : width - 44 - orbSize - 12 - 16,
+              ...(stacked ? {width: '100%'} : {flex: 1, minWidth: 0}),
               ...bubbleColors,
             },
           ]}

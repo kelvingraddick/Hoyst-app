@@ -139,6 +139,47 @@ it('uses equal member fractions and explicit cadence units independently of the 
   expect(text()).toContain('Group streak');
 });
 it.each([
+  [393, 1, 1, 2],
+  [393, 1, 9, 10],
+  [360, 1, 1, 2],
+  [440, 1.6, 9, 10],
+])(
+  'keeps group goal text at its normal size with width %s, scale %s and %s of %s members',
+  (width, fontScale, count, required) => {
+    jest
+      .spyOn(ReactNative, 'useWindowDimensions')
+      .mockReturnValue({width, height: 850, fontScale, scale: 3});
+    mount({
+      group: {
+        ...summary,
+        progress: {covered: count, required, outcome: 'open'},
+      },
+    });
+    const metric = tree.root.findByProps({
+      testID: 'circle-group-period-progress',
+    });
+    const goal = metric.findByProps({
+      accessibilityLabel: `${count} of ${required} members met goal`,
+    });
+    const labels = goal.findAllByType(Text);
+    expect(labels.map(node => node.props.children)).toEqual([
+      `${count} of ${required}`,
+      'met goal',
+    ]);
+    expect(StyleSheet.flatten(goal.props.style)).toMatchObject({
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+    });
+    expect(StyleSheet.flatten(labels[0].props.style).fontSize).toBe(16);
+    expect(StyleSheet.flatten(labels[1].props.style).fontSize).toBe(11);
+    labels.forEach(label => {
+      expect(label.props.adjustsFontSizeToFit).toBeFalsy();
+      expect(label.props.numberOfLines).toBeUndefined();
+      expect(label.findAllByType(Text)).toEqual([label]);
+    });
+  },
+);
+it.each([
   ['daily', 'Today'],
   ['weekly', 'This week'],
   ['monthly', 'This month'],

@@ -1,5 +1,5 @@
 import {formatCircleStreak} from '../../../shared/circle-progress';
-import React, {useEffect, useId, useRef, useState} from 'react';
+import React, {useCallback, useEffect, useId, useRef, useState} from 'react';
 import {
   AccessibilityInfo,
   ActivityIndicator,
@@ -8,7 +8,6 @@ import {
   Easing,
   Image,
   InputAccessoryView,
-  Keyboard,
   TextInput,
   Platform,
   Pressable,
@@ -30,7 +29,8 @@ import {
 } from 'lucide-react-native';
 import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import {
-  initialWindowMetrics,
+  SafeAreaView,
+  useSafeAreaFrame,
   useSafeAreaInsets,
 } from 'react-native-safe-area-context';
 import {
@@ -38,6 +38,8 @@ import {
   getCircleCategoryVisual,
 } from '../../../design/components/CircleCategoryIcon';
 import {HoystTapInMark} from '../../../design/components/HoystTapInMark';
+import {KeyboardInsetView} from '../../../design/components/KeyboardInsetView';
+import {useLayoutWidth} from '../../../design/hooks/useLayoutWidth';
 import {
   DSButton,
   DSIconButton,
@@ -77,70 +79,57 @@ export function ComposerSheet({
 }) {
   const theme = useSystemTheme();
   const insets = useSafeAreaInsets();
-  const {height, width, fontScale} = useWindowDimensions();
+  const {fontScale} = useWindowDimensions();
+  const {height, width} = useSafeAreaFrame();
   const [bodyHeight, setBodyHeight] = useState(0);
-  const originRef = useRef<View>(null);
+  const viewportRef = useRef<View>(null);
   const scrollRef = useRef<ScrollView>(null);
   const contentRef = useRef<View>(null);
   const [keyboardInset, setKeyboardInset] = useState(0);
-  const frameHeightRef = useRef(0);
   const [footerHeight, setFooterHeight] = useState(0);
   const [isExpanded, setIsExpanded] = useState(false);
   const compactRef = useRef(0.3);
   const priorScrollResetKey = useRef(scrollResetKey);
-  const maximumHeight = Math.max(
-    1,
-    height - (initialWindowMetrics?.insets.top ?? insets.top) - 10,
-  );
-  const bottom = Math.max(
-    insets.bottom,
-    initialWindowMetrics?.insets.bottom ?? 0,
-  );
+  const maximumHeight = Math.max(1, height - insets.top - 10);
+  const bottom = insets.bottom;
   // Keep the dock near the lower sheet edge while preserving a reliable
   // clearance above the iOS home indicator.
   const footerBottomInset =
     Platform.OS === 'ios' ? Math.max(20, bottom - 8) : bottom;
-  useEffect(() => {
-    const show = Keyboard.addListener('keyboardDidShow', event => {
-      originRef.current?.measureInWindow((_x, y) => {
-        // Screens' Fabric measurement can omit the native modal translation.
-        // iOS moves an editing sheet below the top safe area while the keyboard is open.
-        const origin = Math.max(y, initialWindowMetrics?.insets.top ?? 0);
-        const visibleHeight = Math.min(
-          frameHeightRef.current,
-          event.endCoordinates.screenY - origin,
-        );
-        setKeyboardInset(Math.max(0, frameHeightRef.current - visibleHeight));
-        requestAnimationFrame(() =>
-          requestAnimationFrame(() => {
-            const input = TextInput.State.currentlyFocusedInput();
-            if (input && contentRef.current) {
-              input.measureLayout(
-                contentRef.current,
-                (_left, top, _width, inputHeight) => {
-                  scrollRef.current?.scrollTo({
-                    y: Math.max(
-                      0,
-                      top + inputHeight - (visibleHeight - footerHeight) + 16,
-                    ),
-                    animated: true,
-                  });
-                },
-                () => undefined,
-              );
-            }
-          }),
-        );
-      });
-    });
-    const hide = Keyboard.addListener('keyboardDidHide', () =>
-      setKeyboardInset(0),
+  const revealFocusedInput = useCallback(() => {
+    if (keyboardInset <= 0) {
+      return;
+    }
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => {
+        const input = TextInput.State.currentlyFocusedInput();
+        if (!input || !contentRef.current) {
+          return;
+        }
+        viewportRef.current?.measure((_x, _y, _width, visibleHeight) => {
+          if (!contentRef.current) {
+            return;
+          }
+          input.measureLayout(
+            contentRef.current,
+            (_left, top, _inputWidth, inputHeight) => {
+              scrollRef.current?.scrollTo({
+                y: Math.max(0, top + inputHeight - visibleHeight + 16),
+                animated: true,
+              });
+            },
+            () => undefined,
+          );
+        });
+      }),
     );
-    return () => {
-      show.remove();
-      hide.remove();
-    };
-  }, [footerHeight]);
+  }, [keyboardInset]);
+  useEffect(revealFocusedInput, [
+    revealFocusedInput,
+    width,
+    height,
+    footerHeight,
+  ]);
   useEffect(() => {
     if (scrollResetKey === priorScrollResetKey.current) {
       return;
@@ -155,7 +144,6 @@ export function ComposerSheet({
   const compact = getTapInSheetDetents(naturalHeight, maximumHeight)[0];
   compactRef.current = compact;
   const frameHeight = Math.round(maximumHeight * (isExpanded ? 0.92 : compact));
-  frameHeightRef.current = frameHeight;
   useEffect(
     () =>
       navigation.addListener('sheetDetentChange', event => {
@@ -190,7 +178,8 @@ export function ComposerSheet({
     fontScale,
   ]);
   return (
-    <View
+    <SafeAreaView
+      edges={['left', 'right']}
       collapsable={false}
       style={[
         styles.sheet,
@@ -204,13 +193,26 @@ export function ComposerSheet({
       {/* Screens 4.10 coerces the first descendant ScrollView to the entire
           sheet frame. Keep a native first sibling so our docked footer and
           keyboard-aware viewport retain their measured layout. */}
+      {Platform.OS === 'ios' ? (
+        <KeyboardInsetView
+          pointerEvents="none"
+          style={StyleSheet.absoluteFill}
+          onInsetChange={event =>
+            setKeyboardInset(Math.max(0, event.nativeEvent.inset))
+          }
+        />
+      ) : (
+        <View
+          collapsable={false}
+          pointerEvents="none"
+          style={{height: 1, marginBottom: -1}}
+        />
+      )}
       <View
-        ref={originRef}
+        ref={viewportRef}
+        onLayout={revealFocusedInput}
         collapsable={false}
-        pointerEvents="none"
-        style={{height: 1, marginBottom: -1}}
-      />
-      <View collapsable={false} style={{flex: 1, overflow: 'hidden'}}>
+        style={{flex: 1, overflow: 'hidden'}}>
         <ScrollView
           ref={scrollRef}
           style={{flex: 1, overflow: 'hidden'}}
@@ -244,7 +246,7 @@ export function ComposerSheet({
           {footer}
         </View>
       ) : null}
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -258,6 +260,7 @@ export function ComposerHeader({
   onClose: () => void;
 }) {
   const theme = useSystemTheme();
+  const {fontScale} = useWindowDimensions();
   const [headerHeight, setHeaderHeight] = useState(0);
   const fadeId = useId().replace(/:/g, '');
   const category = getCircleCategoryVisual(
@@ -297,7 +300,7 @@ export function ComposerHeader({
         </View>
       </View>
       {detail ? (
-        <View style={styles.details}>
+        <View key={fontScale} style={styles.details}>
           <View style={styles.titleRow}>
             <CircleCategoryIcon
               category={detail.category}
@@ -346,7 +349,9 @@ export function ComposerHeader({
               tone={detail.state === 'risk' ? 'warning' : 'muted'}>
               {status}
               {status ? ' · ' : ''}
-              {`Your Circle streak: ${formatCircleStreak(detail.viewerCircleProgress?.streak)}`}
+              {`Your Circle streak: ${formatCircleStreak(
+                detail.viewerCircleProgress?.streak,
+              )}`}
             </DSText>
           </View>
         </View>
@@ -542,6 +547,7 @@ export function ComposerQuantity({
 }) {
   const theme = useSystemTheme();
   const {fontScale, width} = useWindowDimensions();
+  const {width: contentWidth, onLayout} = useLayoutWidth(width - 44);
   const [textWidth, setTextWidth] = useState(0);
   const [editing, setEditing] = useState(false);
   const inputRef = useRef<TextInput>(null);
@@ -560,7 +566,7 @@ export function ComposerQuantity({
   }, [active, disabled]);
   const presentation = getComposerQuantity(detail, value);
   const valueText = inputText ?? formatQuantityValue(value);
-  const availableWidth = Math.max(72, width - 44);
+  const availableWidth = Math.max(1, contentWidth);
   const size = Math.min(
     availableWidth,
     Math.max(
@@ -577,14 +583,14 @@ export function ComposerQuantity({
       ? 'success'
       : 'muted';
   return (
-    <View style={styles.quantity}>
-      <DSText variant="action" tone="muted">
+    <View style={styles.quantity} onLayout={onLayout}>
+      <DSText key={`progress-${fontScale}`} variant="action" tone="muted">
         {presentation.isLimit ? "Today's amount" : "Today's progress"}
       </DSText>
       <View
         style={[
           styles.stepper,
-          size + 120 > width - 44 ? styles.wrappedStepper : undefined,
+          size + 120 > contentWidth ? styles.wrappedStepper : undefined,
         ]}>
         <DSIconButton
           label="Decrease quantity"
@@ -679,6 +685,7 @@ export function ComposerQuantity({
             style={[styles.quantityInput, {color: theme.text}]}
           />
           <DSText
+            key={fontScale}
             accessible={false}
             variant="screenTitle"
             pointerEvents="none"
@@ -744,7 +751,7 @@ export function ComposerQuantity({
           </View>
         </InputAccessoryView>
       ) : null}
-      <View style={styles.quantityCaptions}>
+      <View key={`captions-${fontScale}`} style={styles.quantityCaptions}>
         <DSText variant="secondary" tone="muted" style={styles.center}>
           {presentation.goal}
         </DSText>
@@ -848,7 +855,9 @@ export function ComposerPhoto({
         leading={<Camera size={20} color={theme.muted} />}
       />
       <DSText variant="secondary" tone="muted">
-        {required ? 'Photo proof is required to complete this Tap In.' : 'Optional proof for your Circle'}
+        {required
+          ? 'Photo proof is required to complete this Tap In.'
+          : 'Optional proof for your Circle'}
       </DSText>
       {uri ? (
         <>

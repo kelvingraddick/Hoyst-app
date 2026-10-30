@@ -4,6 +4,7 @@ import Svg, {Path} from 'react-native-svg';
 import {Check, Minus} from 'lucide-react-native';
 import {HoystText} from '../../../design/components/HoystText';
 import {useHoystTheme} from '../../../design/theme/useHoystTheme';
+import {useLayoutWidth} from '../../../design/hooks/useLayoutWidth';
 import type {HomeProgressCell} from '../services/home-data-service';
 import {
   getHomeDailyActionProgressLabel,
@@ -18,9 +19,9 @@ import {ProgressStatsRow} from '../../progress/components/ProgressStatsRow';
 export function HomeWeekPath({days}: {days: readonly HomeProgressCell[]}) {
   const theme = useHoystTheme();
   const {width, fontScale} = useWindowDimensions();
+  const {width: innerWidth, onLayout} = useLayoutWidth(width - 44);
   const labelScale = Math.min(fontScale, 1.2);
   const accent = brandColors.blue;
-  const innerWidth = width - 44;
   const columnWidth = innerWidth / Math.max(1, days.length);
   const offsets = [0, 4, 0, 14, 0, 10, 3];
   const centers = days.map((_, i) => ({
@@ -28,7 +29,7 @@ export function HomeWeekPath({days}: {days: readonly HomeProgressCell[]}) {
     y: 17 + offsets[i % 7],
   }));
   return (
-    <View testID="home-week-path" style={styles.week}>
+    <View testID="home-week-path" style={styles.week} onLayout={onLayout}>
       <Svg
         width={innerWidth}
         height={55}

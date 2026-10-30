@@ -1,4 +1,5 @@
 import React from 'react';
+import {useLayoutWidth} from '../../../design/hooks/useLayoutWidth';
 import {Pressable, StyleSheet, View, useWindowDimensions} from 'react-native';
 import {CalendarCheck, ChevronRight, Trophy} from 'lucide-react-native';
 import {DSSurface, DSText, useSystemTheme} from '../../../design/system';
@@ -83,7 +84,8 @@ export function ProfileStats({
 }) {
   const theme = useSystemTheme();
   const {width, fontScale} = useWindowDimensions();
-  const stacked = width < 360 || fontScale > 1.3;
+  const {width: contentWidth, onLayout} = useLayoutWidth(width - 44);
+  const stacked = contentWidth < 316 || fontScale > 1.3;
   const stats = [
     {
       key: 'streak',
@@ -112,6 +114,7 @@ export function ProfileStats({
   ];
   return (
     <DSSurface
+      onLayout={onLayout}
       raised
       style={[styles.stats, stacked && styles.stacked]}
       testID="profile-stats">

@@ -215,6 +215,7 @@ function ProgressContent({navigation}: Props) {
   const statsOffset = useRef(0);
   const {fontScale, width: windowWidth} = useWindowDimensions();
   const [width, setWidth] = useState(windowWidth);
+  const availableWidth = Math.max(1, width - insets.left - insets.right);
   const [rewardRowWidth, setRewardRowWidth] = useState<number>();
   const preview = useContext(ProgressPreviewContext);
   const live = useProgress(!preview);
@@ -283,10 +284,12 @@ function ProgressContent({navigation}: Props) {
     ['streak_30', 'Reach a 30-day personal streak', 50],
     ['tap_ins_50', 'Complete 50 successful Tap Ins', 50],
   ].find(([id]) => !summary?.milestones[id as string]);
-  const columns = width >= 360 && fontScale < 1.5;
+  const columns = availableWidth >= 360 && fontScale < 1.5;
   const rewardCardWidth =
-    ((rewardRowWidth ?? Math.max(0, width - 2 * systemLayout.gutter)) - 12) / 2;
-  const boostHorizontal = width >= 390 && fontScale <= 1.15;
+    ((rewardRowWidth ?? Math.max(0, availableWidth - 2 * systemLayout.gutter)) -
+      12) /
+    2;
+  const boostHorizontal = availableWidth >= 390 && fontScale <= 1.15;
   return (
     <View
       onLayout={({nativeEvent: {layout}}) => setWidth(layout.width)}
@@ -370,7 +373,7 @@ function ProgressContent({navigation}: Props) {
         </View>
         {!uid ? (
           <ProgressGuestPreview
-            width={width}
+            width={availableWidth}
             onGetStarted={() => {
               const session = useSessionStore.getState();
               session.clearPendingAction();
@@ -548,7 +551,7 @@ function ProgressContent({navigation}: Props) {
                   });
               }}
               uid={uid}
-              width={width - systemLayout.gutter * 2}
+              width={Math.max(1, availableWidth - systemLayout.gutter * 2)}
               preview={Boolean(preview)}
               profile={stats.data}
               profileError={stats.isError}

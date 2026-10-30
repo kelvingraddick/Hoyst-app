@@ -427,7 +427,7 @@ export function TodayCircleCard({
         style={({pressed}) => [
           styles.cardPressable,
           styles.attentionPressable,
-          {width: attentionCardWidth},
+          {width: attentionCardWidth, maxWidth: '100%'},
           {opacity: pressed ? 0.94 : 1},
         ]}>
         <GlassPanel

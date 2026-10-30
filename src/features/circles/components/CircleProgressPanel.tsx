@@ -12,6 +12,7 @@ import {
 import {Info, X} from 'lucide-react-native';
 import {DateTime} from 'luxon';
 import {CircularEmoji} from '../../../design/components/CircularEmoji';
+import {GradientRing} from '../../../design/components/GradientRing';
 import {HoystText} from '../../../design/components/HoystText';
 import {useHoystTheme} from '../../../design/theme/useHoystTheme';
 import {
@@ -214,27 +215,42 @@ export function CircleProgressPanel({
             <DSText variant="statCaption" tone="muted">
               {isGroup ? 'Group' : 'You'}
             </DSText>
-            <DSText
-              variant={known && required > 0 ? 'title' : 'secondary'}
-              numberOfLines={groupCount ? 1 : undefined}
-              adjustsFontSizeToFit={groupCount}
-              minimumFontScale={0.8}>
-              {single?.status ??
-                (known && required > 0 ? `${covered} of ${required}` : copy)}
-              {groupCount ? (
+            <View
+              accessible={groupCount}
+              accessibilityLabel={groupCount ? accessibleCopy : undefined}
+              style={groupCount ? styles.groupGoalValue : undefined}>
+              <DSText variant={known && required > 0 ? 'title' : 'secondary'}>
+                {single?.status ??
+                  (known && required > 0 ? `${covered} of ${required}` : copy)}
+              </DSText>
+              {supportingText ? (
                 <DSText variant="statCaption" tone="muted">
-                  {' met goal'}
+                  {supportingText}
                 </DSText>
               ) : null}
-            </DSText>
-            {supportingText && !groupCount ? (
-              <DSText variant="statCaption" tone="muted">
-                {supportingText}
-              </DSText>
-            ) : null}
+            </View>
           </View>
+          {isGroup ? (
+            <View
+              accessibilityRole="progressbar"
+              accessibilityLabel={`Group progress: ${accessibleCopy}`}
+              accessibilityValue={
+                known && required
+                  ? {min: 0, max: required, now: covered}
+                  : undefined
+              }
+              style={styles.groupGoalRing}>
+              <GradientRing
+                size={28}
+                strokeWidth={3}
+                progress={known && required ? covered / required : 0}
+                flatColor={theme.isDark ? '#A2ADC0' : '#7C879A'}
+                trackColor={systemTheme.track}
+              />
+            </View>
+          ) : null}
         </View>
-        {!single ? (
+        {!single && !isGroup ? (
           <View
             accessibilityRole="progressbar"
             accessibilityLabel={`${
@@ -254,11 +270,7 @@ export function CircleProgressPanel({
                     ? Math.min(100, (covered / required) * 100)
                     : 0
                 }%`,
-                backgroundColor: isGroup
-                  ? theme.isDark
-                    ? '#A2ADC0'
-                    : '#7C879A'
-                  : theme.success,
+                backgroundColor: theme.success,
                 borderRadius: 5,
               }}
             />
@@ -434,6 +446,13 @@ const styles = StyleSheet.create({
   stackedMetric: {flex: 0, width: '100%'},
   metricRow: {flexDirection: 'row', alignItems: 'center', gap: 10},
   metricCopy: {flex: 1, minWidth: 0},
+  groupGoalRing: {flexShrink: 0},
+  groupGoalValue: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'baseline',
+    columnGap: 4,
+  },
   metricLabel: {flexShrink: 1},
   label: {fontSize: 12, lineHeight: 17, flexShrink: 1},
   track: {height: 5, borderRadius: 5, overflow: 'hidden', marginTop: 8},

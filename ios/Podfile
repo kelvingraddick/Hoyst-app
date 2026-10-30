@@ -63,6 +63,14 @@ target 'Hoyst' do
       project.save
     end
     installer.pods_project.targets.each do |target|
+      # Xcode 27 rejects legacy deployment targets, including resource bundles.
+      # Keep every dependency at least at the app's existing minimum version.
+      target.build_configurations.each do |build_config|
+        deployment_target = build_config.build_settings['IPHONEOS_DEPLOYMENT_TARGET']
+        if deployment_target && Gem::Version.new(deployment_target) < Gem::Version.new(min_ios_version_supported)
+          build_config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = min_ios_version_supported
+        end
+      end
       add_react_header_paths.call(target) unless target.name == 'OneSignalXCFramework'
 
       next unless target.name == 'fmt'

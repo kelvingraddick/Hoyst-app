@@ -33,6 +33,7 @@ import Svg, {
 import {getCircleCategoryVisual} from '../../../design/components/CircleCategoryIcon';
 import {radius} from '../../../design/tokens/radius';
 import {useHoystTheme} from '../../../design/theme/useHoystTheme';
+import {useLayoutWidth} from '../../../design/hooks/useLayoutWidth';
 import {
   DesignSystemProvider,
   DSText,
@@ -220,6 +221,9 @@ function TapInStoryShareController({
   const systemTheme = useSystemTheme();
   const insets = useSafeAreaInsets();
   const {height, width} = useWindowDimensions();
+  const {width: carouselWidth, onLayout: measureCarouselWidth} = useLayoutWidth(
+    width - insets.left - insets.right - SCREEN_HORIZONTAL_PADDING * 2,
+  );
   const captureRef = useRef<View>(null);
   const carouselRef = useRef<ScrollView>(null);
   const [activeIndex, setActiveIndex] = useState(0);
@@ -263,7 +267,6 @@ function TapInStoryShareController({
   );
   const safeTopPadding = Math.max(insets.top, MIN_TOP_SAFE_PADDING) + 4;
   const safeBottomPadding = Math.max(insets.bottom, 12) + 8;
-  const carouselWidth = Math.max(1, width - SCREEN_HORIZONTAL_PADDING * 2);
   const fallbackCarouselHeight = Math.max(
     1,
     height -
@@ -320,6 +323,18 @@ function TapInStoryShareController({
       uris: [...new Set([...(prior.key === imageKey ? prior.uris : []), uri])],
     }));
   const isBusy = Boolean(busyDestination);
+  const previousCarouselWidth = useRef(carouselWidth);
+  useEffect(() => {
+    if (previousCarouselWidth.current === carouselWidth) {
+      return;
+    }
+    previousCarouselWidth.current = carouselWidth;
+    // A resize changes each page's offset, but must keep the selected template.
+    carouselRef.current?.scrollTo({
+      x: activeIndex * carouselWidth,
+      animated: false,
+    });
+  }, [activeIndex, carouselWidth]);
   useEffect(() => {
     if (activeIndex >= templates.length) {
       setActiveIndex(Math.max(0, templates.length - 1));
@@ -420,12 +435,14 @@ function TapInStoryShareController({
         getTemplateIndexFromScroll(event, carouselWidth),
       ),
     );
-  const handleCarouselLayout = (event: LayoutChangeEvent) =>
+  const handleCarouselLayout = (event: LayoutChangeEvent) => {
+    measureCarouselWidth(event);
     setCarouselBlockHeight(current =>
       Math.abs(current - event.nativeEvent.layout.height) > 1
         ? event.nativeEvent.layout.height
         : current,
     );
+  };
   return (
     <View style={[styles.screen, {backgroundColor: systemTheme.canvas}]}>
       <Svg
@@ -457,7 +474,15 @@ function TapInStoryShareController({
           templateId={activeTemplate}
         />
       </View>
-      <View style={[styles.content, {paddingTop: safeTopPadding}]}>
+      <View
+        style={[
+          styles.content,
+          {
+            paddingTop: safeTopPadding,
+            paddingLeft: SCREEN_HORIZONTAL_PADDING + insets.left,
+            paddingRight: SCREEN_HORIZONTAL_PADDING + insets.right,
+          },
+        ]}>
         <View style={styles.headerRow}>
           <Pressable
             accessibilityLabel="Close Share Tap In"
@@ -572,6 +597,8 @@ function TapInStoryShareController({
             backgroundColor: systemTheme.canvas,
             borderColor: systemTheme.border,
             paddingBottom: safeBottomPadding,
+            paddingLeft: SCREEN_HORIZONTAL_PADDING + insets.left,
+            paddingRight: SCREEN_HORIZONTAL_PADDING + insets.right,
           },
         ]}>
         <DSText style={[styles.shareLabel, {color: systemTheme.muted}]}>
@@ -643,6 +670,8 @@ const styles = StyleSheet.create({
   destinationsRow: {
     alignItems: 'flex-start',
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
     justifyContent: 'space-between',
   },
   dot: {borderRadius: radius.pill, height: 7, width: 7},

@@ -1,5 +1,5 @@
 import React from 'react';
-import {Alert, Clipboard, NativeModules, View} from 'react-native';
+import {Alert, Clipboard, NativeModules, ScrollView, View} from 'react-native';
 import renderer, {act} from 'react-test-renderer';
 
 import {BrandMark} from '../src/design/components/BrandMark';
@@ -136,6 +136,29 @@ async function flushAsyncShareAction() {
 describe('TapInStoryShareScreen', () => {
   let alertSpy: jest.SpyInstance;
   let clipboardSpy: jest.SpyInstance;
+
+  it('retains the selected story on resize without cancelling dot navigation animation', async () => {
+    const scrollTo = jest.spyOn(ScrollView.prototype, 'scrollTo').mockImplementation(() => undefined);
+    const tree = await renderStoryShareScreen({photoUri: 'file:///proof.jpg'});
+    try {
+      await act(async () => {
+        tree.root.findByProps({accessibilityLabel: 'Show story option 2'}).props.onPress();
+      });
+      expect(scrollTo.mock.calls.at(-1)?.[0]).toEqual(expect.objectContaining({animated: true}));
+      expect(tree.root.findAllByType(TapInStoryTemplateCard)[0].props.templateId).toBe('transparentOverlay');
+      scrollTo.mockClear();
+      const block = tree.root.findAll(node => typeof node.props.onLayout === 'function' && node.type === View)[0];
+      await act(async () => {
+        block.props.onLayout({nativeEvent: {layout: {width: 280, height: 500}}});
+      });
+      expect(scrollTo).toHaveBeenLastCalledWith({x: 280, animated: false});
+      expect(tree.root.findAllByType(TapInStoryTemplateCard)[0].props.templateId).toBe('transparentOverlay');
+      expect(mockLoadStoryContext).toHaveBeenCalledTimes(1);
+    } finally {
+      await act(async () => tree.unmount());
+      scrollTo.mockRestore();
+    }
+  });
 
   beforeEach(() => {
     jest.spyOn(console, 'warn').mockImplementation(() => undefined);

@@ -21,6 +21,7 @@ import {
   ComposerSheet,
 } from '../src/features/check-in/components/TapInComposerPresentation';
 import type {CircleDetailModel} from '../src/types/models';
+import {KeyboardInsetView} from '../src/design/components/KeyboardInsetView';
 jest.mock('@react-native-community/blur', () => {
   const MockReact = require('react');
   const {View} = require('react-native');
@@ -39,6 +40,9 @@ jest.mock('react-native-linear-gradient', () => {
     MockReact.createElement(View, props, children);
 });
 
+let mockSheetFrame = {x: 0, y: 0, width: 402, height: 874};
+let mockSheetInsets = {top: 0, bottom: 0, left: 0, right: 0};
+
 jest.mock('react-native-safe-area-context', () => {
   const MockReact = require('react');
   const {View} = require('react-native');
@@ -46,7 +50,8 @@ jest.mock('react-native-safe-area-context', () => {
   return {
     SafeAreaView: ({children, ...props}: {children?: React.ReactNode}) =>
       MockReact.createElement(View, props, children),
-    useSafeAreaInsets: () => ({bottom: 0, left: 0, right: 0, top: 0}),
+    useSafeAreaInsets: () => mockSheetInsets,
+    useSafeAreaFrame: () => mockSheetFrame,
   };
 });
 
@@ -59,6 +64,130 @@ const detail = {
   targetValue: 30,
   unitLabel: 'pages',
 } as CircleDetailModel;
+
+it('updates sheet geometry and live insets without losing expansion', async () => {
+  let listener!: (event: {data: {stable: boolean; index: number}}) => void;
+  const navigation = {
+    setOptions: jest.fn(),
+    addListener: jest.fn((_name, callback) => {
+      listener = callback;
+      return jest.fn();
+    }),
+  };
+  const content = () => (
+    <ComposerSheet
+      navigation={navigation as never}
+      footer={<DSButton label="Tap In" onPress={() => {}} />}>
+      <TextInput value="17" />
+    </ComposerSheet>
+  );
+  let tree!: renderer.ReactTestRenderer;
+  try {
+    await act(async () => {
+      tree = mount(content());
+    });
+    await act(async () => {
+      tree.root.findByType(ScrollView).props.onContentSizeChange(402, 300);
+      tree.root
+        .findAllByProps({testID: 'tap-in-composer-action-footer-position'})[0]
+        .props.onLayout({nativeEvent: {layout: {height: 100}}});
+      listener({data: {stable: true, index: 1}});
+    });
+    const input = tree.root.findByType(TextInput).instance;
+    for (const geometry of [
+      {
+        frame: {x: 0, y: 0, width: 800, height: 620},
+        insets: {top: 0, bottom: 0, left: 0, right: 74},
+      },
+      {
+        frame: {x: 0, y: 0, width: 800, height: 620},
+        insets: {top: 22, bottom: 40, left: 74, right: 0},
+      },
+      {
+        frame: {x: 0, y: 0, width: 350, height: 820},
+        insets: {top: 20, bottom: 34, left: 0, right: 0},
+      },
+    ]) {
+      mockSheetFrame = geometry.frame;
+      mockSheetInsets = geometry.insets;
+      await act(async () => {
+        tree.update(
+          <DesignSystemProvider scheme="dark">
+            {content()}
+          </DesignSystemProvider>,
+        );
+      });
+      expect(
+        StyleSheet.flatten(
+          tree.root.findAllByProps({testID: 'tap-in-composer-sheet-frame'})[0]
+            .props.style,
+        ).height,
+      ).toBe(
+        Math.round((geometry.frame.height - geometry.insets.top - 10) * 0.92),
+      );
+      expect(
+        StyleSheet.flatten(
+          tree.root.findAllByProps({
+            testID: 'tap-in-composer-action-footer-position',
+          })[0].props.style,
+        ).paddingBottom,
+      ).toBe(Math.max(20, geometry.insets.bottom - 8));
+      expect(tree.root.findByType(TextInput).instance).toBe(input);
+      expect(
+        navigation.setOptions.mock.calls.at(-1)?.[0].sheetInitialDetentIndex,
+      ).toBe(1);
+    }
+  } finally {
+    mockSheetFrame = {x: 0, y: 0, width: 402, height: 874};
+    mockSheetInsets = {top: 0, bottom: 0, left: 0, right: 0};
+    await act(async () => tree?.unmount());
+  }
+});
+
+it('uses native view-local keyboard overlap rather than physical screen coordinates', async () => {
+  const navigation = {
+    setOptions: jest.fn(),
+    addListener: jest.fn(() => jest.fn()),
+  };
+  let tree!: renderer.ReactTestRenderer;
+  await act(async () => {
+    tree = mount(
+      <ComposerSheet navigation={navigation as never}>body</ComposerSheet>,
+    );
+  });
+  for (const inset of [250, 120, 0]) {
+    await act(async () => {
+      tree.root
+        .findByType(KeyboardInsetView)
+        .props.onInsetChange({nativeEvent: {inset}});
+    });
+    expect(
+      StyleSheet.flatten(
+        tree.root.findAllByProps({testID: 'tap-in-composer-sheet-frame'})[0]
+          .props.style,
+      ).paddingBottom,
+    ).toBe(inset);
+  }
+  await act(async () => tree.unmount());
+});
+
+it('fits a large quantity inside a sheet narrower than its presenting window', async () => {
+  const dimensions = jest.spyOn(ReactNative, 'useWindowDimensions').mockReturnValue({width: 951, height: 669, scale: 3, fontScale: 2});
+  let tree!: renderer.ReactTestRenderer;
+  try {
+    await act(async () => {
+      tree = mount(<ComposerQuantity detail={detail} value={123456789} onDecrease={() => {}} onIncrease={() => {}} />);
+    });
+    await act(async () => {
+      tree.root.findAll(node => node.type === ReactNative.View && typeof node.props.onLayout === 'function')[0]
+        .props.onLayout({nativeEvent: {layout: {width: 240}}});
+    });
+    expect(tree.root.findAllByProps({testID: 'tap-in-composer-quantity-ring'})[0].props.style.width).toBeLessThanOrEqual(240);
+  } finally {
+    await act(async () => tree?.unmount());
+    dimensions.mockRestore();
+  }
+});
 it('uses the Circle Detail hero hierarchy and a tighter mark gap', async () => {
   let tree!: renderer.ReactTestRenderer;
   await act(async () => {
