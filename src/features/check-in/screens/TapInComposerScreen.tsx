@@ -284,19 +284,22 @@ function TapInComposerController({
       : `${detail.remainingCheckIns ?? 0} Tap Ins left ${remainingPeriodCopy}`;
   const availableSkips = rewardState.summary?.inventory.skips;
   const isSkipAvailabilityKnown = typeof availableSkips === 'number';
+  const isSkipUseEnabled = rewardState.summary?.flags.inventory === true;
   const canSubmitTapIn =
     !detail.viewerHasTappedInToday ||
     detail.viewerTodayStatus === 'skip' ||
     isQuantityTapIn;
   const canSkip =
     !detail.viewerHasCheckedIn &&
-    rewardState.summary?.flags.inventory === true &&
+    isSkipUseEnabled &&
     canSubmitTapIn &&
     isSkipAvailabilityKnown &&
     availableSkips > 0;
   const shouldShowSkipAction = !detail.viewerHasCheckedIn && canSubmitTapIn;
   const skipActionLabel = !isSkipAvailabilityKnown
     ? 'Loading your skips'
+    : !isSkipUseEnabled
+    ? `Skip use unavailable (${availableSkips} saved)`
     : availableSkips > 0
     ? `Use Skip (${availableSkips} left)`
     : 'No skips left';

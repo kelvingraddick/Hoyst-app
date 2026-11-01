@@ -144,6 +144,52 @@ describe('Progress server transactions and rules', () => {
       1,
     );
   });
+  it('unlocks saved skips after activation even when the Circle allows no legacy skips', async () => {
+    await db.doc('serverConfig/progress').update({inventoryEnforced: false});
+    await db.doc('circles/a').update({
+      graceRules: {skip: {allowance: 0, windowDays: 7}},
+    });
+    await ensureProgress.run(request('owner'));
+    const walletRef = db.doc('userPrivate/owner/progress/current');
+    await walletRef.update({'inventory.skips': 11, 'lots.starter.skips': 11});
+    const paused = await ensureProgress.run(request('owner'));
+    assert.equal(paused.flags.inventory, false);
+    assert.equal(paused.inventory.skips, 11);
+    const skipRequest = request('owner', {
+      circleId: 'a',
+      status: 'skip',
+      progressVersion: 1,
+    });
+    await assert.rejects(
+      submitTapIn.run(skipRequest),
+      /No skips are available/,
+    );
+    assert.equal((await walletRef.get()).data().inventory.skips, 11);
+
+    await db.doc('serverConfig/progress').update({inventoryEnforced: true});
+    const activated = await ensureProgress.run(request('owner'));
+    assert.equal(activated.flags.inventory, true);
+    const result = await submitTapIn.run(skipRequest);
+    assert.equal(result.status, 'skip');
+    const spent = (await walletRef.get()).data();
+    assert.equal(spent.inventory.skips, 10);
+    assert.equal(spent.totalXP, activated.totalXP);
+    const checkIn = (
+      await db.doc(`circles/a/days/${today}/checkIns/owner`).get()
+    ).data();
+    assert.equal(checkIn.status, 'skip');
+    const ledger = await db
+      .collection('userPrivate/owner/progressLedger')
+      .get();
+    const spends = ledger.docs.filter(
+      snapshot => snapshot.data().kind === 'spend',
+    );
+    assert.equal(spends.length, 1);
+    assert.equal(spends[0].data().skips, -1);
+    await assert.rejects(submitTapIn.run(skipRequest), /already tapped in/);
+    assert.equal((await walletRef.get()).data().inventory.skips, 10);
+  });
+
   it('blocks older clients when shared inventory enforcement is active', async () => {
     await assert.rejects(
       submitTapIn.run(request('owner', {circleId: 'a', status: 'skip'})),

@@ -13,7 +13,10 @@ import {
   type ScrollViewProps,
 } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
-import {useSafeAreaInsets} from 'react-native-safe-area-context';
+import {
+  useTabContentInsets,
+  useNavigationLayout,
+} from '../../../navigation/NavigationLayoutContext';
 import {ArrowLeft, type LucideIcon} from 'lucide-react-native';
 import {
   DesignSystemProvider,
@@ -57,7 +60,8 @@ export function ProfileScaffold({
   scrollRef?: RefObject<ScrollView | null>;
 }) {
   const theme = useSystemTheme();
-  const insets = useSafeAreaInsets();
+  const insets = useTabContentInsets();
+  const railMode = useNavigationLayout()?.mode === 'rail';
   const stored = useUserProfileStore(state => state.profile);
   const accountUid = useSessionStore(state => state.user?.uid);
   const storedTint =
@@ -94,7 +98,7 @@ export function ProfileScaffold({
             styles.content,
             {
               paddingTop: insets.top + 16,
-              paddingBottom: insets.bottom + (tab ? 134 : 32),
+              paddingBottom: insets.bottom + (tab && !railMode ? 134 : 32),
               paddingLeft: 22 + insets.left,
               paddingRight: 22 + insets.right,
             },

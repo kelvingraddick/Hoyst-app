@@ -1,3 +1,4 @@
+import {getHomeTopPadding} from '../../../navigation/navigation-layout';
 import {CircleJoinRequestPrompt} from '../../circles/components/CircleJoinRequestPrompt';
 import {getPendingCircleJoinRequests} from '../../circles/services/join-request-selectors';
 import {SetupResumeBanner} from '../../create-circle/components/SetupResumeBanner';
@@ -26,7 +27,10 @@ import {useFocusEffect, useNavigation} from '@react-navigation/native';
 import {ChevronRight, List, Plus} from 'lucide-react-native';
 import {DateTime} from 'luxon';
 import LinearGradient from 'react-native-linear-gradient';
-import {useSafeAreaInsets} from 'react-native-safe-area-context';
+import {
+  useTabContentInsets,
+  useNavigationLayout,
+} from '../../../navigation/NavigationLayoutContext';
 
 import {
   HomeActivityRow,
@@ -666,7 +670,8 @@ export function HomeScreen(): React.JSX.Element {
     [circleActivityEvents],
   );
   const preview = useContext(HomePreviewContext);
-  const insets = useSafeAreaInsets();
+  const insets = useTabContentInsets();
+  const railMode = useNavigationLayout()?.mode === 'rail';
   const previewScroll = useRef<ScrollView>(null);
   const [heroHeight, setHeroHeight] = useState(240);
   const hoyTint = homeHoyVisuals[displayedHoyState ?? 'thinking'].tint;
@@ -1070,7 +1075,10 @@ export function HomeScreen(): React.JSX.Element {
       <LinearGradient
         pointerEvents="none"
         colors={[`${hoyTint}${theme.isDark ? '26' : 'A6'}`, `${hoyTint}00`]}
-        style={[styles.tint, {height: heroHeight}]}
+        style={[
+          styles.tint,
+          {height: heroHeight + getHomeTopPadding(insets.top)},
+        ]}
         testID="home-hoy-context-tint"
       />
       <ScrollView
@@ -1087,7 +1095,7 @@ export function HomeScreen(): React.JSX.Element {
         contentContainerStyle={[
           styles.scrollContent,
           {
-            paddingTop: insets.top,
+            paddingTop: getHomeTopPadding(insets.top),
             paddingLeft: insets.left,
             paddingRight: insets.right,
           },
@@ -1096,9 +1104,7 @@ export function HomeScreen(): React.JSX.Element {
         style={styles.scroll}>
         <HomeHeroHeader
           topInsetApplied
-          onLayout={({nativeEvent: {layout}}) =>
-            setHeroHeight(layout.height + insets.top)
-          }
+          onLayout={({nativeEvent: {layout}}) => setHeroHeight(layout.height)}
           bubbleText={bubbleText}
           emphasis={[
             homeGreetingContext.firstName ?? '',
@@ -1124,7 +1130,11 @@ export function HomeScreen(): React.JSX.Element {
           onHoyActionPress={handleHoyAction}
           surfaceColor={homeNeutralSurfaceColor}
         />
-        <View style={styles.sheet}>
+        <View
+          style={[
+            styles.sheet,
+            railMode && {paddingBottom: insets.bottom + 32},
+          ]}>
           <View
             style={[
               styles.homeProgressSection,

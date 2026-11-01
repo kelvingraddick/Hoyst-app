@@ -38,6 +38,8 @@ The gallery integration remains a development-only host in `App.tsx`; release bu
 
 ## Decision log
 
+- **2026-10-31:** The user approved a narrow Duo exception: Home has a minimum 16-point top gutter, and navigation follows iOS's vertical-bar edge. The Hoyst rail is bottom-aligned below the camera-side system area and does not narrow the existing content width. Tap In retains its mark and accessible name without a visible label. Other Home styling and the ordinary bottom bar remain the reference.
+
 - **2026-10-15:** The user approved a blue variant of signed-out Home's people-and-connections illustration, with the existing purple illustration reused on Profile's matching contextual Get started panel. Home's only change is its starter artwork reference; its layout, copy, actions, other artwork, and frozen hashes remain unchanged.
 
 - **2026-09-30:** The user approved the same transparent top-area correction on Home as Progress. Home's scroll viewport now extends through the top safe area, with its inset applied to scrolling content. This supersedes Home's earlier top clipping; initial header spacing, stationary Hoy-dependent tint, bottom spacing, and other frozen presentation remain unchanged.

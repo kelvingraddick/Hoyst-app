@@ -1,6 +1,14 @@
 import React, {useEffect, useRef, useState} from 'react';
 import {StyleSheet, View} from 'react-native';
 import {createBottomTabNavigator} from '@react-navigation/bottom-tabs';
+import {useSafeAreaInsets} from 'react-native-safe-area-context';
+import {NavigationLayoutContext} from './NavigationLayoutContext';
+import {
+  getNavigationLayout,
+  type NavigationGeometry,
+} from './navigation-layout';
+import {NavigationGeometryView} from './components/NavigationGeometryView';
+import {KeyboardInsetView} from '../design/components/KeyboardInsetView';
 import type {NativeStackScreenProps} from '@react-navigation/native-stack';
 
 import {
@@ -18,7 +26,7 @@ import {ProgressScreen} from '../features/progress/screens/ProgressScreen';
 import {ProfileScreen} from '../features/profile/screens/ProfileScreen';
 import {useHoystTheme} from '../design/theme/useHoystTheme';
 import {HoystTabBarBackground} from './components/HoystTabBarBackground';
-import {HoystBottomTabBar} from './components/HoystBottomTabBar';
+import {renderHoystTabBar} from './components/HoystBottomTabBar';
 import {getAppTabBarColors} from './tab-bar-colors';
 import {canResumePendingAction} from './pending-action-resume';
 import {navigateToAuthWelcome} from './auth-modal-navigation';
@@ -49,6 +57,14 @@ export function AppTabsNavigator({
   navigation: rootNavigation,
 }: Props): React.JSX.Element {
   const theme = useHoystTheme();
+  const safeInsets = useSafeAreaInsets();
+  const [geometry, setGeometry] = useState<NavigationGeometry | null>(null);
+  const [keyboardInset, setKeyboardInset] = useState(0);
+  const navigationLayout = {
+    ...getNavigationLayout(geometry, safeInsets),
+    keyboardInset: NavigationGeometryView ? keyboardInset : undefined,
+  };
+  const railMode = navigationLayout.mode === 'rail';
   const status = useSessionStore(state => state.status);
   const beginAuthFlow = useSessionStore(state => state.beginAuthFlow);
   const consumePendingAction = useSessionStore(
@@ -171,94 +187,113 @@ export function AppTabsNavigator({
   ]);
 
   return (
-    <Tab.Navigator
-      tabBar={HoystBottomTabBar}
-      screenOptions={({route}) => ({
-        headerShown: false,
-        sceneStyle: {
-          backgroundColor: theme.background,
-        },
-        tabBarActiveTintColor: tabBarColors.label,
-        tabBarBackground: HoystTabBarBackground,
-        tabBarHideOnKeyboard: true,
-        tabBarIconStyle:
-          route.name === 'TapIn' ? styles.tapInIconSlot : styles.tabBarIcon,
-        tabBarInactiveTintColor: tabBarColors.label,
-        tabBarItemStyle: styles.tabBarItem,
-        tabBarLabelStyle: styles.tabBarLabel,
-        tabBarLabelPosition: 'below-icon',
-        tabBarStyle: [
-          styles.tabBar,
-          {
-            backgroundColor: 'transparent',
-            borderTopWidth: 0,
-            shadowColor: theme.shadow,
-          },
-        ],
-        // React Navigation expects a render prop here, so the usual nested
-        // component warning is noise for this specific API shape.
-        // eslint-disable-next-line react/no-unstable-nested-components
-        tabBarIcon: ({focused}) => {
-          if (route.name === 'TapIn') {
-            return (
-              <HoystTapInMark
-                interactionKey={tabPulseInteractionKey}
-                size={78}
-                style={styles.tapInOffset}
-              />
-            );
-          }
+    <NavigationLayoutContext.Provider value={navigationLayout}>
+      <View style={styles.container}>
+        <Tab.Navigator
+          tabBar={renderHoystTabBar}
+          screenOptions={({route}) => ({
+            headerShown: false,
+            sceneStyle: {
+              backgroundColor: theme.background,
+            },
+            tabBarActiveTintColor: tabBarColors.label,
+            tabBarBackground: HoystTabBarBackground,
+            tabBarHideOnKeyboard: true,
+            tabBarIconStyle:
+              route.name === 'TapIn' ? styles.tapInIconSlot : styles.tabBarIcon,
+            tabBarInactiveTintColor: tabBarColors.label,
+            tabBarItemStyle: styles.tabBarItem,
+            tabBarLabelStyle: styles.tabBarLabel,
+            tabBarLabelPosition: 'below-icon',
+            tabBarStyle: [
+              styles.tabBar,
+              {
+                backgroundColor: 'transparent',
+                borderTopWidth: 0,
+                shadowColor: theme.shadow,
+              },
+            ],
+            // React Navigation expects a render prop here, so the usual nested
+            // component warning is noise for this specific API shape.
+            // eslint-disable-next-line react/no-unstable-nested-components
+            tabBarIcon: ({focused}) => {
+              if (route.name === 'TapIn') {
+                return (
+                  <HoystTapInMark
+                    interactionKey={tabPulseInteractionKey}
+                    size={railMode ? 56 : 78}
+                    style={railMode ? undefined : styles.tapInOffset}
+                  />
+                );
+              }
 
-          const Icon = routeIcons[route.name as StandardTabName];
-          const iconSize = 28;
-          const iconColor = focused
-            ? tabBarColors.activeIcon
-            : tabBarColors.inactiveIcon;
+              const Icon = routeIcons[route.name as StandardTabName];
+              const iconSize = 28;
+              const iconColor = focused
+                ? tabBarColors.activeIcon
+                : tabBarColors.inactiveIcon;
 
-          return (
-            <Icon
-              color={iconColor}
-              fill="none"
-              focused={focused}
-              secondaryColor={iconColor}
-              size={iconSize}
-              strokeWidth={focused ? 2.1 : 1.9}
+              return (
+                <Icon
+                  color={iconColor}
+                  fill="none"
+                  focused={focused}
+                  secondaryColor={iconColor}
+                  size={iconSize}
+                  strokeWidth={focused ? 2.1 : 1.9}
+                />
+              );
+            },
+          })}>
+          <Tab.Screen component={HomeScreen} name="Home" />
+          <Tab.Screen component={ExploreScreen} name="Explore" />
+          <Tab.Screen
+            component={TapInPlaceholder}
+            listeners={() => ({
+              tabPress: event => {
+                event.preventDefault();
+                setTabPulseInteractionKey(current => current + 1);
+
+                if (status === 'authenticatedReady') {
+                  rootNavigation.navigate('TapInPicker');
+                  return;
+                }
+
+                beginAuthFlow({type: 'tapInPicker'});
+                startOnboardingWizard();
+                navigateToAuthWelcome(rootNavigation);
+              },
+            })}
+            name="TapIn"
+            options={{
+              tabBarAccessibilityLabel: 'Tap In',
+              tabBarLabel: () => null,
+            }}
+          />
+          <Tab.Screen component={ProgressScreen} name="Progress" />
+          <Tab.Screen component={ProfileScreen} name="Profile" />
+        </Tab.Navigator>
+        {NavigationGeometryView ? (
+          <>
+            <NavigationGeometryView
+              pointerEvents="none"
+              style={StyleSheet.absoluteFill}
+              onGeometryChange={event => setGeometry(event.nativeEvent)}
             />
-          );
-        },
-      })}>
-      <Tab.Screen component={HomeScreen} name="Home" />
-      <Tab.Screen component={ExploreScreen} name="Explore" />
-      <Tab.Screen
-        component={TapInPlaceholder}
-        listeners={() => ({
-          tabPress: event => {
-            event.preventDefault();
-            setTabPulseInteractionKey(current => current + 1);
-
-            if (status === 'authenticatedReady') {
-              rootNavigation.navigate('TapInPicker');
-              return;
-            }
-
-            beginAuthFlow({type: 'tapInPicker'});
-            startOnboardingWizard();
-            navigateToAuthWelcome(rootNavigation);
-          },
-        })}
-        name="TapIn"
-        options={{
-          tabBarAccessibilityLabel: 'Tap In',
-          tabBarLabel: () => null,
-        }}
-      />
-      <Tab.Screen component={ProgressScreen} name="Progress" />
-      <Tab.Screen component={ProfileScreen} name="Profile" />
-    </Tab.Navigator>
+            <KeyboardInsetView
+              pointerEvents="none"
+              style={StyleSheet.absoluteFill}
+              onInsetChange={event => setKeyboardInset(event.nativeEvent.inset)}
+            />
+          </>
+        ) : null}
+      </View>
+    </NavigationLayoutContext.Provider>
   );
 }
 
 const styles = StyleSheet.create({
+  container: {flex: 1},
   tabBar: {
     borderRadius: 34,
     elevation: 12,

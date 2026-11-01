@@ -20,7 +20,10 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
-import {useSafeAreaInsets} from 'react-native-safe-area-context';
+import {
+  useTabContentInsets,
+  useNavigationLayout,
+} from '../../../navigation/NavigationLayoutContext';
 import {
   ArrowRight,
   BarChart3,
@@ -209,7 +212,8 @@ export function ProgressRow({
 }
 function ProgressContent({navigation}: Props) {
   const theme = useSystemTheme();
-  const insets = useSafeAreaInsets();
+  const insets = useTabContentInsets();
+  const railMode = useNavigationLayout()?.mode === 'rail';
   const captureScroll = useRef<ScrollView>(null);
   const earningOffset = useRef(0);
   const statsOffset = useRef(0);
@@ -339,7 +343,7 @@ function ProgressContent({navigation}: Props) {
           styles.content,
           {
             paddingTop: insets.top + 16,
-            paddingBottom: space.xxl + 110,
+            paddingBottom: space.xxl + (railMode ? 0 : 110),
             paddingLeft: systemLayout.gutter + insets.left,
             paddingRight: systemLayout.gutter + insets.right,
           },

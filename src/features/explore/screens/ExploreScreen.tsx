@@ -17,7 +17,10 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
-import {SafeAreaView, useSafeAreaInsets} from 'react-native-safe-area-context';
+import {
+  useTabContentInsets,
+  useNavigationLayout,
+} from '../../../navigation/NavigationLayoutContext';
 import LinearGradient from 'react-native-linear-gradient';
 import {useIsFocused} from '@react-navigation/native';
 import type {BottomTabScreenProps} from '@react-navigation/bottom-tabs';
@@ -166,7 +169,8 @@ function CircleResult({
 
 function ExploreContent({navigation}: Props) {
   const theme = useSystemTheme();
-  const insets = useSafeAreaInsets();
+  const insets = useTabContentInsets();
+  const railMode = useNavigationLayout()?.mode === 'rail';
   const focused = useIsFocused();
   const {fontScale} = useWindowDimensions();
   const [query, setQuery] = useState('');
@@ -404,9 +408,7 @@ function ExploreContent({navigation}: Props) {
     </View>
   );
   return (
-    <SafeAreaView
-      edges={['left', 'right']}
-      style={[styles.screen, {backgroundColor: theme.canvas}]}>
+    <View style={[styles.screen, {backgroundColor: theme.canvas}]}>
       {focused ? (
         <StatusBar
           barStyle={theme.isDark ? 'light-content' : 'dark-content'}
@@ -420,7 +422,10 @@ function ExploreContent({navigation}: Props) {
         testID="explore-top-tint"
       />
       <KeyboardAvoidingView
-        style={styles.screen}
+        style={[
+          styles.screen,
+          {paddingLeft: insets.left, paddingRight: insets.right},
+        ]}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <FlatList
           key={fontScale}
@@ -498,8 +503,7 @@ function ExploreContent({navigation}: Props) {
             <View
               style={{
                 paddingBottom:
-                  72 +
-                  (Platform.OS === 'ios' ? 18 : 12) +
+                  (railMode ? 0 : 72 + (Platform.OS === 'ios' ? 18 : 12)) +
                   insets.bottom +
                   space.xxl,
               }}>
@@ -522,7 +526,7 @@ function ExploreContent({navigation}: Props) {
           }
         />
       </KeyboardAvoidingView>
-    </SafeAreaView>
+    </View>
   );
 }
 

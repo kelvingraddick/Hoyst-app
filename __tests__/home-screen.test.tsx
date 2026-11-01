@@ -1580,6 +1580,27 @@ describe('HomeScreen Circle activity updates', () => {
     },
   );
 
+  it('updates the minimum top gutter and tint when insets change without a new header measurement', () => {
+    mockInsets = {top: 0, bottom: 0, left: 0, right: 84};
+    const tree = renderScreenTree();
+    const header = tree.root.findByType(
+      require('../src/design/components/HomeHeroHeader').HomeHeroHeader,
+    );
+    act(() => header.props.onLayout({nativeEvent: {layout: {height: 180}}}));
+    expect(
+      StyleSheet.flatten(
+        tree.root.findByProps({testID: 'home-hoy-context-tint'}).props.style,
+      ).height,
+    ).toBe(192);
+    mockInsets = {...mockInsets, top: 62};
+    act(() => tree.update(<HomeScreen />));
+    expect(
+      StyleSheet.flatten(
+        tree.root.findByProps({testID: 'home-hoy-context-tint'}).props.style,
+      ).height,
+    ).toBe(242);
+  });
+
   it('responds to asymmetric side-inset changes without changing the window size', () => {
     const tree = renderScreenTree();
     for (const insets of [
@@ -1590,7 +1611,7 @@ describe('HomeScreen Circle activity updates', () => {
       mockInsets = insets;
       act(() => tree.update(<HomeScreen />));
       expect(StyleSheet.flatten(tree.root.findByType(ScrollView).props.contentContainerStyle)).toMatchObject({
-        paddingTop: insets.top,
+        paddingTop: Math.max(insets.top, 12),
         paddingLeft: insets.left,
         paddingRight: insets.right,
       });

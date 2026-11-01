@@ -5,6 +5,10 @@ import {useLayoutWidth} from '../src/design/hooks/useLayoutWidth';
 import {getTabBarLayout} from '../src/navigation/tab-bar-layout';
 import {HoystBottomTabBar} from '../src/navigation/components/HoystBottomTabBar';
 
+jest.mock('../src/navigation/components/HoystNavigationRail', () => ({
+  HoystNavigationRail: () => null,
+}));
+
 jest.mock('@react-navigation/bottom-tabs', () => ({
   BottomTabBar: (props: object) =>
     require('react').createElement(require('react-native').View, {

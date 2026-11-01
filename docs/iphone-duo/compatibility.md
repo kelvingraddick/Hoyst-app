@@ -1,5 +1,7 @@
 # Basic iPhone Duo compatibility
 
+The [October 31 Home spacing and side-navigation pass](side-navigation.md) adds the subsequently requested bottom-aligned rail while preserving outer-display content width.
+
 Date: October 30, 2026.
 
 ## Implementation

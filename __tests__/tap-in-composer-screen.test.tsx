@@ -1121,6 +1121,38 @@ describe('TapInComposerScreen', () => {
     expect(skipButton?.props.disabled).toBe(true);
   });
 
+  it('explains why earned skips cannot be used before activation', async () => {
+    mockProgress.summary!.inventory.skips = 11;
+    mockProgress.summary!.flags.inventory = false;
+    const submitCallsBefore = mockSubmitTapIn.mock.calls.length;
+    let tree: renderer.ReactTestRenderer | undefined;
+
+    await act(async () => {
+      tree = renderComposerScreen();
+    });
+
+    const label = 'Skip use unavailable (11 saved)';
+    const skipButton = findPressableContainingText(tree!, label);
+    expect(skipButton?.props.disabled).toBe(true);
+    expect(skipButton?.props.accessibilityLabel).toBe(label);
+    expect(JSON.stringify(tree!.toJSON())).not.toContain('Use Skip (11 left)');
+
+    // Even an invoked stale handler must respect the server feature gate.
+    await act(async () => {
+      skipButton!.props.onPress();
+      await Promise.resolve();
+    });
+    expect(mockSubmitTapIn).toHaveBeenCalledTimes(submitCallsBefore);
+
+    mockProgress.summary!.flags.inventory = true;
+    await act(async () => {
+      mockEmitDetail?.({...mockDetail});
+    });
+    expect(
+      findPressableContainingText(tree!, 'Use Skip (11 left)')?.props.disabled,
+    ).toBe(false);
+  });
+
   it('disables skip when shared inventory is exhausted', async () => {
     mockProgress.summary!.inventory.skips = 0;
     mockDetail = {

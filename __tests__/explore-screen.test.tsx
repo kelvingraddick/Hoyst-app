@@ -3,6 +3,7 @@ import {
   AccessibilityInfo,
   Alert,
   FlatList,
+  KeyboardAvoidingView,
   StyleSheet,
   TextInput,
 } from 'react-native';
@@ -166,10 +167,11 @@ it.each([
     expect(list.props.automaticallyAdjustContentInsets).toBe(false);
     expect(list.props.scrollIndicatorInsets.top).toBe(59);
     expect(list.props.progressViewOffset).toBe(59);
-    const safeArea = screen.root.findByType(
-      require('react-native-safe-area-context').SafeAreaView,
-    );
-    expect(safeArea.props.edges).toEqual(['left', 'right']);
+    const contentViewport = screen.root.findByType(KeyboardAvoidingView);
+    expect(StyleSheet.flatten(contentViewport.props.style)).toMatchObject({
+      paddingLeft: 0,
+      paddingRight: 0,
+    });
   },
 );
 

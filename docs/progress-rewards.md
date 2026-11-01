@@ -1,6 +1,6 @@
 # Progress, XP, and rewards
 
-Implemented September 30, 2026. This is a gated rollout, not a store-ready release. The Progress screen, server economy, historical restore support, and purchase integration are implemented. Functions and rules are deployed to `hoyst-firebase-app`; XP earning was activated on September 30 at 3:46 p.m. America/New_York after authenticated initialization and focused economy validation. Inventory enforcement, restoring, and buying remain disabled. Complete their external setup and acceptance checks before activation.
+Implemented September 30, 2026. This is a gated rollout, not a store-ready release. The Progress screen, server economy, historical restore support, and purchase integration are implemented. Functions and rules are deployed to `hoyst-firebase-app`; XP earning was activated on September 30 at 3:46 p.m. America/New_York after authenticated initialization and focused economy validation. Shared skip inventory enforcement was activated October 31 at 12:08 p.m. America/New_York with user authorization after focused app and server emulator validation. Restoring and buying remain disabled. Complete their external setup and acceptance checks before activation.
 
 ## Implementation
 
@@ -86,3 +86,13 @@ Live read-only inspection found `serverConfig/progress` missing, which defaults 
 The native app and server ledger agreed on 110 XP: checklist 50 XP, historical Strong/Peak momentum 20/30 XP, and the 3-day personal streak milestone 10 XP. Level 2 granted one skip automatically. Three starter skips and one restore remained intact. Native refreshes and preview closure reinitialized the wallet without granting duplicates. No Tap In or protection event was submitted to manufacture this evidence.
 
 The production iOS capture is `docs/design-system/reference/progress/earning-enabled-live-ios.png`. The current flags were verified again after the native checks. Store purchases, historical restores, and shared-skip enforcement remain gated.
+
+## October 31 skip availability diagnosis
+
+A reported Tap In displayed `Use Skip (11 left)` with a disabled button. A live read of `hoyst-firebase-app/serverConfig/progress` confirmed `earningEnabled: true` and `inventoryEnforced: false`, with restores and buying also false. Its last update remained September 30, 2026 at `19:46:27.815923Z`. Earned inventory can therefore be positive while the composer deliberately blocks spending it. The old label only checked the balance and failed to explain the spending gate.
+
+The composer now labels this state `Skip use unavailable (11 saved)`, using the actual balance, and retains the spending guard. Regression coverage verifies that the same balance becomes usable when enforcement is enabled. A server emulator regression reproduces a wallet with 11 skips and a Circle with no legacy skip allowance, then verifies activation permits one skip, deducts exactly one unit, preserves XP, and rejects a duplicate submission.
+
+With explicit user authorization, production activation changed only `serverConfig/progress.inventoryEnforced` from `false` to `true` at `2026-10-31T16:08:30.415842Z`. An immediate independent read verified the enabled setting and confirmed earning remained true, with restores and buying false. The write used a field mask and an update-time precondition; it did not modify wallet balances. Supported clients refresh the effective flags on reopening or foregrounding. Activation permanently latches shared inventory enforcement as each account is reconciled or used, replacing its legacy Circle allowances. The local label change has not been released to TestFlight.
+
+Validation before activation passed 34 composer tests, 41 Progress server emulator tests, app TypeScript, the Functions build, and changed app/test-file lint. Production verification confirms configuration only; no real user's skip was spent to test activation. A physical-device skip submission remains unverified.

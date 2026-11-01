@@ -70,7 +70,7 @@ export function HomeHeroHeader({
   const orbSize = width < 390 ? 68 : 72;
   const bubbleColors = getHoyMessageSurfaceColors(theme.isDark);
   const bubbleColor = bubbleColors.backgroundColor;
-  const stacked = fontScale >= 1.6;
+  const stacked = fontScale >= 1.6 || width < 320;
   const messageOpacity = isHoyActionDisabled ? 0.8 : 1;
   return (
     <View

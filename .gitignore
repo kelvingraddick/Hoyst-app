@@ -110,6 +110,10 @@ android/app/*.keystore
 # Test Reports
 /reports
 
+# Local QA screenshots, separate from versioned app assets and references
+/outputs/**/*.png
+/docs/iphone-duo/evidence/side-navigation/
+
 # Stack Dumps generated when programs crash (Ex. bash.exe.stackdump on Win)
 *.stackdump
 
