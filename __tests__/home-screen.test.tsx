@@ -1,5 +1,10 @@
-jest.mock('../src/store/circle-invite-store', () => ({useCircleInviteStore: jest.fn()}));
-jest.mock('../src/store/setup-journey-store', () => ({useSetupJourneyStore: (selector: (state: {records: object}) => unknown) => selector({records:{}})}));
+jest.mock('../src/store/circle-invite-store', () => ({
+  useCircleInviteStore: jest.fn(),
+}));
+jest.mock('../src/store/setup-journey-store', () => ({
+  useSetupJourneyStore: (selector: (state: {records: object}) => unknown) =>
+    selector({records: {}}),
+}));
 import React from 'react';
 import {Image, ScrollView, StyleSheet} from 'react-native';
 import renderer, {act} from 'react-test-renderer';
@@ -651,37 +656,136 @@ describe('HomeScreen Circle activity updates', () => {
   );
 
   it('surfaces owner join requests as separate Home actions and opens their review', () => {
-    const value = attentionCircle({viewerRole: 'owner', members: [
-      {id: 'requester', name: 'Jordan', initials: 'J', state: 'pending', membershipStatus: 'pending'},
-    ]});
-    mockHomeData = {...homeData(), circles: [value], membershipCount: 1, hasLoadedMemberships: true, hasResolvedGreetingContext: true};
+    const value = attentionCircle({
+      viewerRole: 'owner',
+      members: [
+        {
+          id: 'requester',
+          name: 'Jordan',
+          initials: 'J',
+          state: 'pending',
+          membershipStatus: 'pending',
+        },
+      ],
+    });
+    mockHomeData = {
+      ...homeData(),
+      circles: [value],
+      membershipCount: 1,
+      hasLoadedMemberships: true,
+      hasResolvedGreetingContext: true,
+    };
     const tree = renderScreenTree();
-    expect(tree.root.findByProps({testID: 'home-daily-action-progress'}).props.accessibilityLabel).toBe('2 actions needed today');
-    expect(tree.root.findByProps({testID: `home-commitment-action-${value.id}`})).toBeTruthy();
-    act(() => tree.root.findByProps({accessibilityLabel: 'Review 1 join request for Sleep 8 Hours'}).props.onPress());
-    expect(mockRootNavigate).toHaveBeenCalledWith('CircleDetail', {circleId: value.id, reviewJoinRequests: true});
-    const receive = (subscribeToHomeData as jest.Mock).mock.calls.at(-1)[0].onData;
-    act(() => receive({...mockHomeData, circles: [{...value, members: [], viewerHasTappedInToday: true, nudgeTargetCount: 0}]}));
-    expect(tree.root.findAllByProps({accessibilityLabel: 'Review 1 join request for Sleep 8 Hours'})).toHaveLength(0);
-    expect(tree.root.findByProps({testID: 'home-daily-action-progress'}).props.accessibilityLabel).toBe('All actions complete');
+    expect(
+      tree.root.findByProps({testID: 'home-daily-action-progress'}).props
+        .accessibilityLabel,
+    ).toBe('2 actions needed today');
+    expect(
+      tree.root.findByProps({testID: `home-commitment-action-${value.id}`}),
+    ).toBeTruthy();
+    act(() =>
+      tree.root
+        .findByProps({
+          accessibilityLabel: 'Review 1 join request for Sleep 8 Hours',
+        })
+        .props.onPress(),
+    );
+    expect(mockRootNavigate).toHaveBeenCalledWith('CircleDetail', {
+      circleId: value.id,
+      reviewJoinRequests: true,
+    });
+    const receive = (subscribeToHomeData as jest.Mock).mock.calls.at(-1)[0]
+      .onData;
+    act(() =>
+      receive({
+        ...mockHomeData,
+        circles: [
+          {
+            ...value,
+            members: [],
+            viewerHasTappedInToday: true,
+            nudgeTargetCount: 0,
+          },
+        ],
+      }),
+    );
+    expect(
+      tree.root.findAllByProps({
+        accessibilityLabel: 'Review 1 join request for Sleep 8 Hours',
+      }),
+    ).toHaveLength(0);
+    expect(
+      tree.root.findByProps({testID: 'home-daily-action-progress'}).props
+        .accessibilityLabel,
+    ).toBe('All actions complete');
   });
 
   it('keeps multiple requesters grouped below their own Circle and counts every request', () => {
     const requests = [
-      {id: 'alex', name: 'Alex', initials: 'A', state: 'pending' as const, membershipStatus: 'pending' as const},
-      {id: 'blair', name: 'Blair', initials: 'B', state: 'pending' as const, membershipStatus: 'pending' as const},
+      {
+        id: 'alex',
+        name: 'Alex',
+        initials: 'A',
+        state: 'pending' as const,
+        membershipStatus: 'pending' as const,
+      },
+      {
+        id: 'blair',
+        name: 'Blair',
+        initials: 'B',
+        state: 'pending' as const,
+        membershipStatus: 'pending' as const,
+      },
     ];
-    const first = attentionCircle({id: 'first', title: 'First Circle', viewerRole: 'owner', members: requests, viewerHasTappedInToday: true, nudgeTargetCount: 0});
-    const second = attentionCircle({id: 'second', title: 'Second Circle', viewerRole: 'owner', members: [requests[0]], viewerHasTappedInToday: true, nudgeTargetCount: 0});
-    mockHomeData = {...homeData(), circles: [first, second], membershipCount: 2, hasLoadedMemberships: true, hasResolvedGreetingContext: true};
+    const first = attentionCircle({
+      id: 'first',
+      title: 'First Circle',
+      viewerRole: 'owner',
+      members: requests,
+      viewerHasTappedInToday: true,
+      nudgeTargetCount: 0,
+    });
+    const second = attentionCircle({
+      id: 'second',
+      title: 'Second Circle',
+      viewerRole: 'owner',
+      members: [requests[0]],
+      viewerHasTappedInToday: true,
+      nudgeTargetCount: 0,
+    });
+    mockHomeData = {
+      ...homeData(),
+      circles: [first, second],
+      membershipCount: 2,
+      hasLoadedMemberships: true,
+      hasResolvedGreetingContext: true,
+    };
     const tree = renderScreenTree();
-    expect(tree.root.findByProps({testID: 'home-daily-action-progress'}).props.accessibilityLabel).toBe('3 actions needed today');
+    expect(
+      tree.root.findByProps({testID: 'home-daily-action-progress'}).props
+        .accessibilityLabel,
+    ).toBe('3 actions needed today');
     const output = JSON.stringify(tree.toJSON());
-    expect(output.indexOf('home-commitment-collapsed-first')).toBeLessThan(output.indexOf('Review 2 join requests for First Circle'));
-    expect(output.indexOf('Review 2 join requests for First Circle')).toBeLessThan(output.indexOf('home-commitment-collapsed-second'));
-    expect(output.indexOf('home-commitment-collapsed-second')).toBeLessThan(output.indexOf('Review 1 join request for Second Circle'));
-    act(() => tree.root.findByProps({accessibilityLabel: 'Review 1 join request for Second Circle'}).props.onPress());
-    expect(mockRootNavigate).toHaveBeenCalledWith('CircleDetail', {circleId: 'second', reviewJoinRequests: true});
+    expect(output.indexOf('home-commitment-card-first')).toBeLessThan(
+      output.indexOf('Review 2 join requests for First Circle'),
+    );
+    expect(
+      output.indexOf('Review 2 join requests for First Circle'),
+    ).toBeLessThan(output.indexOf('home-commitment-card-second'));
+    expect(output.indexOf('home-commitment-card-second')).toBeLessThan(
+      output.indexOf('Review 1 join request for Second Circle'),
+    );
+    act(() =>
+      tree.root
+        .findByProps({
+          accessibilityLabel: 'Review 1 join request for Second Circle',
+        })
+        .props.onPress(),
+    );
+    expect(mockRootNavigate).toHaveBeenCalledWith('CircleDetail', {
+      circleId: 'second',
+      reviewJoinRequests: true,
+    });
   });
 
   it('uses meaning icons for actorless Home activity', () => {
@@ -889,12 +993,12 @@ describe('HomeScreen Circle activity updates', () => {
 
     expect(output).toContain('Your commitments');
     expect(output).toContain('Read every day');
-    expect(output).toContain('PERSONAL');
+    expect(output).toContain('WELLNESS');
     expect(output).not.toContain('1/1 Members');
     expect(output).not.toContain('PERSONAL COMMITMENTS');
     expect(
       tree.root.findByProps({
-        testID: 'home-commitment-focused-personal-1',
+        testID: 'home-commitment-card-personal-1',
       }),
     ).toBeTruthy();
   });
@@ -1610,7 +1714,11 @@ describe('HomeScreen Circle activity updates', () => {
     ]) {
       mockInsets = insets;
       act(() => tree.update(<HomeScreen />));
-      expect(StyleSheet.flatten(tree.root.findByType(ScrollView).props.contentContainerStyle)).toMatchObject({
+      expect(
+        StyleSheet.flatten(
+          tree.root.findByType(ScrollView).props.contentContainerStyle,
+        ),
+      ).toMatchObject({
         paddingTop: Math.max(insets.top, 12),
         paddingLeft: insets.left,
         paddingRight: insets.right,
@@ -1859,7 +1967,7 @@ describe('HomeScreen Circle activity updates', () => {
     ).toBeGreaterThan(previousCalls);
   });
 
-  it('preserves deliberate completed and pending expansion and advances when focused work finishes', () => {
+  it('keeps completed and pending cards expanded across subscription updates', () => {
     const first = attentionCircle();
     const second = attentionCircle({id: 'second'});
     const done = attentionCircle({
@@ -1878,60 +1986,39 @@ describe('HomeScreen Circle activity updates', () => {
       hasResolvedGreetingContext: true,
     };
     const tree = renderScreenTree();
-    const push = (circles: typeof mockHomeData.circles) => {
-      const subscription = (subscribeToHomeData as jest.Mock).mock.calls.at(
-        -1,
-      )[0];
-      act(() => subscription.onData({...mockHomeData, circles}));
-    };
+    const subscription = (subscribeToHomeData as jest.Mock).mock.calls.at(
+      -1,
+    )[0];
     act(() =>
-      tree.root
-        .findByProps({testID: 'home-commitment-expand-done'})
-        .props.onPress(),
+      subscription.onData({
+        ...mockHomeData,
+        circles: [
+          {...first, viewerHasTappedInToday: true, nudgeTargetCount: 0},
+          second,
+          done,
+          pending,
+        ],
+      }),
     );
-    push([first, second, done, pending]);
-    expect(
-      tree.root.findByProps({testID: 'home-commitment-focused-done'}),
-    ).toBeTruthy();
-    act(() =>
-      tree.root
-        .findByProps({testID: 'home-commitment-collapsed-pending'})
-        .props.onPress(),
-    );
-    push([first, second, done, pending]);
-    expect(
-      tree.root.findByProps({testID: 'home-commitment-focused-pending'}),
-    ).toBeTruthy();
-    act(() =>
-      tree.root
-        .findByProps({testID: 'home-commitment-collapsed-circle-attention'})
-        .props.onPress(),
-    );
-    const finishedFirst = {
-      ...first,
-      viewerHasTappedInToday: true,
-      nudgeTargetCount: 0,
-    };
-    push([finishedFirst, second, done, pending]);
-    expect(
-      tree.root.findByProps({testID: 'home-commitment-focused-second'}),
-    ).toBeTruthy();
-    push([
-      finishedFirst,
-      {...second, viewerHasTappedInToday: true, nudgeTargetCount: 0},
-      done,
-      pending,
-    ]);
+    for (const id of [first.id, 'second', 'done', 'pending']) {
+      expect(
+        tree.root.findByProps({testID: `home-commitment-card-${id}`}),
+      ).toBeTruthy();
+    }
     expect(
       tree.root.findAll(
-        node =>
-          typeof node.props.testID === 'string' &&
-          node.props.testID.startsWith('home-commitment-focused-'),
+        node => node.props.accessibilityState?.expanded === false,
       ),
+    ).toHaveLength(0);
+    expect(
+      tree.root.findAllByProps({testID: 'home-commitment-action-done'}),
+    ).toHaveLength(0);
+    expect(
+      tree.root.findAllByProps({testID: 'home-commitment-action-pending'}),
     ).toHaveLength(0);
   });
 
-  it('focuses Home commitments as a stacked list and routes its actions', () => {
+  it('renders all Home commitments expanded and routes details and actions separately', () => {
     (getTodayAttentionCircles as jest.Mock).mockReturnValue([
       attentionCircle(),
       attentionCircle({
@@ -1956,19 +2043,7 @@ describe('HomeScreen Circle activity updates', () => {
     expect(output).toContain('Your commitments');
     expect(
       tree.root.findByProps({
-        testID: 'home-commitment-focused-circle-attention',
-      }),
-    ).toBeTruthy();
-
-    act(() => {
-      tree.root
-        .findByProps({testID: 'home-commitment-collapsed-circle-second'})
-        .props.onPress();
-    });
-
-    expect(
-      tree.root.findByProps({
-        testID: 'home-commitment-focused-circle-second',
+        testID: 'home-commitment-card-circle-attention',
       }),
     ).toBeTruthy();
 

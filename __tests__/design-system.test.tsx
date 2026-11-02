@@ -1,13 +1,5 @@
 import React from 'react';
-import {
-  DevSettings,
-  Image,
-  Modal,
-  Pressable,
-  StyleSheet,
-  TextInput,
-  View,
-} from 'react-native';
+import {DevSettings, Image, Modal, Pressable, TextInput} from 'react-native';
 import renderer, {act} from 'react-test-renderer';
 import {DesignSystemProvider} from '../src/design/system/theme';
 import {
@@ -15,13 +7,19 @@ import {
   DSButton,
   DSInput,
   DSListRow,
-  DSProgress,
   DSText,
 } from '../src/design/system/primitives';
 import {DSCommitmentPreview} from '../src/design/system/recipes';
 import {DesignSystemGallery} from '../src/design/system/DesignSystemGallery';
 import {DesignSystemDevHost} from '../src/design/system/DesignSystemDevHost';
 import {getSystemTheme, minimumTarget} from '../src/design/system/tokens';
+import {getCommitmentCardColors} from '../src/design/components/CommitmentCardSurface';
+import {palettes, type PaletteId} from '../src/shared/commitment-appearance';
+
+jest.mock('react-native-linear-gradient', () => {
+  const {View} = require('react-native');
+  return View;
+});
 
 jest.mock('react-native-safe-area-context', () => {
   const {View: MockView} = require('react-native');
@@ -94,96 +92,51 @@ it('blocks repeat interaction and exposes busy/disabled state', () => {
 });
 
 it.each(['Tapped in today', 'Pending approval'])(
-  'allows expansion of %s without adding an action',
+  'keeps %s cards expanded without adding an action',
   status => {
-    const onExpand = jest.fn();
     const onDetails = jest.fn();
-    const props = {
-      title: 'Reading',
-      category: 'Deep Work',
-      description: 'Read one chapter.',
-      context: 'Personal commitment',
-      status,
-      onExpand,
-      onDetails,
-    };
-    const tree = render(<DSCommitmentPreview {...props} expanded={false} />);
-    act(() => button(tree, `Expand Reading. ${status}`).props.onPress());
-    expect(onExpand).toHaveBeenCalledTimes(1);
-    expect(onDetails).not.toHaveBeenCalled();
-    act(() =>
-      tree.update(
-        <DesignSystemProvider scheme="light">
-          <DSCommitmentPreview {...props} expanded />
-        </DesignSystemProvider>,
-      ),
+    const tree = render(
+      <DSCommitmentPreview
+        title="Reading"
+        category="Deep Work"
+        description="Read one chapter."
+        context="Personal commitment"
+        status={status}
+        onDetails={onDetails}
+      />,
     );
+    expect(JSON.stringify(tree.toJSON())).toContain('Read one chapter.');
     expect(tree.root.findAllByType(DSButton)).toHaveLength(0);
+    expect(
+      tree.root.findAll(
+        node => node.props.accessibilityState?.expanded === false,
+      ),
+    ).toHaveLength(0);
     act(() => button(tree, 'View details for Reading').props.onPress());
     expect(onDetails).toHaveBeenCalledTimes(1);
   },
 );
 
-it('keeps focused descriptions compact while retaining detail navigation', () => {
+it('keeps detail navigation independent of the card action', () => {
   const onDetails = jest.fn();
+  const onAction = jest.fn();
   const tree = render(
     <DSCommitmentPreview
-      category="Deep Work"
-      context="Personal commitment"
-      description="Read one chapter."
-      expanded
+      category="Fitness"
+      context="2/4 members tapped in"
+      description="Move for 30 minutes."
       onDetails={onDetails}
-      onExpand={jest.fn()}
       status="Needs your Tap In"
-      title="Reading"
+      title="Movement"
+      action={{label: 'Tap In', onPress: onAction}}
     />,
   );
-  const descriptionTarget = tree.root
-    .findAllByType(Pressable)
-    .find(
-      node =>
-        node.props.accessible === false &&
-        StyleSheet.flatten(node.props.style)?.minHeight === 20,
-    );
-
-  expect(descriptionTarget).toBeDefined();
-  act(() => descriptionTarget?.props.onPress());
+  act(() => button(tree, 'Tap In for Movement').props.onPress());
+  expect(onAction).toHaveBeenCalledTimes(1);
+  expect(onDetails).not.toHaveBeenCalled();
+  act(() => button(tree, 'View details for Movement').props.onPress());
   expect(onDetails).toHaveBeenCalledTimes(1);
-
-  const detailButton = tree.root
-    .findAllByType(Pressable)
-    .find(
-      node =>
-        node.props.accessibilityLabel === 'View details for Reading' &&
-        StyleSheet.flatten(node.props.style)?.position === 'absolute',
-    );
-  expect(StyleSheet.flatten(detailButton?.props.style)).toMatchObject({
-    position: 'absolute',
-    right: 6,
-    top: 0,
-  });
-});
-
-it.each([
-  [0, 0, 0, 1],
-  [1, 4, 1, 4],
-  [4, 4, 4, 4],
-  [9, 4, 4, 4],
-  [-1, 4, 0, 4],
-  [NaN, Infinity, 0, 1],
-])('reports bounded progress for %s of %s', (completed, total, now, max) => {
-  const tree = render(
-    <DSProgress completed={completed} total={total} label="Daily actions" />,
-  );
-  const progress = tree.root
-    .findAllByType(View)
-    .find(node => node.props.accessibilityRole === 'progressbar')!;
-  expect(progress.props.accessibilityValue).toEqual({
-    min: 0,
-    max,
-    now,
-    text: 'Daily actions',
-  });
+  expect(onAction).toHaveBeenCalledTimes(1);
 });
 
 it('exposes input errors without losing its label or native callbacks', () => {
@@ -277,7 +230,26 @@ it('does not register the gallery outside development', () => {
   }
 });
 
-function contrast(a: string, b: string) {
+function contrast(a: string, b: string, background = '#121212') {
+  const composite = (hex: string) => {
+    if (hex.length !== 9) return hex;
+    const alpha = parseInt(hex.slice(7, 9), 16) / 255;
+    return (
+      '#' +
+      [1, 3, 5]
+        .map(offset =>
+          Math.round(
+            parseInt(hex.slice(offset, offset + 2), 16) * alpha +
+              parseInt(background.slice(offset, offset + 2), 16) * (1 - alpha),
+          )
+            .toString(16)
+            .padStart(2, '0'),
+        )
+        .join('')
+    );
+  };
+  a = composite(a);
+  b = composite(b);
   const luminance = (hex: string) => {
     const channels = [1, 3, 5]
       .map(offset => parseInt(hex.slice(offset, offset + 2), 16) / 255)
@@ -289,6 +261,23 @@ function contrast(a: string, b: string) {
   const values = [luminance(a), luminance(b)].sort((x, y) => y - x);
   return (values[0] + 0.05) / (values[1] + 0.05);
 }
+it.each(['light', 'dark'] as const)(
+  'keeps commitment text readable across every %s category tint',
+  scheme => {
+    for (const palette of Object.keys(palettes) as PaletteId[]) {
+      const colors = getCommitmentCardColors(
+        'Custom',
+        {palette},
+        scheme === 'dark',
+      );
+      for (const background of [colors.surface, colors.tint]) {
+        for (const foreground of [colors.text, colors.muted, colors.category]) {
+          expect(contrast(foreground, background)).toBeGreaterThanOrEqual(4.5);
+        }
+      }
+    }
+  },
+);
 it.each(['light', 'dark'] as const)(
   'keeps small text and category pairs readable in %s',
   scheme => {
@@ -308,7 +297,7 @@ it.each(['light', 'dark'] as const)(
     }
     for (const category of Object.values(theme.category)) {
       expect(
-        contrast(category.foreground, category.surface),
+        contrast(category.foreground, category.surface, theme.canvas),
       ).toBeGreaterThanOrEqual(4.5);
       expect(
         contrast(

@@ -1,29 +1,30 @@
 import type {CommitmentAppearance} from '../../shared/commitment-appearance';
 import React, {type ReactNode} from 'react';
+import {Target} from 'lucide-react-native';
 import {
   Pressable,
   StyleSheet,
   View,
   type ImageSourcePropType,
 } from 'react-native';
-import {ArrowUpRight, Target} from 'lucide-react-native';
+import {getCircleCategoryVisual} from '../components/CircleCategoryIcon';
 import {
-  CircleCategoryIcon,
-  getCircleCategoryVisual,
-} from '../components/CircleCategoryIcon';
+  CommitmentCardHeader,
+  CommitmentCardSurface,
+  getCommitmentCardColors,
+} from '../components/CommitmentCardSurface';
 import {
   DSAvatar,
   DSButton,
   DSIconButton,
   DSListRow,
   DSStatus,
-  DSSurface,
   DSText,
 } from './primitives';
-import {layout, space} from './tokens';
+import {space} from './tokens';
 import {useSystemTheme} from './theme';
 
-/** Presentation only. Existing screen controllers own eligibility, requests and focus. */
+/** Presentation only. Existing screen controllers own eligibility and requests. */
 export type CommitmentPreviewProps = {
   title: string;
   category: string;
@@ -35,8 +36,6 @@ export type CommitmentPreviewProps = {
   };
   context: string;
   streaks?: ReactNode;
-  expanded: boolean;
-  onExpand: () => void;
   onDetails: () => void;
   status: string;
   members?: readonly {
@@ -60,8 +59,6 @@ export function DSCommitmentPreview({
   goal,
   context,
   streaks,
-  expanded,
-  onExpand,
   onDetails,
   status,
   members,
@@ -69,13 +66,7 @@ export function DSCommitmentPreview({
 }: CommitmentPreviewProps) {
   const theme = useSystemTheme();
   const visual = getCircleCategoryVisual(category, appearance);
-  const icon = (
-    <CircleCategoryIcon
-      category={category}
-      appearance={appearance}
-      size={layout.iconBackplate}
-    />
-  );
+  const colors = getCommitmentCardColors(category, appearance, theme.isDark);
   const button = action ? (
     <DSButton
       label={action.label}
@@ -84,52 +75,62 @@ export function DSCommitmentPreview({
       disabled={action.disabled}
       compact
       category={visual.tone}
-      variant={action.variant ?? (expanded ? 'primary' : 'outline')}
+      variant={action.variant ?? 'primary'}
       accessibilityLabel={`${action.label} for ${title}`}
     />
   ) : null;
-  if (!expanded) {
-    return (
-      <DSListRow
-        title={title}
-        subtitle={status}
-        leading={icon}
-        action={button}
-        onPress={onExpand}
-        accessibilityLabel={`Expand ${title}. ${status}`}
-        testID={`preview-expand-${title}`}
-      />
-    );
-  }
   return (
-    <DSSurface category={visual.tone} raised style={styles.focused}>
-      <View style={styles.header}>
-        <Pressable
-          onPress={onDetails}
-          accessibilityRole="button"
-          accessibilityLabel={`View details for ${title}`}
-          style={styles.headerTarget}>
-          <CircleCategoryIcon
-            category={category}
-            appearance={appearance}
-            showBackplate={false}
-            size={layout.iconBackplate}
-          />
-          <View style={styles.heading}>
-            <DSText variant="title">{title}</DSText>
-            <DSText
-              variant="category"
-              style={{color: theme.category[visual.tone].foreground}}>
-              {visual.label.toUpperCase()}
-            </DSText>
-          </View>
-        </Pressable>
-      </View>
-      <DSIconButton
-        label={`View details for ${title}`}
+    <CommitmentCardSurface
+      colors={colors}
+      footer={
+        <View style={styles.footer}>
+          <Pressable
+            accessible={false}
+            onPress={onDetails}
+            style={[styles.context, !action && styles.statusContext]}>
+            {members?.length ? (
+              <View style={styles.avatars}>
+                {members.slice(0, 2).map((member, index) => (
+                  <View
+                    key={member.id}
+                    style={index ? styles.avatarOverlap : undefined}>
+                    <DSAvatar
+                      name={member.name}
+                      source={member.source}
+                      size={24}
+                    />
+                  </View>
+                ))}
+              </View>
+            ) : null}
+            <View style={styles.contextCopy}>
+              <DSText
+                variant="secondary"
+                tone="muted"
+                style={styles.contextText}>
+                {context}
+              </DSText>
+              {action?.label.startsWith('Nudg') ? (
+                <DSText variant="secondary" tone="muted">
+                  {status}
+                </DSText>
+              ) : null}
+            </View>
+          </Pressable>
+          {button}
+          {!action ? (
+            <View style={styles.completion}>
+              <DSStatus label={status} />
+            </View>
+          ) : null}
+        </View>
+      }>
+      <CommitmentCardHeader
+        title={title}
+        category={category}
+        appearance={appearance}
+        colors={colors}
         onPress={onDetails}
-        style={styles.detailButton}
-        icon={<ArrowUpRight color={theme.muted} size={layout.controlIcon} />}
       />
       <Pressable
         accessible={false}
@@ -142,7 +143,7 @@ export function DSCommitmentPreview({
             testID={`commitment-preview-goal-${title}`}>
             <Target
               accessible={false}
-              color={theme.muted}
+              color={colors.muted}
               size={14}
               strokeWidth={2.2}
               style={styles.goalIcon}
@@ -163,30 +164,7 @@ export function DSCommitmentPreview({
         ) : null}
       </Pressable>
       {streaks}
-      <View style={styles.footer}>
-        <Pressable
-          accessible={false}
-          onPress={onDetails}
-          style={styles.context}>
-          {members?.length ? (
-            <View style={styles.avatars}>
-              {members.slice(0, 3).map((member, index) => (
-                <View
-                  key={member.id}
-                  style={index ? styles.avatarOverlap : undefined}>
-                  <DSAvatar name={member.name} source={member.source} />
-                </View>
-              ))}
-            </View>
-          ) : null}
-          <DSText variant="secondary" tone="muted" style={styles.contextText}>
-            {context}
-          </DSText>
-        </Pressable>
-        {button}
-        {!action ? <DSStatus label={status} /> : null}
-      </View>
-    </DSSurface>
+    </CommitmentCardSurface>
   );
 }
 
@@ -228,24 +206,6 @@ export function DSActivityPreview({
 }
 
 const styles = StyleSheet.create({
-  focused: {
-    borderRadius: 18,
-    gap: space.sm,
-    paddingHorizontal: 18,
-    paddingVertical: 12,
-    position: 'relative',
-  },
-  header: {minHeight: layout.controlHeight},
-  headerTarget: {
-    flex: 1,
-    minHeight: layout.controlHeight,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: space.md,
-    paddingRight: layout.controlHeight,
-  },
-  detailButton: {position: 'absolute', right: 6, top: 0},
-  heading: {flex: 1, gap: space.xs},
   descriptionTarget: {gap: space.xs, minHeight: 20},
   goalLine: {
     alignItems: 'center',
@@ -267,10 +227,14 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     flexShrink: 1,
     flexBasis: 140,
+    minWidth: 140,
     gap: space.sm,
     minHeight: 44,
   },
+  statusContext: {flexBasis: 100, minWidth: 100},
+  completion: {flexShrink: 1},
   contextText: {flexShrink: 1},
+  contextCopy: {flex: 1, gap: 4},
   avatars: {flexDirection: 'row'},
   avatarOverlap: {marginLeft: -6},
 });

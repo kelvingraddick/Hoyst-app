@@ -1,10 +1,15 @@
 import React from 'react';
-import {StyleSheet, TouchableWithoutFeedback} from 'react-native';
+import {StyleSheet} from 'react-native';
 import renderer, {act} from 'react-test-renderer';
 
-import {CircleCategoryIcon} from '../src/design/components/CircleCategoryIcon';
+import {CommitmentCardHeader} from '../src/design/components/CommitmentCardSurface';
 import {HomeCommitmentStack} from '../src/features/home/components/HomeCommitmentStack';
 import type {CircleManagementCard} from '../src/types/models';
+
+jest.mock('react-native-linear-gradient', () => {
+  const {View} = require('react-native');
+  return View;
+});
 
 jest.mock('react-native-haptic-feedback', () => ({
   trigger: jest.fn(),
@@ -52,29 +57,22 @@ function circle(
   };
 }
 
-function renderCards(
-  cards: CircleManagementCard[],
-  focusedCardId?: string,
-  busy = false,
-) {
+function renderCards(cards: CircleManagementCard[], busy = false) {
   const onActionPress = jest.fn();
-  const onFocusCard = jest.fn();
   const onViewDetails = jest.fn();
   let tree!: renderer.ReactTestRenderer;
   act(() => {
     tree = renderer.create(
       <HomeCommitmentStack
         cards={cards}
-        focusedCardId={focusedCardId}
         isNudged={() => false}
         isNudging={() => busy}
         onActionPress={onActionPress}
-        onFocusCard={onFocusCard}
         onViewDetails={onViewDetails}
       />,
     );
   });
-  return {tree, onActionPress, onFocusCard, onViewDetails};
+  return {tree, onActionPress, onViewDetails};
 }
 
 describe('Home commitment actions', () => {
@@ -164,122 +162,72 @@ describe('Home commitment actions', () => {
         .join(''),
     ).toBe('Goal: 4 Tap Ins per month');
   });
-  it('offers direct actions on expanded and compact rows without recording completion', () => {
-    const first = circle();
+  it('renders every actionable card expanded and keeps action presses independent', () => {
     const second = circle({id: 'second'});
-    const {tree, onActionPress, onFocusCard} = renderCards([first, second]);
-    act(() => {
-      tree.root
-        .findByProps({testID: 'home-commitment-action-second'})
-        .props.onPress();
-    });
-    expect(onActionPress).toHaveBeenCalledWith(second);
-    expect(onFocusCard).not.toHaveBeenCalled();
-    expect(
-      tree.root.findAllByProps({testID: 'home-commitment-done-second'}),
-    ).toHaveLength(0);
-  });
-  it('shows cycle progress on the expanded card without changing collapsed cards', () => {
-    const {tree} = renderCards([
-      circle({
-        commitmentCadence: 'weekly',
-        cycleCoveredCount: 5,
-        cycleRequiredCount: 6,
-        id: 'weekly-group',
-        members: [
-          {
-            cycleGoalMet: true,
-            id: 'member-1',
-            initials: 'M1',
-            name: 'Member One',
-            state: 'done',
-          },
-          {
-            cycleGoalMet: false,
-            id: 'member-2',
-            initials: 'M2',
-            name: 'Member Two',
-            state: 'pending',
-          },
-        ],
-        title: 'Weekly Group',
-      }),
-      circle({
-        circleMode: 'personal',
-        cycleCoveredCount: 0,
-        cycleRequiredCount: 1,
-        id: 'daily-personal',
-        title: 'Daily Personal',
-      }),
-    ]);
-    const output = JSON.stringify(tree.toJSON());
-
-    expect(output).toContain('1/2 members met goal this week');
-    expect(output).not.toContain('Goal not met today');
-    expect(output).toContain('Needs your Tap In');
-    expect(
-      tree.root.findByProps({
-        testID: 'home-commitment-collapsed-daily-personal',
-      }).props.accessibilityLabel,
-    ).toBe('Expand Daily Personal. Needs your Tap In');
-  });
-  it('keeps focus and detail navigation separate from submitting an action', () => {
-    const second = circle({id: 'second'});
-    const {tree, onFocusCard, onViewDetails, onActionPress} = renderCards([
+    const {tree, onActionPress, onViewDetails} = renderCards([
       circle(),
       second,
     ]);
+    expect(tree.root.findAllByType(CommitmentCardHeader)).toHaveLength(2);
+    expect(JSON.stringify(tree.toJSON())).not.toContain(
+      'home-commitment-collapsed',
+    );
     act(() =>
       tree.root
-        .findByProps({testID: 'home-commitment-collapsed-second'})
+        .findByProps({testID: 'home-commitment-action-second'})
         .props.onPress(),
     );
-    expect(onFocusCard).toHaveBeenCalledWith('second');
-    act(() =>
-      tree.root
-        .findByProps({testID: 'home-commitment-expand-second'})
-        .props.onPress(),
-    );
-    expect(onFocusCard).toHaveBeenCalledTimes(2);
+    expect(onActionPress).toHaveBeenCalledWith(second);
+    expect(onViewDetails).not.toHaveBeenCalled();
     act(() =>
       tree.root
         .findByProps({testID: 'home-commitment-details-circle-1'})
         .props.onPress(),
     );
     expect(onViewDetails).toHaveBeenCalledWith('circle-1');
-    expect(onActionPress).not.toHaveBeenCalled();
-
-    act(() => tree.root.findByType(TouchableWithoutFeedback).props.onPress());
-    expect(onViewDetails).toHaveBeenCalledTimes(2);
-    expect(
-      tree.root.findByProps({
-        testID: 'home-commitment-detail-arrow-circle-1',
-      }),
-    ).toBeTruthy();
-    const categoryIcons = tree.root.findAllByType(CircleCategoryIcon);
-    expect(categoryIcons[0].props.showBackplate).toBe(false);
-    expect(categoryIcons[1].props.showBackplate).toBeUndefined();
-    expect(
-      StyleSheet.flatten(
-        tree.root.findByProps({testID: 'home-commitment-focused-circle-1'})
-          .props.style,
-      ),
-    ).toMatchObject({paddingHorizontal: 18, paddingVertical: 12});
-
-    act(() =>
-      tree.root
-        .findByProps({testID: 'home-commitment-action-circle-1'})
-        .props.onPress(),
-    );
-    expect(onActionPress).toHaveBeenCalledWith(circle());
-    expect(onViewDetails).toHaveBeenCalledTimes(2);
+    expect(onActionPress).toHaveBeenCalledTimes(1);
   });
-  it("shows a personal commitment's actual category in the focused card", () => {
-    const {tree} = renderCards([circle({circleMode: 'personal'})]);
-    const output = JSON.stringify(tree.toJSON());
-
-    expect(output).toContain('FITNESS');
-    expect(output).not.toContain('PERSONAL COMMITMENT');
+  it('shows each card’s own cycle progress without inventing group data for personal commitments', () => {
+    const {tree} = renderCards([
+      circle({
+        commitmentCadence: 'weekly',
+        cycleCoveredCount: 5,
+        cycleRequiredCount: 6,
+        members: [
+          {
+            cycleGoalMet: true,
+            id: 'm1',
+            initials: 'M1',
+            name: 'One',
+            state: 'done',
+          },
+          {
+            cycleGoalMet: false,
+            id: 'm2',
+            initials: 'M2',
+            name: 'Two',
+            state: 'pending',
+          },
+        ],
+      }),
+      circle({
+        id: 'personal',
+        circleMode: 'personal',
+        cycleCoveredCount: 0,
+        cycleRequiredCount: 1,
+      }),
+    ]);
+    expect(JSON.stringify(tree.toJSON())).toContain(
+      '1/2 members met goal this week',
+    );
+    const personal = tree.root.findByProps({
+      testID: 'home-commitment-card-personal',
+    });
+    expect(
+      personal.findAllByType(
+        require('../src/design/components/LayeredAvatar').LayeredAvatar,
+      ),
+    ).toHaveLength(0);
   });
   it.each(['partial', 'failed', 'skip', 'done'] as const)(
     'offers Nudge after a saved %s result',
@@ -301,64 +249,57 @@ describe('Home commitment actions', () => {
       expect(onActionPress).toHaveBeenCalledWith(card);
     },
   );
-  it('keeps completed and pending rows compact and without submission controls', () => {
-    const {tree} = renderCards([
+  it('keeps completed and pending cards expanded with details and no submission controls', () => {
+    const {tree, onViewDetails, onActionPress} = renderCards([
       circle({viewerHasTappedInToday: true}),
       circle({id: 'pending', viewerMembershipStatus: 'pending'}),
     ]);
+    expect(tree.root.findAllByType(CommitmentCardHeader)).toHaveLength(2);
+    expect(
+      tree.root.findAll(
+        node => node.props.accessibilityState?.expanded === false,
+      ),
+    ).toHaveLength(0);
     expect(
       tree.root.findAllByProps({testID: 'home-commitment-action-circle-1'}),
     ).toHaveLength(0);
     expect(
-      tree.root.findAllByProps({testID: 'home-commitment-focused-circle-1'}),
+      tree.root.findAllByProps({testID: 'home-commitment-action-pending'}),
     ).toHaveLength(0);
-    expect(
-      tree.root.findByProps({testID: 'home-commitment-collapsed-pending'}).props
-        .accessibilityLabel,
-    ).toContain('Pending approval');
-  });
-  it.each([
-    {viewerHasTappedInToday: true},
-    {viewerMembershipStatus: 'pending' as const},
-  ])('allows intentional expansion of a non-actionable row: %p', overrides => {
-    const card = circle(overrides);
-    const {tree, onViewDetails, onActionPress} = renderCards([card], card.id);
-    expect(
-      tree.root.findByProps({testID: 'home-commitment-focused-circle-1'}),
-    ).toBeTruthy();
-    expect(JSON.stringify(tree.toJSON())).toContain(card.commitment);
-    expect(
-      tree.root.findAllByProps({testID: 'home-commitment-action-circle-1'}),
-    ).toHaveLength(0);
+    expect(JSON.stringify(tree.toJSON())).toContain('Pending approval');
     act(() =>
       tree.root
-        .findByProps({testID: 'home-commitment-details-circle-1'})
+        .findByProps({testID: 'home-commitment-details-pending'})
         .props.onPress(),
     );
-    expect(onViewDetails).toHaveBeenCalledWith(card.id);
+    expect(onViewDetails).toHaveBeenCalledWith('pending');
     expect(onActionPress).not.toHaveBeenCalled();
   });
-  it('expands completed and pending rows through either content or chevron', () => {
-    const {tree, onFocusCard, onActionPress, onViewDetails} = renderCards([
-      circle({viewerHasTappedInToday: true}),
-      circle({id: 'pending', viewerMembershipStatus: 'pending'}),
-    ]);
-    act(() => {
-      tree.root
-        .findByProps({testID: 'home-commitment-collapsed-circle-1'})
-        .props.onPress();
-      tree.root
-        .findByProps({testID: 'home-commitment-expand-pending'})
-        .props.onPress();
-    });
-    expect(onFocusCard.mock.calls).toEqual([['circle-1'], ['pending']]);
-    expect(onActionPress).not.toHaveBeenCalled();
-    expect(onViewDetails).not.toHaveBeenCalled();
+  it('does not collapse or hide another card when work finishes', () => {
+    const first = circle();
+    const second = circle({id: 'second'});
+    const {tree} = renderCards([first, second]);
+    const props = tree.root.findByType(HomeCommitmentStack)
+      .props as React.ComponentProps<typeof HomeCommitmentStack>;
+    act(() =>
+      tree.update(
+        <HomeCommitmentStack
+          {...props}
+          cards={[{...first, viewerHasTappedInToday: true}, second]}
+        />,
+      ),
+    );
+    expect(tree.root.findAllByType(CommitmentCardHeader)).toHaveLength(2);
+    expect(
+      tree.root.findAllByProps({testID: 'home-commitment-action-circle-1'}),
+    ).toHaveLength(0);
+    expect(
+      tree.root.findByProps({testID: 'home-commitment-action-second'}),
+    ).toBeTruthy();
   });
   it('disables the primary action while a Nudge is sending', () => {
     const {tree} = renderCards(
       [circle({viewerHasTappedInToday: true, nudgeTargetCount: 2})],
-      undefined,
       true,
     );
     expect(
@@ -366,14 +307,16 @@ describe('Home commitment actions', () => {
         .accessibilityState,
     ).toEqual({disabled: true, busy: true});
   });
-  it('keeps full descriptions and long compact titles readable in dark mode', () => {
+  it('keeps personal category and long titles readable in dark mode', () => {
     mockAppearance = 'dark';
-    const longTitle = 'A long personal commitment with a meaningful full title';
-    const {tree} = renderCards([
-      circle(),
-      circle({id: 'long', title: longTitle}),
-    ]);
-    expect(JSON.stringify(tree.toJSON())).toContain(longTitle);
-    expect(JSON.stringify(tree.toJSON())).toContain('Move for 30 minutes');
+    const title = 'A long personal commitment with a meaningful full title';
+    const {tree} = renderCards([circle({circleMode: 'personal', title})]);
+    const output = JSON.stringify(tree.toJSON());
+    expect(output).toContain(title);
+    expect(output).toContain('FITNESS');
+    expect(output).toContain('Move for 30 minutes');
+    expect(
+      tree.root.findByType(CommitmentCardHeader).props.colors.surface,
+    ).toBe('#242428');
   });
 });

@@ -35,7 +35,11 @@ jest.mock('react-native-safe-area-context', () => {
 
   return {
     useSafeAreaInsets: () => ({bottom: 0, left: 0, right: 0, top: 0}),
-    useSafeAreaFrame: () => ({x: 0, y: 0, ...require('react-native').Dimensions.get('window')}),
+    useSafeAreaFrame: () => ({
+      x: 0,
+      y: 0,
+      ...require('react-native').Dimensions.get('window'),
+    }),
     SafeAreaView: ({children, ...props}: {children?: React.ReactNode}) =>
       MockReact.createElement(View, props, children),
   };
@@ -388,16 +392,11 @@ describe('TapInPickerScreen', () => {
       tree.root.findByProps({testID: 'tap-in-picker-due-stack'}),
     ).toBeTruthy();
     expect(
-      tree.root.findByProps({
-        testID: 'tap-in-priority-card-building-hoyst',
-      }).props.style,
-    ).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          borderBottomWidth: expect.any(Number),
-        }),
-      ]),
-    );
+      tree.root
+        .findByProps({testID: 'tap-in-priority-card-building-hoyst'})
+        .findAllByType(Text)
+        .some(node => node.props.children === 'Building Hoyst'),
+    ).toBe(true);
     expect(output).toContain('Also today');
     expect(output).toContain('Hydration');
     expect(output).toContain('Goal met today');

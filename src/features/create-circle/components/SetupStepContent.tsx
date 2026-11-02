@@ -1,3 +1,9 @@
+import {
+  CommitmentCardHeader,
+  CommitmentCardSurface,
+  getCommitmentCardColors,
+} from '../../../design/components/CommitmentCardSurface';
+import type {CommitmentAppearance} from '../../../shared/commitment-appearance';
 import React, {useEffect, useRef} from 'react';
 import {Platform, Pressable, StyleSheet, View} from 'react-native';
 import {Check, ChevronRight, Globe2, Link, Shield} from 'lucide-react-native';
@@ -37,6 +43,8 @@ export function SetupChoice({
   body,
   tag,
   compact,
+  commitmentCategory,
+  commitmentAppearance,
   selected,
   onPress,
   icon,
@@ -47,6 +55,8 @@ export function SetupChoice({
   body?: string;
   tag?: string;
   compact?: boolean;
+  commitmentCategory?: string;
+  commitmentAppearance?: CommitmentAppearance;
   selected?: boolean;
   onPress: () => void;
   icon?: React.ReactNode;
@@ -55,6 +65,58 @@ export function SetupChoice({
 }) {
   const theme = useSetupTheme();
   const palette = palettes[tone];
+  if (commitmentCategory) {
+    const colors = getCommitmentCardColors(
+      commitmentCategory,
+      commitmentAppearance,
+      theme.isDark,
+    );
+    return (
+      <Pressable
+        accessibilityRole="radio"
+        accessibilityState={{selected: Boolean(selected), disabled}}
+        accessibilityLabel={[tag, title, body].filter(Boolean).join('. ')}
+        onPress={onPress}
+        disabled={disabled}
+        style={disabled ? styles.disabled : undefined}>
+        <CommitmentCardSurface
+          colors={colors}
+          style={{
+            borderWidth: 1,
+            borderColor: selected ? colors.category : 'transparent',
+          }}
+          footer={
+            <View style={{flexDirection: 'row', alignItems: 'center', gap: 12}}>
+              {tag ? (
+                <HoystText
+                  style={[styles.helper, {flex: 1, color: colors.category}]}>
+                  {tag}
+                </HoystText>
+              ) : (
+                <View style={styles.flex} />
+              )}
+              {selected ? (
+                <Check color={colors.category} size={20} />
+              ) : (
+                <ChevronRight color={colors.muted} size={20} />
+              )}
+            </View>
+          }>
+          <CommitmentCardHeader
+            title={title}
+            category={commitmentCategory}
+            appearance={commitmentAppearance}
+            colors={colors}
+          />
+          {body ? (
+            <HoystText tone="muted" style={styles.copy}>
+              {body}
+            </HoystText>
+          ) : null}
+        </CommitmentCardSurface>
+      </Pressable>
+    );
+  }
   return (
     <Pressable
       accessibilityRole="radio"
@@ -1028,35 +1090,14 @@ export function SetupStepContent({
     ];
     return (
       <>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={`Edit ${
-            personal ? 'Commitment name' : 'Circle name'
-          }: ${draft.title}`}
-          onPress={() => onEdit('name')}
-          style={[
-            styles.preview,
-            styles.row,
-            {
-              backgroundColor: theme.isDark
-                ? resolveAppearance(draft.category, draft.appearance)
-                    .darkBackground
-                : resolveAppearance(draft.category, draft.appearance)
-                    .background,
-            },
-          ]}>
-          <CircleCategoryIcon
-            category={draft.category}
-            appearance={draft.appearance}
-            size={44}
-          />
-          <View style={styles.flex}>
-            <HoystText style={styles.cardTitle}>{draft.title}</HoystText>
-            <HoystText tone="muted" style={styles.copy}>
-              {draft.commitment}
-            </HoystText>
-          </View>
-          <ChevronRight color={theme.textMuted} size={18} />
+        <Pressable accessibilityRole="button"
+          accessibilityLabel={`Edit ${personal ? 'Commitment name' : 'Circle name'}: ${draft.title}`}
+          onPress={() => onEdit('name')}>
+          <CommitmentCardSurface colors={getCommitmentCardColors(draft.category, draft.appearance, theme.isDark)}>
+            <CommitmentCardHeader title={draft.title} category={draft.category} appearance={draft.appearance}
+              colors={getCommitmentCardColors(draft.category, draft.appearance, theme.isDark)} showDetails />
+            <HoystText tone="muted" style={styles.copy}>{draft.commitment}</HoystText>
+          </CommitmentCardSurface>
         </Pressable>
         {rows.map(([label, value, target]) => (
           <Pressable

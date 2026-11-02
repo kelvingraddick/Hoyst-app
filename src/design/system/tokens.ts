@@ -2,7 +2,7 @@ import {palettes} from '../../shared/commitment-appearance';
 import {Platform, type TextStyle} from 'react-native';
 
 /** Opt-in v1. Home and legacy tokens deliberately do not import this module. */
-export const systemVersion = '1.2.0';
+export const systemVersion = '2.0.7';
 export const typography = {
   screenTitle: {fontSize: 24, lineHeight: 29, fontWeight: '600'},
   heading: {fontSize: 18, lineHeight: 23, fontWeight: '600'},

@@ -2,7 +2,11 @@
 
 Implemented September 11, 2026 from the three approved light-mode mockups, followed by the requested goal-line adjustment.
 
-## Local presentation
+## November 1, 2026 card update
+
+The approved [expanded commitment card design](commitment-cards.md) supersedes the older featured/due-row presentation below. All due and utility commitment entries now use separate neutral cards with category-accented icons and labels. Tap In, Update Tap In, Nudge, Share, and View keep their existing eligibility and handlers. Sheet behavior, sorting, goals, saved quantities, and request locking remain unchanged.
+
+## Local presentation (September reference)
 
 The existing `TapInPicker` native slide-up modal keeps its route, subscription, sorting and eligibility. A screen-local `DesignSystemProvider` follows the existing appearance preference. The selector uses the 52-point `HoystTapInMark` unchanged, including its shadow and Reduce Motion behavior. Its animation pauses when the route loses focus.
 

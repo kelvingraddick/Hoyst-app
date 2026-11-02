@@ -1,3 +1,8 @@
+import {
+  CommitmentCardHeader,
+  CommitmentCardSurface,
+  getCommitmentCardColors,
+} from '../../../design/components/CommitmentCardSurface';
 import React, {useEffect, useMemo, useState} from 'react';
 import {Image, StyleSheet, View} from 'react-native';
 import {ArrowLeft, CalendarDays, Check, Minus, X} from 'lucide-react-native';
@@ -117,19 +122,24 @@ export function PastCircleScreen({navigation, route}: Props) {
         <View style={styles.navSpacer} />
       </View>
 
-      <GlassPanel style={styles.heroPanel}>
+      <CommitmentCardSurface
+        colors={getCommitmentCardColors(
+          summary.category,
+          summary.appearance,
+          theme.isDark,
+        )}>
         <HoystText style={styles.eyebrow}>PAST CIRCLE</HoystText>
-        <HoystText style={styles.title}>{summary.title}</HoystText>
+        <CommitmentCardHeader
+          title={summary.title}
+          category={summary.category}
+          appearance={summary.appearance}
+          colors={getCommitmentCardColors(
+            summary.category,
+            summary.appearance,
+            theme.isDark,
+          )}
+        />
         <HoystText tone="muted">{summary.commitment}</HoystText>
-        <View
-          style={[
-            styles.categoryPill,
-            {backgroundColor: theme.tabActiveBackground},
-          ]}>
-          <HoystText style={[styles.categoryLabel, {color: theme.accent}]}>
-            {summary.category}
-          </HoystText>
-        </View>
         <View style={styles.membershipHistory}>
           <HoystText tone="muted" variant="label">
             Membership history
@@ -150,7 +160,7 @@ export function PastCircleScreen({navigation, route}: Props) {
             </View>
           ))}
         </View>
-      </GlassPanel>
+      </CommitmentCardSurface>
 
       <View style={styles.sectionHeader}>
         <HoystText style={styles.sectionTitle}>Your Tap Ins</HoystText>

@@ -273,7 +273,6 @@ export function HomeScreen(): React.JSX.Element {
   const [nudgingCircleIds, setNudgingCircleIds] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
-  const [focusedCommitmentId, setFocusedCommitmentId] = useState<string>();
   const [homeGreetingState, setHomeGreetingState] =
     useState<HomeGreetingState>();
   const nudgeInFlight = useRef(new Set<string>());
@@ -295,9 +294,6 @@ export function HomeScreen(): React.JSX.Element {
   const lastResolvedGreetingRef = useRef<
     {headline: string; sessionKey: string} | undefined
   >(undefined);
-  const previousFocusedCommitmentRef = useRef<CircleManagementCard | undefined>(
-    undefined,
-  );
   const hoyCelebrationTimerRef = useRef<
     ReturnType<typeof setTimeout> | undefined
   >(undefined);
@@ -508,41 +504,6 @@ export function HomeScreen(): React.JSX.Element {
     [actionCircles],
   );
 
-  useEffect(() => {
-    if (commitmentStackCircles.length === 0) {
-      previousFocusedCommitmentRef.current = undefined;
-      if (focusedCommitmentId) {
-        setFocusedCommitmentId(undefined);
-      }
-      return;
-    }
-
-    const focusedCommitment = commitmentStackCircles.find(
-      circle => circle.id === focusedCommitmentId,
-    );
-    const previousFocusedCommitment = previousFocusedCommitmentRef.current;
-    const completedWhileFocused = Boolean(
-      focusedCommitment &&
-        previousFocusedCommitment?.id === focusedCommitment.id &&
-        ['tap_in', 'nudge'].includes(
-          getHomeDailyAction(previousFocusedCommitment),
-        ) &&
-        !['tap_in', 'nudge'].includes(getHomeDailyAction(focusedCommitment)),
-    );
-    const nextIncompleteCommitment = commitmentStackCircles.find(circle =>
-      ['tap_in', 'nudge'].includes(getHomeDailyAction(circle)),
-    );
-    const nextFocusedCommitment =
-      !focusedCommitment || completedWhileFocused
-        ? nextIncompleteCommitment
-        : focusedCommitment;
-
-    if (nextFocusedCommitment?.id !== focusedCommitmentId) {
-      setFocusedCommitmentId(nextFocusedCommitment?.id);
-    }
-
-    previousFocusedCommitmentRef.current = nextFocusedCommitment;
-  }, [commitmentStackCircles, focusedCommitmentId]);
   const homePrimaryAction = useMemo(
     () =>
       getHomePrimaryAction({
@@ -1399,7 +1360,6 @@ export function HomeScreen(): React.JSX.Element {
                       </View>
                     ) : null;
                   }}
-                  focusedCardId={focusedCommitmentId}
                   isNudged={circleId =>
                     Boolean(
                       actionCircles.find(circle => circle.id === circleId)
@@ -1418,7 +1378,6 @@ export function HomeScreen(): React.JSX.Element {
                     );
                   }}
                   onActionPress={handleCircleAction}
-                  onFocusCard={setFocusedCommitmentId}
                   onViewDetails={openCircleDetail}
                 />
               ) : !showAuthenticatedEmptyState &&

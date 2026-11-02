@@ -1,3 +1,8 @@
+import {
+  CommitmentCardHeader,
+  CommitmentCardSurface,
+  getCommitmentCardColors,
+} from '../../../design/components/CommitmentCardSurface';
 import {formatCircleStreak} from '../../../shared/circle-progress';
 import {readCircleProgress} from '../../../shared/circle-progress';
 import {categories as commitmentCategories} from '../../../shared/commitment-appearance';
@@ -35,7 +40,6 @@ import {
   DSAvatar,
   DSButton,
   DSIconButton,
-  DSSurface,
   DSText,
   layout,
   minimumTarget,
@@ -71,6 +75,11 @@ function CircleResult({
 }) {
   const theme = useSystemTheme();
   const tone = getCircleCategoryVisual(circle.category, circle.appearance).tone;
+  const colors = getCommitmentCardColors(
+    circle.category,
+    circle.appearance,
+    theme.isDark,
+  );
   const activity = circle.latestPublicTapIn;
   const timestamp = activity ? formatPublicTapInTime(activity.occurredAt) : '';
   const avatarSource = React.useMemo(
@@ -86,8 +95,8 @@ function CircleResult({
       ? 'Invite only'
       : 'Request to join';
   return (
-    <DSSurface
-      category={tone}
+    <CommitmentCardSurface
+      colors={colors}
       style={styles.card}
       testID={`explore-circle-${circle.id}`}>
       <Pressable
@@ -95,21 +104,13 @@ function CircleResult({
         accessibilityLabel={`View details for ${circle.title}`}
         onPress={onDetails}
         style={styles.cardDetails}>
-        <View style={styles.row}>
-          <CircleCategoryIcon
-            category={circle.category}
-            appearance={circle.appearance}
-            size={40}
-          />
-          <View style={styles.grow}>
-            <DSText variant="title">{circle.title}</DSText>
-            <DSText
-              variant="category"
-              style={{color: theme.category[tone].foreground}}>
-              {circle.category.toUpperCase()}
-            </DSText>
-          </View>
-        </View>
+        <CommitmentCardHeader
+          title={circle.title}
+          category={circle.category}
+          appearance={circle.appearance}
+          colors={colors}
+          showDetails
+        />
         <DSText tone="muted">{circle.commitment}</DSText>
         <View style={styles.facts}>
           <View style={styles.fact}>
@@ -119,15 +120,26 @@ function CircleResult({
             </DSText>
           </View>
           <View style={styles.fact}>
-            {(readCircleProgress(circle.groupStreak, circle as unknown as Record<string, unknown>)?.streak.count ?? 0) > 0 ? (
+            {(readCircleProgress(
+              circle.groupStreak,
+              circle as unknown as Record<string, unknown>,
+            )?.streak.count ?? 0) > 0 ? (
               <Flame
                 size={layout.statIcon}
                 color={theme.category[tone].foreground}
               />
             ) : null}
             <DSText variant="secondary" tone="muted">
-              {(readCircleProgress(circle.groupStreak, circle as unknown as Record<string, unknown>)?.streak.count ?? 0) > 0
-                ? `${formatCircleStreak(readCircleProgress(circle.groupStreak, circle as unknown as Record<string, unknown>)?.streak)} group streak`
+              {(readCircleProgress(
+                circle.groupStreak,
+                circle as unknown as Record<string, unknown>,
+              )?.streak.count ?? 0) > 0
+                ? `${formatCircleStreak(
+                    readCircleProgress(
+                      circle.groupStreak,
+                      circle as unknown as Record<string, unknown>,
+                    )?.streak,
+                  )} group streak`
                 : availability}
             </DSText>
           </View>
@@ -163,7 +175,7 @@ function CircleResult({
           style={styles.detailsButton}
         />
       </View>
-    </DSSurface>
+    </CommitmentCardSurface>
   );
 }
 
@@ -596,7 +608,7 @@ const styles = StyleSheet.create({
     minHeight: minimumTarget(),
   },
   section: {gap: space.xs},
-  card: {marginBottom: space.lg, gap: space.md},
+  card: {marginBottom: space.lg},
   cardDetails: {gap: space.md, minHeight: minimumTarget()},
   row: {flexDirection: 'row', alignItems: 'center', gap: space.sm},
   facts: {flexDirection: 'row', flexWrap: 'wrap', gap: space.md},

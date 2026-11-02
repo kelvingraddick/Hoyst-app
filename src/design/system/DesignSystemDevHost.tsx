@@ -9,6 +9,7 @@ import {DesignSystemGallery} from './DesignSystemGallery';
 
 /** Debug-only visual fixtures. Hidden host renders nothing. */
 export function DesignSystemDevHost() {
+  const [cardMode, setCardMode] = useState<string>();
   const [storyMode, setStoryMode] = useState<string>();
   const [circleProgressMode, setCircleProgressMode] = useState<string>();
   const [profileMode, setProfileMode] = useState<string>();
@@ -22,6 +23,9 @@ export function DesignSystemDevHost() {
     }
     let mounted = true;
     // React Native replaces handlers by title, including after Fast Refresh.
+    DevSettings.addMenuItem('Commitment card previews', () => {
+      if (mounted) setCardMode('light');
+    });
     DevSettings.addMenuItem('Hoyst Design System', () => {
       if (mounted) {
         setVisible(true);
@@ -91,6 +95,8 @@ export function DesignSystemDevHost() {
         }
         return;
       }
+      const cardMatch = url?.match(/^hoyst:\/\/commitment-cards-preview\/([a-z-]+)$/);
+      if (mounted && cardMatch) {setCardMode(cardMatch[1] === 'close' ? undefined : cardMatch[1]); return;}
       const storyMatch = url?.match(/^hoyst:\/\/tap-in-story-preview\/([a-z-]+)$/);
       if (mounted && storyMatch) {
         setStoryMode(storyMatch[1] === 'close' ? undefined : storyMatch[1]);
@@ -132,7 +138,8 @@ export function DesignSystemDevHost() {
   }, []);
   if (
     !__DEV__ ||
-    (!storyMode &&
+    (!cardMode &&
+      !storyMode &&
       !circleProgressMode &&
       !visible &&
       !tapInVisible &&
@@ -141,6 +148,14 @@ export function DesignSystemDevHost() {
       !profileMode)
   ) {
     return null;
+  }
+  if (cardMode) {
+    const {CommitmentCardsPreview} = require('./CommitmentCardsPreview');
+    return <View accessibilityViewIsModal style={StyleSheet.absoluteFill}>
+      <SafeAreaProvider initialMetrics={initialWindowMetrics}>
+        <CommitmentCardsPreview key={cardMode} mode={cardMode} onClose={() => setCardMode(undefined)} />
+      </SafeAreaProvider>
+    </View>;
   }
   if (storyMode) {
     const {TapInStoryPreview} = require('../../features/check-in/components/TapInStoryPreview');

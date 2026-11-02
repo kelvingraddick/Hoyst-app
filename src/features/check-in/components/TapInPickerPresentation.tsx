@@ -1,3 +1,8 @@
+import {
+  CommitmentCardHeader,
+  CommitmentCardSurface,
+  getCommitmentCardColors,
+} from '../../../design/components/CommitmentCardSurface';
 import React, {useState} from 'react';
 import {
   Pressable,
@@ -6,25 +11,12 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
-import {
-  ArrowUpRight,
-  Bell,
-  Check,
-  Flame,
-  Plus,
-  Share2,
-  Target,
-  X,
-} from 'lucide-react-native';
-import {
-  CircleCategoryIcon,
-  getCircleCategoryVisual,
-} from '../../../design/components/CircleCategoryIcon';
+import {Check, Flame, Plus, Target, X} from 'lucide-react-native';
+import {getCircleCategoryVisual} from '../../../design/components/CircleCategoryIcon';
 import {HoystTapInMark} from '../../../design/components/HoystTapInMark';
 import {
   DSButton,
   DSIconButton,
-  DSListRow,
   DSSurface,
   DSText,
   minimumTarget,
@@ -102,19 +94,22 @@ function savedQuantityStatus(circle: CircleManagementCard) {
 function Commitment({
   circle,
   featured = false,
-  showDivider = false,
   deadline,
   onPress,
 }: {
   circle: CircleManagementCard;
   featured?: boolean;
-  showDivider?: boolean;
   deadline?: string;
   onPress: () => void;
 }) {
   const theme = useSystemTheme();
   const {fontScale, width} = useWindowDimensions();
   const visual = getCircleCategoryVisual(circle.category, circle.appearance);
+  const colors = getCommitmentCardColors(
+    circle.category,
+    circle.appearance,
+    theme.isDark,
+  );
   const goal = getCommitmentGoalPresentation(circle);
   const update = circle.viewerCanUpdateTapIn && circle.viewerHasTappedInToday;
   const label = update ? 'Update Tap In' : 'Tap In';
@@ -141,27 +136,51 @@ function Commitment({
       }`}
     />
   );
-  const content = (
-    <>
-      <View style={styles.identity}>
-        <CircleCategoryIcon
-          category={circle.category}
-          appearance={circle.appearance}
-          size={32}
-          showBackplate={false}
-        />
-        <View style={styles.copy}>
-          <DSText variant="title">{circle.title}</DSText>
+  const footer = (
+    <View style={[styles.footer, stackAction && styles.stackedFooter]}>
+      <View style={styles.status}>
+        <View
+          style={status === 'Streak at risk' ? styles.riskStatus : undefined}>
+          {status === 'Streak at risk' ? (
+            <Flame
+              accessible={false}
+              color={theme.warning}
+              size={14}
+              strokeWidth={2.4}
+            />
+          ) : null}
           <DSText
-            variant="category"
-            style={{color: theme.category[visual.tone].foreground}}>
-            {visual.label.toUpperCase()}
-            <DSText variant="category" tone="muted">{` · ${getCommitmentType(
-              circle,
-            ).toUpperCase()}`}</DSText>
+            variant="secondary"
+            tone={status === 'Streak at risk' ? 'warning' : 'muted'}>
+            {status}
+            {featured && deadline ? (
+              <DSText variant="secondary" tone="muted">
+                {` · ${deadline}`}
+              </DSText>
+            ) : null}
           </DSText>
         </View>
+        <DSText variant="secondary" tone="muted">
+          {cycleProgress.listLabel}
+        </DSText>
+        {circle.circleMode === 'personal' ? (
+          <DSText variant="secondary" tone="muted">
+            Personal commitment
+          </DSText>
+        ) : null}
       </View>
+      {action}
+    </View>
+  );
+  const content = (
+    <>
+      <CommitmentCardHeader
+        title={circle.title}
+        category={circle.category}
+        appearance={circle.appearance}
+        colors={colors}
+        categorySuffix={getCommitmentType(circle).toUpperCase()}
+      />
       <View style={styles.description}>
         <DSText tone="muted">{circle.commitment}</DSText>
         {goal ? (
@@ -190,56 +209,15 @@ function Commitment({
           </View>
         ) : null}
       </View>
-      <View style={[styles.footer, stackAction && styles.stackedFooter]}>
-        <View style={styles.status}>
-          <View
-            style={status === 'Streak at risk' ? styles.riskStatus : undefined}>
-            {status === 'Streak at risk' ? (
-              <Flame
-                accessible={false}
-                color={theme.warning}
-                size={14}
-                strokeWidth={2.4}
-              />
-            ) : null}
-            <DSText
-              variant="secondary"
-              tone={status === 'Streak at risk' ? 'warning' : 'muted'}>
-              {status}
-              {featured && deadline ? (
-                <DSText variant="secondary" tone="muted">
-                  {` · ${deadline}`}
-                </DSText>
-              ) : null}
-            </DSText>
-          </View>
-          <DSText variant="secondary" tone="muted">
-            {cycleProgress.listLabel}
-          </DSText>
-          {circle.circleMode === 'personal' ? (
-            <DSText variant="secondary" tone="muted">
-              Personal commitment
-            </DSText>
-          ) : null}
-        </View>
-        {action}
-      </View>
     </>
   );
   return (
-    <DSSurface
-      category={visual.tone}
-      style={[
-        styles.featured,
-        styles.stackedCard,
-        showDivider && {
-          borderBottomColor: theme.border,
-          borderBottomWidth: StyleSheet.hairlineWidth,
-        },
-      ]}
+    <CommitmentCardSurface
+      colors={colors}
+      footer={footer}
       testID={`tap-in-${featured ? 'priority' : 'due'}-card-${circle.id}`}>
       {content}
-    </DSSurface>
+    </CommitmentCardSurface>
   );
 }
 
@@ -353,7 +331,6 @@ export function TapInPickerPresentation({
                 key={circle.id}
                 circle={circle}
                 featured={index === 0}
-                showDivider={index < dueCircles.length - 1}
                 deadline={index === 0 ? deadline : undefined}
                 onPress={() => onTapIn(circle.id)}
               />
@@ -378,32 +355,59 @@ export function TapInPickerPresentation({
             </DSText>
             {utilities.length ? (
               utilities.map(utility => {
-                const Icon =
-                  utility.kind === 'nudge'
-                    ? Bell
-                    : utility.kind === 'share'
-                    ? Share2
-                    : ArrowUpRight;
+                const circle = utility.circle;
+                const colors = getCommitmentCardColors(
+                  circle.category,
+                  circle.appearance,
+                  theme.isDark,
+                );
+                const visual = getCircleCategoryVisual(
+                  circle.category,
+                  circle.appearance,
+                );
+                const goal = getCommitmentGoalPresentation(circle);
                 return (
-                  <DSListRow
-                    key={utility.circle.id}
-                    title={utility.circle.title}
-                    subtitle={`${utility.status}\n${utility.progress}`}
-                    leading={<Icon color={theme.muted} size={22} />}
-                    action={
-                      <DSButton
-                        label={utility.label}
-                        variant="quiet"
-                        compact
-                        labelStyle={[styles.utilityLabel, {color: theme.muted}]}
-                        busy={utility.busy}
-                        disabled={utility.disabled}
-                        accessibilityLabel={`${utility.label} for ${utility.circle.title}`}
-                        testID={`tap-in-picker-utility-${utility.circle.id}`}
-                        onPress={utility.onPress}
-                      />
-                    }
-                  />
+                  <CommitmentCardSurface
+                    key={circle.id}
+                    colors={colors}
+                    testID={`tap-in-utility-card-${circle.id}`}
+                    footer={
+                      <View style={styles.footer}>
+                        <View style={styles.copy}>
+                          <DSText variant="secondary" tone="muted">
+                            {utility.status}
+                          </DSText>
+                          <DSText variant="secondary" tone="muted">
+                            {utility.progress}
+                          </DSText>
+                        </View>
+                        <DSButton
+                          label={utility.label}
+                          category={visual.tone}
+                          compact
+                          busy={utility.busy}
+                          disabled={utility.disabled}
+                          accessibilityLabel={`${utility.label} for ${circle.title}`}
+                          testID={`tap-in-picker-utility-${circle.id}`}
+                          onPress={utility.onPress}
+                        />
+                      </View>
+                    }>
+                    <CommitmentCardHeader
+                      title={circle.title}
+                      category={circle.category}
+                      appearance={circle.appearance}
+                      colors={colors}
+                    />
+                    <DSText tone="muted">{circle.commitment}</DSText>
+                    {goal ? (
+                      <DSText variant="secondary" tone="muted">
+                        {goal.label}
+                        {goal.label === 'Goal' ? ': ' : ' · '}
+                        {goal.value}
+                      </DSText>
+                    ) : null}
+                  </CommitmentCardSurface>
                 );
               })
             ) : (
@@ -422,7 +426,6 @@ const styles = StyleSheet.create({
   sheet: {flex: 1},
   scroll: {flex: 1},
   scrollOrigin: {height: 1, marginBottom: -1},
-  utilityLabel: {fontWeight: '400'},
   content: {paddingTop: 0, paddingHorizontal: 22, gap: 16, paddingBottom: 24},
   hero: {gap: 16, paddingTop: 32},
   mark: {alignItems: 'center'},
@@ -442,15 +445,7 @@ const styles = StyleSheet.create({
     borderRadius: 999,
   },
   createPressed: {opacity: 0.7},
-  featured: {
-    paddingHorizontal: 18,
-    paddingVertical: 12,
-    borderRadius: 18,
-    gap: 12,
-  },
-  dueStack: {borderRadius: 18, gap: 0, overflow: 'hidden'},
-  stackedCard: {borderRadius: 0},
-  identity: {flexDirection: 'row', alignItems: 'center', gap: 12},
+  dueStack: {gap: 16},
   copy: {flex: 1, minWidth: 0, gap: 4},
   description: {gap: 4},
   goalLine: {alignItems: 'center', flexDirection: 'row', flexWrap: 'wrap'},

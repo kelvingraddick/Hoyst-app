@@ -62,9 +62,12 @@ export function ProgressStatsRow({
   testIDPrefix?: string;
 }) {
   const {width, fontScale} = useWindowDimensions();
-  const {width: contentWidth, onLayout} = useLayoutWidth(width - 44);
-  const columns =
-    (viewportWidth ?? contentWidth + 44) >= 390 && fontScale <= 1.15;
+  const {width: contentWidth, onLayout} = useLayoutWidth(
+    (viewportWidth ?? width) - 44,
+  );
+  // Two 156-point cards plus their gap fit Duo's 329-point outer content area. Measure
+  // the row itself so side safe areas and embedded containers count only once.
+  const columns = contentWidth >= 156 * 2 + 12 && fontScale <= 1.15;
   return (
     <View onLayout={onLayout} style={columns ? styles.columns : styles.stack}>
       {[

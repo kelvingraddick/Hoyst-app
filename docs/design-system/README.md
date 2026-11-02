@@ -1,8 +1,8 @@
 # Hoyst design system
 
-Version **1.2.0**, established September 8, 2026. Approved Home source revision: `00d4726793147f6f933886a696ad4530735daa58`.
+Version **2.0.7**, established September 8, 2026. Approved Home source revision: `00d4726793147f6f933886a696ad4530735daa58`.
 
-**Home is the frozen reference, not a migration target.** Do not refactor Home into this system or change its transitive shared styles, theme defaults, artwork, or tab bar. Other screens adopt this opt-in system independently. Retain legacy components for Home as long as it needs them.
+**Home is the frozen reference, with the explicitly approved card exception documented below.** The November 1 expanded-card treatment may share its scoped native card shell. Do not migrate the rest of Home or change its transitive shared styles, theme defaults, artwork, or tab bar. Other screens adopt the opt-in system independently. Retain legacy components wherever Home still needs them.
 
 ## Start here
 
@@ -36,7 +36,25 @@ The gallery integration remains a development-only host in `App.tsx`; release bu
 4. Existing category names, icons, assets, eligibility, navigation and submission logic remain authoritative. Presentation components accept data and callbacks; they do not reimplement these rules.
 5. Changes to this system are explicit and versioned. Fixes increment patch, additive roles increment minor, and incompatible API or default visual changes increment major. Record decisions and update reference evidence rather than silently retuning global styles.
 
+## Commitment card update
+
+[Expanded commitment cards](commitment-cards.md) documents the current neutral card surfaces, category accents, expanded-only presentation, shared native shell, and scoped Home exception. The initial gradient mock was superseded by the user’s gradient-removal and icon-placement refinements. The rest of Home and navigation remain reference surfaces.
+
 ## Decision log
+
+- **2026-11-01:** Version 2.0.7 uses equal 16-point top and bottom padding on shared commitment cards, retaining the 18-point horizontal inset.
+
+- **2026-11-01:** Version 2.0.6 removes the forced full-width row for pending/completed footer statuses. Member copy can wrap beside the status, with a second row reserved for layouts that actually need it.
+
+- **2026-11-01:** Version 2.0.5 reduces commitment-card titles to 18/24 semibold and vertically centers the category/title stack beside the category icon circle, superseding the earlier top alignment.
+
+- **2026-11-01:** Version 2.0.4 reduces shared commitment-card footer top padding from 12 to 6 points, bringing footer content closer to its divider.
+
+- **2026-11-01:** Version 2.0.3 tightens the category-to-title gap to 2 points, aligns the category label with the icon container's visible top, pads the 32-point icon inside a 44-point background, and restores the goal's target icon on Home and shared commitment previews.
+
+- **2026-11-01:** Following the card-header spacing refinement, the user removed the gradient treatment. Version 2.0.2 uses plain white/charcoal card surfaces, retaining category accents on the icon, label, and actions.
+
+- **2026-11-01:** The user selected the soft color-wash mock and approved its implementation across all in-app commitment cards and previews: Home, Circles, Explore, selector, setup/invites, archives, and past summaries. Cards stay expanded, including completed and pending items. Version 2.0 removes expansion-only recipe props. Full-screen Detail/composer/completion headers, share exports, other Home styling, navigation, and global theme defaults are outside this exception.
 
 - **2026-10-31:** The user approved a narrow Duo exception: Home has a minimum 16-point top gutter, and navigation follows iOS's vertical-bar edge. The Hoyst rail is bottom-aligned below the camera-side system area and does not narrow the existing content width. Tap In retains its mark and accessible name without a visible label. Other Home styling and the ordinary bottom bar remain the reference.
 

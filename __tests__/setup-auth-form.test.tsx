@@ -1,12 +1,25 @@
 import React from 'react';
 import renderer, {act} from 'react-test-renderer';
-import {Image, Platform, Pressable, StyleSheet, View} from 'react-native';
+import {
+  Image,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import {Mail, Phone} from 'lucide-react-native';
 import {HoystButton} from '../src/design/components/HoystButton';
 import {HoystInput} from '../src/design/components/HoystInput';
 import {brandColors} from '../src/design/tokens/colors';
 import {SetupAuthForm} from '../src/features/auth/components/SetupAuthForm';
-import {signInWithGoogle} from '../src/features/auth/services/auth-service';
+import {SignInScreen} from '../src/features/auth/screens/SignInScreen';
+import {
+  signInWithEmail,
+  signInWithGoogle,
+} from '../src/features/auth/services/auth-service';
+import {useSessionStore} from '../src/store/session-store';
 import {useSettingsStore} from '../src/store/settings-store';
 
 jest.mock('@react-native-async-storage/async-storage', () =>
@@ -17,6 +30,10 @@ jest.mock('react-native-linear-gradient', () => {
   return ({children, ...props}: React.PropsWithChildren) =>
     ReactMock.createElement(require('react-native').View, props, children);
 });
+jest.mock('react-native-safe-area-context', () => ({
+  SafeAreaProvider: ({children}: React.PropsWithChildren) => children,
+  useSafeAreaInsets: () => ({top: 62, bottom: 34, left: 0, right: 0}),
+}));
 jest.mock('../src/features/legal/policy-service', () => ({
   acceptLegalTerms: jest.fn().mockResolvedValue({accepted: true}),
 }));
@@ -249,4 +266,72 @@ it('does not record acceptance when sending or resending a phone code, but recor
   await act(async () => actionRef.current?.());
   expect(auth.confirmPhoneSignIn).toHaveBeenCalledWith(confirmation, '123456');
   expect(legal.acceptLegalTerms).toHaveBeenCalledWith('phone-user');
+});
+
+it('shows a failed login above the fixed action, preserves the inputs, and clears the error on retry or method change', async () => {
+  useSessionStore.setState({status: 'guest', user: undefined});
+  const failure = {
+    code: 'auth/invalid-credential',
+    message: 'Raw Firebase error',
+  };
+  (signInWithEmail as jest.Mock).mockRejectedValue(failure);
+  act(() => {
+    tree = renderer.create(
+      <SignInScreen
+        navigation={{getParent: () => undefined, goBack: jest.fn()} as never}
+        route={{params: {method: 'email'}} as never}
+      />,
+    );
+  });
+  act(() => {
+    for (const input of tree.root.findAllByType(HoystInput)) {
+      input.props.onChangeText(
+        input.props.accessibilityLabel === 'Email'
+          ? 'missing@example.com'
+          : 'test-password',
+      );
+    }
+  });
+  await act(async () => button('Sign in').props.onPress());
+  const footer = tree.root.findByProps({testID: 'setup-frame-footer'});
+  const alerts = () =>
+    footer
+      .findAllByType(Text)
+      .filter(node => node.props.accessibilityRole === 'alert');
+  expect(alerts()).toHaveLength(1);
+  expect(alerts()[0].props.children).toBe(
+    'Email or password is incorrect. Try again or reset your password.',
+  );
+  expect(
+    tree.root
+      .findByType(ScrollView)
+      .findAllByProps({accessibilityRole: 'alert'}),
+  ).toHaveLength(0);
+  expect(button('Sign in').props.disabled).toBe(false);
+  expect(
+    tree.root.findAllByType(HoystInput).map(input => input.props.value),
+  ).toEqual(['missing@example.com', 'test-password']);
+
+  let rejectRetry!: (reason: unknown) => void;
+  (signInWithEmail as jest.Mock).mockImplementationOnce(
+    () =>
+      new Promise((_, reject) => {
+        rejectRetry = reject;
+      }),
+  );
+  await act(async () => button('Sign in').props.onPress());
+  expect(alerts()).toHaveLength(0);
+  expect(button('Working...').props.disabled).toBe(true);
+  await act(async () => rejectRetry(failure));
+  expect(alerts()).toHaveLength(1);
+  const changeMethod = tree.root
+    .findAllByType(Pressable)
+    .find(
+      node =>
+        node.findAllByProps({children: 'Use another sign-in method'}).length >
+        0,
+    )!;
+  act(() => changeMethod.props.onPress());
+  expect(alerts()).toHaveLength(0);
+  expect(button('Continue with email')).toBeDefined();
 });

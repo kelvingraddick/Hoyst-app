@@ -50,6 +50,7 @@ export function SignInScreen({navigation, route}: Props): React.JSX.Element {
       message={form.message}
       messageEmphasis={form.emphasis}
       step={form.title}
+      error={form.error}
       onBack={() => {
         if (!form.busy && !backAction.current?.()) navigation.goBack();
       }}

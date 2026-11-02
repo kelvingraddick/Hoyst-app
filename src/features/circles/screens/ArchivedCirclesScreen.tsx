@@ -1,13 +1,11 @@
+import {
+  CommitmentCardHeader,
+  CommitmentCardSurface,
+  getCommitmentCardColors,
+} from '../../../design/components/CommitmentCardSurface';
 import React, {useEffect, useMemo, useState} from 'react';
 import {Alert, Pressable, StyleSheet, View} from 'react-native';
-import {
-  Archive,
-  ArchiveRestore,
-  ArrowLeft,
-  ChevronRight,
-  LockKeyhole,
-  UsersRound,
-} from 'lucide-react-native';
+import {Archive, ArchiveRestore, ArrowLeft} from 'lucide-react-native';
 import type {NativeStackScreenProps} from '@react-navigation/native-stack';
 
 import {FrostedBackdrop} from '../../../design/components/FrostedBackdrop';
@@ -51,9 +49,37 @@ function ArchivedCircleCard({
 }) {
   const theme = useHoystTheme();
   const isPersonal = circle.circleMode === 'personal';
+  const colors = getCommitmentCardColors(
+    circle.category,
+    circle.appearance,
+    theme.isDark,
+  );
 
   return (
-    <GlassPanel style={styles.card}>
+    <CommitmentCardSurface
+      colors={colors}
+      footer={
+        circle.viewerRole === 'owner' ? (
+          <HoystButton
+            disabled={isRestoring}
+            icon={
+              <ArchiveRestore
+                color={theme.actionForeground}
+                size={18}
+                strokeWidth={2.3}
+              />
+            }
+            label={
+              isRestoring
+                ? 'Restoring...'
+                : isPersonal
+                ? 'Unarchive Commitment'
+                : 'Unarchive Circle'
+            }
+            onPress={onRestore}
+          />
+        ) : null
+      }>
       <Pressable
         accessibilityLabel={`Open archived ${
           isPersonal ? 'Commitment' : 'Circle'
@@ -64,28 +90,15 @@ function ArchivedCircleCard({
           styles.cardMain,
           {opacity: pressed ? actionMotion.pressedOpacity : 1},
         ]}>
-        <View
-          style={[
-            styles.cardIcon,
-            {backgroundColor: `${theme.accentSecondaryForeground}18`},
-          ]}>
-          {isPersonal ? (
-            <LockKeyhole
-              color={theme.accentSecondaryForeground}
-              size={20}
-              strokeWidth={2.2}
-            />
-          ) : (
-            <UsersRound
-              color={theme.accentSecondaryForeground}
-              size={20}
-              strokeWidth={2.2}
-            />
-          )}
-        </View>
+        <CommitmentCardHeader
+          title={circle.title}
+          category={circle.category}
+          appearance={circle.appearance}
+          colors={colors}
+          showDetails
+        />
         <View style={styles.cardCopy}>
-          <HoystText style={styles.cardTitle}>{circle.title}</HoystText>
-          <HoystText numberOfLines={2} tone="muted" variant="caption">
+          <HoystText tone="muted" style={{fontSize: 14, lineHeight: 20}}>
             {circle.commitment}
           </HoystText>
           <HoystText tone="muted" variant="tiny">
@@ -98,29 +111,8 @@ function ArchivedCircleCard({
             {formatArchivedDate(circle.archivedAt)}
           </HoystText>
         </View>
-        <ChevronRight color={theme.textSubtle} size={18} strokeWidth={2.2} />
       </Pressable>
-      {circle.viewerRole === 'owner' ? (
-        <HoystButton
-          disabled={isRestoring}
-          icon={
-            <ArchiveRestore
-              color={theme.actionForeground}
-              size={18}
-              strokeWidth={2.3}
-            />
-          }
-          label={
-            isRestoring
-              ? 'Restoring...'
-              : isPersonal
-              ? 'Unarchive Commitment'
-              : 'Unarchive Circle'
-          }
-          onPress={onRestore}
-        />
-      ) : null}
-    </GlassPanel>
+    </CommitmentCardSurface>
   );
 }
 
@@ -230,10 +222,12 @@ export function ArchivedCirclesScreen({navigation}: Props) {
           />
         </View>
         <View style={styles.heroText}>
-          <HoystText style={styles.title}>Archived commitments & circles</HoystText>
+          <HoystText style={styles.title}>
+            Archived commitments & circles
+          </HoystText>
           <HoystText tone="muted">
-            History stays available. Owners can restore an item when it is
-            ready to become active again.
+            History stays available. Owners can restore an item when it is ready
+            to become active again.
           </HoystText>
         </View>
       </View>
@@ -287,7 +281,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     width: 44,
   },
-  cardMain: {alignItems: 'center', flexDirection: 'row', gap: 12},
+  cardMain: {gap: 12},
   cardStack: {gap: 12},
   cardTitle: {fontSize: 17, fontWeight: '800', lineHeight: 21},
   content: {gap: 22, paddingBottom: 64, paddingHorizontal: 20},

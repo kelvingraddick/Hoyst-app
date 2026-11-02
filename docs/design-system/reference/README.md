@@ -1,5 +1,7 @@
 # Approved Home reference
 
+**November 1, 2026 card exception:** [Expanded commitment cards](../commitment-cards.md) supersedes the focused/collapsed card treatment in the historical screenshots below. The approved tint mock, native card captures, and validation are linked there. Other Home presentation and navigation remain the reference. Frozen hashes were not regenerated.
+
 Captured September 8, 2026 from the running iPhone 17 Pro Simulator, iOS 26.5, logical viewport 402 × 874. Source revision: `00d4726793147f6f933886a696ad4530735daa58`. These are real renders, not generated mockups. Personal/live content is incidental to the visual reference and will change with time.
 
 | Light | Dark |

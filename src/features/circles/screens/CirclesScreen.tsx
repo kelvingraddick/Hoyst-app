@@ -1,3 +1,8 @@
+import {
+  CommitmentCardHeader,
+  CommitmentCardSurface,
+  getCommitmentCardColors,
+} from '../../../design/components/CommitmentCardSurface';
 import {CircleJoinRequestPrompt} from '../components/CircleJoinRequestPrompt';
 import {getPendingCircleJoinRequests} from '../services/join-request-selectors';
 import {CircleCardStreaks} from '../components/CircleCardStreaks';
@@ -18,7 +23,6 @@ import {
   CalendarClock,
   Check,
   ChevronDown,
-  History,
   Plus,
   Search,
   Star,
@@ -569,11 +573,9 @@ function CirclesScreenContent({navigation}: Props) {
             appearance={item.appearance}
             context={memberContext(item)}
             description={item.commitment}
-            expanded
             goal={getCommitmentGoalPresentation(item)}
             members={memberSources(item)}
             onDetails={() => openCircle(item.id)}
-            onExpand={() => undefined}
             streaks={<CircleCardStreaks circle={item} />}
             status={statusCopy(item, locallyNudged)}
             title={item.title}
@@ -744,18 +746,29 @@ function CirclesScreenContent({navigation}: Props) {
         <View style={styles.footerSection} testID="past-circles-section">
           <DSSectionHeading title="Past circles" />
           {pastCircles.map(circle => (
-            <DSListRow
+            <CommitmentCardSurface
               key={circle.id}
-              accessibilityLabel={`View past circle ${circle.title}`}
-              leading={
-                <History color={theme.muted} size={layout.controlIcon} />
-              }
-              onPress={() =>
-                navigation.navigate('PastCircle', {summary: circle})
-              }
-              subtitle={circle.commitment}
-              title={circle.title}
-            />
+              colors={getCommitmentCardColors(
+                circle.category,
+                circle.appearance,
+                theme.isDark,
+              )}>
+              <CommitmentCardHeader
+                title={circle.title}
+                category={circle.category}
+                appearance={circle.appearance}
+                colors={getCommitmentCardColors(
+                  circle.category,
+                  circle.appearance,
+                  theme.isDark,
+                )}
+                accessibilityLabel={`View past circle ${circle.title}`}
+                onPress={() =>
+                  navigation.navigate('PastCircle', {summary: circle})
+                }
+              />
+              <DSText tone="muted">{circle.commitment}</DSText>
+            </CommitmentCardSurface>
           ))}
         </View>
       ) : null}

@@ -1,3 +1,17 @@
+# Commitment card design QA, November 1, 2026
+
+Final result: passed for the scoped commitment-card redesign.
+
+Reference: `outputs/home-circle-card-redesign-2026-11-01/round-2/02-soft-color-wash.png`.
+
+The shared expanded card has a neutral body, category-accented icon, full-width title and divided action footer. Native light/dark, 360-point width, accessibility-large text, completed/pending cards, setup selection, and Duo open/closed state retention were inspected. A narrow completion-footer squeeze was fixed and recaptured. Existing category graphics and progress semantics remain authoritative.
+
+Detailed captures, comparison notes and limitations are in local, unversioned QA artifacts under `outputs/home-circle-card-redesign-2026-11-01/implementation/`.
+
+131 focused tests pass. The full Home suite has 57 passing tests and one existing actorless activity-icon failure. TypeScript, scoped ESLint, signed iOS Debug build, Android production JavaScript bundle and diff checks pass. Android native and physical-device rendering remain unverified. No real Tap In, Nudge, restoration or share action was submitted during QA.
+
+The historical Progress QA below is retained unchanged.
+
 # Progress design QA
 
 Source visual truth: `/Users/kelvin/.codex/generated_images/01a0efec-cf56-7272-b461-cd1fe6ea30e6/exec-557328cc-4298-4fb5-aee4-e913db1e291b.png`.

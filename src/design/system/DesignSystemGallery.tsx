@@ -144,8 +144,8 @@ function GalleryContent({
         <States announce={announce} />
       )}
       <DSText variant="secondary" tone="muted">
-        End of {page.toLowerCase()}. Home and the production tab bar are frozen
-        references.
+        End of {page.toLowerCase()}. Commitment cards use the approved expanded
+        treatment. Other Home presentation and navigation remain references.
       </DSText>
     </DSScreen>
   );
@@ -397,7 +397,7 @@ function Patterns({
   announce: (message: string) => void;
 }) {
   const theme = useSystemTheme();
-  const [focus, setFocus] = useState<string | undefined>('Read every day');
+
   const [done, setDone] = useState(false);
   const [nudged, setNudged] = useState(false);
   return (
@@ -437,7 +437,6 @@ function Patterns({
       <DSCommitmentPreview
         title="Read every day"
         category="Deep Work"
-        expanded={focus === 'Read every day'}
         members={[
           {id: 'alex', name: 'Alex'},
           {id: 'sam', name: 'Sam', source: getBrandIcon(theme.isDark)},
@@ -455,7 +454,6 @@ function Patterns({
             ? '2 members need a nudge'
             : 'Needs your Tap In'
         }
-        onExpand={() => setFocus('Read every day')}
         onDetails={() => announce('Read every day details example.')}
         action={
           done && nudged
@@ -465,7 +463,7 @@ function Patterns({
                 onPress: () => {
                   if (done) {
                     setNudged(true);
-                    setFocus(undefined);
+
                     announce('Simulated Nudge completed.');
                   } else {
                     setDone(true);
@@ -478,21 +476,17 @@ function Patterns({
       <DSCommitmentPreview
         title="Walk outside"
         category="Fitness"
-        expanded={focus === 'Walk outside'}
         status="Tapped in today"
         description="Take a walk during lunch."
         context="Personal commitment"
-        onExpand={() => setFocus('Walk outside')}
         onDetails={() => announce('Walk outside details example.')}
       />
       <DSCommitmentPreview
         title="Write together"
         category="Writing"
-        expanded={focus === 'Write together'}
         status="Pending approval"
         description="Write one page each morning."
         context="Membership awaiting approval"
-        onExpand={() => setFocus('Write together')}
         onDetails={() => announce('Pending membership details example.')}
       />
       <DSButton
@@ -501,7 +495,6 @@ function Patterns({
         onPress={() => {
           setDone(false);
           setNudged(false);
-          setFocus('Read every day');
         }}
       />
       <DSSectionHeading title="Circle activity" />

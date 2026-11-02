@@ -1,3 +1,8 @@
+import {
+  CommitmentCardHeader,
+  CommitmentCardSurface,
+  getCommitmentCardColors,
+} from '../../../design/components/CommitmentCardSurface';
 import {trackEventOnce, identifyAnalytics} from '../../../lib/analytics';
 import {useAcquisitionStore} from '../../beta/services/acquisition-store';
 import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
@@ -37,7 +42,6 @@ import {
 import {SetupInput as HoystInput} from '../components/SetupInput';
 import {SetupText as HoystText} from '../components/SetupText';
 import {useSetupTheme} from '../services/setup-presentation';
-import {softShadow} from '../../../design/system/tokens';
 import {categories} from '../../../shared/commitment-appearance';
 import {
   checkProfileUsername,
@@ -1069,36 +1073,24 @@ export function CommitmentWizardScreen({
     commitment: string,
     category: string,
     appearance = draft.appearance,
-    featured = false,
-  ) => (
-    <View
-      style={[
-        styles.card,
-        {backgroundColor: theme.surfaceSoft},
-        featured && styles.welcomeCard,
-        featured && {
-          backgroundColor: theme.isDark
-            ? `${getCircleCategoryVisual(category, appearance).accentColor}20`
-            : getCircleCategoryVisual(category, appearance).backplateColor,
-          borderColor: theme.border,
-          shadowColor: theme.isDark ? '#000000' : '#92723E',
-        },
-      ]}>
-      <CircleCategoryIcon
-        category={category}
-        appearance={appearance}
-        size={44}
-      />
-      <View style={styles.flex}>
-        <HoystText style={styles.cardTitle}>{title}</HoystText>
-        {title !== commitment && (
+  ) => {
+    const colors = getCommitmentCardColors(category, appearance, theme.isDark);
+    return (
+      <CommitmentCardSurface colors={colors}>
+        <CommitmentCardHeader
+          title={title}
+          category={category}
+          appearance={appearance}
+          colors={colors}
+        />
+        {title !== commitment ? (
           <HoystText tone="muted" style={styles.copy}>
             {commitment}
           </HoystText>
-        )}
-      </View>
-    </View>
-  );
+        ) : null}
+      </CommitmentCardSurface>
+    );
+  };
   if (step === 'welcome') {
     copy = {
       title: "Let's get started!",
@@ -1113,7 +1105,6 @@ export function CommitmentWizardScreen({
           'A little movement, 4 Tap Ins per week.',
           'Fitness',
           {},
-          true,
         )}
       </>
     );
@@ -1200,6 +1191,8 @@ export function CommitmentWizardScreen({
             title={starter.commitment}
             tag="Create your own"
             body={paceLabel(applyStarter(draft, starter))}
+            commitmentCategory={starter.category}
+            commitmentAppearance={applyStarter(draft, starter).appearance}
             icon={<CircleCategoryIcon category={starter.category} size={40} />}
             tone={getCircleCategoryVisual(starter.category).palette}
             selected={
@@ -1217,6 +1210,8 @@ export function CommitmentWizardScreen({
         {circles[0] && (
           <SetupChoice
             title={circles[0].title}
+            commitmentCategory={circles[0].category}
+            commitmentAppearance={circles[0].appearance}
             tag="Join a Circle"
             body={`${circles[0].memberCount} of ${
               circles[0].maxSize
@@ -1249,6 +1244,8 @@ export function CommitmentWizardScreen({
             title={starter.commitment}
             tag="Create your own"
             body={paceLabel(applyStarter(draft, starter))}
+            commitmentCategory={starter.category}
+            commitmentAppearance={applyStarter(draft, starter).appearance}
             icon={<CircleCategoryIcon category={starter.category} size={40} />}
             tone={getCircleCategoryVisual(starter.category).palette}
             selected={
@@ -1866,7 +1863,7 @@ export function CommitmentWizardScreen({
             : 'This Circle is hidden from Explore.'
           : undefined
       }
-      error={error}>
+      error={step === 'account' ? authUi.error ?? error : error}>
       {content}
     </SetupJourneyFrame>
   );
@@ -1884,7 +1881,6 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   cardTitle: {fontSize: 16, lineHeight: 21, fontWeight: '700'},
-  welcomeCard: {...softShadow, borderWidth: StyleSheet.hairlineWidth},
   copy: {fontSize: 14, lineHeight: 20},
   section: {fontSize: 18, lineHeight: 23, fontWeight: '600'},
   helper: {fontSize: 12, lineHeight: 16},

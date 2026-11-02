@@ -42,6 +42,7 @@ export type AuthFormState = {
   label: string;
   busy: boolean;
   disabled: boolean;
+  error?: string;
   method?: 'email' | 'phone' | 'reset';
 };
 export function SetupAuthForm({
@@ -94,10 +95,18 @@ export function SetupAuthForm({
       } catch (failure) {
         const value = failure as {code?: string; message?: string};
         setError(
-          value.code?.includes('account-exists-with-different-credential')
+          (method === 'email' || method === 'reset') &&
+            [
+              'auth/invalid-credential',
+              'auth/wrong-password',
+              'auth/user-not-found',
+            ].includes(value.code ?? '')
+            ? 'Email or password is incorrect. Try again or reset your password.'
+            : value.code === 'linking-required' ||
+              value.code?.includes('account-exists-with-different-credential')
             ? 'This email already uses a different sign-in method. Sign in with that method.'
             : value.message ??
-                'Could not continue. Check your details and try again.',
+              'Could not continue. Check your details and try again.',
         );
       } finally {
         setBusy(false);
@@ -163,6 +172,7 @@ export function SetupAuthForm({
       method,
       label,
       busy,
+      error,
       disabled:
         busy ||
         (creating && method !== 'reset' && !legalChecked) ||
@@ -218,6 +228,7 @@ export function SetupAuthForm({
     confirmation,
     creating,
     email,
+    error,
     label,
     method,
     onState,
@@ -440,11 +451,6 @@ export function SetupAuthForm({
           style={styles.touch}>
           <HoystText tone="muted">Use another sign-in method</HoystText>
         </Pressable>
-      )}
-      {error && (
-        <HoystText accessibilityRole="alert" tone="danger">
-          {error}
-        </HoystText>
       )}
       <Modal
         visible={choosingCountry}

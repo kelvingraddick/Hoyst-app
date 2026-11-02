@@ -1,6 +1,12 @@
-jest.mock('../src/lib/firebase/authenticated-callable', () => ({authenticatedCallable: jest.fn()}));
-jest.mock('../src/lib/firebase/auth', () => ({firebaseAuth: () => ({currentUser: null})}));
-jest.mock('../src/lib/firebase/firestore', () => ({firebaseFirestore: jest.fn()}));
+jest.mock('../src/lib/firebase/authenticated-callable', () => ({
+  authenticatedCallable: jest.fn(),
+}));
+jest.mock('../src/lib/firebase/auth', () => ({
+  firebaseAuth: () => ({currentUser: null}),
+}));
+jest.mock('../src/lib/firebase/firestore', () => ({
+  firebaseFirestore: jest.fn(),
+}));
 import React from 'react';
 import {Share, StyleSheet, Text} from 'react-native';
 import renderer, {act} from 'react-test-renderer';
@@ -257,16 +263,44 @@ describe('CirclesScreen render paths', () => {
   });
 
   it('flags owner requests under Needs you even after the weekly goal is complete', () => {
-    mockHomeData = homeData([makeCircle({viewerRole: 'owner', commitmentCadence: 'weekly', viewerCycleCoveredCount: 3, viewerCycleRequiredCount: 3, viewerHasTappedInToday: true, members: [
-      {id: 'requester', name: 'Jordan', initials: 'J', state: 'pending', membershipStatus: 'pending'},
-    ]})]);
+    mockHomeData = homeData([
+      makeCircle({
+        viewerRole: 'owner',
+        commitmentCadence: 'weekly',
+        viewerCycleCoveredCount: 3,
+        viewerCycleRequiredCount: 3,
+        viewerHasTappedInToday: true,
+        members: [
+          {
+            id: 'requester',
+            name: 'Jordan',
+            initials: 'J',
+            state: 'pending',
+            membershipStatus: 'pending',
+          },
+        ],
+      }),
+    ]);
     const {screen, rootNavigate} = renderScreenWithNavigation();
-    const needsYou = screen.root.findByProps({accessibilityLabel: 'Needs you, 1'});
+    const needsYou = screen.root.findByProps({
+      accessibilityLabel: 'Needs you, 1',
+    });
     act(() => needsYou.props.onPress());
     expect(renderedText(screen)).toContain('Morning Movers');
-    act(() => screen.root.findByProps({accessibilityLabel: 'Review 1 join request for Morning Movers'}).props.onPress());
-    expect(rootNavigate).toHaveBeenCalledWith('CircleDetail', {circleId: mockHomeData.circles[0].id, reviewJoinRequests: true});
-    expect(screen.root.findByProps({accessibilityLabel: 'Pending, 0'})).toBeTruthy();
+    act(() =>
+      screen.root
+        .findByProps({
+          accessibilityLabel: 'Review 1 join request for Morning Movers',
+        })
+        .props.onPress(),
+    );
+    expect(rootNavigate).toHaveBeenCalledWith('CircleDetail', {
+      circleId: mockHomeData.circles[0].id,
+      reviewJoinRequests: true,
+    });
+    expect(
+      screen.root.findByProps({accessibilityLabel: 'Pending, 0'}),
+    ).toBeTruthy();
   });
 
   it('renders personal commitments in the unified focused-card list', () => {
@@ -490,7 +524,7 @@ describe('CirclesScreen render paths', () => {
       minWidth: 0,
     });
     expect(cards).toHaveLength(1);
-    expect(cards[0].props.expanded).toBe(true);
+    expect(cards[0].props.onDetails).toEqual(expect.any(Function));
   });
 
   it('renders the empty state when there are no joined circles', () => {
