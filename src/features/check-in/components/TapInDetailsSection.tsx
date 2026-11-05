@@ -534,7 +534,7 @@ export function TapInDetailsSection({
           multiline
           numberOfLines={4}
           onChangeText={setNoteDraft}
-          placeholder="Share what you did, how it went, or what your Circle should know."
+          placeholder="Share what you did and how it went."
           placeholderTextColor={theme.isDark ? '#8D96AD' : '#918CAE'}
           style={[
             styles.noteInput,
@@ -841,7 +841,7 @@ export function ComposerDetailsPresentation({
         multiline
         numberOfLines={4}
         editable={!isSaving}
-        placeholder="Share what you did, how it went, or what your Circle should know."
+        placeholder="Share what you did and how it went."
         style={{minHeight: 108}}
         textAlignVertical="top"
       />
@@ -852,7 +852,7 @@ export function ComposerDetailsPresentation({
             ? 'Required proof. Replace the photo or remove the whole Tap In.'
             : proofRequiredForCompletion
             ? 'Required to complete this Tap In'
-            : 'Optional proof for your Circle'
+            : 'Optional photo proof'
         }
         onPress={onAddPhoto}
         disabled={isSaving}

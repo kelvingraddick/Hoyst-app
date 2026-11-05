@@ -92,6 +92,25 @@ it('opens a confirmation from a separate dismiss target and keeps the setup on c
   expect(navigation.navigate).toHaveBeenCalledWith('CreateCircle');
 });
 
+it.each(['onboarding', `create:${uid}`])(
+  'resumes the original %s route for an account-owned archived draft',
+  async originalKey => {
+    const archivedKey = `account:${uid}:${originalKey}`;
+    useSetupJourneyStore.setState({
+      records: {
+        [archivedKey]: {...createSetupJourney('proof'), ownerUid: uid},
+      },
+    });
+    await render();
+    press('resume-commitment-setup');
+    expect(navigation.navigate).toHaveBeenCalledWith(
+      ...(originalKey.startsWith('create:')
+        ? ['CreateCircle']
+        : ['Auth', {screen: 'Welcome', params: {setupKey: originalKey}}]),
+    );
+  },
+);
+
 it('discards only the displayed setup, persists removal, and reveals the next draft', async () => {
   const other = createSetupJourney('name');
   other.draft.title = 'Another saved setup';

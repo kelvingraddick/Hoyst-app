@@ -14,7 +14,9 @@ export type AuthLinkingRequired = {
   providers: string[];
 };
 
-export type AuthServiceError = AuthLinkingRequired | {code: string; message: string};
+export type AuthServiceError =
+  | AuthLinkingRequired
+  | {code: string; message: string};
 
 function toAuthServiceError(error: unknown): AuthServiceError {
   const firebaseError = error as {
@@ -27,7 +29,8 @@ function toAuthServiceError(error: unknown): AuthServiceError {
   if (firebaseError.code === 'auth/account-exists-with-different-credential') {
     return {
       code: 'linking-required',
-      email: firebaseError.userInfo?.email ?? firebaseError.customData?.email ?? '',
+      email:
+        firebaseError.userInfo?.email ?? firebaseError.customData?.email ?? '',
       providers: [],
     };
   }
@@ -93,7 +96,10 @@ export async function registerWithEmail(email: string, password: string) {
 
 export async function signInWithEmail(email: string, password: string) {
   try {
-    return await firebaseAuth().signInWithEmailAndPassword(email.trim(), password);
+    return await firebaseAuth().signInWithEmailAndPassword(
+      email.trim(),
+      password,
+    );
   } catch (error) {
     throw await toAuthServiceErrorWithProviderHints(error);
   }
@@ -136,13 +142,23 @@ export async function signInWithApple() {
     };
   }
 
-  const response = await appleAuth.performRequest({
-    requestedOperation: appleAuth.Operation.LOGIN,
-    requestedScopes: [appleAuth.Scope.FULL_NAME, appleAuth.Scope.EMAIL],
-  });
+  const response = await appleAuth
+    .performRequest({
+      requestedOperation: appleAuth.Operation.LOGIN,
+      requestedScopes: [appleAuth.Scope.FULL_NAME, appleAuth.Scope.EMAIL],
+    })
+    .catch(error => {
+      if (String(error?.code) === appleAuth.Error.CANCELED) {
+        throw {code: 'auth/cancelled'};
+      }
+      throw error;
+    });
 
   if (!response.identityToken) {
-    throw {code: 'auth/missing-token', message: 'Apple did not return a token.'};
+    throw {
+      code: 'auth/missing-token',
+      message: 'Apple did not return a token.',
+    };
   }
 
   const credential = auth.AppleAuthProvider.credential(
@@ -156,10 +172,16 @@ export async function signInWithApple() {
 export async function signInWithGoogle() {
   await GoogleSignin.hasPlayServices({showPlayServicesUpdateDialog: true});
   const response = await GoogleSignin.signIn();
+  if (response.type === 'cancelled') {
+    throw {code: 'auth/cancelled'};
+  }
   const idToken = response.data?.idToken;
 
   if (!idToken) {
-    throw {code: 'auth/missing-token', message: 'Google did not return a token.'};
+    throw {
+      code: 'auth/missing-token',
+      message: 'Google did not return a token.',
+    };
   }
 
   const credential = auth.GoogleAuthProvider.credential(idToken);

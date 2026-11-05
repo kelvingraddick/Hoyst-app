@@ -5,7 +5,7 @@ import {
 } from '../../../design/components/CommitmentCardSurface';
 import type {CommitmentAppearance} from '../../../shared/commitment-appearance';
 import React, {useEffect, useRef} from 'react';
-import {Platform, Pressable, StyleSheet, View} from 'react-native';
+import {Platform, Pressable, StyleSheet, useWindowDimensions, View} from 'react-native';
 import {Check, ChevronRight, Globe2, Link, Shield} from 'lucide-react-native';
 import {CircularEmoji} from '../../../design/components/CircularEmoji';
 import {SetupText as HoystText} from './SetupText';
@@ -604,6 +604,7 @@ export function SetupCategoryGrid({
   onChange: (category: string) => void;
 }) {
   const theme = useSetupTheme();
+  const {fontScale} = useWindowDimensions();
   return (
     <View style={styles.grid}>
       {categories.map(option => (
@@ -614,6 +615,7 @@ export function SetupCategoryGrid({
           onPress={() => onChange(option.label)}
           style={[
             styles.category,
+            fontScale >= 1.6 && {width: '100%'},
             {
               backgroundColor: theme.surfaceSoft,
               borderColor:
@@ -642,32 +644,26 @@ export function SetupAppearanceEditor({
 }) {
   const theme = useSetupTheme();
   const resolved = resolveAppearance(draft.category, draft.appearance);
+  const colors = getCommitmentCardColors(
+    draft.category,
+    draft.appearance,
+    theme.isDark,
+  );
   const set = (patch: Partial<CreateCircleDraft>) =>
     onChange({...draft, ...patch});
   return (
     <>
-      <View
-        style={[
-          styles.preview,
-          styles.row,
-          {
-            backgroundColor: theme.isDark
-              ? resolved.darkBackground
-              : resolved.background,
-          },
-        ]}>
-        <CircleCategoryIcon
+      <CommitmentCardSurface colors={colors}>
+        <CommitmentCardHeader
+          title={draft.title}
           category={draft.category}
           appearance={draft.appearance}
-          size={44}
+          colors={colors}
         />
-        <View style={styles.flex}>
-          <HoystText style={styles.cardTitle}>{draft.title}</HoystText>
-          <HoystText tone="muted" style={styles.copy}>
-            {draft.commitment}
-          </HoystText>
-        </View>
-      </View>
+        <HoystText style={[styles.copy, {color: colors.muted}]}>
+          {draft.commitment}
+        </HoystText>
+      </CommitmentCardSurface>
       <HoystText style={styles.section}>Emoji</HoystText>
       <CommitmentAppearanceControl
         emojiOnly
@@ -1090,13 +1086,32 @@ export function SetupStepContent({
     ];
     return (
       <>
-        <Pressable accessibilityRole="button"
-          accessibilityLabel={`Edit ${personal ? 'Commitment name' : 'Circle name'}: ${draft.title}`}
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Edit ${
+            personal ? 'Commitment name' : 'Circle name'
+          }: ${draft.title}`}
           onPress={() => onEdit('name')}>
-          <CommitmentCardSurface colors={getCommitmentCardColors(draft.category, draft.appearance, theme.isDark)}>
-            <CommitmentCardHeader title={draft.title} category={draft.category} appearance={draft.appearance}
-              colors={getCommitmentCardColors(draft.category, draft.appearance, theme.isDark)} showDetails />
-            <HoystText tone="muted" style={styles.copy}>{draft.commitment}</HoystText>
+          <CommitmentCardSurface
+            colors={getCommitmentCardColors(
+              draft.category,
+              draft.appearance,
+              theme.isDark,
+            )}>
+            <CommitmentCardHeader
+              title={draft.title}
+              category={draft.category}
+              appearance={draft.appearance}
+              colors={getCommitmentCardColors(
+                draft.category,
+                draft.appearance,
+                theme.isDark,
+              )}
+              showDetails
+            />
+            <HoystText tone="muted" style={styles.copy}>
+              {draft.commitment}
+            </HoystText>
           </CommitmentCardSurface>
         </Pressable>
         {rows.map(([label, value, target]) => (
@@ -1193,7 +1208,6 @@ const styles = StyleSheet.create({
   goalPreview: {padding: 14, borderRadius: 20, borderWidth: 1, gap: 12},
   previewSection: {gap: 8, paddingBottom: 12, borderBottomWidth: 1},
   previewLabel: {fontSize: 12, lineHeight: 16, fontWeight: '600'},
-  preview: {padding: 14, borderRadius: 20, gap: 4},
   grid: {flexDirection: 'row', flexWrap: 'wrap', gap: 8},
   category: {
     width: '48%',

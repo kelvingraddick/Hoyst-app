@@ -125,6 +125,141 @@ function SetupJourneyFrameContent({
   useEffect(() => {
     scroll.current?.scrollTo({y: 0, animated: false});
   }, [step]);
+  // Large text can make fixed navigation and actions taller than the viewport.
+  const scrollAll = fontScale >= 1.6;
+  const navigation = (
+    <>
+      {(onBack || onLater) && (
+        <View style={[styles.top, scrollAll && styles.inlineChrome]}>
+          {onBack ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Go back"
+              onPress={onBack}
+              style={styles.touch}>
+              <ChevronLeft color={theme.textMuted} size={26} />
+            </Pressable>
+          ) : (
+            <View />
+          )}
+          {onLater && (
+            <Pressable
+              accessibilityRole="button"
+              onPress={onLater}
+              style={styles.touch}>
+              <HoystText style={{color: theme.accentForeground, fontSize: 14}}>
+                Save for later
+              </HoystText>
+            </Pressable>
+          )}
+        </View>
+      )}
+      {phase && (
+        <View
+          accessibilityLabel={`Setup phase: ${phase}`}
+          style={[styles.progress, scrollAll && styles.progressAccessible]}>
+          {(['Discover', 'Set up', 'Start'] as const).map(label => (
+            <View key={label} style={styles.phase}>
+              <HoystText
+                style={[
+                  styles.phaseLabel,
+                  {
+                    color:
+                      phase === label
+                        ? theme.accentForeground
+                        : theme.textMuted,
+                  },
+                ]}>
+                {label}
+              </HoystText>
+              <View
+                style={[
+                  styles.bar,
+                  {
+                    backgroundColor:
+                      phase === label ? theme.accentSecondary : theme.border,
+                  },
+                ]}
+              />
+            </View>
+          ))}
+        </View>
+      )}
+    </>
+  );
+  const footer = (
+    <View
+      testID="setup-frame-footer"
+      onLayout={revealFocusedInput}
+      style={[
+        styles.footer,
+        scrollAll && styles.inlineChrome,
+        {paddingBottom: 8 + (keyboardVisible ? 0 : insets.bottom)},
+      ]}>
+      {footerNote && (
+        <HoystText tone="muted" style={{fontSize: 12, lineHeight: 16}}>
+          {footerNote}
+        </HoystText>
+      )}
+      {error && (
+        <HoystText accessibilityRole="alert" tone="danger" style={styles.error}>
+          {error}
+        </HoystText>
+      )}
+      {primary && (
+        <HoystButton
+          {...primary}
+          backgroundColor={theme.accent}
+          textColor="#FFFFFF"
+          borderColor={theme.accent}
+          style={styles.action}
+        />
+      )}
+      {secondary && footerVariant === 'welcome' ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Already have an account? ${secondary.label}`}
+          disabled={secondary.disabled}
+          onPress={secondary.onPress}
+          style={styles.footerLink}>
+          <HoystText tone="muted" style={styles.accountPrompt}>
+            Already have an account?{' '}
+            <HoystText
+              style={[styles.signInLink, {color: theme.accentForeground}]}>
+              {secondary.label}
+            </HoystText>
+          </HoystText>
+        </Pressable>
+      ) : secondary ? (
+        <HoystButton
+          {...secondary}
+          variant="outline"
+          borderColor={theme.accent}
+          textColor={theme.accentForeground}
+          style={[styles.action, {borderWidth: 1, borderColor: theme.accent}]}
+        />
+      ) : null}
+      {tertiary &&
+      (footerVariant === 'welcome' || tertiaryPresentation === 'link') ? (
+        <Pressable
+          accessibilityRole="button"
+          disabled={tertiary.disabled}
+          onPress={tertiary.onPress}
+          style={styles.footerLink}>
+          <HoystText tone="muted" style={styles.browseLink}>
+            {tertiary.label}
+          </HoystText>
+        </Pressable>
+      ) : tertiary ? (
+        <HoystButton
+          {...tertiary}
+          variant="ghost"
+          textColor={theme.textMuted}
+          style={styles.action}
+        />
+      ) : null}
+    </View>
+  );
   return (
     <SetupInputFocusContext.Provider value={revealFocusedInput}>
       <View
@@ -147,68 +282,7 @@ function SetupJourneyFrameContent({
         <KeyboardAvoidingView
           style={styles.flex}
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-          {(onBack || onLater) && (
-            <View style={styles.top}>
-              {onBack ? (
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="Go back"
-                  onPress={onBack}
-                  style={styles.touch}>
-                  <ChevronLeft color={theme.textMuted} size={26} />
-                </Pressable>
-              ) : (
-                <View />
-              )}
-              {onLater && (
-                <Pressable
-                  accessibilityRole="button"
-                  onPress={onLater}
-                  style={styles.touch}>
-                  <HoystText
-                    style={{color: theme.accentForeground, fontSize: 14}}>
-                    Save for later
-                  </HoystText>
-                </Pressable>
-              )}
-            </View>
-          )}
-          {phase && (
-            <View
-              accessibilityLabel={`Setup phase: ${phase}`}
-              style={[
-                styles.progress,
-                fontScale >= 1.6 && styles.progressAccessible,
-              ]}>
-              {(['Discover', 'Set up', 'Start'] as const).map(label => (
-                <View key={label} style={styles.phase}>
-                  <HoystText
-                    style={[
-                      styles.phaseLabel,
-                      {
-                        color:
-                          phase === label
-                            ? theme.accentForeground
-                            : theme.textMuted,
-                      },
-                    ]}>
-                    {label}
-                  </HoystText>
-                  <View
-                    style={[
-                      styles.bar,
-                      {
-                        backgroundColor:
-                          phase === label
-                            ? theme.accentSecondary
-                            : theme.border,
-                      },
-                    ]}
-                  />
-                </View>
-              ))}
-            </View>
-          )}
+          {!scrollAll && navigation}
           <ScrollView
             ref={scroll}
             onLayout={revealFocusedInput}
@@ -225,6 +299,7 @@ function SetupJourneyFrameContent({
             automaticallyAdjustContentInsets={false}
             contentInsetAdjustmentBehavior="never"
             showsVerticalScrollIndicator={false}>
+            {scrollAll && navigation}
             {brand}
             <HoystText accessibilityRole="header" style={styles.heading}>
               {title}
@@ -258,86 +333,9 @@ function SetupJourneyFrameContent({
               </View>
             )}
             <View style={styles.body}>{children}</View>
+            {scrollAll && footer}
           </ScrollView>
-          <View
-            testID="setup-frame-footer"
-            onLayout={revealFocusedInput}
-            style={[
-              styles.footer,
-              {paddingBottom: 8 + (keyboardVisible ? 0 : insets.bottom)},
-            ]}>
-            {footerNote && (
-              <HoystText tone="muted" style={{fontSize: 12, lineHeight: 16}}>
-                {footerNote}
-              </HoystText>
-            )}
-            {error && (
-              <HoystText
-                accessibilityRole="alert"
-                tone="danger"
-                style={styles.error}>
-                {error}
-              </HoystText>
-            )}
-            {primary && (
-              <HoystButton
-                {...primary}
-                backgroundColor={theme.accent}
-                textColor="#FFFFFF"
-                borderColor={theme.accent}
-                style={styles.action}
-              />
-            )}
-            {secondary && footerVariant === 'welcome' ? (
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={`Already have an account? ${secondary.label}`}
-                disabled={secondary.disabled}
-                onPress={secondary.onPress}
-                style={styles.footerLink}>
-                <HoystText tone="muted" style={styles.accountPrompt}>
-                  Already have an account?{' '}
-                  <HoystText
-                    style={[
-                      styles.signInLink,
-                      {color: theme.accentForeground},
-                    ]}>
-                    {secondary.label}
-                  </HoystText>
-                </HoystText>
-              </Pressable>
-            ) : secondary ? (
-              <HoystButton
-                {...secondary}
-                variant="outline"
-                borderColor={theme.accent}
-                textColor={theme.accentForeground}
-                style={[
-                  styles.action,
-                  {borderWidth: 1, borderColor: theme.accent},
-                ]}
-              />
-            ) : null}
-            {tertiary &&
-            (footerVariant === 'welcome' || tertiaryPresentation === 'link') ? (
-              <Pressable
-                accessibilityRole="button"
-                disabled={tertiary.disabled}
-                onPress={tertiary.onPress}
-                style={styles.footerLink}>
-                <HoystText tone="muted" style={styles.browseLink}>
-                  {tertiary.label}
-                </HoystText>
-              </Pressable>
-            ) : tertiary ? (
-              <HoystButton
-                {...tertiary}
-                variant="ghost"
-                textColor={theme.textMuted}
-                style={styles.action}
-              />
-            ) : null}
-          </View>
+          {!scrollAll && footer}
         </KeyboardAvoidingView>
       </View>
     </SetupInputFocusContext.Provider>
@@ -367,7 +365,8 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   phase: {flex: 1, gap: 5},
-  progressAccessible: {paddingHorizontal: 22},
+  progressAccessible: {paddingHorizontal: 0, flexDirection: 'column'},
+  inlineChrome: {paddingHorizontal: 0},
   phaseLabel: {fontSize: 12, lineHeight: 16, textAlign: 'center'},
   bar: {height: 5, borderRadius: 5},
   content: {paddingHorizontal: 22, paddingTop: 12, paddingBottom: 16, gap: 20},

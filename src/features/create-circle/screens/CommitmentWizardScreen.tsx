@@ -13,6 +13,7 @@ import {
   Platform,
   Pressable,
   StyleSheet,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import {CommonActions, useFocusEffect} from '@react-navigation/native';
@@ -77,6 +78,7 @@ import {
 } from '../components/SetupStepContent';
 
 export type SetupGateway = Partial<{
+  auth: import('../../auth/components/SetupAuthForm').SetupAuthGateway;
   getCurrentUser: () =>
     | {uid: string; displayName?: string | null}
     | undefined
@@ -139,15 +141,18 @@ export function CommitmentWizardScreen({
   gateway,
 }: Props) {
   const theme = useSetupTheme();
+  const {fontScale} = useWindowDimensions();
   const user = useSessionStore(state => state.user);
   const sessionStatus = useSessionStore(state => state.status);
   const hasLegalAcceptance = useHasLegalAcceptance();
   const {acknowledge: acknowledgeLegal} = useLegalAcceptance();
   const [legalCheckedUid, setLegalCheckedUid] = useState<string>();
   const [acknowledging, setAcknowledging] = useState(false);
-  const profile = useUserProfileStore(state => state.profile);
+  const storedProfile = useUserProfileStore(state => state.profile);
+  const profile = storedProfile?.id === user?.uid ? storedProfile : undefined;
   const hydrated = useSetupJourneyStore(state => state.hydrated);
   const ensure = useSetupJourneyStore(state => state.ensure);
+  const claim = useSetupJourneyStore(state => state.claim);
   const update = useSetupJourneyStore(state => state.update);
   const legacyJourney = useOnboardingStore(state => state.journey);
   const pendingInviteCode = useCircleInviteStore(state => state.inviteCode);
@@ -168,7 +173,15 @@ export function CommitmentWizardScreen({
   const initialized = useRef<string | undefined>(undefined);
   const finished = useRef(false);
   const saving = useRef(false);
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
   const authAction = useRef<(() => void) | undefined>(undefined);
+  const authInFlight = useRef(false);
   const authBack = useRef<(() => boolean) | undefined>(undefined);
   const backAction = useRef<(() => void) | undefined>(undefined);
   const [authUi, setAuthUi] = useState(initialAuth);
@@ -204,11 +217,16 @@ export function CommitmentWizardScreen({
   );
 
   useEffect(() => {
-    if (!hydrated || finished.current || initialized.current === key) return;
-    initialized.current = key;
+    const identity = `${key}:${user?.uid ?? 'guest'}`;
+    if (!hydrated || finished.current || initialized.current === identity)
+      return;
+    initialized.current = identity;
     const existing = useSetupJourneyStore.getState().records[key];
-    if (existing && !existing.completed) {
-      patch({deferred: false});
+    const differentOwner = Boolean(
+      existing?.ownerUid && existing.ownerUid !== user?.uid,
+    );
+    if (existing && !existing.completed && !differentOwner) {
+      claim(key, user?.uid, existing);
     } else {
       const legacy = useOnboardingStore.getState();
       const initial = createSetupJourney(
@@ -222,6 +240,7 @@ export function CommitmentWizardScreen({
         profile?.timezone,
       );
       if (
+        !differentOwner &&
         isOnboarding &&
         !activeInvite &&
         legacy.hasPendingStarterCircleSetup &&
@@ -238,7 +257,8 @@ export function CommitmentWizardScreen({
         initial.step = legacySteps[legacy.currentStep] ?? 'review';
         initial.interests = legacy.categories ?? [];
       }
-      if (entry === 'create') initial.interests = legacy.categories ?? [];
+      if (entry === 'create' && !differentOwner)
+        initial.interests = legacy.categories ?? [];
       const pendingAction = useSessionStore.getState().pendingAction;
       initial.pendingAction = pendingAction;
       if (
@@ -253,16 +273,19 @@ export function CommitmentWizardScreen({
         name:
           profile?.name ||
           user?.displayName ||
-          (legacy.hasPendingProfileCompletion ? legacy.displayName : '') ||
+          (!differentOwner && legacy.hasPendingProfileCompletion
+            ? legacy.displayName
+            : '') ||
           '',
         handle:
           profile?.handle ||
-          (legacy.hasPendingProfileCompletion ? legacy.handle : '') ||
+          (!differentOwner && legacy.hasPendingProfileCompletion
+            ? legacy.handle
+            : '') ||
           '',
         avatarUrl: profile?.avatarUrl,
       };
-      if (existing) update(key, initial);
-      else ensure(key, initial);
+      claim(key, user?.uid, initial);
     }
     if (isOnboarding && !profile?.onboardingStatus) {
       void trackEventOnce(
@@ -285,6 +308,7 @@ export function CommitmentWizardScreen({
       });
   }, [
     activeInvite,
+    claim,
     ensure,
     entry,
     hydrated,
@@ -308,7 +332,30 @@ export function CommitmentWizardScreen({
       patch({step: 'joinPreview'});
       return;
     }
-    if (record.selection) return;
+    if (record.selection) {
+      const selection = record.selection;
+      if (
+        selection.kind === 'circle' &&
+        selection.inviteCode === activeInvite &&
+        pendingInviteCode === activeInvite &&
+        inviteResolution === 'ready' &&
+        invitePreview?.circleId === selection.circle.id &&
+        (selection.circle.memberCount !== invitePreview.memberCount ||
+          selection.circle.maxSize !== invitePreview.maxSize)
+      ) {
+        patch({
+          selection: {
+            ...selection,
+            circle: {
+              ...selection.circle,
+              memberCount: invitePreview.memberCount,
+              maxSize: invitePreview.maxSize,
+            },
+          },
+        });
+      }
+      return;
+    }
     if (pendingInviteCode !== activeInvite) {
       useCircleInviteStore.getState().setInviteCode(activeInvite);
       return;
@@ -570,7 +617,7 @@ export function CommitmentWizardScreen({
   );
 
   const later = () => {
-    if (saving.current || authUi.busy) return;
+    if (saving.current || authInFlight.current || authUi.busy) return;
     patch({
       deferred: true,
       pendingAction:
@@ -598,6 +645,9 @@ export function CommitmentWizardScreen({
     if (
       !current ||
       !account ||
+      !['review', 'profile', 'joinPreview', 'account', 'saveError'].includes(
+        current.step,
+      ) ||
       saving.current ||
       current.status === 'saved' ||
       current.status === 'saving'
@@ -610,7 +660,26 @@ export function CommitmentWizardScreen({
       ...current.draft,
       proofRequirement: current.draft.proofRequirement ?? 'photo',
     };
-    const existingProfile = useUserProfileStore.getState().profile;
+    const existingProfileValue = useUserProfileStore.getState().profile;
+    const existingProfile =
+      existingProfileValue?.id === account.uid
+        ? existingProfileValue
+        : undefined;
+    const isCurrentSave = () =>
+      mounted.current &&
+      !finished.current &&
+      useSessionStore.getState().user?.uid === account.uid &&
+      useSetupJourneyStore.getState().records[key]?.requestId ===
+        current.requestId &&
+      (gateway?.getCurrentUser
+        ? gateway.getCurrentUser()
+        : firebaseAuth().currentUser
+      )?.uid === account.uid;
+    if (
+      !isCurrentSave() ||
+      (current.ownerUid && current.ownerUid !== account.uid)
+    )
+      return;
     const form = current.profileDraft ?? {
       name: account.displayName ?? '',
       handle: '',
@@ -620,10 +689,10 @@ export function CommitmentWizardScreen({
       (!form.name.trim() ||
         !/^[a-z0-9_]{3,20}$/.test(form.handle.trim().toLowerCase()))
     ) {
+      setStep('profile');
       setError(
         'Enter your name and a username of 3 to 20 letters, numbers, or underscores.',
       );
-      setStep('profile');
       return;
     }
     if (
@@ -643,6 +712,7 @@ export function CommitmentWizardScreen({
       setAcknowledging(true);
       try {
         await acknowledgeLegal();
+        if (!isCurrentSave()) return;
       } catch (reason) {
         setError(
           reason instanceof Error
@@ -672,6 +742,7 @@ export function CommitmentWizardScreen({
             versioned: true,
           },
         );
+        if (!isCurrentSave()) return;
         uploadingAvatar = false;
         patch({profileDraft: {...form, avatarUrl}});
       }
@@ -694,6 +765,7 @@ export function CommitmentWizardScreen({
         const completed = await (gateway?.completeProfile ?? completeProfile)(
           input,
         );
+        if (!isCurrentSave()) return completed;
         identifyAnalytics(account.uid);
         if (!existingProfile?.onboardingStatus) {
           void trackEventOnce(
@@ -723,6 +795,7 @@ export function CommitmentWizardScreen({
       let result: SetupJourney['result'];
       if (current.selection?.kind === 'circle') {
         if (!existingProfile?.onboardingStatus) await saveProfile(payload);
+        if (!isCurrentSave()) return;
         const joined = await (gateway?.joinCircle ?? joinCircle)(
           current.selection.circle.id,
           current.selection.inviteCode,
@@ -753,6 +826,7 @@ export function CommitmentWizardScreen({
       } else {
         await saveProfile(payload);
       }
+      if (!isCurrentSave()) return;
       useOnboardingStore.setState({
         categories: current.interests,
         displayName: payload.displayName,
@@ -773,6 +847,7 @@ export function CommitmentWizardScreen({
       });
       if (!result && !isOnboarding) finish();
     } catch (failure) {
+      if (!isCurrentSave()) return;
       const code = (failure as {code?: string}).code ?? '';
       if (uploadingAvatar) {
         patch({status: 'editing', step: 'profile', submittedDraft: undefined});
@@ -808,12 +883,22 @@ export function CommitmentWizardScreen({
         );
     } finally {
       saving.current = false;
+      if (!isCurrentSave()) {
+        const interrupted = useSetupJourneyStore.getState().records[key];
+        if (
+          interrupted?.requestId === current.requestId &&
+          interrupted.status === 'saving'
+        ) {
+          update(key, {status: 'error', step: 'saveError'});
+        }
+      }
     }
   }, [
     finish,
     gateway,
     isOnboarding,
     key,
+    update,
     patch,
     setStep,
     hasLegalAcceptance,
@@ -824,14 +909,15 @@ export function CommitmentWizardScreen({
   useEffect(() => {
     if (
       !record ||
+      (record.ownerUid && record.ownerUid !== user?.uid) ||
       saving.current ||
       record.step !== 'account' ||
       (sessionStatus !== 'authenticatedReady' &&
         sessionStatus !== 'authenticatedIncompleteProfile')
     )
       return;
+    if (authInFlight.current || authUi.busy) return;
     if (sessionStatus === 'authenticatedReady') {
-      if (authUi.busy) return;
       if (!hasLegalAcceptance) {
         // Keep confirmation beside the setup being submitted, never on its own step.
         patch({
@@ -893,7 +979,11 @@ export function CommitmentWizardScreen({
     () => recommendStarters(record?.customText ?? '', record?.interests ?? []),
     [record?.customText, record?.interests],
   );
-  if (!hydrated || !record)
+  if (
+    !hydrated ||
+    !record ||
+    (record.ownerUid && record.ownerUid !== user?.uid)
+  )
     return (
       <View style={[styles.loading, {backgroundColor: theme.background}]}>
         <ActivityIndicator color={theme.accent} />
@@ -1145,6 +1235,7 @@ export function CommitmentWizardScreen({
             }}
             style={[
               styles.interest,
+              fontScale >= 1.6 && {width: '100%'},
               {
                 backgroundColor: theme.surfaceSoft,
                 borderColor: record.interests.includes(category.label)
@@ -1387,6 +1478,8 @@ export function CommitmentWizardScreen({
     content = (
       <SetupAuthForm
         creating
+        busyRef={authInFlight}
+        gateway={gateway?.auth}
         actionRef={authAction}
         backRef={authBack}
         onState={setAuthUi}
@@ -1641,6 +1734,9 @@ export function CommitmentWizardScreen({
     };
   } else if (step === 'finish') {
     const pending = record.result?.membership === 'pending';
+    const personal =
+      record.selection?.kind !== 'circle' && draft.circleMode === 'personal';
+    const checking = !pending && eligible === undefined && !eligibilityError;
     const title =
       record.selection?.kind === 'circle'
         ? record.selection.circle.title
@@ -1659,6 +1755,12 @@ export function CommitmentWizardScreen({
         ? 'The Circle owner will review your request. You can explore while you wait.'
         : eligible
         ? 'Your starting point is ready. Want to show up for it now?'
+        : checking
+        ? 'Your setup is saved. I’m checking when you can make your first Tap In.'
+        : eligibilityError
+        ? `Your setup is saved. You can view your ${
+            personal ? 'commitment' : 'Circle'
+          } while I check your next Tap In.`
         : 'Your place is ready. Your first Tap In window will open with the next round.',
       emphasis: pending
         ? ['review your request']
@@ -1674,6 +1776,9 @@ export function CommitmentWizardScreen({
           record.selection?.kind === 'circle'
             ? record.selection.circle.category
             : draft.category,
+          record.selection?.kind === 'circle'
+            ? record.selection.circle.appearance
+            : draft.appearance,
         )}
         {pending && (
           <HoystText tone="muted" style={styles.copy}>
@@ -1691,7 +1796,8 @@ export function CommitmentWizardScreen({
         )}
         {eligibilityError && (
           <HoystText tone="danger" style={styles.copy}>
-            Couldn’t check your next Tap In. Try again or view the Circle.
+            Couldn’t check your next Tap In. Try again or view the{' '}
+            {personal ? 'commitment' : 'Circle'}.
           </HoystText>
         )}
       </>
@@ -1699,17 +1805,23 @@ export function CommitmentWizardScreen({
     primary = {
       label: eligibilityError
         ? 'Check again'
+        : checking
+        ? 'Checking your Tap In…'
         : eligible
         ? 'Tap In now'
         : 'Go to Home',
-      disabled: busy,
+      disabled: busy || checking,
       onPress: () => {
         if (eligibilityError) setCheckTick(value => value + 1);
         else finish(eligible ? 'tapIn' : 'home');
       },
     };
     tertiary = {
-      label: eligible ? 'Not now' : 'View Circle',
+      label: eligible
+        ? 'Not now'
+        : personal
+        ? 'View commitment'
+        : 'View Circle',
       onPress: () => finish(eligible ? 'home' : 'circle'),
     };
   } else if (step === 'saveError') {

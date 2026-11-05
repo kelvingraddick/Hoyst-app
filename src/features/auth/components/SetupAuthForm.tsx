@@ -1,6 +1,7 @@
 import React, {
   useCallback,
   useEffect,
+  useRef,
   useState,
   type MutableRefObject,
 } from 'react';
@@ -17,7 +18,7 @@ import type {FirebaseAuthTypes} from '@react-native-firebase/auth';
 import {Apple, ChevronDown, Mail, Phone} from 'lucide-react-native';
 import {HoystButton} from '../../../design/components/HoystButton';
 import {SetupInput as HoystInput} from '../../create-circle/components/SetupInput';
-import {HoystText} from '../../../design/components/HoystText';
+import {SetupText as HoystText} from '../../create-circle/components/SetupText';
 import {useSetupTheme} from '../../create-circle/services/setup-presentation';
 import {brandColors} from '../../../design/tokens/colors';
 import {radius} from '../../../design/tokens/radius';
@@ -45,18 +46,32 @@ export type AuthFormState = {
   error?: string;
   method?: 'email' | 'phone' | 'reset';
 };
+export type SetupAuthGateway = Partial<{
+  confirmPhoneSignIn: typeof confirmPhoneSignIn;
+  registerWithEmail: typeof registerWithEmail;
+  sendPasswordReset: typeof sendPasswordReset;
+  signInWithApple: typeof signInWithApple;
+  signInWithEmail: typeof signInWithEmail;
+  signInWithGoogle: typeof signInWithGoogle;
+  startPhoneSignIn: typeof startPhoneSignIn;
+  acceptLegalTerms: typeof acceptLegalTerms;
+}>;
 export function SetupAuthForm({
   creating,
   actionRef,
   onState,
   initialMethod,
   backRef,
+  gateway,
+  busyRef,
 }: {
   creating: boolean;
   actionRef: MutableRefObject<(() => void) | undefined>;
   onState: (state: AuthFormState) => void;
   initialMethod?: 'email' | 'phone';
   backRef?: MutableRefObject<(() => boolean) | undefined>;
+  gateway?: SetupAuthGateway;
+  busyRef?: MutableRefObject<boolean>;
 }) {
   const theme = useSetupTheme();
   const [method, setMethod] = useState<'email' | 'phone' | 'reset' | undefined>(
@@ -71,6 +86,8 @@ export function SetupAuthForm({
   const [confirmation, setConfirmation] =
     useState<FirebaseAuthTypes.ConfirmationResult>();
   const [busy, setBusy] = useState(false);
+  const localInFlight = useRef(false);
+  const inFlight = busyRef ?? localInFlight;
   const [legalChecked, setLegalChecked] = useState(false);
   const [error, setError] = useState<string>();
   const [resetSent, setResetSent] = useState(false);
@@ -81,38 +98,51 @@ export function SetupAuthForm({
     ? phone
     : `${country.code} ${phone}`;
   const run = useCallback(
-    async (action: () => Promise<unknown>, authenticates = false) => {
+    async (
+      action: () => Promise<unknown>,
+      authenticates = false,
+      provider?: 'apple' | 'google',
+    ) => {
+      if (inFlight.current) return;
       if (creating && method !== 'reset' && !legalChecked) {
         setError('Confirm you are 18 or older and agree to the Terms.');
         return;
       }
       setError(undefined);
+      inFlight.current = true;
       setBusy(true);
       try {
         const result = (await action()) as {user?: {uid: string}} | undefined;
         if (creating && legalChecked && authenticates)
-          await acceptLegalTerms(result?.user?.uid);
+          await (gateway?.acceptLegalTerms ?? acceptLegalTerms)(
+            result?.user?.uid,
+          );
       } catch (failure) {
-        const value = failure as {code?: string; message?: string};
+        const value = failure as {code?: string | number; message?: string};
+        const code = String(value.code ?? '');
+        if (code === 'auth/cancelled') return;
         setError(
-          (method === 'email' || method === 'reset') &&
+          provider === 'apple' && code === '1000'
+            ? 'Apple sign-in couldn’t finish. If prompted, sign in to your Apple Account in iPhone Settings, then try again.'
+            : (method === 'email' || method === 'reset') &&
             [
               'auth/invalid-credential',
               'auth/wrong-password',
               'auth/user-not-found',
-            ].includes(value.code ?? '')
+            ].includes(code)
             ? 'Email or password is incorrect. Try again or reset your password.'
-            : value.code === 'linking-required' ||
-              value.code?.includes('account-exists-with-different-credential')
+            : code === 'linking-required' ||
+              code.includes('account-exists-with-different-credential')
             ? 'This email already uses a different sign-in method. Sign in with that method.'
             : value.message ??
               'Could not continue. Check your details and try again.',
         );
       } finally {
+        inFlight.current = false;
         setBusy(false);
       }
     },
-    [creating, legalChecked, method],
+    [creating, legalChecked, method, gateway?.acceptLegalTerms, inFlight],
   );
   const label = busy
     ? 'Working...'
@@ -144,11 +174,12 @@ export function SetupAuthForm({
       if (busy || (creating && method !== 'reset' && !legalChecked)) return;
       if (method === 'reset') {
         if (resetSent) {
+          setPassword('');
           setMethod('email');
           setResetSent(false);
         } else {
           run(async () => {
-            await sendPasswordReset(email);
+            await (gateway?.sendPasswordReset ?? sendPasswordReset)(email);
             setResetSent(true);
           }).catch(() => undefined);
         }
@@ -157,14 +188,23 @@ export function SetupAuthForm({
         run(
           () =>
             creating
-              ? registerWithEmail(email, password)
-              : signInWithEmail(email, password),
+              ? (gateway?.registerWithEmail ?? registerWithEmail)(
+                  email,
+                  password,
+                )
+              : (gateway?.signInWithEmail ?? signInWithEmail)(email, password),
           true,
         ).catch(() => undefined);
       if (method === 'phone')
         run(async () => {
-          if (confirmation) return confirmPhoneSignIn(confirmation, code);
-          setConfirmation(await startPhoneSignIn(destination));
+          if (confirmation)
+            return (gateway?.confirmPhoneSignIn ?? confirmPhoneSignIn)(
+              confirmation,
+              code,
+            );
+          setConfirmation(
+            await (gateway?.startPhoneSignIn ?? startPhoneSignIn)(destination),
+          );
           return undefined;
         }, Boolean(confirmation)).catch(() => undefined);
     };
@@ -240,6 +280,7 @@ export function SetupAuthForm({
     resetSent,
     legalChecked,
     run,
+    gateway,
   ]);
   const select = (next: 'email' | 'phone' | undefined) => {
     setMethod(next);
@@ -264,7 +305,11 @@ export function SetupAuthForm({
               backgroundColor="#070B1A"
               textColor="#FFFFFF"
               onPress={() => {
-                run(signInWithApple, true).catch(() => undefined);
+                run(
+                  gateway?.signInWithApple ?? signInWithApple,
+                  true,
+                  'apple',
+                ).catch(() => undefined);
               }}
             />
           )}
@@ -282,7 +327,11 @@ export function SetupAuthForm({
               borderColor={brandColors.gray}
               textColor={brandColors.charcoal}
               onPress={() => {
-                run(signInWithGoogle, true).catch(() => undefined);
+                run(
+                  gateway?.signInWithGoogle ?? signInWithGoogle,
+                  true,
+                  'google',
+                ).catch(() => undefined);
               }}
             />
             {/* Keep the stroke above the fill without changing shared button layout. */}
@@ -432,7 +481,11 @@ export function SetupAuthForm({
             disabled={busy}
             onPress={() => {
               run(async () => {
-                setConfirmation(await startPhoneSignIn(destination));
+                setConfirmation(
+                  await (gateway?.startPhoneSignIn ?? startPhoneSignIn)(
+                    destination,
+                  ),
+                );
                 setCode('');
               }).catch(() => undefined);
             }}

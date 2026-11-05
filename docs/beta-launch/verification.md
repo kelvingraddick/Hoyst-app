@@ -1,4 +1,11 @@
-# Beta preparation verification, October 21–22, 2026
+# Beta preparation verification, updated November 3, 2026
+
+## November 3 restart
+
+- Kelvin confirms he installed and used build 55 on his physical iPhone. The release chat reports build 55 Testing for both internal and external groups. Full fresh-account/reminder/invitation pilot coverage is not implied by that confirmation.
+- Kelvin has not recorded a demo or promoted Hoyst. Historical brand/new-app email permission wording/source cannot currently be identified. The rollout therefore starts with personal pilot invitations and KG.codes/Wave Link organic promotion; campaign email is limited to explicit Hoyst subscribers still opted in. Legacy lists remain pending evidence.
+- Native Sentry filtering is committed as `96682ef`. The earlier build 51 status below is historical. The release chat reports a Hermes dSYM warning on build 55; full symbolication remains unverified here.
+- The live homepage was fetched directly November 3 and returned HTTP 200 with the TestFlight link, required email/unchecked-consent form, installation/invitation instructions, eligibility and the requested business contact address. No signup was submitted during this status check.
 
 ## Live setup
 

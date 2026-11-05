@@ -1,6 +1,14 @@
 # Hoyst public iPhone beta
 
-Launch November 1, 2026 at 10 a.m. Eastern. Free and ongoing. US adults 18+. Recruit broadly through KG.codes and Wave Link. Goals: 25 onboarded accounts by November 8 and at least 50 by November 15. These goals are not forecasts.
+Free and ongoing. US adults 18+. Recruit broadly through KG.codes and Wave Link. The original November 1 promotion schedule slipped. Use the readiness-based sequence below, with planning goals of 25 onboarded accounts within seven days of the public promotion push and at least 50 within fourteen days. These goals are not forecasts.
+
+## November 3 restart
+
+Kelvin confirms he installed and used build 55 on his physical iPhone. The release chat reports build 55 Testing for both internal and external groups. This confirms personal installation/use, not completion of every fresh-account, reminder and invitation check. No demo has been recorded and Kelvin has not promoted Hoyst yet.
+
+Historical brand/new-app email permission wording or source cannot currently be identified. Keep the existing Snippeta/Resend and KG.codes/Mailchimp lists out of this rollout's email audience unless matching permission evidence becomes available. Start with KG.codes/Wave Link organic promotion and individually selected personal pilot invitations. Email only explicit Hoyst updates subscribers who remain opted in; refresh preferences before any send. Do not send a permission-request campaign to the uncertain legacy lists.
+
+Next milestone: five pilot testers reach a saved Tap In, followed by a 35–45 second demo and the public promotion push. Installation/signup/save blockers take priority. The pilot should include a fresh install and one friend invitation. Use `launch-copy.md` for the pilot invitation, Story and recording script. The existing campaign identifiers and November 1 analytics cutoff remain unchanged; use actual onboarding timestamps and completed observation windows for cohort rates.
 
 ## Prepared assets
 
@@ -11,7 +19,7 @@ Launch November 1, 2026 at 10 a.m. Eastern. Free and ongoing. US adults 18+. Rec
 
 ## Service setup
 
-**Sentry:** Hoyst project created in Wave Link at https://wave-link.sentry.io/projects/hoyst/. Its DSN is stored only in the ignored local `.env`. No account token is included in tracked code. App initialization sets release/build and filters JavaScript error content. A generic transport check reached Sentry as HOYST-1 with release 1.0 (50). A native startup error, now fixed, reached HOYST-2 and revealed that native crash events bypass the JavaScript filter. With Kelvin's explicit approval, the TestFlight release chat owns the native privacy fix and verification before tester distribution. Source-map symbolication also remains a release check.
+**Sentry:** Hoyst project created in Wave Link at https://wave-link.sentry.io/projects/hoyst/. Its DSN is stored only in the ignored local `.env`. No account token is included in tracked code. App initialization sets release/build and filters JavaScript error content. A generic transport check reached Sentry as HOYST-1 with release 1.0 (50). A native startup error, now fixed, reached HOYST-2 and revealed that native crash events bypass the JavaScript filter. The native iOS filter is implemented in commit `96682ef`; React Native does not replace native initialization. Verify controlled-event privacy and symbolication on the distributed build. The release chat reported a missing Hermes dSYM warning for build 55, so full symbolication must not be assumed.
 
 **Resend:** Keep the existing account. Created empty segment `Hoyst` and topic `Hoyst beta updates` (private, default `opt_out`). In Resend’s terminology, that default means no one receives topic mail until explicitly subscribed. Do not add the Snippeta segment or all subscribers to Hoyst broadcasts. Live inventory on October 21: existing Snippeta segment 4,091 contacts, including 88 unsubscribed. Subscription status does not prove permission for Hoyst promotion. A read-only API inventory and local review were saved under ignored `.beta-private/audience/`; the provider export contains no permission wording, so none of these addresses was automatically approved for Hoyst. Kelvin states explicit brand/new-app permission exists and will identify the source; annotate only the matching records once that evidence is supplied.
 
@@ -33,7 +41,7 @@ Set the same public capture token and ingestion host in `hosting/beta-config.js`
 
 The homepage's optional Hoyst-only signup form posts to `/api/launch-signup` with email and explicit checkbox consent. The required box starts unchecked. Successful new subscriptions are added directly to the Hoyst segment/topic without a confirmation email. The shared implementation in `functions/src/updates` preserves existing opt-outs, privately records consent wording/version/timestamp, and limits requests. Checkbox consent is not email ownership verification. Legacy confirmation links at `/updates/confirm` remain supported for their original lifetime, without bulk activation. The website chat owns configuration, tests and deployment. Signup is never required to install Hoyst. The sending domain `hoyst.app` is verified in Resend. Public DNS setup records are in `resend-dns-records.json`; that file contains no private key. Use `development@wavelinkllc.com` directly for support and email replies, per Kelvin. Sender: Hoyst <updates@hoyst.app>.
 
-Install native dependencies with the existing package manager and run `pod install` in `ios` before rebuilding. The existing “🚀 Commit, build, and deploy to Testflight” chat owns the mobile release gates; the mobile changes are committed as `e419175` and the build 51 bump as `44c9eb6`. It reports build 51 uploaded but unassigned while checking native privacy. A privacy fix requires a replacement build before tester distribution. Website deployment does not update installed mobile builds.
+Install native dependencies with the existing package manager and run `pod install` in `ios` before rebuilding. The existing “🚀 Commit, build, and deploy to Testflight” chat owns mobile release administration. Build 55 (`006391e`) is Testing for both existing tester groups according to that chat; Kelvin confirms physical installation and use. Website deployment does not update installed mobile builds.
 
 ## Saved PostHog dashboard
 
@@ -71,20 +79,18 @@ The script writes private per-provider eligible lists, a review file, and aggreg
 
 ## Operating calendar
 
-- October 21–25: app/web setup, audience review, demo recording.
-- October 26–28: 5–10 pilot testers on physical iPhones. Check fresh install, signup, first Commitment, first Tap In and a Circle invitation.
-- October 29–31: founder teaser/demo and bio links. Have the release build and external TestFlight availability confirmed by October 29.
-- November 1, 10 a.m. Eastern: publish launch video/Stories and send the initial eligible email batch. Pin the post and save a Hoyst Beta Highlight.
-- November 2–7: answer installation questions, publish the use case/Circle walkthrough, send one November 5 reminder to eligible recipients. Community updates start on Instagram.
-- November 8–14: share shipped improvements, ask one focused question at a time, hold two short conversations.
-- November 15: review mature cohorts, choose the next three changes, publish the completed update template.
+- Next 2–3 days: personally invite five pilot testers, expanding to ten if useful. Check fresh install, signup, first Commitment, first Tap In and a Circle invitation. Record the demo while testers start.
+- Public promotion day, after pilot blockers are resolved: publish the founder/demo post and Stories, update bio links, pin the announcement and save a Hoyst Beta Highlight. Adapt the same content across accounts and channels. Email only explicit Hoyst updates subscribers still opted in, if there are eligible recipients.
+- Days 1–6 after the push: answer installation questions and share a concrete use case and Circle walkthrough. Send at most one relevant reminder to eligible Hoyst subscribers, around day 4. Community updates start on Instagram.
+- Day 7: review onboarding counts and mature activation cohorts; planning goal 25 onboarded. Share an improvement and ask one focused question. Mark repeat-use cohorts pending until their full window completes.
+- Day 14: planning goal at least 50 onboarded. Review completed cohorts, choose the next three improvements and publish the two-week update.
 
 Weekly budget: 90 minutes content, 60 minutes replies/triage, 30 minutes metrics, 30 minutes campaigns, 30 minutes tester conversations. App development is separate. Kelvin owns promotion, replies and review. No future posts, sends or recurring automation are silently scheduled by these files.
 
 ## Release gates
 
 - External TestFlight link accepts a new tester, has room and an unexpired public build. App Store Connect redirected to login during the October 21 check; capacity remains unverified.
-- New build installs on a physical iPhone. Test fresh/returning authentication, first setup, accepted Tap In and reminders.
+- Kelvin confirms physical installation and use of build 55. Complete the pilot checks for fresh/returning authentication, first setup, accepted Tap In and reminders.
 - Invitation works with Hoyst installed and uninstalled. New users install, return to the invitation page, then tap Open Hoyst. Pending membership is distinct from approval.
 - Support and feature choices open Instagram/email; failed mail launch offers Copy email. Clicking a contact route is not a sent ticket.
 - Source question appears after new onboarding, can be skipped and does not repeat after answering. Existing completed accounts are not prompted.

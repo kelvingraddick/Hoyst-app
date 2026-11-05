@@ -436,11 +436,11 @@ function TapInStoryShareController({
       ),
     );
   const handleCarouselLayout = (event: LayoutChangeEvent) => {
+    // React Native releases the event before queued state updaters may run.
+    const nextHeight = event.nativeEvent.layout.height;
     measureCarouselWidth(event);
     setCarouselBlockHeight(current =>
-      Math.abs(current - event.nativeEvent.layout.height) > 1
-        ? event.nativeEvent.layout.height
-        : current,
+      Math.abs(current - nextHeight) > 1 ? nextHeight : current,
     );
   };
   return (

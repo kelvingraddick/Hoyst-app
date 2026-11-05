@@ -40,6 +40,9 @@ export function SetupResumeBanner({
     return null;
   }
   const [key, record] = pending;
+  const resumeKey = key.startsWith(`account:${uid}:`)
+    ? key.slice(`account:${uid}:`.length)
+    : key;
   const confirmDiscard = () => {
     Alert.alert(
       'Discard this setup?',
@@ -96,7 +99,7 @@ export function SetupResumeBanner({
         accessibilityRole="button"
         accessibilityLabel="Finish setup"
         onPress={() => {
-          if (key.startsWith('create:')) {
+          if (resumeKey.startsWith('create:')) {
             navigation?.navigate('CreateCircle');
             return;
           }
@@ -121,7 +124,7 @@ export function SetupResumeBanner({
             useSessionStore.getState().setPendingAction(record.pendingAction);
           navigation?.navigate('Auth', {
             screen: 'Welcome',
-            params: {setupKey: key},
+            params: {setupKey: resumeKey},
           });
         }}
         style={[styles.resumeTarget, largeType && styles.largeResumeTarget]}>

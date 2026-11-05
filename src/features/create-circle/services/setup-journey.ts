@@ -356,6 +356,7 @@ export function applyStarter(
 ): CreateCircleDraft {
   return {
     ...draft,
+    appearance: {},
     category: starter.category,
     title: starter.commitment.slice(0, 80),
     commitment: starter.commitment,

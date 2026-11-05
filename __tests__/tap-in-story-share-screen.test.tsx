@@ -1,5 +1,12 @@
 import React from 'react';
-import {Alert, Clipboard, NativeModules, ScrollView, View} from 'react-native';
+import {
+  Alert,
+  Clipboard,
+  NativeModules,
+  ScrollView,
+  View,
+  type LayoutChangeEvent,
+} from 'react-native';
 import renderer, {act} from 'react-test-renderer';
 
 import {BrandMark} from '../src/design/components/BrandMark';
@@ -136,6 +143,31 @@ async function flushAsyncShareAction() {
 describe('TapInStoryShareScreen', () => {
   let alertSpy: jest.SpyInstance;
   let clipboardSpy: jest.SpyInstance;
+
+  it('keeps the measured preview height after React Native releases the layout event', async () => {
+    const tree = await renderStoryShareScreen();
+    try {
+      const block = tree.root.findAll(
+        node => typeof node.props.onLayout === 'function' && node.type === View,
+      )[0];
+      const event = {
+        nativeEvent: {layout: {width: 280, height: 400}},
+      } as LayoutChangeEvent;
+
+      await act(async () => {
+        block.props.onLayout(event);
+        // Native synthetic events are released when the handler returns,
+        // before React evaluates queued state updates.
+        Object.assign(event, {nativeEvent: null});
+      });
+
+      expect(
+        tree.root.findByType(ScrollView).props.style,
+      ).toEqual(expect.arrayContaining([{height: 373, width: 280}]));
+    } finally {
+      await act(async () => tree.unmount());
+    }
+  });
 
   it('retains the selected story on resize without cancelling dot navigation animation', async () => {
     const scrollTo = jest.spyOn(ScrollView.prototype, 'scrollTo').mockImplementation(() => undefined);

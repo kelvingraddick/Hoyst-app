@@ -7,7 +7,6 @@ import {
   Pressable,
   StyleSheet,
   Text,
-  View as NativeView,
 } from 'react-native';
 import {
   CircleCategoryIcon,
@@ -15,6 +14,7 @@ import {
 } from '../src/design/components/CircleCategoryIcon';
 import {HoystButton} from '../src/design/components/HoystButton';
 import {HoystInput} from '../src/design/components/HoystInput';
+import {CommitmentCardSurface} from '../src/design/components/CommitmentCardSurface';
 import {
   HoyMessageText,
   getHoyMessageParts,
@@ -22,7 +22,10 @@ import {
 import {CreateCircleScreen} from '../src/features/create-circle/screens/CreateCircleScreen';
 import {CommitmentWizardScreen} from '../src/features/create-circle/screens/CommitmentWizardScreen';
 import {SetupResumeBanner} from '../src/features/create-circle/components/SetupResumeBanner';
-import {GoalEditor, SetupChoice} from '../src/features/create-circle/components/SetupStepContent';
+import {
+  GoalEditor,
+  SetupChoice,
+} from '../src/features/create-circle/components/SetupStepContent';
 import {CommitmentTypeIcon} from '../src/design/components/CommitmentTypeVisual';
 import {palettes} from '../src/shared/commitment-appearance';
 import {
@@ -41,7 +44,10 @@ import {
   createCircle,
   joinCircle,
 } from '../src/features/circles/services/circle-service';
-import {completeProfile} from '../src/features/auth/services/account-service';
+import {
+  completeProfile,
+  uploadProfileAvatar,
+} from '../src/features/auth/services/account-service';
 import {requestPushNotificationPermission} from '../src/lib/notifications';
 
 jest.mock('@react-native-async-storage/async-storage', () =>
@@ -100,8 +106,15 @@ jest.mock('../src/lib/firebase/firestore', () => ({
     return chain;
   },
 }));
-jest.mock('../src/features/legal/LegalAcceptanceContext', () => ({useHasLegalAcceptance: () => true, useLegalAcceptance: () => ({acknowledge: jest.fn().mockResolvedValue(undefined)})}));
-jest.mock('../src/features/legal/policy-service', () => ({acceptLegalTerms: jest.fn().mockResolvedValue(undefined)}));
+jest.mock('../src/features/legal/LegalAcceptanceContext', () => ({
+  useHasLegalAcceptance: () => true,
+  useLegalAcceptance: () => ({
+    acknowledge: jest.fn().mockResolvedValue(undefined),
+  }),
+}));
+jest.mock('../src/features/legal/policy-service', () => ({
+  acceptLegalTerms: jest.fn().mockResolvedValue(undefined),
+}));
 jest.mock('../src/lib/notifications', () => ({
   requestPushNotificationPermission: jest.fn().mockResolvedValue(true),
 }));
@@ -206,24 +219,24 @@ function expectChoicePalette(
   appearance: 'light' | 'dark',
 ) {
   const dark = appearance === 'dark';
-  expect(StyleSheet.flatten(choice.findByType(Pressable).props.style)).toMatchObject({
-    backgroundColor: dark ? `${visual.accent}20` : visual.background,
-    borderColor: choice.props.selected ? visual.accent : 'transparent',
+  const category = dark ? visual.accentLight : visual.foregroundColor;
+  const card = choice.findByType(CommitmentCardSurface);
+  expect(card.props.colors).toMatchObject({
+    surface: dark ? '#242428' : '#FFFFFF',
+    category,
   });
-  const tag = choice.findAllByType(Text).find(
-    node => node.props.children === choice.props.tag,
-  );
+  expect(StyleSheet.flatten(card.props.style)).toMatchObject({
+    borderColor: choice.props.selected ? category : 'transparent',
+  });
+  const tag = choice
+    .findAllByType(Text)
+    .find(node => node.props.children === choice.props.tag);
   expect(StyleSheet.flatten(tag!.props.style)).toMatchObject({
-    color: dark ? visual.darkForeground : visual.foreground,
-    backgroundColor: `${visual.accent}18`,
+    color: category,
   });
-  if (choice.props.selected) {
-    expect(choice.findAllByType(NativeView).some(node => {
-      const style = StyleSheet.flatten(node.props.style);
-      return style?.width === 26 &&
-        style.backgroundColor === (dark ? visual.accent : visual.foreground);
-    })).toBe(true);
-  }
+  expect(choice.findByType(Pressable).props.accessibilityState.selected).toBe(
+    Boolean(choice.props.selected),
+  );
 }
 
 beforeEach(() => {
@@ -254,25 +267,277 @@ afterEach(async () => {
 });
 
 describe('shared approved wizard', () => {
-  it.each(['light', 'dark'] as const)('uses blue for generic choices and preserves semantic choices in %s', async appearance => {
-    useSettingsStore.setState({appearance});
-    seed('mode');
-    const tree = await render();
-    expect(tree.root.findAllByType(SetupChoice).map(node => [node.props.title, node.props.tone])).toEqual([
-      ['Shared Circle', 'green'], ['Personal commitment', 'blue'],
-    ]);
-    await act(async () => useSetupJourneyStore.getState().update(key, {step: 'joining'}));
-    expect(tree.root.findAllByType(SetupChoice).map(node => node.props.tone)).toEqual([undefined, undefined]);
-    for (const choice of tree.root.findAllByType(SetupChoice)) {
-      expect(StyleSheet.flatten(choice.findByType(Pressable).props.style).backgroundColor).toBe(
-        appearance === 'dark' ? palettes.blue.accent + '20' : palettes.blue.background,
+  it('does not claim the first window is closed before eligibility has loaded', async () => {
+    const saved = seed('finish');
+    saved.status = 'saved';
+    saved.result = {circleId: 'created-circle', membership: 'active'};
+    let resolveEligibility!: (value: boolean) => void;
+    let tree!: renderer.ReactTestRenderer;
+    await act(async () => {
+      tree = renderer.create(
+        <CommitmentWizardScreen
+          entry="onboarding"
+          setupKey={key}
+          navigation={navigation as never}
+          gateway={{
+            checkEligibility: () =>
+              new Promise(resolve => {
+                resolveEligibility = resolve;
+              }),
+          }}
+        />,
       );
-    }
-    await act(async () => useSetupJourneyStore.getState().update(key, {step: 'privacy'}));
-    expect(tree.root.findAllByType(SetupChoice).map(node => [node.props.title, node.props.tone])).toEqual([
-      ['Public', 'green'], ['Link only', 'blue'], ['Private', 'blue'],
-    ]);
+    });
+    mounted.push(tree);
+    expect(
+      tree.root
+        .findAllByType(Text)
+        .map(node => node.props.children)
+        .flat()
+        .join(' '),
+    ).not.toContain('will open with the next round');
+    expect(
+      tree.root
+        .findAllByType(HoystButton)
+        .find(node => node.props.label === 'Checking your Tap In…')?.props
+        .disabled,
+    ).toBe(true);
+    await act(async () => resolveEligibility(true));
+    expect(
+      tree.root
+        .findAllByType(HoystButton)
+        .find(node => node.props.label === 'Tap In now')?.props.disabled,
+    ).toBe(false);
   });
+
+  it('binds a profile draft to the signed-in account before it is saved', async () => {
+    seed('profile');
+    useUserProfileStore.setState({profile: undefined});
+    useSessionStore.setState({
+      status: 'authenticatedIncompleteProfile',
+      user: {uid: 'setup-test-user', displayName: 'Jamie', providerIds: []},
+    });
+    await render('onboarding');
+    expect(currentRecord().ownerUid).toBe('setup-test-user');
+  });
+
+  it.each([true, false])('does not reuse another account’s legacy profile fields for a new phone account (completed: %s)', async completed => {
+    useSetupJourneyStore.setState({records: {}});
+    useOnboardingStore.setState({
+      displayName: 'Previous private name',
+      handle: 'previous_private',
+      starterCircleSetupId: 'previous-request',
+      hasPendingProfileCompletion: true,
+      hasPendingStarterCircleSetup: true,
+    });
+    if (completed) {
+      useOnboardingStore.getState().completeSavedSetup('previous-request');
+    }
+    useOnboardingStore.getState().prepareProfileCompletion();
+    useUserProfileStore.setState({profile: undefined});
+    useSessionStore.setState({
+      status: 'authenticatedIncompleteProfile',
+      user: {uid: 'setup-test-user', providerIds: ['phone']},
+    });
+    await render('onboarding');
+    expect(currentRecord().profileDraft).toMatchObject({name: '', handle: ''});
+  });
+
+  it('keeps an account-owned profile draft when preparing profile completion again', async () => {
+    const saved = seed('profile');
+    saved.ownerUid = 'setup-test-user';
+    saved.profileDraft = {name: 'My unfinished name', handle: 'unfinished'};
+    useOnboardingStore.setState({
+      displayName: 'Old mirror name',
+      handle: 'old_mirror',
+    });
+    useOnboardingStore.getState().prepareProfileCompletion();
+    useUserProfileStore.setState({profile: undefined});
+    useSessionStore.setState({
+      status: 'authenticatedIncompleteProfile',
+      user: {uid: 'setup-test-user', providerIds: ['phone']},
+    });
+    await render('onboarding');
+    expect(currentRecord().profileDraft).toEqual(saved.profileDraft);
+  });
+
+  it('does not show another account’s unfinished profile when onboarding mounts', async () => {
+    const saved = seed('profile');
+    saved.ownerUid = 'previous-account';
+    saved.profileDraft = {
+      name: 'Previous private name',
+      handle: 'previous_private',
+    };
+    useUserProfileStore.setState({profile: undefined});
+    useSessionStore.setState({
+      status: 'authenticatedIncompleteProfile',
+      user: {uid: 'setup-test-user', displayName: 'Jamie', providerIds: []},
+    });
+    const tree = await render('onboarding');
+    expect(
+      tree.root.findAllByType(HoystInput).map(node => node.props.value),
+    ).not.toContain('Previous private name');
+    expect(
+      tree.root.findAllByType(HoystInput).map(node => node.props.value),
+    ).not.toContain('previous_private');
+  });
+
+  it('ignores a completed save after the signed-in account changes', async () => {
+    const saved = seed('review');
+    saved.draft = applyStarter(saved.draft, starters[0]);
+    let resolveSave!: (value: {circleId: string}) => void;
+    (createCircle as jest.Mock).mockImplementationOnce(
+      () =>
+        new Promise(resolve => {
+          resolveSave = resolve;
+        }),
+    );
+    const tree = await render();
+    await press(tree, 'Create commitment');
+    await act(async () => {
+      useSessionStore.getState().setGuest();
+      useUserProfileStore.setState({profile: undefined});
+      resolveSave({circleId: 'old-account-circle'});
+    });
+    expect(currentRecord()?.status).not.toBe('saved');
+    expect(navigation.dispatch).not.toHaveBeenCalled();
+  });
+
+  it('does not submit a previous account’s profile after a delayed photo upload', async () => {
+    const saved = seed('profile');
+    saved.profileDraft = {
+      name: 'Jamie',
+      handle: 'jamie_audit',
+      avatarUri: 'file:///local-test-photo.jpg',
+    };
+    useUserProfileStore.setState({profile: undefined});
+    useSessionStore.setState({
+      status: 'authenticatedIncompleteProfile',
+      user: {uid: 'setup-test-user', displayName: 'Jamie', providerIds: []},
+    });
+    let finishUpload!: (url: string) => void;
+    (uploadProfileAvatar as jest.Mock).mockImplementationOnce(
+      () =>
+        new Promise(resolve => {
+          finishUpload = resolve;
+        }),
+    );
+    const tree = await render('onboarding');
+    await press(tree, 'Save and continue');
+    await act(async () => {
+      useSessionStore
+        .getState()
+        .setAuthenticatedIncompleteProfile({
+          uid: 'next-account',
+          displayName: 'Sam',
+          providerIds: [],
+        });
+      finishUpload('https://example.com/local-test-photo.jpg');
+    });
+    expect(completeProfile).not.toHaveBeenCalled();
+    expect(
+      tree.root.findAllByType(HoystInput).map(node => node.props.value),
+    ).not.toContain('jamie_audit');
+    const archived =
+      useSetupJourneyStore.getState().records[`account:setup-test-user:${key}`];
+    expect(archived).toMatchObject({
+      ownerUid: 'setup-test-user',
+      status: 'error',
+      step: 'saveError',
+      requestId: saved.requestId,
+    });
+  });
+
+  it('waits for signup acknowledgment to finish before leaving the account form', async () => {
+    seed('account');
+    useSessionStore.setState({status: 'guest', user: undefined});
+    useUserProfileStore.setState({profile: undefined});
+    let finishAcknowledgment!: () => void;
+    let tree!: renderer.ReactTestRenderer;
+    await act(async () => {
+      tree = renderer.create(
+        <CommitmentWizardScreen
+          entry="onboarding"
+          setupKey={key}
+          navigation={navigation as never}
+          gateway={{
+            auth: {
+              registerWithEmail: async () => {
+                useSessionStore
+                  .getState()
+                  .setAuthenticatedIncompleteProfile({
+                    uid: 'setup-test-user',
+                    displayName: 'Jamie',
+                    providerIds: [],
+                  });
+                return {user: {uid: 'setup-test-user'}} as never;
+              },
+              acceptLegalTerms: () =>
+                new Promise(resolve => {
+                  finishAcknowledgment = () => resolve({accepted: true});
+                }),
+            },
+          }}
+        />,
+      );
+    });
+    mounted.push(tree);
+    act(() =>
+      tree.root.findByProps({testID: 'legal-acknowledgment'}).props.onPress(),
+    );
+    await press(tree, 'Continue with email');
+    await input(tree, 'Email', 'local@example.com');
+    await input(tree, 'Password', 'local-test-password');
+    await press(tree, 'Create account');
+    expect(currentRecord().step).toBe('account');
+    await act(async () => finishAcknowledgment());
+    expect(currentRecord().step).toBe('profile');
+  });
+
+  it.each(['light', 'dark'] as const)(
+    'uses blue for generic choices and preserves semantic choices in %s',
+    async appearance => {
+      useSettingsStore.setState({appearance});
+      seed('mode');
+      const tree = await render();
+      expect(
+        tree.root
+          .findAllByType(SetupChoice)
+          .map(node => [node.props.title, node.props.tone]),
+      ).toEqual([
+        ['Shared Circle', 'green'],
+        ['Personal commitment', 'blue'],
+      ]);
+      await act(async () =>
+        useSetupJourneyStore.getState().update(key, {step: 'joining'}),
+      );
+      expect(
+        tree.root.findAllByType(SetupChoice).map(node => node.props.tone),
+      ).toEqual([undefined, undefined]);
+      for (const choice of tree.root.findAllByType(SetupChoice)) {
+        expect(
+          StyleSheet.flatten(choice.findByType(Pressable).props.style)
+            .backgroundColor,
+        ).toBe(
+          appearance === 'dark'
+            ? palettes.blue.accent + '20'
+            : palettes.blue.background,
+        );
+      }
+      await act(async () =>
+        useSetupJourneyStore.getState().update(key, {step: 'privacy'}),
+      );
+      expect(
+        tree.root
+          .findAllByType(SetupChoice)
+          .map(node => [node.props.title, node.props.tone]),
+      ).toEqual([
+        ['Public', 'green'],
+        ['Link only', 'blue'],
+        ['Private', 'blue'],
+      ]);
+    },
+  );
   it.each(['create', 'onboarding'] as const)(
     'removes the confirmed %s setup on exit and keeps unrelated saved drafts through restart',
     async entry => {
@@ -489,7 +754,11 @@ describe('shared approved wizard', () => {
       const saved = seed('pace');
       const tree = await render(entry);
       const choices = tree.root.findAllByType(SetupChoice);
-      expect(choices.filter(choice => choice.props.selected).map(choice => choice.props.title)).toEqual(['Daily']);
+      expect(
+        choices
+          .filter(choice => choice.props.selected)
+          .map(choice => choice.props.title),
+      ).toEqual(['Daily']);
       await press(tree, 'Continue');
       expect(currentRecord()).toMatchObject({
         step: 'type',
@@ -510,16 +779,26 @@ describe('shared approved wizard', () => {
     async cadence => {
       const saved = seed('pace');
       saved.draft.commitmentCadence = cadence;
-      saved.draft.commitmentFrequency = {tapInsPerWeek: 5, opportunitiesPerPeriod: 19};
+      saved.draft.commitmentFrequency = {
+        tapInsPerWeek: 5,
+        opportunitiesPerPeriod: 19,
+      };
       useSetupJourneyStore.setState({records: {[key]: saved}});
       const tree = await render('onboarding');
-      expect(tree.root.findAllByType(SetupChoice).filter(choice => choice.props.selected).map(choice => choice.props.title)).toEqual([
-        cadence === 'weekly' ? 'Weekly' : 'Monthly',
-      ]);
+      expect(
+        tree.root
+          .findAllByType(SetupChoice)
+          .filter(choice => choice.props.selected)
+          .map(choice => choice.props.title),
+      ).toEqual([cadence === 'weekly' ? 'Weekly' : 'Monthly']);
       await press(tree, 'Continue');
       expect(currentRecord()).toMatchObject({
-        step: 'frequency', requestId: saved.requestId,
-        draft: {commitmentCadence: cadence, commitmentFrequency: saved.draft.commitmentFrequency},
+        step: 'frequency',
+        requestId: saved.requestId,
+        draft: {
+          commitmentCadence: cadence,
+          commitmentFrequency: saved.draft.commitmentFrequency,
+        },
       });
     },
   );
@@ -530,7 +809,9 @@ describe('shared approved wizard', () => {
     await choose(tree, 'Weekly');
     expect(currentRecord().draft.commitmentFrequency.tapInsPerWeek).toBe(4);
     await choose(tree, 'Monthly');
-    expect(currentRecord().draft.commitmentFrequency.opportunitiesPerPeriod).toBe(16);
+    expect(
+      currentRecord().draft.commitmentFrequency.opportunitiesPerPeriod,
+    ).toBe(16);
   });
 
   it.each(['light', 'dark'] as const)(
@@ -545,15 +826,25 @@ describe('shared approved wizard', () => {
       let choices = tree.root.findAllByType(SetupChoice);
       for (const choice of choices) {
         const icon = choice.findByType(CircleCategoryIcon);
-        expectChoicePalette(choice, getCircleCategoryVisual(icon.props.category), appearance);
+        expectChoicePalette(
+          choice,
+          getCircleCategoryVisual(icon.props.category),
+          appearance,
+        );
       }
       await choose(tree, 'Take 5 mindful minutes');
-      await act(async () => useSetupJourneyStore.getState().update(key, {
-        interests: ['Wellness'],
-      }));
+      await act(async () =>
+        useSetupJourneyStore.getState().update(key, {
+          interests: ['Wellness'],
+        }),
+      );
       choices = tree.root.findAllByType(SetupChoice);
       expect(choices[0].props.title).toBe('Take 5 mindful minutes');
-      expectChoicePalette(choices[0], getCircleCategoryVisual('Wellness'), appearance);
+      expectChoicePalette(
+        choices[0],
+        getCircleCategoryVisual('Wellness'),
+        appearance,
+      );
       expect(currentRecord()).toMatchObject({
         selection: {kind: 'template', id: 'mindful'},
         customText: 'My own idea',
@@ -563,7 +854,10 @@ describe('shared approved wizard', () => {
   );
 
   it.each([
-    ['light', false], ['dark', false], ['light', true], ['dark', true],
+    ['light', false],
+    ['dark', false],
+    ['light', true],
+    ['dark', true],
   ] as const)(
     'uses the public Circle palette in %s mode (override: %s) and preserves join intent',
     async (appearance, override) => {
@@ -572,12 +866,22 @@ describe('shared approved wizard', () => {
         const saved = seed();
         saved.customText = 'My own idea';
         const circle: CircleSuggestion = {
-          id: 'suggested-circle', title: 'Walk together', commitment: 'Walk',
-          category: 'Fitness', memberCount: 2, maxSize: 10, groupStreakDays: 0,
-          joinMode: 'open', commitmentCadence: 'weekly',
-          commitmentFrequency: {tapInsPerWeek: 4}, commitmentType: 'build',
-          unitLabel: 'Tap In', timezone: 'UTC',
-          ...(override ? {appearance: {emoji: '🌻', palette: 'pink' as const}} : {}),
+          id: 'suggested-circle',
+          title: 'Walk together',
+          commitment: 'Walk',
+          category: 'Fitness',
+          memberCount: 2,
+          maxSize: 10,
+          groupStreakDays: 0,
+          joinMode: 'open',
+          commitmentCadence: 'weekly',
+          commitmentFrequency: {tapInsPerWeek: 4},
+          commitmentType: 'build',
+          unitLabel: 'Tap In',
+          timezone: 'UTC',
+          ...(override
+            ? {appearance: {emoji: '🌻', palette: 'pink' as const}}
+            : {}),
         };
         (suggestPublicCircles as jest.Mock).mockResolvedValue([circle]);
         useSettingsStore.setState({appearance});
@@ -585,18 +889,27 @@ describe('shared approved wizard', () => {
         await act(async () => jest.advanceTimersByTime(300));
         const choices = tree.root.findAllByType(SetupChoice);
         expect(choices.map(choice => choice.props.tag)).toEqual([
-          'Create your own', 'Join a Circle', 'Create your own',
+          'Create your own',
+          'Join a Circle',
+          'Create your own',
         ]);
         const publicChoice = choices[1];
-        const visual = getCircleCategoryVisual(circle.category, circle.appearance);
+        const visual = getCircleCategoryVisual(
+          circle.category,
+          circle.appearance,
+        );
         expectChoicePalette(publicChoice, visual, appearance);
-        expect(publicChoice.findByType(CircleCategoryIcon).props.appearance).toEqual(circle.appearance);
+        expect(
+          publicChoice.findByType(CircleCategoryIcon).props.appearance,
+        ).toEqual(circle.appearance);
         await choose(tree, circle.title);
         expectChoicePalette(publicChoice, visual, appearance);
         await press(tree, 'Make it mine');
         expect(currentRecord()).toMatchObject({
-          step: 'joinPreview', selection: {kind: 'circle', circle},
-          customText: 'My own idea', requestId: saved.requestId,
+          step: 'joinPreview',
+          selection: {kind: 'circle', circle},
+          customText: 'My own idea',
+          requestId: saved.requestId,
           draft: saved.draft,
         });
       } finally {
@@ -772,20 +1085,23 @@ describe('shared approved wizard', () => {
       useSessionStore.setState({status: 'guest', user: undefined});
       const tree = await render('onboarding');
       expect(
-        tree.root.findAllByType(Text).some(
-          node => node.props.children === "Let's get started!",
-        ),
+        tree.root
+          .findAllByType(Text)
+          .some(node => node.props.children === "Let's get started!"),
       ).toBe(true);
       const icon = tree.root.findByType(CircleCategoryIcon);
       const visual = getCircleCategoryVisual('Fitness');
       expect(icon.props.category).toBe('Fitness');
       expect(icon.props.appearance).toEqual({});
       expect(
-        icon.findAllByType(Text).some(node => node.props.children === visual.emoji),
+        icon
+          .findAllByType(Text)
+          .some(node => node.props.children === visual.emoji),
       ).toBe(true);
-      expect(StyleSheet.flatten(icon.parent!.props.style).backgroundColor).toBe(
-        appearance === 'dark' ? `${visual.accentColor}20` : visual.backplateColor,
-      );
+      expect(icon.props.showBackplate).toBe(false);
+      expect(
+        tree.root.findByType(CommitmentCardSurface).props.colors.surface,
+      ).toBe(appearance === 'dark' ? '#242428' : '#FFFFFF');
       expect(currentRecord().draft).toMatchObject({
         category: 'Mindfulness',
         appearance: {emoji: '🌻', palette: 'purple'},
@@ -804,12 +1120,14 @@ describe('shared approved wizard', () => {
       expect(
         tree.root.findAllByType(HoystButton).map(node => node.props.label),
       ).toEqual(['Find my starting point']);
-      const skip = tree.root.findAllByType(Pressable).find(
-        node => node.props.children?.props?.children === 'Skip for now',
-      );
+      const skip = tree.root
+        .findAllByType(Pressable)
+        .find(node => node.props.children?.props?.children === 'Skip for now');
       expect(skip?.props.accessibilityRole).toBe('button');
       expect(StyleSheet.flatten(skip!.props.style).minHeight).toBe(44);
-      expect(StyleSheet.flatten(skip!.props.children.props.style)).toMatchObject({
+      expect(
+        StyleSheet.flatten(skip!.props.children.props.style),
+      ).toMatchObject({
         fontSize: 13,
         lineHeight: 18,
         fontWeight: '600',
@@ -1181,7 +1499,6 @@ describe('shared approved wizard', () => {
   });
 });
 
-
 describe('shared goal editor polish', () => {
   async function renderGoal(
     patch: Partial<ReturnType<typeof createSetupJourney>['draft']>,
@@ -1500,20 +1817,24 @@ describe('shared goal editor polish', () => {
   });
 });
 
-
 describe('Tap In proof setup', () => {
   it('shows a selected Photo proof default and preserves No proof through review and save', async () => {
     seed('proof');
     const tree = await render();
-    expect(tree.root.findAllByType(SetupChoice).find(node => node.props.title === 'Photo proof')?.props.selected).toBe(true);
+    expect(
+      tree.root
+        .findAllByType(SetupChoice)
+        .find(node => node.props.title === 'Photo proof')?.props.selected,
+    ).toBe(true);
     await choose(tree, 'No proof needed');
     expect(currentRecord().draft.proofRequirement).toBe('none');
-    await act(async () => useSetupJourneyStore.getState().update(key, {step: 'review'}));
+    await act(async () =>
+      useSetupJourneyStore.getState().update(key, {step: 'review'}),
+    );
     expect(JSON.stringify(tree.toJSON())).toContain('No proof needed');
     await act(async () => tree.unmount());
   });
 });
-
 
 it('preserves a pre-proof submitted payload when recovering an uncertain creation', async () => {
   const saved = seed('saveError');

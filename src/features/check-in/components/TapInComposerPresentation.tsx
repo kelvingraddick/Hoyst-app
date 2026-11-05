@@ -349,7 +349,7 @@ export function ComposerHeader({
               tone={detail.state === 'risk' ? 'warning' : 'muted'}>
               {status}
               {status ? ' · ' : ''}
-              {`Your Circle streak: ${formatCircleStreak(
+              {`Your ${detail.circleMode === 'personal' ? 'commitment' : 'Circle'} streak: ${formatCircleStreak(
                 detail.viewerCircleProgress?.streak,
               )}`}
             </DSText>
@@ -857,7 +857,7 @@ export function ComposerPhoto({
       <DSText variant="secondary" tone="muted">
         {required
           ? 'Photo proof is required to complete this Tap In.'
-          : 'Optional proof for your Circle'}
+          : 'Optional photo proof'}
       </DSText>
       {uri ? (
         <>

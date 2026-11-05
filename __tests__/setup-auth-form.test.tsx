@@ -1,6 +1,7 @@
 import React from 'react';
 import renderer, {act} from 'react-test-renderer';
 import {
+  Dimensions,
   Image,
   Platform,
   Pressable,
@@ -16,6 +17,8 @@ import {brandColors} from '../src/design/tokens/colors';
 import {SetupAuthForm} from '../src/features/auth/components/SetupAuthForm';
 import {SignInScreen} from '../src/features/auth/screens/SignInScreen';
 import {
+  sendPasswordReset,
+  signInWithApple,
   signInWithEmail,
   signInWithGoogle,
 } from '../src/features/auth/services/auth-service';
@@ -76,12 +79,141 @@ function button(label: string) {
 }
 beforeEach(() => {
   jest.clearAllMocks();
+  jest.spyOn(Dimensions, 'get').mockReturnValue({
+    width: 390,
+    height: 844,
+    scale: 3,
+    fontScale: 1,
+  });
   actionRef.current = undefined;
   backRef.current = undefined;
 });
 afterEach(() => {
   act(() => tree?.unmount());
   Platform.OS = originalPlatform;
+  jest.restoreAllMocks();
+});
+
+it('updates email links and their line boxes when text size grows and returns to normal', () => {
+  render(false);
+  act(() => button('Continue with email').props.onPress());
+  for (const fontScale of [3.1, 1]) {
+    const metrics = {width: 390, height: 844, scale: 3, fontScale};
+    jest.mocked(Dimensions.get).mockReturnValue(metrics);
+    act(() => Dimensions.set({window: metrics, screen: metrics}));
+    const link = tree.root
+      .findAllByType(Text)
+      .find(node => node.props.children === 'Forgot password?')!;
+    expect(link.props.allowFontScaling).toBe(false);
+    expect(StyleSheet.flatten(link.props.style)).toMatchObject({
+      fontSize: 16 * fontScale,
+      lineHeight: 22 * fontScale,
+    });
+  }
+});
+
+it('preserves the email but clears the previous password when returning from a successful reset request', async () => {
+  (sendPasswordReset as jest.Mock).mockResolvedValueOnce(undefined);
+  render(false);
+  act(() => button('Continue with email').props.onPress());
+  act(() => {
+    const inputs = tree.root.findAllByType(HoystInput);
+    inputs
+      .find(input => input.props.accessibilityLabel === 'Email')!
+      .props.onChangeText('qa@example.com');
+    inputs
+      .find(input => input.props.accessibilityLabel === 'Password')!
+      .props.onChangeText('previous-attempt');
+  });
+  const forgot = tree.root
+    .findAllByType(Pressable)
+    .find(
+      node => node.findAllByProps({children: 'Forgot password?'}).length > 0,
+    )!;
+  act(() => forgot.props.onPress());
+  await act(async () => actionRef.current?.());
+  expect(sendPasswordReset).toHaveBeenCalledTimes(1);
+  expect(sendPasswordReset).toHaveBeenCalledWith('qa@example.com');
+  expect(onState.mock.lastCall?.[0].label).toBe('Back to sign in');
+  act(() => actionRef.current?.());
+  expect(
+    tree.root.findAllByType(HoystInput).map(input => input.props.value),
+  ).toEqual(['qa@example.com', '']);
+  expect(onState.mock.lastCall?.[0]).toMatchObject({
+    label: 'Sign in',
+    disabled: true,
+  });
+});
+
+it.each(['1000', 1000])(
+  'explains an unfinished Apple sign-in without exposing native error %s',
+  async code => {
+    Platform.OS = 'ios';
+    (signInWithApple as jest.Mock).mockRejectedValueOnce({
+      code,
+      message:
+        'The operation couldn’t be completed. (com.apple.AuthenticationServices.AuthorizationError error 1000.)',
+    });
+    render(false);
+    await act(async () => button('Continue with Apple').props.onPress());
+    expect(onState.mock.lastCall?.[0]).toMatchObject({
+      busy: false,
+      error:
+        'Apple sign-in couldn’t finish. If prompted, sign in to your Apple Account in iPhone Settings, then try again.',
+    });
+    expect(button('Continue with Apple').props.disabled).toBe(false);
+  },
+);
+
+it('keeps Apple-specific recovery wording out of other providers', async () => {
+  (signInWithGoogle as jest.Mock).mockRejectedValueOnce({
+    code: '1000',
+    message: 'Google sign-in unavailable.',
+  });
+  render(false);
+  await act(async () => button('Continue with Google').props.onPress());
+  expect(onState.mock.lastCall?.[0].error).toBe('Google sign-in unavailable.');
+});
+
+it.each([true, false])(
+  'returns quietly from provider cancellation with creating=%s',
+  async creating => {
+    (signInWithGoogle as jest.Mock).mockRejectedValueOnce({
+      code: 'auth/cancelled',
+    });
+    render(creating);
+    if (creating)
+      act(() =>
+        tree.root.findByProps({testID: 'legal-acknowledgment'}).props.onPress(),
+      );
+    await act(async () => button('Continue with Google').props.onPress());
+    expect(onState.mock.lastCall?.[0]).toMatchObject({
+      busy: false,
+      error: undefined,
+    });
+    expect(button('Continue with Google').props.disabled).toBe(false);
+    expect(
+      require('../src/features/legal/policy-service').acceptLegalTerms,
+    ).not.toHaveBeenCalled();
+  },
+);
+
+it('starts only one provider request when two taps arrive before the busy state renders', async () => {
+  let finish!: () => void;
+  (signInWithGoogle as jest.Mock).mockImplementationOnce(
+    () =>
+      new Promise<void>(resolve => {
+        finish = resolve;
+      }),
+  );
+  render(false);
+  const press = button('Continue with Google').props.onPress;
+  await act(async () => {
+    press();
+    press();
+  });
+  expect(signInWithGoogle).toHaveBeenCalledTimes(1);
+  await act(async () => finish());
 });
 
 describe.each(['ios', 'android'] as const)('%s account buttons', platform => {

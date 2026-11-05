@@ -39,6 +39,15 @@ jest.mock('react-native-safe-area-context', () => {
 jest.mock('react-native-image-picker', () => ({
   launchImageLibrary: jest.fn().mockResolvedValue({didCancel: true}),
 }));
+jest.mock('../src/features/legal/LegalAcceptanceContext', () => ({
+  useHasLegalAcceptance: () => true,
+  useLegalAcceptance: () => ({
+    acknowledge: jest.fn().mockResolvedValue(undefined),
+  }),
+}));
+jest.mock('../src/features/legal/policy-service', () => ({
+  acceptLegalTerms: jest.fn().mockResolvedValue(undefined),
+}));
 jest.mock('../src/lib/firebase/auth', () => ({
   firebaseAuth: () => ({
     currentUser: {uid: 'setup-test-user', displayName: 'Jamie'},
@@ -168,6 +177,34 @@ afterEach(async () => {
   tree = undefined;
 });
 describe('shared invite journey', () => {
+  it('refreshes a resumed invitation count without leaving signup', async () => {
+    useSessionStore.setState({status: 'guest', user: undefined});
+    useUserProfileStore.setState({profile: undefined});
+    useCircleInviteStore.getState().setInviteCode(code);
+    await render();
+    await press('Accept invite');
+
+    await act(async () => {
+      useCircleInviteStore.getState().setResolvedPreview(code, {
+        ...circle,
+        circleId: circle.id,
+        memberCount: 7,
+        maxSize: 12,
+        isFull: false,
+        cadenceLabel: 'Weekly',
+      });
+    });
+
+    expect(useSetupJourneyStore.getState().records[key]).toMatchObject({
+      step: 'account',
+      selection: {
+        inviteCode: code,
+        circle: {id: circle.id, memberCount: 7, maxSize: 12},
+      },
+    });
+    expect(joinCircle).not.toHaveBeenCalled();
+  });
+
   it('settles an unavailable invite once and retains its recovery screen across remounts', async () => {
     const record = createSetupJourney('joinPreview', 'UTC');
     useSetupJourneyStore.setState({records: {[key]: record}});

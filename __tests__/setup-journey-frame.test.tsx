@@ -50,7 +50,7 @@ function render(children?: React.ReactNode) {
 }
 it('scales the heading and its line box together without applying native font scaling twice', () => {
   jest
-    .spyOn(ReactNative, 'useWindowDimensions')
+    .spyOn(ReactNative.Dimensions, 'get')
     .mockReturnValue({width: 390, height: 844, scale: 3, fontScale: 2});
   render();
   const heading = tree.root
@@ -62,6 +62,39 @@ it('scales the heading and its line box together without applying native font sc
     flexShrink: 0,
   });
   expect(heading.props.allowFontScaling).toBe(false);
+});
+it.each([1.6, 3.1])(
+  'keeps navigation, form content and footer reachable in one scroll area at font scale %s',
+  fontScale => {
+    jest
+      .spyOn(ReactNative.Dimensions, 'get')
+      .mockReturnValue({width: 390, height: 844, scale: 3, fontScale});
+    render(<SetupInput accessibilityLabel="Test field" />);
+    const area = tree.root.findByType(ScrollView);
+    expect(
+      area.findAllByProps({testID: 'setup-frame-footer'}).length,
+    ).toBeGreaterThan(0);
+    expect(
+      area.findAllByProps({accessibilityLabel: 'Go back'}).length,
+    ).toBeGreaterThan(0);
+    expect(area.findByType(SetupInput).props.accessibilityLabel).toBe(
+      'Test field',
+    );
+    expect(area.findByType(HoystButton).props.label).toBe('Continue');
+  },
+);
+
+it('keeps the normal-size footer outside the content scroll area', () => {
+  jest
+    .spyOn(ReactNative.Dimensions, 'get')
+    .mockReturnValue({width: 390, height: 844, scale: 3, fontScale: 1});
+  render();
+  expect(
+    tree.root
+      .findByType(ScrollView)
+      .findAllByProps({testID: 'setup-frame-footer'}),
+  ).toHaveLength(0);
+  expect(tree.root.findByProps({testID: 'setup-frame-footer'})).toBeDefined();
 });
 it('scrolls a newly focused field inside the viewport above the footer while the keyboard is open', () => {
   jest.spyOn(global, 'requestAnimationFrame').mockImplementation(callback => {

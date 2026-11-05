@@ -14,7 +14,7 @@ beforeEach(async () => {
   useOnboardingStore.getState().reset();
 });
 
-it('clears only a matching legacy draft while retaining account preferences and completion', async () => {
+it('clears a matching legacy draft and identity while retaining preferences and completion', async () => {
   const draft = createSetupJourney().draft;
   draft.commitment = 'Read each day';
   useOnboardingStore.setState({
@@ -44,8 +44,8 @@ it('clears only a matching legacy draft while retaining account preferences and 
     journey: 'standard',
     categories: ['Learning'],
     focusArea: 'focus',
-    displayName: 'Jamie',
-    handle: 'jamie',
+    displayName: '',
+    handle: '',
     timezone: 'America/New_York',
     hasHydrated: true,
   });
@@ -56,7 +56,8 @@ it('clears only a matching legacy draft while retaining account preferences and 
     starterCircleSetupId: undefined,
     starterCircleDraft: {commitment: ''},
     categories: ['Learning'],
-    handle: 'jamie',
+    displayName: '',
+    handle: '',
   });
 });
 
@@ -69,6 +70,8 @@ it('preserves another legacy submission and its resume flags', () => {
     hasPendingStarterCircleSetup: true,
     hasPendingProfileCompletion: true,
     journey: 'invite',
+    displayName: 'Unfinished name',
+    handle: 'unfinished',
   });
   useOnboardingStore.getState().completeSavedSetup('completed-request');
   expect(useOnboardingStore.getState()).toMatchObject({
@@ -79,6 +82,8 @@ it('preserves another legacy submission and its resume flags', () => {
     hasPendingStarterCircleSetup: true,
     hasPendingProfileCompletion: true,
     journey: 'invite',
+    displayName: 'Unfinished name',
+    handle: 'unfinished',
   });
 });
 

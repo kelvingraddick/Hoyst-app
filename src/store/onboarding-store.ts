@@ -222,6 +222,8 @@ export const useOnboardingStore = create<OnboardingStoreState>()(
           ...(state.starterCircleSetupId === requestId
             ? {
                 currentStep: 'welcome' as const,
+                displayName: '',
+                handle: '',
                 firstCircleSkipped: false,
                 hasPendingProfileCompletion: false,
                 hasPendingStarterCircleSetup: false,
@@ -267,6 +269,9 @@ export const useOnboardingStore = create<OnboardingStoreState>()(
       },
       prepareProfileCompletion: () =>
         set({
+          // Account-owned profile drafts live in the setup journey store.
+          displayName: '',
+          handle: '',
           hasPendingProfileCompletion: true,
           hasSeenOnboarding: false,
         }),

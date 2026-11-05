@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {create} from 'zustand';
+import {claimSetupJourney} from '../features/create-circle/services/setup-account';
 import {createJSONStorage, persist} from 'zustand/middleware';
 import {
   createSetupJourney,
@@ -10,6 +11,7 @@ type State = {
   hydrated: boolean;
   records: Record<string, SetupJourney>;
   ensure: (key: string, initial?: SetupJourney) => void;
+  claim: (key: string, uid: string | undefined, initial: SetupJourney) => void;
   update: (
     key: string,
     update: Partial<SetupJourney> | ((current: SetupJourney) => SetupJourney),
@@ -22,6 +24,10 @@ export const useSetupJourneyStore = create<State>()(
     (set, get) => ({
       hydrated: false,
       records: {},
+      claim: (key, uid, initial) =>
+        set(state => ({
+          records: claimSetupJourney(state.records, key, uid, initial),
+        })),
       ensure: (key, initial) => {
         if (!get().records[key])
           set(state => ({
